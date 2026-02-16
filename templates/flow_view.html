@@ -199,13 +199,29 @@
             .status-badge { top: 8px; right: 8px; }
         }
 
-        /* Handy Portrait: Hinweis + brauchbare Darstellung */
+        /* Handy Portrait: kompakte Darstellung, scrollbar für Status-Daten */
         @media (max-width: 600px) and (orientation: portrait) {
+            body { overflow: auto; }
             .container { padding: 4px; align-items: flex-start; }
             .flow-chart { padding: 6px; padding-top: 34px; border-radius: 8px; }
-            #flow-svg { height: auto; max-height: calc(100vh - 100px); }
-            .timestamp { font-size: 12px; top: 10px; left: 8px; max-width: 60%; overflow: hidden;
+            #flow-svg { height: auto; min-height: 250px; max-height: calc(100vh - 180px); }
+            .timestamp { font-size: 11px; top: 10px; left: 8px; max-width: 55%; overflow: hidden;
                          text-overflow: ellipsis; white-space: nowrap; }
+            /* Sub-Kreise (Detail-Erzeuger + Detail-Verbraucher) ausblenden */
+            .sub-producers, .sub-consumers { display: none; }
+            /* Battery-Detail und Inverter-Temps: kompakter, aber sichtbar */
+            .battery-detail {
+                flex-wrap: wrap;
+                gap: 6px 10px;
+                font-size: 10px;
+                padding: 8px 0 4px 0;
+            }
+            .inverter-temps {
+                flex-wrap: wrap;
+                gap: 4px 8px;
+                font-size: 9px;
+                padding: 4px 0;
+            }
         }
 
         /* Querformat-Hinweis (nur Portrait + schmal) */
@@ -338,6 +354,7 @@
                       fill="#60a5fa" font-size="13" font-weight="700" id="sub-consumption">0 kWh</text>
 
                 <!-- ═══ SUB-ERZEUGER (kurze Linien, Fluss immer → PV) ═══ -->
+                <g class="sub-producers">
                 <circle cx="250" cy="30" r="39" fill="none"
                         stroke="#fcd34d" stroke-width="2" id="circle-f1"/>
                 <text x="250" y="24" text-anchor="middle"
@@ -361,8 +378,10 @@
                 <text x="450" y="42" text-anchor="middle"
                       fill="rgba(255,255,255,0.7)" font-size="15"
                       font-weight="600" id="value-f3">0W</text>
+                </g>
 
                 <!-- ═══ SUB-VERBRAUCHER (kurze Linien, Fluss immer → Verbraucher) ═══ -->
+                <g class="sub-consumers">
                 <circle cx="640" cy="130" r="39" fill="none"
                         stroke="#dbeafe" stroke-width="2" id="circle-household"/>
                 <text x="640" y="123" text-anchor="middle"
@@ -393,6 +412,7 @@
                         stroke-dasharray="4,4"/>
                 <text x="670" y="363" text-anchor="middle"
                       fill="rgba(255,255,255,0.12)" font-size="9">Reserve</text>
+                </g>
             </svg>
 
             <!-- Battery Detail -->
@@ -865,6 +885,20 @@
     setInterval(fetchFlow, 10000);
     setInterval(fetchBatteryDetail, 60000);
     animate();
+
+    // Mobile Portrait: SVG viewBox auf Hauptknoten beschränken (ohne Sub-Kreise)
+    function adjustSvgForMobile() {
+        const svg = document.getElementById('flow-svg');
+        const isPortraitMobile = window.innerWidth < 600 && window.innerHeight > window.innerWidth;
+        if (isPortraitMobile) {
+            // Nur Netz(200,225), PV(350,135), Hub(350,225), Batterie(350,315), Verbrauch(500,225)
+            svg.setAttribute('viewBox', '80 80 500 300');
+        } else {
+            svg.setAttribute('viewBox', '60 -30 750 420');
+        }
+    }
+    adjustSvgForMobile();
+    window.addEventListener('resize', adjustSvgForMobile);
     </script>
 
     {% include 'info_overlay.html' %}

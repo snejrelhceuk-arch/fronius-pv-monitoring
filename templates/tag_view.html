@@ -76,6 +76,20 @@
             background: white;
             border-radius: 8px;
         }
+
+        @media (max-width: 600px) {
+            .chart-container {
+                padding: 6px 2px;
+                gap: 4px;
+            }
+            #frequencyChart {
+                height: 50px;
+                border-radius: 4px;
+            }
+            #mainChart {
+                border-radius: 4px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -875,7 +889,13 @@
                         {name: 'Bewölkung (%)', itemStyle: {color: 'rgba(100, 149, 237, 1)'}}
                     ]
                 },
-                grid: {
+                grid: isMobile() ? {
+                    left: 5,
+                    right: 5,
+                    bottom: '15%',
+                    top: '18%',
+                    containLabel: true
+                } : {
                     left: '3%',
                     right: '5%',
                     bottom: '15%',
@@ -886,21 +906,24 @@
                     type: 'category',
                     boundaryGap: false,
                     data: times,
-                    name: 'Uhrzeit'
+                    name: isMobile() ? '' : 'Uhrzeit',
+                    axisLabel: isMobile() ? { fontSize: 9, interval: 'auto' } : {}
                 },
                 yAxis: [
                     {
                         type: 'value',
-                        name: 'Leistung (W)',
-                        position: 'left'
+                        name: isMobile() ? '' : 'Leistung (W)',
+                        position: 'left',
+                        axisLabel: isMobile() ? { fontSize: 9, formatter: v => v >= 1000 ? (v/1000)+'k' : String(v) } : {}
                     },
                     {
                         type: 'value',
-                        name: 'Bewölkung (%)',
+                        name: isMobile() ? '' : 'Bewölkung (%)',
                         position: 'right',
                         min: 0,
                         max: 100,
-                        splitLine: { show: false }
+                        splitLine: { show: false },
+                        axisLabel: isMobile() ? { fontSize: 9 } : {}
                     }
                 ],
                 series: [
@@ -1118,15 +1141,31 @@
             return { min: start.getTime(), max: end.getTime() };
         }
         
+        // Mobile-Erkennung (< 600px Portrait)
+        function isMobile() {
+            return window.innerWidth < 600;
+        }
+
         // Shared time-axis xAxis config — immer volle 24h
         function getTimeXAxis() {
             const bounds = getDayBounds();
+            const mobile = isMobile();
             return {
                 type: 'time',
                 boundaryGap: false,
                 min: bounds.min,
                 max: bounds.max,
-                axisLabel: {
+                axisLabel: mobile ? {
+                    show: true,
+                    formatter: function(value) {
+                        const d = new Date(value);
+                        return String(d.getHours());
+                    },
+                    fontSize: 9,
+                    interval: 0,
+                    showMinLabel: true,
+                    showMaxLabel: true
+                } : {
                     formatter: function(value) {
                         const d = new Date(value);
                         return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
@@ -1321,14 +1360,22 @@
                 }
             );
             
+            const mobile = isMobile();
             const option = {
                 tooltip: getTimeTooltip(),
                 legend: {
                     bottom: 0,
                     icon: 'rect',
-                    data: legendData
+                    data: legendData,
+                    ...(mobile ? { textStyle: { fontSize: 9 }, itemWidth: 10, itemHeight: 8, itemGap: 6 } : {})
                 },
-                grid: {
+                grid: mobile ? {
+                    left: 5,
+                    right: 5,
+                    bottom: '15%',
+                    top: 10,
+                    containLabel: true
+                } : {
                     left: '3%',
                     right: '5%',
                     bottom: '15%',
@@ -1336,8 +1383,10 @@
                 },
                 xAxis: getTimeXAxis(),
                 yAxis: [
-                    { type: 'value', name: 'Leistung (W)', position: 'left', min: 0, max: calcYMax() },
-                    { type: 'value', name: '%', position: 'right', min: 0, max: 100, scale: false }
+                    { type: 'value', name: mobile ? '' : 'Leistung (W)', position: 'left', min: 0, max: calcYMax(),
+                      axisLabel: mobile ? { fontSize: 9, formatter: v => v >= 1000 ? (v/1000)+'k' : String(v) } : {} },
+                    { type: 'value', name: mobile ? '' : '%', position: 'right', min: 0, max: 100, scale: false,
+                      axisLabel: mobile ? { fontSize: 9 } : {} }
                 ],
                 series: series
             };
@@ -1507,14 +1556,22 @@
                 }
             );
             
+            const mobile = isMobile();
             const option = {
                 tooltip: getTimeTooltip(),
                 legend: {
                     bottom: 0,
                     icon: 'rect',
-                    data: legendData
+                    data: legendData,
+                    ...(mobile ? { textStyle: { fontSize: 9 }, itemWidth: 10, itemHeight: 8, itemGap: 6 } : {})
                 },
-                grid: {
+                grid: mobile ? {
+                    left: 5,
+                    right: 5,
+                    bottom: '15%',
+                    top: 10,
+                    containLabel: true
+                } : {
                     left: '3%',
                     right: '5%',
                     bottom: '15%',
@@ -1522,8 +1579,10 @@
                 },
                 xAxis: getTimeXAxis(),
                 yAxis: [
-                    { type: 'value', name: 'Leistung (W)', position: 'left', min: 0, max: calcYMax() },
-                    { type: 'value', name: '%', position: 'right', min: 0, max: 100, scale: false }
+                    { type: 'value', name: mobile ? '' : 'Leistung (W)', position: 'left', min: 0, max: calcYMax(),
+                      axisLabel: mobile ? { fontSize: 9, formatter: v => v >= 1000 ? (v/1000)+'k' : String(v) } : {} },
+                    { type: 'value', name: mobile ? '' : '%', position: 'right', min: 0, max: 100, scale: false,
+                      axisLabel: mobile ? { fontSize: 9 } : {} }
                 ],
                 series: series
             };
@@ -1905,9 +1964,16 @@
                 legend: {
                     data: ['Direkt (Ertrag)', 'Batterieladung', 'Einspeisung', 'Prognose (Rest)', 'Direkt (Verbrauch)', 'Batterieentladung', 'Netzbezug', 'Prognose'],
                     bottom: daysInMonth > visibleDays ? 50 : 10,
-                    left: 'center'
+                    left: 'center',
+                    ...(isMobile() ? { textStyle: { fontSize: 9 }, itemWidth: 10, itemHeight: 8, itemGap: 5 } : {})
                 },
-                grid: {
+                grid: isMobile() ? {
+                    left: 5,
+                    right: 5,
+                    bottom: daysInMonth > visibleDays ? '90px' : '70px',
+                    top: '25px',
+                    containLabel: true
+                } : {
                     left: '3%',
                     right: '4%',
                     bottom: daysInMonth > visibleDays ? '100px' : '80px',
@@ -1949,11 +2015,15 @@
                 xAxis: {
                     type: 'category',
                     data: days,
-                    name: 'Tag des Monats',
+                    name: isMobile() ? '' : 'Tag des Monats',
                     nameLocation: 'middle',
                     nameGap: 30,
                     boundaryGap: true,
-                    axisLabel: {
+                    axisLabel: isMobile() ? {
+                        interval: 'auto',
+                        rotate: 0,
+                        fontSize: 9
+                    } : {
                         interval: 0,
                         rotate: daysInMonth > 21 ? 45 : 0,
                         fontSize: 11
@@ -1973,12 +2043,13 @@
                 },
                 yAxis: {
                     type: 'value',
-                    name: 'Energie (kWh)',
+                    name: isMobile() ? '' : 'Energie (kWh)',
                     nameTextStyle: {
                         fontSize: 12
                     },
                     axisLabel: {
-                        formatter: formatAxisValue
+                        formatter: formatAxisValue,
+                        ...(isMobile() ? { fontSize: 9 } : {})
                     }
                 },
                 series: [
@@ -2356,9 +2427,16 @@
                 legend: {
                     data: ['Direkt (Ertrag)', 'Batterieladung', 'Einspeisung', 'Direkt (Verbrauch)', 'Batterieentladung', 'Netzbezug'],
                     bottom: 10,
-                    left: 'center'
+                    left: 'center',
+                    ...(isMobile() ? { textStyle: { fontSize: 9 }, itemWidth: 10, itemHeight: 8, itemGap: 5 } : {})
                 },
-                grid: {
+                grid: isMobile() ? {
+                    left: 5,
+                    right: 5,
+                    bottom: '70px',
+                    top: '45px',
+                    containLabel: true
+                } : {
                     left: '3%',
                     right: '4%',
                     bottom: '80px',
@@ -2369,7 +2447,10 @@
                     type: 'category',
                     data: xLabels,
                     boundaryGap: true,
-                    axisLabel: {
+                    axisLabel: isMobile() ? {
+                        interval: 'auto',
+                        fontSize: 9
+                    } : {
                         interval: 0,
                         fontSize: 11
                     },
@@ -2380,10 +2461,11 @@
                 },
                 yAxis: {
                     type: 'value',
-                    name: 'Energie (kWh)',
+                    name: isMobile() ? '' : 'Energie (kWh)',
                     nameTextStyle: { fontSize: 12 },
                     axisLabel: {
-                        formatter: formatAxisValue
+                        formatter: formatAxisValue,
+                        ...(isMobile() ? { fontSize: 9 } : {})
                     }
                 },
                 series: [
@@ -2508,16 +2590,20 @@
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(function() {
                 if (chart) {
-                    if (currentPeriod === 'monat') {
-                        chart.dispose();
+                    chart.dispose();
+                    chart = null;
+                    if (currentPeriod === 'tag') {
+                        updateChart();
+                    } else if (currentPeriod === 'monat') {
                         createMonthChart();
                     } else if (currentPeriod === 'jahr') {
-                        chart.dispose();
                         createYearChart();
                     } else if (currentPeriod === 'gesamt') {
-                        chart.dispose();
                         createGesamtChart();
                     }
+                }
+                if (frequencyChart) {
+                    frequencyChart.resize();
                 }
             }, 250);
         });
