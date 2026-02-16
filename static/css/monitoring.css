@@ -219,3 +219,37 @@ body {
     color: #ef4444;
     font-size: 16px;
 }
+
+/* ── Mobile: Kompakte Nav + Charts ── */
+@media (max-width: 600px) {
+    .container {
+        margin: 4px auto;
+        width: calc(100% - 8px);
+        border-radius: 8px;
+    }
+    .top-nav-bar {
+        padding: 6px 8px;
+        gap: 4px;
+    }
+    .top-nav-bar button, .top-nav-bar a {
+        padding: 5px 8px;
+        font-size: 11px;
+    }
+    .top-nav-bar a.nav-main {
+        padding: 6px 10px;
+        font-size: 12px;
+    }
+    .top-nav-bar .date-label {
+        min-width: 80px;
+        font-size: 12px;
+    }
+    .top-nav-bar .nav-separator {
+        margin: 0 2px;
+    }
+    .nav-summary {
+        font-size: 10px;
+    }
+    .chart-area {
+        padding: 8px 4px;
+    }
+}
