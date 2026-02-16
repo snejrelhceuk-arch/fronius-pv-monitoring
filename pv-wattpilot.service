@@ -1,0 +1,22 @@
+[Unit]
+Description=PV-System Wattpilot Collector
+After=network-online.target pv-collector.service
+Wants=network-online.target
+
+[Service]
+User=admin
+WorkingDirectory=/home/admin/Dokumente/PVAnlage/pv-system
+ExecStart=/usr/bin/python3 /home/admin/Dokumente/PVAnlage/pv-system/wattpilot_collector.py
+Restart=always
+RestartSec=30
+StartLimitIntervalSec=600
+StartLimitBurst=10
+StandardOutput=journal
+StandardError=journal
+
+# Prozess sauber beenden (SIGTERM → PID-File Cleanup)
+KillSignal=SIGINT
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

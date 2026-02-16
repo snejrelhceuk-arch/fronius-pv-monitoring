@@ -1,0 +1,2528 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PV-Anlage Tag-Übersicht</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <link rel="stylesheet" href="/static/css/monitoring.css">
+    <style>
+        /* Tag-View spezifisch */
+        .top-nav-bar .btn-analyse {
+            background: rgba(255,255,255,0.25);
+            border-color: rgba(255,255,255,0.4);
+        }
+
+        .top-nav-bar button.view-active {
+            background: rgba(255,255,255,0.4);
+            color: white;
+            border-color: rgba(255,255,255,0.5);
+        }
+
+        .navigation {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 5px;
+        }
+
+        .btn-nav {
+            padding: 8px 16px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            color: rgba(255,255,255,0.9);
+        }
+
+        .btn-nav:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .btn-nav:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            flex: 1;
+            min-height: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background: rgba(15, 23, 42, 0.5);
+        }
+
+        #frequencyChart {
+            width: 100%;
+            height: 80px;
+            flex-shrink: 0;
+            background: white;
+            border-radius: 8px;
+        }
+
+        #mainChart {
+            width: 100%;
+            flex: 1;
+            min-height: 0;
+            background: white;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Top Navigation Bar -->
+        <div class="top-nav-bar">
+            <div class="nav-left">
+                <a href="/" class="nav-main">Flow</a>
+                <a href="/monitoring" class="nav-main active">Monitoring</a>
+                <a href="/analyse/pv" class="nav-main">Analyse</a>
+                <div class="nav-separator"></div>
+                <button class="active" id="btnViewTag" onclick="navigateToView('tag')">Tag</button>
+                <button id="btnViewMonat" onclick="navigateToView('monat')">Monat</button>
+                <button id="btnViewJahr" onclick="navigateToView('jahr')">Jahr</button>
+                <button id="btnViewGesamt" onclick="navigateToView('gesamt')">Gesamt</button>
+            </div>
+            <div class="nav-center">
+                <div id="tagNavigation" style="display:flex; gap:4px; align-items:center;">
+                    <button onclick="navigateDay(-1)">◀</button>
+                    <button class="date-label" id="currentDateDisplay">Heute</button>
+                    <button onclick="navigateDay(1)" id="btnNext">▶</button>
+                </div>
+                <div id="monatNavigation" style="display:none; gap:4px; align-items:center;">
+                    <button onclick="navigateMonth(-1)">◀</button>
+                    <button class="date-label" id="currentMonthDisplay">Monat</button>
+                    <button onclick="navigateMonth(1)" id="btnNextMonth">▶</button>
+                </div>
+                <div id="jahrNavigation" style="display:none; gap:4px; align-items:center;">
+                    <button onclick="navigateYear(-1)">◀</button>
+                    <button class="date-label" id="currentYearDisplay">Jahr</button>
+                    <button onclick="navigateYear(1)" id="btnNextYear">▶</button>
+                </div>
+                <button class="btn-jetzt" id="btnJetzt" onclick="navigateToNow()" style="display:none;">⏱ Jetzt</button>
+            </div>
+            <div class="nav-right">
+                <span id="viewToggleNav" style="display:flex; gap:4px;">
+                    <button class="view-active" id="btnErtrag" onclick="switchView('ertrag')">🌞</button>
+                    <button id="btnVerbrauch" onclick="switchView('verbrauch')">⚡</button>
+                </span>
+                <div class="nav-separator"></div>
+                <span class="nav-summary" id="summaryDisplay" style="display:none;">
+                    <span class="summary-val" id="summaryValue">--</span>
+                </span>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <div id="loading" class="loading">Lade Daten...</div>
+            <div id="error" class="error" style="display:none;"></div>
+            <div id="frequencyChart" style="display:none;"></div>
+            <div id="mainChart" style="display:none;"></div>
+        </div>
+        
+        <!-- Footer removed - all navigation is now in top bar -->
+    </div>
+    
+    <script>
+        let currentDate = new Date();
+        let currentView = 'ertrag';
+        let currentPeriod = 'tag';  // 'tag', 'monat', 'jahr', 'gesamt'
+        let currentYear = new Date().getFullYear();
+        let currentMonth = new Date().getMonth() + 1;
+        let chart = null;
+        let frequencyChart = null;
+        let chartData = null;
+        let forecastData = null;  // Separate forecast for background overlay
+        let clearSkyData = null;  // Clear-Sky reference curve
+        
+        // State aus localStorage laden
+        function loadState() {
+            try {
+                const savedState = localStorage.getItem('pvViewState');
+                if (savedState) {
+                    const state = JSON.parse(savedState);
+                    currentView = state.currentView || 'ertrag';
+                    currentPeriod = state.currentPeriod || 'tag';
+                    if (state.currentDate) {
+                        currentDate = new Date(state.currentDate);
+                    }
+                    if (state.currentYear) currentYear = state.currentYear;
+                    if (state.currentMonth) currentMonth = state.currentMonth;
+                }
+            } catch (e) {
+                console.error('Fehler beim Laden des gespeicherten States:', e);
+            }
+        }
+        
+        // State in localStorage speichern
+        function saveState() {
+            try {
+                const state = {
+                    currentView: currentView,
+                    currentPeriod: currentPeriod,
+                    currentDate: currentDate.toISOString(),
+                    currentYear: currentYear,
+                    currentMonth: currentMonth
+                };
+                localStorage.setItem('pvViewState', JSON.stringify(state));
+            } catch (e) {
+                console.error('Fehler beim Speichern des States:', e);
+            }
+        }
+        
+        // Initialisierung
+        document.addEventListener('DOMContentLoaded', function() {
+            // D: Immer mit aktuellem Tag starten
+            currentDate = new Date();
+            currentPeriod = 'tag';
+            currentView = 'ertrag';
+            currentYear = currentDate.getFullYear();
+            currentMonth = currentDate.getMonth() + 1;
+            
+            // URL-Parameter prüfen (z.B. /?view=monat von Analyse-Seite)
+            const urlParams = new URLSearchParams(window.location.search);
+            const requestedView = urlParams.get('view');
+            if (requestedView && ['tag', 'monat', 'jahr', 'gesamt'].includes(requestedView)) {
+                // Buttons entsprechend State setzen
+                document.getElementById('btnErtrag').classList.toggle('view-active', currentView === 'ertrag');
+                document.getElementById('btnVerbrauch').classList.toggle('view-active', currentView === 'verbrauch');
+                navigateToView(requestedView);
+                return;
+            }
+            
+            // Buttons entsprechend State setzen
+            document.getElementById('btnErtrag').classList.toggle('view-active', currentView === 'ertrag');
+            document.getElementById('btnVerbrauch').classList.toggle('view-active', currentView === 'verbrauch');
+            
+            // A/D: View-Buttons aktualisieren
+            updateViewButtons();
+            
+            // Navigation entsprechend State anzeigen
+            document.getElementById('tagNavigation').style.display = 'flex';
+            document.getElementById('monatNavigation').style.display = 'none';
+            document.getElementById('jahrNavigation').style.display = 'none';
+            document.getElementById('viewToggleNav').style.display = 'flex';
+            loadData();
+        });
+        
+        function switchView(view) {
+            currentView = view;
+            document.getElementById('btnErtrag').classList.toggle('view-active', view === 'ertrag');
+            document.getElementById('btnVerbrauch').classList.toggle('view-active', view === 'verbrauch');
+            saveState();
+            
+            // Daten neu laden je nach aktueller Periode
+            if (currentPeriod === 'tag') {
+                updateChart();
+            } else if (currentPeriod === 'monat') {
+                createMonthChart();
+            } else if (currentPeriod === 'jahr') {
+                createYearChart();
+            } else if (currentPeriod === 'gesamt') {
+                createGesamtChart();
+            }
+            
+            // Summe aktualisieren
+            updateSummaryDisplay();
+        }
+        
+        function navigateDay(offset) {
+            currentDate.setDate(currentDate.getDate() + offset);
+            saveState();
+            loadData();
+        }
+        
+        function updateDateDisplay() {
+            // Formatiere Datum für Tag-Ansicht (z.B. "3. Jan. 2026")
+            const dateDisplay = document.getElementById('currentDateDisplay');
+            if (dateDisplay) {
+                const day = currentDate.getDate();
+                const months = ['Jan.', 'Feb.', 'März', 'Apr.', 'Mai', 'Juni', 'Juli', 'Aug.', 'Sept.', 'Okt.', 'Nov.', 'Dez.'];
+                const month = months[currentDate.getMonth()];
+                const year = currentDate.getFullYear();
+                dateDisplay.textContent = `${day}. ${month} ${year}`;
+            }
+        }
+        
+        function updateMonthDisplay() {
+            // Formatiere Monat für Monats-Ansicht (z.B. "Jan. '26")
+            const monthDisplay = document.getElementById('currentMonthDisplay');
+            if (monthDisplay) {
+                const months = ['Jan.', 'Feb.', 'März', 'Apr.', 'Mai', 'Juni', 'Juli', 'Aug.', 'Sept.', 'Okt.', 'Nov.', 'Dez.'];
+                const month = months[currentMonth - 1];
+                const year = String(currentYear).slice(-2);
+                monthDisplay.textContent = `${month} '${year}`;
+            }
+        }
+        
+        function updateSummaryDisplay() {
+            const summaryDisplay = document.getElementById('summaryDisplay');
+            const summarySeparator = document.getElementById('summarySeparator');
+            const summaryValue = document.getElementById('summaryValue');
+            
+            if (!chartData || !chartData.datapoints || chartData.datapoints.length === 0) {
+                summaryDisplay.style.display = 'none';
+                if (summarySeparator) summarySeparator.style.display = 'none';
+                return;
+            }
+            
+            function showSummary(text) {
+                summaryValue.textContent = text;
+                summaryDisplay.style.display = 'inline';
+                if (summarySeparator) summarySeparator.style.display = 'block';
+            }
+            
+            if (currentPeriod === 'tag') {
+                // Prognose: Zeige erwartete kWh
+                if (chartData.forecast) {
+                    showSummary(`☀ ${formatEnergy(chartData.expected_kwh || 0)}`);
+                    return;
+                }
+                
+                // Today with separate forecast: show monitoring + forecast expected
+                if (chartData.has_forecast && forecastData) {
+                    // Prefer counter-based totals (exact, = Solarweb) over P×t sums
+                    let realErtrag_kwh, realVerbrauch_kwh;
+                    const ct = chartData.counter_totals;
+                    if (ct) {
+                        realErtrag_kwh = ct.ertrag_kwh;
+                        realVerbrauch_kwh = ct.verbrauch_kwh;
+                    } else {
+                        const realErtrag_wh = chartData.datapoints.reduce((s, dp) => s + (dp.w_ertrag || 0), 0);
+                        const realVerbrauch_wh = chartData.datapoints.reduce((s, dp) => s + (dp.w_verbrauch || 0), 0);
+                        realErtrag_kwh = realErtrag_wh / 1000;
+                        realVerbrauch_kwh = realVerbrauch_wh / 1000;
+                    }
+                    const fcErtrag_kwh = (forecastData.expected_kwh || 0);
+                    const autarkie = realVerbrauch_kwh > 0 ? Math.min(100, (realErtrag_kwh / realVerbrauch_kwh * 100)) : 0;
+                    
+                    if (currentView === 'ertrag') {
+                        showSummary(`${formatEnergy(realErtrag_kwh)} / ${formatEnergy(fcErtrag_kwh)} ☀`);
+                    } else {
+                        showSummary(`${formatEnergy(realVerbrauch_kwh)} · ${autarkie.toFixed(0)}%`);
+                    }
+                    return;
+                }
+                
+                // Tag-Ansicht: Direkte Summierung
+                // Prefer counter-based totals (exact) over P×t sums
+                let ertrag_kwh, verbrauch_kwh;
+                const ct2 = chartData.counter_totals;
+                if (ct2) {
+                    ertrag_kwh = ct2.ertrag_kwh;
+                    verbrauch_kwh = ct2.verbrauch_kwh;
+                } else {
+                    const ertrag_wh = chartData.datapoints.reduce((sum, dp) => sum + (dp.w_ertrag || 0), 0);
+                    const verbrauch_wh = chartData.datapoints.reduce((sum, dp) => sum + (dp.w_verbrauch || 0), 0);
+                    ertrag_kwh = ertrag_wh / 1000;
+                    verbrauch_kwh = verbrauch_wh / 1000;
+                }
+                const autarkie = verbrauch_kwh > 0 ? Math.min(100, (ertrag_kwh / verbrauch_kwh * 100)) : 0;
+                
+                if (currentView === 'ertrag') {
+                    let text = `${formatEnergy(ertrag_kwh)} · ${autarkie.toFixed(0)}%`;
+                    if (clearSkyData && clearSkyData.total_kwh) {
+                        text += ` (☼ ${formatEnergy(clearSkyData.total_kwh)})`;
+                    }
+                    showSummary(text);
+                } else {
+                    showSummary(`${formatEnergy(verbrauch_kwh)} · ${autarkie.toFixed(0)}%`);
+                }
+                return;
+            } else if (currentPeriod === 'monat' || currentPeriod === 'jahr' || currentPeriod === 'gesamt') {
+                const ertragTotal = chartData.datapoints.filter(dp => !dp.is_forecast).reduce((sum, dp) => {
+                    return sum + (dp.w_einspeisung || 0) + (dp.w_batterieladung || 0) + (dp.w_direktverbrauch || 0);
+                }, 0);
+                const verbrauchTotal = chartData.datapoints.filter(dp => !dp.is_forecast).reduce((sum, dp) => {
+                    return sum + (dp.w_netzbezug || 0) + (dp.w_batterieentladung || 0) + (dp.w_direktverbrauch || 0);
+                }, 0);
+                const autarkiePeriod = verbrauchTotal > 0 ? Math.min(100, (ertragTotal / verbrauchTotal * 100)) : 0;
+                
+                let summaryText = `${formatEnergy(ertragTotal)} / ${formatEnergy(verbrauchTotal)} · ${autarkiePeriod.toFixed(0)}%`;
+                
+                // Jahr-Ansicht: Sonnenstunden anzeigen (aus API-Daten)
+                if (currentPeriod === 'jahr' && chartData.sonnenstunden) {
+                    summaryText += ` · ☀h ${chartData.sonnenstunden}`;
+                }
+                
+                showSummary(summaryText);
+                return;
+            }
+            
+            summaryDisplay.style.display = 'none';
+            if (summarySeparator) summarySeparator.style.display = 'none';
+        }
+        
+        function updateViewButtons() {
+            // Active-Klasse für View-Buttons setzen, aktiven Button ausblenden
+            ['tag', 'monat', 'jahr', 'gesamt'].forEach(v => {
+                const btn = document.getElementById('btnView' + v.charAt(0).toUpperCase() + v.slice(1));
+                if (btn) {
+                    btn.classList.toggle('active', v === currentPeriod);
+                    btn.style.display = (v === currentPeriod) ? 'none' : '';
+                }
+            });
+            // D: "Jetzt"-Button anzeigen wenn nicht auf heute
+            updateJetztButton();
+        }
+        
+        async function loadBatteryInfo() {
+            try {
+                const response = await fetch('/api/battery_status');
+                if (!response.ok) return;
+                const b = await response.json();
+                if (b.error) return;
+                
+                // SOC, Min, Max
+                document.getElementById('biSoc').textContent = b.current_soc != null ? Math.round(b.current_soc) : '--';
+                document.getElementById('biSocMin').textContent = b.soc_min ?? '--';
+                document.getElementById('biSocMax').textContent = b.soc_max ?? '--';
+                
+                // Ladung/Entladung kWh heute
+                const label = document.getElementById('biBattPowerLabel');
+                const valEl = document.getElementById('biBattPower');
+                if (currentView === 'verbrauch') {
+                    label.firstChild.textContent = 'BattEntlad: ';
+                    valEl.textContent = (b.batt_discharge_kwh ?? 0).toFixed(2);
+                    label.lastChild.textContent = ' kWh';
+                } else {
+                    label.firstChild.textContent = 'BattLad: ';
+                    valEl.textContent = (b.batt_charge_kwh ?? 0).toFixed(2);
+                    label.lastChild.textContent = ' kWh';
+                }
+                
+                // SOH
+                document.getElementById('biSoh').textContent = b.soh != null ? Math.round(b.soh) : '--';
+                
+                document.getElementById('batteryInfoBar').style.display = 'flex';
+            } catch (e) {
+                console.warn('Batterie-Info nicht verfügbar:', e.message);
+            }
+        }
+        
+        function updateJetztButton() {
+            const btn = document.getElementById('btnJetzt');
+            if (!btn) return;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const cur = new Date(currentDate);
+            cur.setHours(0, 0, 0, 0);
+            // Zeige Jetzt-Button wenn Datum != heute oder Ansicht != tag
+            const isToday = cur.getTime() === today.getTime();
+            btn.style.display = (currentPeriod === 'tag' && isToday) ? 'none' : '';
+        }
+        
+        function navigateToNow() {
+            // D: Schneller Rücksprung auf Heute/Tag
+            currentDate = new Date();
+            currentPeriod = 'tag';
+            currentYear = currentDate.getFullYear();
+            currentMonth = currentDate.getMonth() + 1;
+            document.getElementById('tagNavigation').style.display = 'flex';
+            document.getElementById('monatNavigation').style.display = 'none';
+            document.getElementById('jahrNavigation').style.display = 'none';
+            document.getElementById('viewToggleNav').style.display = 'flex';
+            updateViewButtons();
+            saveState();
+            loadData();
+        }
+        
+        function navigateToView(view, keepState) {
+            if (view === 'tag') {
+                currentPeriod = 'tag';
+                document.getElementById('tagNavigation').style.display = 'flex';
+                document.getElementById('monatNavigation').style.display = 'none';
+                document.getElementById('jahrNavigation').style.display = 'none';
+                document.getElementById('viewToggleNav').style.display = 'flex';
+                updateViewButtons();
+                saveState();
+                loadData();
+            } else if (view === 'monat') {
+                currentPeriod = 'monat';
+                if (!keepState) {
+                    const now = new Date();
+                    currentYear = now.getFullYear();
+                    currentMonth = now.getMonth() + 1;
+                }
+                
+                document.getElementById('viewToggleNav').style.display = 'none';
+                document.getElementById('tagNavigation').style.display = 'none';
+                document.getElementById('monatNavigation').style.display = 'flex';
+                document.getElementById('jahrNavigation').style.display = 'none';
+                
+                updateViewButtons();
+                saveState();
+                loadMonthData();
+            } else if (view === 'jahr') {
+                currentPeriod = 'jahr';
+                if (!keepState) {
+                    currentYear = new Date().getFullYear();
+                }
+                
+                document.getElementById('viewToggleNav').style.display = 'none';
+                document.getElementById('tagNavigation').style.display = 'none';
+                document.getElementById('monatNavigation').style.display = 'none';
+                document.getElementById('jahrNavigation').style.display = 'flex';
+                
+                updateViewButtons();
+                saveState();
+                loadYearData();
+            } else if (view === 'gesamt') {
+                currentPeriod = 'gesamt';
+                
+                document.getElementById('viewToggleNav').style.display = 'none';
+                document.getElementById('tagNavigation').style.display = 'none';
+                document.getElementById('monatNavigation').style.display = 'none';
+                document.getElementById('jahrNavigation').style.display = 'none';
+                
+                updateViewButtons();
+                saveState();
+                loadGesamtData();
+            } else if (view === 'analyse') {
+                // Weiterleitung zur Analyse
+                window.location.href = '/analyse/pv';
+            }
+        }
+        
+        function navigateMonth(offset) {
+            currentMonth += offset;
+            if (currentMonth < 1) {
+                currentMonth = 12;
+                currentYear--;
+            } else if (currentMonth > 12) {
+                currentMonth = 1;
+                currentYear++;
+            }
+            saveState();
+            loadMonthData();
+        }
+        
+        function navigateToCurrentMonth() {
+            const now = new Date();
+            currentYear = now.getFullYear();
+            currentMonth = now.getMonth() + 1;
+            loadMonthData();
+        }
+        
+        function navigateYear(offset) {
+            currentYear += offset;
+            saveState();
+            loadYearData();
+        }
+        
+        function updateYearDisplay() {
+            const yearDisplay = document.getElementById('currentYearDisplay');
+            if (yearDisplay) {
+                yearDisplay.textContent = String(currentYear);
+            }
+        }
+        
+        /**
+         * Universelle Wert-Formatierung mit SI-Präfix-Skalierung.
+         *
+         * Regeln (siehe doc/DISPLAY_CONVENTIONS.md):
+         *   < 10:           2 Dezimalstellen   "3,47 kWh"
+         *   10 – 999:       1 Dezimalstelle    "142,5 kWh"
+         *   1.000 – 99.999: Tausendertrenner   "15.940 kWh"
+         *   ≥ 100.000:      nächster Präfix     "123,4 MWh"
+         *
+         * SI-Kette: '' → 'k' → 'M' → 'G' → 'T'
+         * Funktioniert für Wh, W, VA, VAr, EUR und jede andere Einheit.
+         *
+         * @param {number} value  - Der Zahlenwert
+         * @param {string} unit   - Basiseinheit (z.B. 'kWh', 'W', 'EUR')
+         * @param {number} [forceDecimals] - Erzwinge feste Dezimalstellen
+         */
+        function formatValue(value, unit, forceDecimals) {
+            if (value === null || value === undefined || isNaN(value)) return '–';
+
+            // SI-Präfixe: jeder Schritt = ×1000
+            const siPrefixes = ['', 'k', 'M', 'G', 'T'];
+
+            // Bestimme, welchen Präfix die Einheit bereits hat (z.B. 'kWh' → hat schon 'k')
+            let baseUnit = unit || '';
+            let prefixIndex = 0;
+            for (let i = 1; i < siPrefixes.length; i++) {
+                if (baseUnit.startsWith(siPrefixes[i]) && baseUnit.length > 1) {
+                    prefixIndex = i;
+                    baseUnit = baseUnit.substring(siPrefixes[i].length);
+                    break;
+                }
+            }
+
+            // Skaliere bei ≥ 100.000 auf nächsten Präfix (kumulativ)
+            let displayValue = value;
+            while (Math.abs(displayValue) >= 100000 && prefixIndex < siPrefixes.length - 1) {
+                displayValue /= 1000;
+                prefixIndex++;
+            }
+
+            const displayUnit = siPrefixes[prefixIndex] + baseUnit;
+            const absVal = Math.abs(displayValue);
+
+            if (forceDecimals !== undefined) {
+                return displayValue.toLocaleString('de-DE', {
+                    minimumFractionDigits: forceDecimals,
+                    maximumFractionDigits: forceDecimals
+                }) + ' ' + displayUnit;
+            }
+            if (absVal >= 1000) {
+                return displayValue.toLocaleString('de-DE', {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0
+                }) + ' ' + displayUnit;
+            }
+            if (absVal >= 10) {
+                return displayValue.toLocaleString('de-DE', {
+                    minimumFractionDigits: 1,
+                    maximumFractionDigits: 1
+                }) + ' ' + displayUnit;
+            }
+            return displayValue.toLocaleString('de-DE', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }) + ' ' + displayUnit;
+        }
+
+        /** Kurzform für Energiewerte (kWh). */
+        function formatEnergy(value, forceDecimals) {
+            return formatValue(value, 'kWh', forceDecimals);
+        }
+
+        /**
+         * Formatiert Y-Achsen-Werte für ECharts (ohne Einheit, da im Achsentitel).
+         * Tausendertrenner ab 1.000, k-Präfix ab 100.000.
+         */
+        function formatAxisValue(value) {
+            if (Math.abs(value) >= 100000) return (value / 1000).toFixed(0) + 'k';
+            if (Math.abs(value) >= 1000) return value.toLocaleString('de-DE', {maximumFractionDigits: 0});
+            return value;
+        }
+
+        function formatDate(date) {
+            const days = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+            const months = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 
+                          'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+            
+            return `${days[date.getDay()]}, ${date.getDate()}. ${months[date.getMonth()]} ${date.getFullYear()}`;
+        }
+        
+        function formatDateISO(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+        
+        async function loadData() {
+            try {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('error').style.display = 'none';
+                document.getElementById('frequencyChart').style.display = 'none';
+                document.getElementById('mainChart').style.display = 'none';
+                
+                // Stale-State verhindern: immer zurücksetzen vor neuem Laden
+                forecastData = null;
+                clearSkyData = null;
+                
+                const dateStr = formatDateISO(currentDate);
+                
+                // Prüfe ob Datum in der Zukunft liegt → Prognose laden
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const current = new Date(currentDate);
+                current.setHours(0, 0, 0, 0);
+                const daysAhead = Math.round((current - today) / 86400000);
+                
+                if (daysAhead > 0 && daysAhead <= 7) {
+                    // Zukunft: reine Prognose
+                    const response = await fetch(`/api/forecast_tag?date=${dateStr}`);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    chartData = await response.json();
+                    forecastData = null; // No separate overlay needed
+                    
+                    // Clear-Sky auch für Zukunftstage laden
+                    try {
+                        const csResponse = await fetch(`/api/clearsky_day?date=${dateStr}&interval=5`);
+                        if (csResponse.ok) {
+                            clearSkyData = await csResponse.json();
+                        } else {
+                            clearSkyData = null;
+                        }
+                    } catch (csErr) {
+                        clearSkyData = null;
+                    }
+                } else {
+                    // Heute oder Vergangenheit: Messdaten laden
+                    const response = await fetch(`/api/tag_visualization?date=${dateStr}`);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    chartData = await response.json();
+                    
+                    // Heute: Prognose LIVE laden (für Hintergrund-Overlay)
+                    if (daysAhead === 0) {
+                        try {
+                            const fcResponse = await fetch(`/api/forecast_tag?date=${dateStr}`);
+                            if (fcResponse.ok) {
+                                const fcData = await fcResponse.json();
+                                if (fcData.datapoints && fcData.datapoints.length > 0) {
+                                    forecastData = fcData;
+                                    chartData.has_forecast = true;
+                                    chartData.expected_kwh_total = fcData.expected_kwh;
+                                    chartData.forecast_quality = fcData.quality;
+                                    chartData.forecast_weather = fcData.weather_text;
+                                    console.log('Prognose separat geladen:',
+                                        fcData.datapoints.length, 'Stunden,',
+                                        fcData.expected_kwh, 'kWh erwartet');
+                                }
+                            }
+                        } catch (fcErr) {
+                            console.warn('Prognose-Laden fehlgeschlagen:', fcErr.message);
+                            forecastData = null;
+                        }
+                    } else {
+                        // Vergangenheit: gespeicherte Prognose aus DB laden
+                        try {
+                            const sfResponse = await fetch(`/api/stored_forecast?date=${dateStr}`);
+                            if (sfResponse.ok) {
+                                const sfData = await sfResponse.json();
+                                if (sfData.datapoints && sfData.datapoints.length > 0) {
+                                    forecastData = sfData;
+                                    chartData.has_forecast = true;
+                                    chartData.expected_kwh_total = sfData.expected_kwh;
+                                    chartData.forecast_quality = sfData.quality;
+                                    chartData.forecast_weather = sfData.weather_text;
+                                    // Clear-Sky aus gespeicherter Prognose übernehmen
+                                    if (sfData.clearsky_datapoints && sfData.clearsky_datapoints.length > 0) {
+                                        clearSkyData = {
+                                            datapoints: sfData.clearsky_datapoints,
+                                            total_kwh: sfData.clearsky_kwh,
+                                        };
+                                    }
+                                    console.log('Gespeicherte Prognose geladen:',
+                                        sfData.datapoints.length, 'Stunden,',
+                                        sfData.expected_kwh, 'kWh vorhergesagt');
+                                }
+                            } else {
+                                console.log('Keine gespeicherte Prognose für', dateStr);
+                            }
+                        } catch (sfErr) {
+                            console.warn('Gespeicherte Prognose Fehler:', sfErr.message);
+                        }
+                    }
+                    
+                    // Clear-Sky-Referenzkurve laden (für heute UND Vergangenheit)
+                    try {
+                        const csResponse = await fetch(`/api/clearsky_day?date=${dateStr}&interval=5`);
+                        if (csResponse.ok) {
+                            clearSkyData = await csResponse.json();
+                            console.log('Clear-Sky geladen:',
+                                clearSkyData.datapoints.length, 'Punkte,',
+                                clearSkyData.total_kwh, 'kWh Peak,',
+                                clearSkyData.peak_w, 'W');
+                        } else {
+                            clearSkyData = null;
+                        }
+                    } catch (csErr) {
+                        console.warn('Clear-Sky-Laden fehlgeschlagen:', csErr.message);
+                        clearSkyData = null;
+                    }
+                }
+                
+                console.log('Daten geladen:', chartData.datapoints.length, 'Punkte',
+                             chartData.forecast ? '(PROGNOSE)' : '(MESSDATEN)');
+                
+                // Update Navigation Display
+                updateDateDisplay();
+                
+                // Navigation: Erlaubt bis +5 Tage in die Zukunft
+                document.getElementById('btnNext').disabled = daysAhead >= 5;
+                
+                document.getElementById('loading').style.display = 'none';
+                // Frequenz-Chart nur bei echten Messdaten anzeigen
+                if (chartData.forecast) {
+                    document.getElementById('frequencyChart').style.display = 'none';
+                } else {
+                    document.getElementById('frequencyChart').style.display = 'block';
+                }
+                document.getElementById('mainChart').style.display = 'block';
+                
+                updateChart();
+                updateSummaryDisplay();
+                updateJetztButton();
+                
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').textContent = `Fehler beim Laden: ${error.message}`;
+                console.error('Fehler:', error);
+            }
+        }
+        
+        function updateChart() {
+            if (!chartData || !chartData.datapoints) {
+                console.error('Keine chartData vorhanden!');
+                return;
+            }
+            
+            console.log('updateChart gerufen, View:', currentView,
+                         chartData.forecast ? '(PROGNOSE)' : '');
+            
+            const chartDom = document.getElementById('mainChart');
+            const freqDom = document.getElementById('frequencyChart');
+            
+            if (chart) {
+                chart.dispose();
+            }
+            if (frequencyChart) {
+                frequencyChart.dispose();
+            }
+            
+            chart = echarts.init(chartDom);
+            
+            // Prognose: Spezial-Chart, kein Frequenz-Chart
+            if (chartData.forecast) {
+                createForecastChart();
+                window.addEventListener('resize', function() { chart.resize(); });
+                return;
+            }
+            
+            frequencyChart = echarts.init(freqDom);
+            
+            console.log('Charts initialisiert');
+            
+            createFrequencyChart();
+            
+            console.log('Frequenz-Chart erstellt');
+            
+            if (currentView === 'ertrag') {
+                createErtragChart();
+            } else {
+                createVerbrauchChart();
+            }
+            
+            console.log('Haupt-Chart erstellt');
+            
+            // Responsive resize
+            window.addEventListener('resize', function() {
+                chart.resize();
+                frequencyChart.resize();
+            });
+        }
+        
+        // ═══════════════════════════════════════════════════════
+        // PROGNOSE-CHART (Tag-Ansicht mit Forecast-Daten)
+        // ═══════════════════════════════════════════════════════
+        function createForecastChart() {
+            const times = chartData.datapoints.map(dp => {
+                const d = new Date(dp.timestamp * 1000);
+                return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+            });
+            
+            const kwh = chartData.expected_kwh || 0;
+            const quality = chartData.quality || '?';
+            const qualityEmoji = quality === 'gut' ? '☀️' : quality === 'mittel' ? '⛅' : '☁️';
+            const weather = chartData.weather_text || '';
+            const sunrise = chartData.sunrise ? chartData.sunrise.substring(11, 16) : '';
+            const sunset = chartData.sunset ? chartData.sunset.substring(11, 16) : '';
+            const sunshine = chartData.sunshine_hours || 0;
+            const tempMin = chartData.temp_min != null ? chartData.temp_min : '?';
+            const tempMax = chartData.temp_max != null ? chartData.temp_max : '?';
+            
+            const titleText = `${qualityEmoji} Prognose: ${kwh.toFixed(1)} kWh — ${weather}`;
+            const csKwh = clearSkyData ? clearSkyData.total_kwh : null;
+            const subtitleText = `☀ ${sunrise}–${sunset}  |  ${sunshine.toFixed(1)}h Sonne  |  ${tempMin}°/${tempMax}°C` +
+                (csKwh ? `  |  ☼ Clear Sky: ${csKwh.toFixed(1)} kWh` : '');
+            
+            const option = {
+                title: {
+                    text: titleText,
+                    subtext: subtitleText,
+                    left: 'center',
+                    top: 5,
+                    textStyle: { fontSize: 14 },
+                    subtextStyle: { fontSize: 11 }
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'cross' },
+                    formatter: function(params) {
+                        if (!params || params.length === 0) return '';
+                        const idx = params[0].dataIndex;
+                        const dp = chartData.datapoints[idx];
+                        let result = `<strong>${params[0].axisValue}</strong><br/>`;
+                        result += `☀ PV-Prognose: <strong>${(dp.p_produktion || 0).toFixed(0)} W</strong><br/>`;
+                        result += `☁ Bewölkung: ${dp.cloud_cover || 0} %<br/>`;
+                        result += `🌡 Temperatur: ${(dp.temp || 0).toFixed(1)} °C<br/>`;
+                        result += `💡 GHI: ${dp.ghi_wm2 || 0} W/m²`;
+                        return result;
+                    }
+                },
+                legend: {
+                    bottom: 0,
+                    icon: 'rect',
+                    data: [
+                        {name: 'PV-Prognose', itemStyle: {color: 'rgba(255, 152, 0, 1)'}},
+                        ...(clearSkyData ? [{name: 'Clear Sky', itemStyle: {color: 'rgba(255, 87, 34, 1)'}}] : []),
+                        {name: 'Bewölkung (%)', itemStyle: {color: 'rgba(100, 149, 237, 1)'}}
+                    ]
+                },
+                grid: {
+                    left: '3%',
+                    right: '5%',
+                    bottom: '15%',
+                    top: '18%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    boundaryGap: false,
+                    data: times,
+                    name: 'Uhrzeit'
+                },
+                yAxis: [
+                    {
+                        type: 'value',
+                        name: 'Leistung (W)',
+                        position: 'left'
+                    },
+                    {
+                        type: 'value',
+                        name: 'Bewölkung (%)',
+                        position: 'right',
+                        min: 0,
+                        max: 100,
+                        splitLine: { show: false }
+                    }
+                ],
+                series: [
+                    {
+                        name: 'PV-Prognose',
+                        type: 'line',
+                        smooth: true,
+                        symbol: 'circle',
+                        symbolSize: 6,
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: 'rgba(255, 152, 0, 0.6)' },
+                                { offset: 1, color: 'rgba(255, 152, 0, 0.05)' }
+                            ])
+                        },
+                        lineStyle: {
+                            color: 'rgba(255, 152, 0, 1)',
+                            width: 3,
+                            type: 'dashed'
+                        },
+                        itemStyle: {
+                            color: 'rgba(255, 152, 0, 1)'
+                        },
+                        data: chartData.datapoints.map(dp => dp.p_produktion)
+                    },
+                    // Clear-Sky reference for forecast chart (match to category timestamps)
+                    ...(clearSkyData && clearSkyData.datapoints ? [{
+                        name: 'Clear Sky',
+                        type: 'line',
+                        smooth: true,
+                        symbol: 'none',
+                        showSymbol: false,
+                        lineStyle: {
+                            color: 'rgba(255, 87, 34, 0.7)',
+                            width: 1.5,
+                            type: 'solid'
+                        },
+                        itemStyle: { color: 'rgba(255, 87, 34, 1)' },
+                        data: chartData.datapoints.map(dp => {
+                            // Find closest Clear-Sky point for this forecast timestamp
+                            const ts = dp.timestamp;
+                            let best = null, bestDiff = Infinity;
+                            for (const cs of clearSkyData.datapoints) {
+                                const diff = Math.abs(cs.timestamp - ts);
+                                if (diff < bestDiff) { bestDiff = diff; best = cs; }
+                            }
+                            return best ? best.total_ac : 0;
+                        })
+                    }] : []),
+                    {
+                        name: 'Bewölkung (%)',
+                        type: 'line',
+                        yAxisIndex: 1,
+                        smooth: true,
+                        symbol: 'none',
+                        showSymbol: false,
+                        lineStyle: {
+                            color: 'rgba(100, 149, 237, 0.7)',
+                            width: 1.5,
+                            type: 'dotted'
+                        },
+                        areaStyle: {
+                            color: 'rgba(100, 149, 237, 0.1)'
+                        },
+                        data: chartData.datapoints.map(dp => dp.cloud_cover)
+                    }
+                ]
+            };
+            
+            chart.setOption(option);
+            console.log('Forecast-Chart erstellt:', times.length, 'Stunden');
+        }
+        
+        function createFrequencyChart() {
+            try {
+                // Time-axis data: [timestamp_ms, frequency] pairs
+                const freqTimeSeries = chartData.datapoints.map(dp => 
+                    [dp.timestamp * 1000, dp.f_netz_avg || 50.0]
+                );
+                
+                // Feste 24h-Achse (synchron mit Hauptchart)
+                const bounds = getDayBounds();
+                const xMin = bounds.min;
+                const xMax = bounds.max;
+                
+                const option = {
+                    grid: {
+                        left: '3%',
+                        right: '5%',
+                        top: '10%',
+                        bottom: '10%',
+                        containLabel: false
+                    },
+                    visualMap: {
+                        type: 'piecewise',
+                        show: false,
+                        min: 49.2,
+                        max: 50.8,
+                        dimension: 1,
+                        pieces: [
+                            { min: 49.2, max: 49.4, color: '#d73027' },  // ROT: kritisch niedrig
+                            { min: 49.4, max: 49.8, color: '#fc8d59' },  // ORANGE: Warnung niedrig
+                            { min: 49.8, max: 49.95, color: '#fee08b' }, // GELB: Grenzbereich niedrig
+                            { min: 49.95, max: 50.05, color: '#1a9850' },// GRÜN: optimal ±0.05 Hz
+                            { min: 50.05, max: 50.2, color: '#fee08b' }, // GELB: Grenzbereich hoch
+                            { min: 50.2, max: 50.6, color: '#fc8d59' },  // ORANGE: Warnung hoch
+                            { min: 50.6, max: 50.8, color: '#d73027' }   // ROT: kritisch hoch
+                        ]
+                    },
+                    xAxis: {
+                        type: 'time',
+                        show: false,
+                        boundaryGap: false,
+                        min: xMin,
+                        max: xMax
+                    },
+                    yAxis: {
+                        type: 'value',
+                        min: 49.2,
+                        max: 50.8,
+                        show: false
+                    },
+                    series: [
+                        {
+                            type: 'line',
+                            smooth: true,
+                            symbol: 'none',
+                            showSymbol: false,
+                            lineStyle: {
+                                width: 2
+                            },
+                            data: freqTimeSeries
+                        }
+                    ]
+                };
+                
+                frequencyChart.setOption(option);
+                console.log('Frequenz-Option gesetzt, Daten:', freqTimeSeries.length, 'Punkte');
+            } catch (error) {
+                console.error('Fehler in createFrequencyChart:', error);
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════
+        // HELPER: Build time-based data arrays for charts
+        // Returns [timestamp_ms, value] pairs for ECharts time axis
+        // ═══════════════════════════════════════════════════════
+        function buildTimeAxis() {
+            // Convert monitoring data to [ts_ms, value] pairs
+            const tsToData = (field) => chartData.datapoints.map(dp => [dp.timestamp * 1000, dp[field]]);
+            
+            if (!forecastData || !forecastData.datapoints || forecastData.datapoints.length === 0) {
+                console.log('buildTimeAxis: kein Forecast vorhanden');
+                return { tsData: tsToData, forecastProduction: null, forecastCloudCover: null, hasForecast: false };
+            }
+            
+            // Forecast as [ts_ms, production] pairs (full day curve)
+            const forecastProduction = forecastData.datapoints.map(dp => 
+                [dp.timestamp * 1000, dp.p_produktion || 0]
+            );
+            
+            const peakW = Math.max(...forecastProduction.map(fp => fp[1]));
+            console.log('buildTimeAxis: Forecast Overlay aktiv,',
+                forecastProduction.length, 'Punkte, Peak:', Math.round(peakW), 'W');
+            
+            // Cloud cover as [ts_ms, %] pairs for background
+            const forecastCloudCover = forecastData.datapoints.map(dp =>
+                [dp.timestamp * 1000, dp.cloud_cover != null ? dp.cloud_cover : null]
+            );
+            
+            return { tsData: tsToData, forecastProduction, forecastCloudCover, hasForecast: true };
+        }
+        
+        // Build Clear-Sky [ts_ms, watt] pairs from clearSkyData
+        function buildClearSkyAxis() {
+            if (!clearSkyData || !clearSkyData.datapoints || clearSkyData.datapoints.length === 0) {
+                return null;
+            }
+            return clearSkyData.datapoints
+                .filter(dp => dp.total_ac > 0)
+                .map(dp => [dp.timestamp * 1000, dp.total_ac]);
+        }
+        
+        // Dynamische Y-Achse: Minimum 10kW, auf 5kW-Stufen aufgerundet
+        function calcYMax() {
+            let maxVal = 10000; // Minimum 10 kW
+            // Monitoring-Daten prüfen
+            if (chartData && chartData.datapoints) {
+                chartData.datapoints.forEach(dp => {
+                    if (dp.p_produktion > maxVal) maxVal = dp.p_produktion;
+                    // Auch Stacked-Summe prüfen (Ertrag-Chart)
+                    const stacked = (dp.p_direct_ertrag || 0) + (dp.p_inbatt_pv || 0) + (dp.p_exp || 0);
+                    if (stacked > maxVal) maxVal = stacked;
+                });
+            }
+            // Forecast-Daten prüfen
+            if (forecastData && forecastData.datapoints) {
+                forecastData.datapoints.forEach(dp => {
+                    if (dp.p_produktion > maxVal) maxVal = dp.p_produktion;
+                });
+            }
+            // Clear-Sky prüfen
+            if (clearSkyData && clearSkyData.peak_w && clearSkyData.peak_w > maxVal) {
+                maxVal = clearSkyData.peak_w;
+            }
+            // Auf 5000er-Stufen aufrunden (10000, 15000, 20000, 25000, 30000)
+            return Math.ceil(maxVal / 5000) * 5000;
+        }
+        
+        // Tages-Grenzen: immer 00:00 – 23:59 des aktuellen Tages
+        function getDayBounds() {
+            const d = new Date(currentDate);
+            const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
+            const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
+            return { min: start.getTime(), max: end.getTime() };
+        }
+        
+        // Shared time-axis xAxis config — immer volle 24h
+        function getTimeXAxis() {
+            const bounds = getDayBounds();
+            return {
+                type: 'time',
+                boundaryGap: false,
+                min: bounds.min,
+                max: bounds.max,
+                axisLabel: {
+                    formatter: function(value) {
+                        const d = new Date(value);
+                        return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                    }
+                },
+                splitLine: { show: false }
+            };
+        }
+        
+        // Shared tooltip for time-axis charts
+        function getTimeTooltip() {
+            return {
+                trigger: 'axis',
+                axisPointer: { type: 'cross' },
+                formatter: function(params) {
+                    if (!params || params.length === 0) return '';
+                    const ts = params[0].value[0];
+                    const d = new Date(ts);
+                    const timeStr = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                    let result = '<strong>' + timeStr + '</strong><br/>';
+                    params.forEach(item => {
+                        if (item.value[1] == null) return;
+                        let unit = ' W';
+                        if (item.seriesName === 'SOC (%)') unit = ' %';
+                        else if (item.seriesName === 'Bewölkung') unit = ' %';
+                        result += item.marker + ' ' + item.seriesName + ': ' + (item.value[1] || 0).toFixed(0) + unit + '<br/>';
+                    });
+                    return result;
+                }
+            };
+        }
+        
+        function createErtragChart() {
+            const axis = buildTimeAxis();
+            const hasFC = axis.hasForecast;
+            const td = axis.tsData;
+            const clearSky = buildClearSkyAxis();
+            
+            const legendData = [
+                {name: 'Direktverbrauch PV', itemStyle: {color: 'rgba(255, 193, 7, 1)'}},
+                {name: 'Batterieladung (PV)', itemStyle: {color: 'rgba(76, 175, 80, 1)'}},
+                {name: 'Einspeisung', itemStyle: {color: 'rgba(128, 128, 128, 1)'}},
+                {name: 'Verbrauch', itemStyle: {color: 'rgba(33, 150, 243, 1)'}},
+                {name: 'SOC (%)', itemStyle: {color: 'rgba(76, 175, 80, 1)'}}
+            ];
+            
+            if (clearSky) {
+                legendData.unshift({name: 'Clear Sky', itemStyle: {color: 'rgba(255, 87, 34, 1)'}});
+            }
+            if (hasFC) {
+                legendData.unshift({name: 'Prognose', itemStyle: {color: 'rgba(255, 152, 0, 1)'}});
+                legendData.push({name: 'Bewölkung', itemStyle: {color: 'rgba(120, 144, 180, 0.5)'}});
+            }
+            
+            const series = [];
+            
+            // Cloud cover background (drawn first — furthest behind, z:0)
+            if (hasFC && axis.forecastCloudCover) {
+                series.push({
+                    name: 'Bewölkung',
+                    type: 'line',
+                    yAxisIndex: 1,
+                    smooth: true,
+                    symbol: 'none',
+                    showSymbol: false,
+                    z: 0,
+                    areaStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(120, 144, 180, 0.35)' },
+                            { offset: 1, color: 'rgba(120, 144, 180, 0.05)' }
+                        ])
+                    },
+                    lineStyle: {
+                        color: 'rgba(120, 144, 180, 0.4)',
+                        width: 1,
+                        type: 'dotted'
+                    },
+                    itemStyle: { color: 'rgba(120, 144, 180, 0.5)' },
+                    data: axis.forecastCloudCover
+                });
+            }
+            
+            // Forecast background (drawn first = behind everything)
+            if (hasFC && axis.forecastProduction) {
+                series.push({
+                    name: 'Prognose',
+                    type: 'line',
+                    smooth: true,
+                    symbol: 'none',
+                    showSymbol: false,
+                    z: 1,
+                    areaStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(255, 152, 0, 0.25)' },
+                            { offset: 1, color: 'rgba(255, 152, 0, 0.03)' }
+                        ])
+                    },
+                    lineStyle: {
+                        color: 'rgba(255, 152, 0, 0.6)',
+                        width: 2,
+                        type: 'dashed'
+                    },
+                    itemStyle: { color: 'rgba(255, 152, 0, 1)' },
+                    data: axis.forecastProduction
+                });
+            }
+            
+            // Clear-Sky reference curve (thin solid line, behind monitoring)
+            if (clearSky) {
+                series.push({
+                    name: 'Clear Sky',
+                    type: 'line',
+                    smooth: true,
+                    symbol: 'none',
+                    showSymbol: false,
+                    z: 2,
+                    lineStyle: {
+                        color: 'rgba(255, 87, 34, 0.7)',
+                        width: 1.5,
+                        type: 'solid'
+                    },
+                    itemStyle: { color: 'rgba(255, 87, 34, 1)' },
+                    data: clearSky
+                });
+            }
+            
+            // Monitoring data series (drawn on top)
+            series.push(
+                {
+                    name: 'Direktverbrauch PV',
+                    type: 'line',
+                    stack: 'total',
+                    smooth: true,
+                    symbol: 'none',
+                    legendHoverLink: true,
+                    z: 3,
+                    itemStyle: { color: 'rgba(255, 193, 7, 1)' },
+                    areaStyle: { color: 'rgba(255, 193, 7, 0.7)' },
+                    lineStyle: { color: 'rgba(255, 193, 7, 1)', width: 1 },
+                    data: td('p_direct_ertrag')
+                },
+                {
+                    name: 'Batterieladung PV',
+                    type: 'line',
+                    stack: 'total',
+                    smooth: true,
+                    symbol: 'none',
+                    legendHoverLink: true,
+                    z: 3,
+                    itemStyle: { color: 'rgba(76, 175, 80, 1)' },
+                    areaStyle: { color: 'rgba(76, 175, 80, 0.7)' },
+                    lineStyle: { color: 'rgba(76, 175, 80, 1)', width: 1 },
+                    data: td('p_inbatt_pv')
+                },
+                {
+                    name: 'Einspeisung',
+                    type: 'line',
+                    stack: 'total',
+                    smooth: true,
+                    symbol: 'none',
+                    legendHoverLink: true,
+                    z: 3,
+                    itemStyle: { color: 'rgba(128, 128, 128, 1)' },
+                    areaStyle: { color: 'rgba(128, 128, 128, 0.7)' },
+                    lineStyle: { color: 'rgba(128, 128, 128, 1)', width: 1 },
+                    data: td('p_exp')
+                },
+                {
+                    name: 'Verbrauch',
+                    type: 'line',
+                    smooth: true,
+                    symbol: 'none',
+                    showSymbol: false,
+                    legendHoverLink: true,
+                    z: 4,
+                    itemStyle: { color: 'rgba(33, 150, 243, 1)' },
+                    lineStyle: { color: 'rgba(33, 150, 243, 1)', width: 2 },
+                    data: td('p_haushalt')
+                },
+                {
+                    name: 'SOC (%)',
+                    type: 'line',
+                    yAxisIndex: 1,
+                    smooth: true,
+                    symbol: 'none',
+                    showSymbol: false,
+                    legendHoverLink: true,
+                    z: 4,
+                    itemStyle: { color: 'rgba(76, 175, 80, 1)' },
+                    lineStyle: { color: 'rgba(76, 175, 80, 1)', width: 2 },
+                    data: td('soc')
+                }
+            );
+            
+            const option = {
+                tooltip: getTimeTooltip(),
+                legend: {
+                    bottom: 0,
+                    icon: 'rect',
+                    data: legendData
+                },
+                grid: {
+                    left: '3%',
+                    right: '5%',
+                    bottom: '15%',
+                    containLabel: true
+                },
+                xAxis: getTimeXAxis(),
+                yAxis: [
+                    { type: 'value', name: 'Leistung (W)', position: 'left', min: 0, max: calcYMax() },
+                    { type: 'value', name: '%', position: 'right', min: 0, max: 100, scale: false }
+                ],
+                series: series
+            };
+            
+            console.log('Ertrag-Option gesetzt, yMax:', calcYMax());
+            chart.setOption(option);
+        }
+        
+        function createVerbrauchChart() {
+            const axis = buildTimeAxis();
+            const hasFC = axis.hasForecast;
+            const td = axis.tsData;
+            const clearSky = buildClearSkyAxis();
+            
+            const legendData = [
+                {name: 'Direktverbrauch PV', itemStyle: {color: 'rgba(255, 193, 7, 1)'}},
+                {name: 'Batterieentladung', itemStyle: {color: 'rgba(76, 175, 80, 1)'}},
+                {name: 'Netzbezug', itemStyle: {color: 'rgba(128, 128, 128, 1)'}},
+                {name: 'Gesamt-Produktion', itemStyle: {color: 'rgba(255, 87, 34, 1)'}},
+                {name: 'SOC (%)', itemStyle: {color: 'rgba(76, 175, 80, 1)'}}
+            ];
+            
+            if (clearSky) {
+                legendData.unshift({name: 'Clear Sky', itemStyle: {color: 'rgba(255, 87, 34, 1)'}});
+            }
+            if (hasFC) {
+                legendData.unshift({name: 'Prognose', itemStyle: {color: 'rgba(255, 152, 0, 1)'}});
+                legendData.push({name: 'Bewölkung', itemStyle: {color: 'rgba(120, 144, 180, 0.5)'}});
+            }
+            
+            const series = [];
+            
+            // Cloud cover background (furthest behind, z:0)
+            if (hasFC && axis.forecastCloudCover) {
+                series.push({
+                    name: 'Bewölkung',
+                    type: 'line',
+                    yAxisIndex: 1,
+                    smooth: true,
+                    symbol: 'none',
+                    showSymbol: false,
+                    z: 0,
+                    areaStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(120, 144, 180, 0.35)' },
+                            { offset: 1, color: 'rgba(120, 144, 180, 0.05)' }
+                        ])
+                    },
+                    lineStyle: {
+                        color: 'rgba(120, 144, 180, 0.4)',
+                        width: 1,
+                        type: 'dotted'
+                    },
+                    itemStyle: { color: 'rgba(120, 144, 180, 0.5)' },
+                    data: axis.forecastCloudCover
+                });
+            }
+            
+            // Forecast background
+            if (hasFC && axis.forecastProduction) {
+                series.push({
+                    name: 'Prognose',
+                    type: 'line',
+                    smooth: true,
+                    symbol: 'none',
+                    showSymbol: false,
+                    z: 1,
+                    areaStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(255, 152, 0, 0.25)' },
+                            { offset: 1, color: 'rgba(255, 152, 0, 0.03)' }
+                        ])
+                    },
+                    lineStyle: {
+                        color: 'rgba(255, 152, 0, 0.6)',
+                        width: 2,
+                        type: 'dashed'
+                    },
+                    itemStyle: { color: 'rgba(255, 152, 0, 1)' },
+                    data: axis.forecastProduction
+                });
+            }
+            
+            // Clear-Sky reference curve (thin solid line, behind monitoring)
+            if (clearSky) {
+                series.push({
+                    name: 'Clear Sky',
+                    type: 'line',
+                    smooth: true,
+                    symbol: 'none',
+                    showSymbol: false,
+                    z: 2,
+                    lineStyle: {
+                        color: 'rgba(255, 87, 34, 0.7)',
+                        width: 1.5,
+                        type: 'solid'
+                    },
+                    itemStyle: { color: 'rgba(255, 87, 34, 1)' },
+                    data: clearSky
+                });
+            }
+            
+            series.push(
+                {
+                    name: 'Direktverbrauch PV',
+                    type: 'line',
+                    stack: 'total',
+                    smooth: true,
+                    symbol: 'none',
+                    legendHoverLink: true,
+                    z: 3,
+                    itemStyle: { color: 'rgba(255, 193, 7, 1)' },
+                    areaStyle: { color: 'rgba(255, 193, 7, 0.7)' },
+                    lineStyle: { color: 'rgba(255, 193, 7, 1)', width: 1 },
+                    data: td('p_direct_verbrauch')
+                },
+                {
+                    name: 'Batterieentladung',
+                    type: 'line',
+                    stack: 'total',
+                    smooth: true,
+                    symbol: 'none',
+                    legendHoverLink: true,
+                    z: 3,
+                    itemStyle: { color: 'rgba(76, 175, 80, 1)' },
+                    areaStyle: { color: 'rgba(76, 175, 80, 0.7)' },
+                    lineStyle: { color: 'rgba(76, 175, 80, 1)', width: 1 },
+                    data: td('p_outbatt')
+                },
+                {
+                    name: 'Netzbezug',
+                    type: 'line',
+                    stack: 'total',
+                    smooth: true,
+                    symbol: 'none',
+                    legendHoverLink: true,
+                    z: 3,
+                    itemStyle: { color: 'rgba(128, 128, 128, 1)' },
+                    areaStyle: { color: 'rgba(128, 128, 128, 0.7)' },
+                    lineStyle: { color: 'rgba(128, 128, 128, 1)', width: 1 },
+                    data: td('p_imp')
+                },
+                {
+                    name: 'Gesamt-Produktion',
+                    type: 'line',
+                    smooth: true,
+                    symbol: 'none',
+                    showSymbol: false,
+                    legendHoverLink: true,
+                    z: 4,
+                    itemStyle: { color: 'rgba(255, 87, 34, 1)' },
+                    lineStyle: { color: 'rgba(255, 87, 34, 1)', width: 2 },
+                    data: td('p_produktion')
+                },
+                {
+                    name: 'SOC (%)',
+                    type: 'line',
+                    yAxisIndex: 1,
+                    smooth: true,
+                    symbol: 'none',
+                    showSymbol: false,
+                    legendHoverLink: true,
+                    z: 4,
+                    itemStyle: { color: 'rgba(76, 175, 80, 1)' },
+                    lineStyle: { color: 'rgba(76, 175, 80, 1)', width: 2 },
+                    data: td('soc')
+                }
+            );
+            
+            const option = {
+                tooltip: getTimeTooltip(),
+                legend: {
+                    bottom: 0,
+                    icon: 'rect',
+                    data: legendData
+                },
+                grid: {
+                    left: '3%',
+                    right: '5%',
+                    bottom: '15%',
+                    containLabel: true
+                },
+                xAxis: getTimeXAxis(),
+                yAxis: [
+                    { type: 'value', name: 'Leistung (W)', position: 'left', min: 0, max: calcYMax() },
+                    { type: 'value', name: '%', position: 'right', min: 0, max: 100, scale: false }
+                ],
+                series: series
+            };
+            
+            chart.setOption(option);
+        }
+        
+        async function loadMonthData() {
+            try {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('error').style.display = 'none';
+                document.getElementById('frequencyChart').style.display = 'none';
+                document.getElementById('mainChart').style.display = 'none';
+                
+                const url = `/api/monat_visualization?year=${currentYear}&month=${currentMonth}`;
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                chartData = await response.json();
+                console.log('Monatsdaten geladen:', chartData.datapoints.length, 'Tage');
+                
+                // Prognose-Daten für nächste 2 Tage nachladen und mergen
+                try {
+                    const fcUrl = `/api/forecast_monat?year=${currentYear}&month=${currentMonth}`;
+                    const fcResponse = await fetch(fcUrl);
+                    if (fcResponse.ok) {
+                        const fcData = await fcResponse.json();
+                        if (fcData.datapoints && fcData.datapoints.length > 0) {
+                            // Nur Prognose-Tage hinzufügen, die nicht schon als Messdaten existieren
+                            const existingDays = new Set(chartData.datapoints.map(dp => dp.day));
+                            fcData.datapoints.forEach(dp => {
+                                if (!existingDays.has(dp.day)) {
+                                    chartData.datapoints.push(dp);
+                                }
+                            });
+                            console.log('Prognose-Tage hinzugefügt:', fcData.datapoints.length);
+                        }
+                    }
+                } catch (fcErr) {
+                    console.warn('Prognose-Daten nicht verfügbar:', fcErr.message);
+                }
+                
+                // Heute: Prognose-Restmenge für heutigen Balken ermitteln
+                try {
+                    const now = new Date();
+                    if (currentYear === now.getFullYear() && currentMonth === now.getMonth() + 1) {
+                        const todayDay = now.getDate();
+                        const todayDP = chartData.datapoints.find(dp => dp.day === todayDay && !dp.is_forecast);
+                        if (todayDP) {
+                            const todayStr = `${currentYear}-${String(currentMonth).padStart(2,'0')}-${String(todayDay).padStart(2,'0')}`;
+                            const fcTodayResp = await fetch(`/api/forecast_tag?date=${todayStr}`);
+                            if (fcTodayResp.ok) {
+                                const fcTodayData = await fcTodayResp.json();
+                                const expectedTotal = fcTodayData.expected_kwh || 0;
+                                const actualSoFar = todayDP.w_pv_total || 0;
+                                todayDP.w_forecast_remaining = Math.max(0, +(expectedTotal - actualSoFar).toFixed(2));
+                                todayDP.forecast_quality = fcTodayData.quality;
+                                console.log('Heute Prognose-Rest:', todayDP.w_forecast_remaining, 'kWh',
+                                    '(erwartet:', expectedTotal, '- gemessen:', actualSoFar, ')');
+                            }
+                        }
+                    }
+                } catch (fcErr) {
+                    console.warn('Heute-Prognose nicht verfügbar:', fcErr.message);
+                }
+                
+                // Update Navigation Display
+                updateMonthDisplay();
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('mainChart').style.display = 'block';
+                
+                // Frequenzlinie: zeige f_Netz Min/Max/Avg pro Tag
+                const hasFreqData = chartData.datapoints.some(dp => !dp.is_forecast && dp.f_netz_min != null);
+                if (hasFreqData) {
+                    document.getElementById('frequencyChart').style.display = 'block';
+                }
+                
+                createMonthChart();
+                
+                if (hasFreqData) {
+                    createMonthFrequencyChart();
+                }
+                
+            } catch (error) {
+                console.error('Fehler beim Laden der Monatsdaten:', error);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').textContent = 'Fehler beim Laden: ' + error.message;
+            }
+        }
+        
+        async function loadYearData() {
+            try {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('error').style.display = 'none';
+                document.getElementById('frequencyChart').style.display = 'none';
+                document.getElementById('mainChart').style.display = 'none';
+                
+                const url = `/api/jahr_visualization?year=${currentYear}`;
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                chartData = await response.json();
+                console.log('Jahresdaten geladen:', chartData.datapoints.length, 'Monate');
+                
+                updateYearDisplay();
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('mainChart').style.display = 'block';
+                
+                createYearChart();
+                
+            } catch (error) {
+                console.error('Fehler beim Laden der Jahresdaten:', error);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').textContent = 'Fehler beim Laden: ' + error.message;
+            }
+        }
+        
+        async function loadGesamtData() {
+            try {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('error').style.display = 'none';
+                document.getElementById('frequencyChart').style.display = 'none';
+                document.getElementById('mainChart').style.display = 'none';
+                
+                const url = '/api/gesamt_visualization';
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                chartData = await response.json();
+                console.log('Gesamtdaten geladen:', chartData.datapoints.length, 'Jahre');
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('mainChart').style.display = 'block';
+                
+                createGesamtChart();
+                
+            } catch (error) {
+                console.error('Fehler beim Laden der Gesamtdaten:', error);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').textContent = 'Fehler beim Laden: ' + error.message;
+            }
+        }
+        
+        function createMonthChart() {
+            if (chart) {
+                chart.dispose();
+                chart = null;
+            }
+            
+            chart = echarts.init(document.getElementById('mainChart'));
+            
+            // Bestimme Anzahl Tage im aktuellen Monat
+            const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+            
+            // X-Achse: Alle Tage des Monats (1. bis 31. bzw. 28/29/30)
+            const days = Array.from({length: daysInMonth}, (_, i) => `${i + 1}.`);
+            
+            // Erstelle Mapping: Tag -> Daten
+            const dataByDay = {};
+            chartData.datapoints.forEach(dp => {
+                dataByDay[dp.day] = dp;
+            });
+            
+            // Erstelle Daten-Arrays für ERTRAG (linker Balken)
+            // C: Prognose-Tage NUR als Ertrag-Balken (kein Verbrauch), extra transparent
+            const forecastStyle = {
+                color: 'rgba(255, 152, 0, 0.3)',
+                borderColor: 'rgba(255, 152, 0, 0.8)',
+                borderWidth: 1.5,
+                borderType: 'dashed'
+            };
+            
+            const einspeisungData = days.map((_, i) => {
+                const day = i + 1;
+                const dp = dataByDay[day];
+                if (!dp) return null;
+                const item = {
+                    value: dp.w_einspeisung,
+                    verbrauch: dp.w_gesamtverbrauch,
+                    erzeugung: dp.w_pv_total
+                };
+                if (dp.is_forecast) item.itemStyle = { ...forecastStyle, color: 'rgba(158, 158, 158, 0.3)' };
+                return item;
+            });
+            const batterieladungData = days.map((_, i) => {
+                const day = i + 1;
+                const dp = dataByDay[day];
+                if (!dp) return null;
+                const item = {
+                    value: dp.w_batterieladung,
+                    verbrauch: dp.w_gesamtverbrauch,
+                    erzeugung: dp.w_pv_total
+                };
+                if (dp.is_forecast) item.itemStyle = { ...forecastStyle, color: 'rgba(56, 142, 60, 0.3)' };
+                return item;
+            });
+            const direktverbrauchErtragData = days.map((_, i) => {
+                const day = i + 1;
+                const dp = dataByDay[day];
+                if (!dp) return null;
+                const item = {
+                    value: dp.w_direktverbrauch,
+                    verbrauch: dp.w_gesamtverbrauch,
+                    erzeugung: dp.w_pv_total
+                };
+                if (dp.is_forecast) item.itemStyle = forecastStyle;
+                return item;
+            });
+            
+            // C: Erstelle Daten-Arrays für VERBRAUCH (rechter Balken)
+            // Prognose-Tage haben KEINEN Verbrauch-Balken
+            const netzbezugData = days.map((_, i) => {
+                const day = i + 1;
+                const dp = dataByDay[day];
+                if (!dp || dp.is_forecast) return null;
+                return {
+                    value: dp.w_netzbezug,
+                    erzeugung: dp.w_pv_total,
+                    autarkie: dp.autarkie
+                };
+            });
+            const batterieentladungData = days.map((_, i) => {
+                const day = i + 1;
+                const dp = dataByDay[day];
+                if (!dp || dp.is_forecast) return null;
+                return {
+                    value: dp.w_batterieentladung,
+                    erzeugung: dp.w_pv_total,
+                    autarkie: dp.autarkie
+                };
+            });
+            const direktverbrauchVerbrauchData = days.map((_, i) => {
+                const day = i + 1;
+                const dp = dataByDay[day];
+                if (!dp || dp.is_forecast) return null;
+                return {
+                    value: dp.w_direktverbrauch,
+                    erzeugung: dp.w_pv_total,
+                    autarkie: dp.autarkie
+                };
+            });
+            
+            // Prognose-Restmenge für heute (stacked auf Ertrag)
+            const prognoseRestData = days.map((_, i) => {
+                const day = i + 1;
+                const dp = dataByDay[day];
+                if (!dp || !dp.w_forecast_remaining) return null;
+                return {
+                    value: dp.w_forecast_remaining,
+                    erzeugung: dp.w_pv_total,
+                    forecast_remaining: dp.w_forecast_remaining
+                };
+            });
+            
+            // Prognose-Linie: dünne graue waagerechte Markierungen pro Tag
+            // Linie steht links und rechts 2mm (~0.3 Einheiten) über die Balken hinaus
+            const forecastLineData = [];
+            days.forEach((_, i) => {
+                const day = i + 1;
+                const dp = dataByDay[day];
+                if (dp && dp.forecast_kwh != null && !dp.is_forecast) {
+                    forecastLineData.push({
+                        value: dp.forecast_kwh,
+                        xAxis: i  // category index
+                    });
+                }
+            });
+            
+            console.log('Monatschart - Tage im Monat:', daysInMonth);
+            console.log('Monatschart - Datenpunkte verfügbar:', chartData.datapoints.length);
+            
+            // Summen berechnen
+            updateSummaryDisplay();
+            
+            // Responsive: Bildschirmbreite bestimmen
+            const screenWidth = window.innerWidth;
+            let visibleDays = 31; // Standard: große Bildschirme zeigen alle Tage
+            
+            // Responsive Anpassung
+            if (screenWidth < 480) {
+                visibleDays = 7;  // Handy: 7 Tage
+            } else if (screenWidth < 768) {
+                visibleDays = 14; // Tablet Portrait: 14 Tage
+            } else if (screenWidth < 1024) {
+                visibleDays = 21; // Tablet Landscape: 21 Tage
+            }
+            
+            // DataZoom Start/End berechnen
+            const zoomEnd = 100; // Immer bis zum Ende (aktueller Tag)
+            const zoomStart = Math.max(0, 100 - (visibleDays / daysInMonth * 100));
+            
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    formatter: function(params) {
+                        if (!params || params.length === 0) return '';
+                        
+                        const dayIndex = params[0].dataIndex;
+                        const day = dayIndex + 1;
+                        const dp = dataByDay[day];
+                        
+                        // Formatiere Datum wie bei SolarWeb: "18.01.2026"
+                        const datum = new Date(currentYear, currentMonth - 1, day);
+                        const datumStr = datum.toLocaleDateString('de-DE', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric'
+                        });
+                        
+                        if (!dp) return `<strong>${datumStr}</strong><br/>Keine Daten`;
+                        
+                        // Prognose-Tage speziell kennzeichnen
+                        if (dp.is_forecast) {
+                            let result = `<strong>${datumStr}</strong> ☀️ <em>Prognose</em><br/><br/>`;
+                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(255,152,0,0.6);border:2px dashed #FF9800;margin-right:5px;"></span>`;
+                            result += `PV-Prognose: <strong>${formatEnergy(dp.w_pv_total)}</strong><br/>`;
+                            if (dp.quality) result += `Qualität: ${dp.quality}<br/>`;
+                            if (dp.weather_text) result += `Wetter: ${dp.weather_text}`;
+                            return result;
+                        }
+                        
+                        let result = `<strong>${datumStr}</strong><br/><br/>`;
+                        
+                        // Alle Einzelwerte (nur wenn > 0)
+                        if (dp.w_netzbezug > 0) {
+                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(244,67,54,0.8);border:1px solid #000;margin-right:5px;"></span>${formatEnergy(dp.w_netzbezug)}<br/>`;
+                        }
+                        if (dp.w_einspeisung > 0) {
+                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(158,158,158,0.8);border:1px solid #000;margin-right:5px;"></span>${formatEnergy(dp.w_einspeisung)}<br/>`;
+                        }
+                        if (dp.w_batterieladung > 0) {
+                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(56,142,60,0.85);border:1px solid #000;margin-right:5px;"></span>${formatEnergy(dp.w_batterieladung)}<br/>`;
+                        }
+                        if (dp.w_batterieentladung > 0) {
+                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(139,195,74,0.8);border:1px solid #000;margin-right:5px;"></span>${formatEnergy(dp.w_batterieentladung)}<br/>`;
+                        }
+                        if (dp.w_direktverbrauch > 0) {
+                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(255,193,7,0.8);border:1px solid #000;margin-right:5px;"></span>${formatEnergy(dp.w_direktverbrauch)}<br/>`;
+                        }
+                        
+                        // Trennlinie
+                        result += '<hr style="border:none;border-top:1px solid #ccc;margin:8px 0;"/>';
+                        
+                        // Prognose-Rest für heute
+                        if (dp.w_forecast_remaining > 0) {
+                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(255,152,0,0.3);border:2px dashed #FF9800;margin-right:5px;"></span>Prognose Rest: ${formatEnergy(dp.w_forecast_remaining)}<br/>`;
+                        }
+                        
+                        // Trennlinie
+                        result += '<hr style="border:none;border-top:1px solid #ccc;margin:8px 0;"/>';
+                        
+                        // Summen
+                        result += `<strong>Erzeugung:</strong> ${formatEnergy(dp.w_pv_total)}`;
+                        if (dp.w_forecast_remaining > 0) {
+                            result += ` + ${formatEnergy(dp.w_forecast_remaining)} erwartet`;
+                        }
+                        result += '<br/>';
+                        result += `<strong>Verbrauch:</strong> ${formatEnergy(dp.w_gesamtverbrauch)}<br/>`;
+                        result += `<strong>Autarkie:</strong> ${dp.autarkie} %`;
+                        
+                        return result;
+                    }
+                },
+                legend: {
+                    data: ['Direkt (Ertrag)', 'Batterieladung', 'Einspeisung', 'Prognose (Rest)', 'Direkt (Verbrauch)', 'Batterieentladung', 'Netzbezug', 'Prognose'],
+                    bottom: daysInMonth > visibleDays ? 50 : 10,
+                    left: 'center'
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: daysInMonth > visibleDays ? '100px' : '80px',
+                    top: '35px',
+                    containLabel: true
+                },
+                dataZoom: daysInMonth > visibleDays ? [
+                    {
+                        type: 'slider',
+                        show: true,
+                        xAxisIndex: 0,
+                        start: zoomStart,
+                        end: zoomEnd,
+                        bottom: 15,
+                        height: 20,
+                        handleSize: '110%',
+                        handleStyle: {
+                            color: '#667eea'
+                        },
+                        textStyle: {
+                            color: '#666'
+                        },
+                        borderColor: '#ddd',
+                        fillerColor: 'rgba(102, 126, 234, 0.2)',
+                        labelFormatter: function(value) {
+                            return Math.floor(value + 1) + '.';
+                        }
+                    },
+                    {
+                        type: 'inside',
+                        xAxisIndex: 0,
+                        start: zoomStart,
+                        end: zoomEnd,
+                        zoomOnMouseWheel: true,
+                        moveOnMouseMove: true,
+                        moveOnMouseWheel: true
+                    }
+                ] : [],
+                xAxis: {
+                    type: 'category',
+                    data: days,
+                    name: 'Tag des Monats',
+                    nameLocation: 'middle',
+                    nameGap: 30,
+                    boundaryGap: true,
+                    axisLabel: {
+                        interval: 0,
+                        rotate: daysInMonth > 21 ? 45 : 0,
+                        fontSize: 11
+                    },
+                    axisTick: {
+                        alignWithLabel: true,
+                        length: 8
+                    },
+                    splitLine: {
+                        show: true,
+                        lineStyle: {
+                            color: '#ccc',
+                            width: 1,
+                            type: 'solid'
+                        }
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: 'Energie (kWh)',
+                    nameTextStyle: {
+                        fontSize: 12
+                    },
+                    axisLabel: {
+                        formatter: formatAxisValue
+                    }
+                },
+                series: [
+                    // ERTRAG Stack (linker Balken) - von unten nach oben
+                    {
+                        name: 'Direkt (Ertrag)',
+                        type: 'bar',
+                        stack: 'ertrag',
+                        barMaxWidth: 40,
+                        barGap: '15%',
+                        barCategoryGap: '40%',
+                        itemStyle: { 
+                            color: 'rgba(255, 193, 7, 0.8)',
+                            borderColor: '#000',
+                            borderWidth: 0.5
+                        },
+                        data: direktverbrauchErtragData
+                    },
+                    {
+                        name: 'Batterieladung',
+                        type: 'bar',
+                        stack: 'ertrag',
+                        barMaxWidth: 40,
+                        itemStyle: { 
+                            color: 'rgba(56, 142, 60, 0.85)',
+                            borderColor: '#000',
+                            borderWidth: 0.5
+                        },
+                        data: batterieladungData
+                    },
+                    {
+                        name: 'Einspeisung',
+                        type: 'bar',
+                        stack: 'ertrag',
+                        barMaxWidth: 40,
+                        itemStyle: { 
+                            color: 'rgba(158, 158, 158, 0.8)',
+                            borderColor: '#000',
+                            borderWidth: 0.5
+                        },
+                        data: einspeisungData
+                    },
+                    {
+                        name: 'Prognose (Rest)',
+                        type: 'bar',
+                        stack: 'ertrag',
+                        barMaxWidth: 40,
+                        itemStyle: {
+                            color: 'rgba(255, 152, 0, 0.3)',
+                            borderColor: 'rgba(255, 152, 0, 0.8)',
+                            borderWidth: 1.5,
+                            borderType: 'dashed'
+                        },
+                        data: prognoseRestData
+                    },
+                    // VERBRAUCH Stack (rechter Balken) - von unten nach oben
+                    {
+                        name: 'Direkt (Verbrauch)',
+                        type: 'bar',
+                        stack: 'verbrauch',
+                        barMaxWidth: 40,
+                        itemStyle: { 
+                            color: 'rgba(255, 193, 7, 0.8)',
+                            borderColor: '#000',
+                            borderWidth: 0.5
+                        },
+                        data: direktverbrauchVerbrauchData
+                    },
+                    {
+                        name: 'Batterieentladung',
+                        type: 'bar',
+                        stack: 'verbrauch',
+                        barMaxWidth: 40,
+                        itemStyle: { 
+                            color: 'rgba(139, 195, 74, 0.8)',
+                            borderColor: '#000',
+                            borderWidth: 0.5
+                        },
+                        data: batterieentladungData
+                    },
+                    {
+                        name: 'Netzbezug',
+                        type: 'bar',
+                        stack: 'verbrauch',
+                        barMaxWidth: 40,
+                        itemStyle: { 
+                            color: 'rgba(244, 67, 54, 0.8)',
+                            borderColor: '#000',
+                            borderWidth: 0.5
+                        },
+                        data: netzbezugData
+                    },
+                    // Prognose-Linie: dünne graue horizontale Striche pro Tag
+                    {
+                        name: 'Prognose',
+                        type: 'scatter',
+                        symbol: 'rect',
+                        symbolSize: function(val, params) {
+                            // Breite: etwas breiter als Balken (2mm Überstand je Seite)
+                            // Höhe: 2px = dünne Linie
+                            return [28, 2];
+                        },
+                        symbolOffset: ['-50%', 0],  // Links ausrichten (auf Ertrag-Stack)
+                        itemStyle: {
+                            color: 'rgba(160, 160, 160, 0.7)',
+                            borderWidth: 0
+                        },
+                        z: 10,
+                        data: forecastLineData.map(fl => ({
+                            value: [fl.xAxis, fl.value],
+                            symbolSize: [32, 2.5]
+                        })),
+                        tooltip: {
+                            formatter: function(params) {
+                                const day = params.data.value[0] + 1;
+                                const fc = params.data.value[1];
+                                return `<strong>${day}.</strong><br/>Prognose: ${formatEnergy(fc)}`;
+                            }
+                        }
+                    }
+                ]
+            };
+            
+            chart.setOption(option);
+            chart.group = 'monthSync';
+            
+            // Drill-down: Klick auf Tages-Balken → Tag-Ansicht
+            chart.on('click', function(params) {
+                if (params.componentType === 'series') {
+                    const dayNum = params.dataIndex + 1;
+                    const clickedDate = new Date(currentYear, currentMonth - 1, dayNum);
+                    currentDate = clickedDate;
+                    navigateToView('tag', true);
+                }
+            });
+        }
+        
+        function createMonthFrequencyChart() {
+            // Stündliche Netzfrequenz-Daten: senkrechte Peaks bei Anomalien
+            try {
+                const freqDom = document.getElementById('frequencyChart');
+                if (frequencyChart) {
+                    frequencyChart.dispose();
+                }
+                frequencyChart = echarts.init(freqDom);
+                
+                const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+                
+                // Lade stündliche Frequenz-Daten vom neuen Endpunkt
+                fetch(`/api/monat_frequency?year=${currentYear}&month=${currentMonth}`)
+                    .then(r => r.json())
+                    .then(freqData => {
+                        if (!freqData.datapoints || freqData.datapoints.length === 0) {
+                            console.log('Keine stündlichen Frequenzdaten');
+                            return;
+                        }
+                        
+                        // Daten als [x, y] Paare: x = fraktionale Tagesposition
+                        // Hauptchart hat category-Achse mit boundaryGap=true:
+                        // Index 0 = Tag 1, Index 1 = Tag 2, ...
+                        // Damit dataZoom-Sync (prozentual) passt, nutze day_frac
+                        // wobei 0.5 = Mittag Tag 1 auf Index 0 zentriert
+                        const avgData = [];
+                        const minData = [];
+                        const maxData = [];
+                        
+                        freqData.datapoints.forEach(dp => {
+                            avgData.push([dp.day_frac, dp.f_avg]);
+                            minData.push([dp.day_frac, dp.f_min]);
+                            maxData.push([dp.day_frac, dp.f_max]);
+                        });
+                        
+                        // DataZoom synchron zum Hauptchart
+                        const screenWidth = window.innerWidth;
+                        let visibleDays = 31;
+                        if (screenWidth < 480) visibleDays = 7;
+                        else if (screenWidth < 768) visibleDays = 14;
+                        else if (screenWidth < 1024) visibleDays = 21;
+                        
+                        const zoomEnd = 100;
+                        const zoomStart = Math.max(0, 100 - (visibleDays / daysInMonth * 100));
+                        
+                        const option = {
+                            tooltip: {
+                                trigger: 'axis',
+                                formatter: function(params) {
+                                    if (!params || params.length === 0) return '';
+                                    const dp = freqData.datapoints.find(d => 
+                                        Math.abs(d.day_frac - params[0].data[0]) < 0.001);
+                                    if (!dp) return '';
+                                    const monthNames = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+                                    return `<strong>${dp.day}. ${monthNames[currentMonth-1]}, ${dp.hour}:00 Uhr</strong><br/>` +
+                                           `f<sub>Netz</sub> Min: <strong>${dp.f_min.toFixed(3)} Hz</strong><br/>` +
+                                           `f<sub>Netz</sub> Avg: <strong>${dp.f_avg.toFixed(3)} Hz</strong><br/>` +
+                                           `f<sub>Netz</sub> Max: <strong>${dp.f_max.toFixed(3)} Hz</strong>`;
+                                }
+                            },
+                            backgroundColor: 'transparent',
+                            grid: {
+                                left: '3%',
+                                right: '4%',
+                                top: '5%',
+                                bottom: '0%',
+                                containLabel: false
+                            },
+                            visualMap: {
+                                type: 'piecewise',
+                                show: false,
+                                min: 49.2,
+                                max: 50.8,
+                                dimension: 1,
+                                seriesIndex: 0,
+                                pieces: [
+                                    { min: 49.2, max: 49.4, color: '#d73027' },
+                                    { min: 49.4, max: 49.8, color: '#fc8d59' },
+                                    { min: 49.8, max: 49.95, color: '#fee08b' },
+                                    { min: 49.95, max: 50.05, color: '#1a9850' },
+                                    { min: 50.05, max: 50.2, color: '#fee08b' },
+                                    { min: 50.2, max: 50.6, color: '#fc8d59' },
+                                    { min: 50.6, max: 50.8, color: '#d73027' }
+                                ]
+                            },
+                            xAxis: {
+                                type: 'value',
+                                min: 0,
+                                max: daysInMonth - 1,
+                                show: false
+                            },
+                            yAxis: {
+                                type: 'value',
+                                min: 49.2,
+                                max: 50.8,
+                                show: false
+                            },
+                            dataZoom: daysInMonth > visibleDays ? [{
+                                type: 'inside',
+                                xAxisIndex: 0,
+                                start: zoomStart,
+                                end: zoomEnd,
+                                zoomOnMouseWheel: true,
+                                moveOnMouseMove: true
+                            }] : [],
+                            series: [
+                                // Avg-Linie (visualMap-gefärbt)
+                                {
+                                    type: 'line',
+                                    smooth: false,
+                                    symbol: 'none',
+                                    lineStyle: { width: 1.5 },
+                                    data: avgData,
+                                    z: 3
+                                },
+                                // Min-Linie (scharfe Peaks nach unten)
+                                {
+                                    type: 'line',
+                                    smooth: false,
+                                    symbol: 'none',
+                                    lineStyle: { width: 1, color: 'rgba(180, 60, 60, 0.5)', type: 'dotted' },
+                                    data: minData,
+                                    z: 1
+                                },
+                                // Max-Linie (scharfe Peaks nach oben)
+                                {
+                                    type: 'line',
+                                    smooth: false,
+                                    symbol: 'none',
+                                    lineStyle: { width: 1, color: 'rgba(180, 60, 60, 0.5)', type: 'dotted' },
+                                    data: maxData,
+                                    z: 2
+                                }
+                            ]
+                        };
+                        
+                        frequencyChart.setOption(option);
+                        frequencyChart.group = 'monthSync';
+                        echarts.connect('monthSync');
+                        
+                        console.log('Monat-Frequenz-Chart (stündlich):', freqData.count, 'Messpunkte');
+                    })
+                    .catch(err => console.error('Fehler beim Laden der Frequenzdaten:', err));
+                
+            } catch (error) {
+                console.error('Fehler in createMonthFrequencyChart:', error);
+            }
+        }
+        
+        function createStackedBarChart(title, xLabels, dataByKey, keyField) {
+            /**
+             * Generische Funktion für gestapelte Balken-Charts (Jahr, Gesamt).
+             * Gleiche Optik wie createMonthChart(), aber mit beliebigen X-Labels.
+             */
+            if (chart) {
+                chart.dispose();
+                chart = null;
+            }
+            
+            chart = echarts.init(document.getElementById('mainChart'));
+            
+            const dataByLabel = {};
+            chartData.datapoints.forEach(dp => {
+                dataByLabel[dp[keyField]] = dp;
+            });
+            
+            // Ertrag-Stack
+            const einspeisungData = xLabels.map((_, i) => {
+                const dp = chartData.datapoints[i];
+                return dp ? { value: dp.w_einspeisung, verbrauch: dp.w_gesamtverbrauch, erzeugung: dp.w_pv_total } : null;
+            });
+            const batterieladungData = xLabels.map((_, i) => {
+                const dp = chartData.datapoints[i];
+                return dp ? { value: dp.w_batterieladung, verbrauch: dp.w_gesamtverbrauch, erzeugung: dp.w_pv_total } : null;
+            });
+            const direktverbrauchErtragData = xLabels.map((_, i) => {
+                const dp = chartData.datapoints[i];
+                return dp ? { value: dp.w_direktverbrauch, verbrauch: dp.w_gesamtverbrauch, erzeugung: dp.w_pv_total } : null;
+            });
+            
+            // Verbrauch-Stack
+            const netzbezugData = xLabels.map((_, i) => {
+                const dp = chartData.datapoints[i];
+                return dp ? { value: dp.w_netzbezug, erzeugung: dp.w_pv_total, autarkie: dp.autarkie } : null;
+            });
+            const batterieentladungData = xLabels.map((_, i) => {
+                const dp = chartData.datapoints[i];
+                return dp ? { value: dp.w_batterieentladung, erzeugung: dp.w_pv_total, autarkie: dp.autarkie } : null;
+            });
+            const direktverbrauchVerbrauchData = xLabels.map((_, i) => {
+                const dp = chartData.datapoints[i];
+                return dp ? { value: dp.w_direktverbrauch, erzeugung: dp.w_pv_total, autarkie: dp.autarkie } : null;
+            });
+            
+            updateSummaryDisplay();
+            
+            const option = {
+                title: {
+                    text: title,
+                    left: 'center',
+                    top: 10
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    formatter: function(params) {
+                        if (!params || params.length === 0) return '';
+                        const i = params[0].dataIndex;
+                        const dp = chartData.datapoints[i];
+                        if (!dp || dp.w_pv_total === 0) return `<strong>${xLabels[i]}</strong><br/>Keine Daten`;
+                        
+                        let result = `<strong>${dp.label || xLabels[i]}</strong><br/><br/>`;
+                        
+                        if (dp.w_netzbezug > 0) {
+                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(244,67,54,0.8);border:1px solid #000;margin-right:5px;"></span>Netzbez. ${formatEnergy(dp.w_netzbezug)}<br/>`;
+                        }
+                        if (dp.w_einspeisung > 0) {
+                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(158,158,158,0.8);border:1px solid #000;margin-right:5px;"></span>Einspeis. ${formatEnergy(dp.w_einspeisung)}<br/>`;
+                        }
+                        if (dp.w_batterieladung > 0) {
+                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(56,142,60,0.85);border:1px solid #000;margin-right:5px;"></span>Batt.lad. ${formatEnergy(dp.w_batterieladung)}<br/>`;
+                        }
+                        if (dp.w_batterieentladung > 0) {
+                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(139,195,74,0.8);border:1px solid #000;margin-right:5px;"></span>Batt.entl. ${formatEnergy(dp.w_batterieentladung)}<br/>`;
+                        }
+                        if (dp.w_direktverbrauch > 0) {
+                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(255,193,7,0.8);border:1px solid #000;margin-right:5px;"></span>Direkt ${formatEnergy(dp.w_direktverbrauch)}<br/>`;
+                        }
+                        
+                        result += '<hr style="border:none;border-top:1px solid #ccc;margin:8px 0;"/>';
+                        result += `<strong>Erzeugung:</strong> ${formatEnergy(dp.w_pv_total)}<br/>`;
+                        result += `<strong>Verbrauch:</strong> ${formatEnergy(dp.w_gesamtverbrauch)}<br/>`;
+                        result += `<strong>Autarkie:</strong> ${dp.autarkie} %`;
+                        
+                        return result;
+                    }
+                },
+                legend: {
+                    data: ['Direkt (Ertrag)', 'Batterieladung', 'Einspeisung', 'Direkt (Verbrauch)', 'Batterieentladung', 'Netzbezug'],
+                    bottom: 10,
+                    left: 'center'
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '80px',
+                    top: '60px',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: xLabels,
+                    boundaryGap: true,
+                    axisLabel: {
+                        interval: 0,
+                        fontSize: 11
+                    },
+                    axisTick: {
+                        alignWithLabel: true,
+                        length: 8
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: 'Energie (kWh)',
+                    nameTextStyle: { fontSize: 12 },
+                    axisLabel: {
+                        formatter: formatAxisValue
+                    }
+                },
+                series: [
+                    {
+                        name: 'Direkt (Ertrag)',
+                        type: 'bar',
+                        stack: 'ertrag',
+                        barMaxWidth: 60,
+                        barGap: '15%',
+                        barCategoryGap: '40%',
+                        itemStyle: { color: 'rgba(255, 193, 7, 0.8)', borderColor: '#000', borderWidth: 0.5 },
+                        data: direktverbrauchErtragData
+                    },
+                    {
+                        name: 'Batterieladung',
+                        type: 'bar',
+                        stack: 'ertrag',
+                        barMaxWidth: 60,
+                        itemStyle: { color: 'rgba(56, 142, 60, 0.85)', borderColor: '#000', borderWidth: 0.5 },
+                        data: batterieladungData
+                    },
+                    {
+                        name: 'Einspeisung',
+                        type: 'bar',
+                        stack: 'ertrag',
+                        barMaxWidth: 60,
+                        itemStyle: { color: 'rgba(158, 158, 158, 0.8)', borderColor: '#000', borderWidth: 0.5 },
+                        data: einspeisungData
+                    },
+                    {
+                        name: 'Direkt (Verbrauch)',
+                        type: 'bar',
+                        stack: 'verbrauch',
+                        barMaxWidth: 60,
+                        itemStyle: { color: 'rgba(255, 193, 7, 0.8)', borderColor: '#000', borderWidth: 0.5 },
+                        data: direktverbrauchVerbrauchData
+                    },
+                    {
+                        name: 'Batterieentladung',
+                        type: 'bar',
+                        stack: 'verbrauch',
+                        barMaxWidth: 60,
+                        itemStyle: { color: 'rgba(139, 195, 74, 0.8)', borderColor: '#000', borderWidth: 0.5 },
+                        data: batterieentladungData
+                    },
+                    {
+                        name: 'Netzbezug',
+                        type: 'bar',
+                        stack: 'verbrauch',
+                        barMaxWidth: 60,
+                        itemStyle: { color: 'rgba(244, 67, 54, 0.8)', borderColor: '#000', borderWidth: 0.5 },
+                        data: netzbezugData
+                    }
+                ]
+            };
+            
+            chart.setOption(option);
+            
+            // Drill-down: Klick navigiert zur nächsten Detailebene
+            if (currentPeriod === 'gesamt') {
+                // Gesamt → Jahr: Klick auf Jahres-Balken → Jahr-Ansicht
+                chart.on('click', function(params) {
+                    if (params.componentType === 'series') {
+                        const dp = chartData.datapoints[params.dataIndex];
+                        if (dp && dp.year) {
+                            currentYear = dp.year;
+                            navigateToView('jahr', true);
+                        }
+                    }
+                });
+            } else if (currentPeriod === 'jahr') {
+                // Jahr → Monat: Klick auf Monats-Balken → Monat-Ansicht
+                chart.on('click', function(params) {
+                    if (params.componentType === 'series') {
+                        currentMonth = params.dataIndex + 1;
+                        // currentYear bleibt erhalten
+                        navigateToView('monat', true);
+                    }
+                });
+            }
+        }
+        
+        function createYearChart() {
+            const monthNames = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+            
+            // Erstelle Array mit 12 Monaten (alle mit Nullwerten initialisiert)
+            const fullYearData = Array(12).fill(null).map((_, index) => ({
+                month: index + 1,
+                label: `${(index + 1).toString().padStart(2, '0')}/${currentYear}`,
+                w_einspeisung: 0,
+                w_batterieladung: 0,
+                w_direktverbrauch: 0,
+                w_wattpilot: 0,  // wattpilot_kwh aus monthly_statistics (Wallbox E-Auto)
+                w_netzbezug: 0,
+                w_batterieentladung: 0,
+                w_pv_total: 0,
+                w_gesamtverbrauch: 0,
+                autarkie: 0
+            }));
+            
+            // Tatsächliche Datenpunkte an der richtigen Position einfügen
+            chartData.datapoints.forEach(dp => {
+                if (dp.month >= 1 && dp.month <= 12) {
+                    fullYearData[dp.month - 1] = dp;
+                }
+            });
+            
+            // Ersetze chartData.datapoints dauerhaft (für Tooltips)
+            chartData.datapoints = fullYearData;
+            
+            createStackedBarChart('Erzeugung & Verbrauch pro Monat', monthNames, fullYearData, 'month');
+        }
+        
+        function createGesamtChart() {
+            const xLabels = chartData.datapoints.map(dp => String(dp.year));
+            createStackedBarChart('Erzeugung & Verbrauch pro Jahr', xLabels, chartData.datapoints, 'year');
+        }
+        
+        // Resize Handler mit Debounce für responsive Anpassung
+        let resizeTimeout;
+        window.addEventListener('resize', function() {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(function() {
+                if (chart) {
+                    if (currentPeriod === 'monat') {
+                        chart.dispose();
+                        createMonthChart();
+                    } else if (currentPeriod === 'jahr') {
+                        chart.dispose();
+                        createYearChart();
+                    } else if (currentPeriod === 'gesamt') {
+                        chart.dispose();
+                        createGesamtChart();
+                    }
+                }
+            }, 250);
+        });
+    </script>
+
+    {% include 'info_overlay.html' %}
+</body>
+</html>

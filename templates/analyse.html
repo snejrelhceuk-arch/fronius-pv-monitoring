@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PV-Anlage Amortisation</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 30px;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+            display: inline-block;
+            margin-right: 20px;
+        }
+        .header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+        }
+        .header-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            border-left: 4px solid #667eea;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .info-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .info-card h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .info-card .value {
+            font-size: 28px;
+            font-weight: bold;
+            margin: 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        th {
+            padding: 12px;
+            text-align: right;
+            font-weight: 600;
+        }
+        th:first-child {
+            text-align: left;
+        }
+        td {
+            padding: 12px;
+            text-align: right;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        td:first-child {
+            text-align: left;
+            font-weight: 600;
+            color: #667eea;
+        }
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+        .section {
+            margin: 40px 0;
+        }
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+            padding-left: 10px;
+            border-left: 4px solid #667eea;
+        }
+        .status-amortisiert {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .status-laufend {
+            color: #fd7e14;
+            font-weight: bold;
+        }
+        .footer-note {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 30px;
+            font-size: 13px;
+            color: #666;
+            line-height: 1.6;
+        }
+        .footer-note h4 {
+            margin-top: 0;
+            color: #333;
+        }
+        .btn-back {
+            display: inline-block;
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: transform 0.2s;
+            font-size: 14px;
+        }
+        .btn-back:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .top-nav {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 10px 16px;
+            border-radius: 8px 8px 0 0;
+            margin: -30px -30px 20px -30px;
+        }
+        .top-nav a {
+            display: inline-block;
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.15);
+            color: white;
+            text-decoration: none;
+            border: 1px solid rgba(255,255,255,0.25);
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        .top-nav a:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        .top-nav a.active {
+            background: rgba(255,255,255,0.9);
+            color: #667eea;
+            border-color: white;
+            pointer-events: none;
+        }
+        .top-nav .nav-separator {
+            width: 1px;
+            height: 24px;
+            background: rgba(255,255,255,0.3);
+            margin: 0 4px;
+        }
+        .top-nav a.btn-verbraucher {
+            background: rgba(155,89,182,0.5);
+            border-color: rgba(255,255,255,0.35);
+        }
+        .top-nav a.btn-verbraucher:hover {
+            background: rgba(155,89,182,0.7);
+        }
+        .top-nav a.btn-erzeuger {
+            background: rgba(80,160,255,0.5);
+            border-color: rgba(255,255,255,0.35);
+        }
+        .top-nav a.btn-erzeuger:hover {
+            background: rgba(80,160,255,0.7);
+        }
+        .highlight-row {
+            background: #fff3cd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="top-nav">
+            <a href="/analyse" class="active">📊 Analyse</a>
+            <div class="nav-separator"></div>
+            <a href="/erzeuger" class="btn-erzeuger">⚡ Erzeuger</a>
+            <a href="/verbraucher" class="btn-verbraucher">🔌 Verbraucher</a>
+            <div class="nav-separator"></div>
+            <a href="/">← Monitoring</a>
+        </div>
+        <div class="header-row">
+            <div class="header-left">
+                <h1>📊 Analysen</h1>
+            </div>
+        </div>
+
+        <!-- TABELLE 1: Jährliche Übersicht -->
+        <div class="section">
+            <div class="section-title">Jährliche Übersicht</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Jahr</th>
+                        <th>Solar</th>
+                        <th>Gesamt-Verbrauch</th>
+                        <th>Netzbezug</th>
+                        <th>Strompreis</th>
+                        <th>Netz-Kosten</th>
+                        <th>Autarkie</th>
+                        <th>Batt.-Wirkungsgrad</th>
+                        <th>E-Auto</th>
+                        <th>Strom-Netto</th>
+                        <th>Heiz-Ersparnis</th>
+                        <th>Benzin-Ersparnis</th>
+                        <th>GESAMT</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for year in yearly_data %}
+                    <tr>
+                        <td><strong>{{ year.year }}</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.solar) }} kWh</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.gesamt_verbr) }} kWh</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.netz_bezug) }} kWh</strong></td>
+                        <td><strong>{{ "%.2f"|format(year.strompreis) }} €/kWh</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.kosten_strom) }} € (inkl. {{ year.monate }} × 10 € Zählermiete)</strong></td>
+                        <td><strong>{{ "%.1f"|format(year.autarkie) }}%</strong></td>
+                        <td><strong>{{ "%.1f"|format(year.batt_wirkungsgrad) }}%</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.km_gefahren) }} km</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.netto_ersparnis_strom) }} €</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.heiz_ersparnis) }} €</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.benzin_ersparnis) }} €</strong></td>
+                        <td><strong style="color: #28a745;">{{ "{:,.2f}".format(year.netto_ersparnis) }} €</strong></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- TABELLE 2: PV-Amortisation -->
+        <div class="section">
+            <div class="section-title">PV-Amortisation (Invest 2022: 24.000 €, 2024: 8.000 € | Gesamt: 32.000 €)</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Jahr</th>
+                        <th>Solar</th>
+                        <th>Brutto-Ersparnis</th>
+                        <th>Netz-Kosten</th>
+                        <th>Rel. Amort.</th>
+                        <th>In Jahren</th>
+                        <th>€/kWh (real)</th>
+                        <th>€/kWh (25J)</th>
+                        <th>Prognose¹</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for year in amort_pv_data %}
+                    <tr>
+                        <td><strong>{{ year.year }}</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.solar) }} kWh</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.brutto_ersparnis) }} €</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.netz_kosten) }} €</strong></td>
+                        <td><strong>{{ "%.2f"|format(year.rel_amort) }}%</strong></td>
+                        <td><strong>{{ "%.1f"|format(year.jahre_amort) }} a</strong></td>
+                        <td><strong>{{ "%.3f"|format(year.eur_kwh_real) }} €</strong></td>
+                        <td><strong>{{ "%.3f"|format(year.eur_kwh_25j) }} €</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.prognose_25j) }} €</strong></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <div style="margin-top: 15px; font-size: 12px; color: #666;">
+                <p><strong>Fußnoten:</strong></p>
+                <p>¹ <em>Prognose</em>: 25 Jahre gerechnete Brutto-Ersparnis bei 1% Wartungskosten (320 €/Jahr)</p>
+                <p><strong>Brutto-Ersparnis:</strong> Solar-Erzeugung × Strompreis (wie Solarweb-Berechnung)</p>
+                <p><strong>€/kWh (real):</strong> Investition / kumulierte Solar-Produktion (Was hat jede kWh bisher gekostet?)</p>
+                <p><strong>€/kWh (25J):</strong> Investition / Prognose kumuliert 25 Jahre (mit 18.000 kWh/Jahr ab 2026)</p>
+            </div>
+        </div>
+
+        <!-- Investitionsübersicht (nach den ersten beiden Tabellen) -->
+        <div class="header-info">
+            <h3>📊 Investitionsübersicht</h3>
+            <p><strong>Jan 2022:</strong> 24.000 € (PV-Anlage + Batterie) + 12.000 € (Wärmepumpe)</p>
+            <p><strong>Jan 2024:</strong> 8.000 € (PV-Erweiterung/Wattpilot)</p>
+            <p><strong>PV-Gesamt:</strong> {{ "{:,.0f}".format(gesamt_invest_pv) }} €</p>
+            <p><strong>Haushalt-Gesamt:</strong> {{ "{:,.0f}".format(gesamt_invest_haushalt) }} €</p>
+            <br>
+            <p><strong>Strompreise:</strong> 2022/23: 0,30 €/kWh, 2024/25: 0,33 €/kWh, ab 22.2.26: 0,30 €/kWh</p>
+            <p><strong>Einspeisevergütung:</strong> Nulleinspeiser</p>
+            <p><strong>Zusätzliche Ersparnisse:</strong> Heizkosten (elektrisch statt Brennstoff) + Benzin (E-Auto statt Verbrenner)</p>
+        </div>
+
+        <!-- TABELLE 3: Haushalts-Amortisation -->
+        <div class="section">
+            <div class="section-title">Haushalts-Amortisation (Invest PV: 32.000 € + Wärmepumpe 2022: 12.000 € | Gesamt: 44.000 €)</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Jahr</th>
+                        <th>Invest Jahr</th>
+                        <th>Strom-Netto</th>
+                        <th>Netz-Kosten</th>
+                        <th>Heizung</th>
+                        <th>Benzin</th>
+                        <th>GESAMT Ersparnis</th>
+                        <th>Rel. Amort.</th>
+                        <th>In Jahren</th>
+                        <th>Real (kumuliert)</th>
+                        <th>Prognose²</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for year in amort_haushalt_data %}
+                    <tr>
+                        <td><strong>{{ year.year }}</strong></td>
+                        <td><strong>{% if year.invest_jahr > 0 %}{{ "{:,.0f}".format(year.invest_jahr) }} €{% endif %}</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.strom_ersparnis) }} €</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.netz_kosten) }} €</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.heiz_ersparnis) }} €</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.benzin_ersparnis) }} €</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.gesamt_ersparnis) }} €</strong></td>
+                        <td><strong>{{ "%.2f"|format(year.rel_amort) }}%</strong></td>
+                        <td><strong>{{ "%.1f"|format(year.jahre_amort) }} a</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.kum_ersparnis) }} €</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.prognose_25j) }} €</strong></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <div style="margin-top: 15px; font-size: 12px; color: #666;">
+                <p><strong>Fußnoten:</strong></p>
+                <p>² <em>Prognose</em>: 25 Jahre gerechnete Gesamt-Ersparnis bei 1% Wartungskosten (440 €/Jahr)</p>
+                <p><strong>Strom:</strong> Netto-Ersparnis (Solar × Preis - Netz × Preis)</p>
+                <p><strong>Heizung:</strong> Eingesparte Brennstoffkosten, nur Heizperiode Okt–Mär (Budget/6 pro Heizmonat: 2022: 250€, 2023: 500€, ab 2024: 450€)</p>
+                <p><strong>Benzin:</strong> E-Auto statt Verbrenner (Wattpilot kWh → km mit 15kWh/100km → 10€/100km gespart)</p>
+            </div>
+        </div>
+
+        <div class="footer-note">
+            <h4>📖 Berechnungsgrundlagen:</h4>
+            <ul style="margin: 10px 0; padding-left: 20px;">
+                <li><strong>Energiebilanz</strong>: Solar_Erzeugung = Batterie_Ladung + Direktverbrauch + Wattpilot</li>
+                <li><strong>Gesamt-Verbrauch</strong> = Netz_Bezug + Solar_Erzeugung (gesamter Hausverbrauch)</li>
+                <li><strong>Autarkie</strong> = Solar-Erzeugung / Gesamt-Verbrauch × 100</li>
+                <li><strong>Batteriewirkungsgrad</strong> = Batterie-Entladung / Batterie-Ladung × 100</li>
+                <li><strong>Ersparnis</strong> = Solar-Erzeugung × Strompreis (Nulleinspeiser)</li>
+                <li><strong>Netto</strong> = Ersparnis - Kosten Netzbezug</li>
+                <li><strong>Restschuld</strong> = Kumulierte Investition - Kumulierte Ersparnis</li>
+                <li><strong>Prognose</strong> = Lineare Fortschreibung der aktuellen Jahres-Ersparnis</li>
+            </ul>
+            <p><strong>💡 Wichtige Erkenntnisse:</strong></p>
+            <ul style="margin: 10px 0; padding-left: 20px;">
+                <li>📉 <strong>Autarkie sinkt</strong> mit höherem Verbrauch (E-Autos) - mehr Verbrauch als PV-Erzeugung</li>
+                <li>📈 <strong>Batteriewirkungsgrad steigt</strong> mit höheren Lade-/Entladeströmen (E-Auto-Ladung)</li>
+                <li>💰 <strong>Amortisation verbessert sich trotzdem</strong> - mehr Eigenverbrauch = mehr Ersparnis!</li>
+                <li>🔋 Batterie in 2022/23: Kleine Ströme (Nachtverbrauch) → schlechterer Wirkungsgrad</li>
+                <li>⚡ Batterie in 2024/25: Hohe Ströme (E-Auto) → besserer Wirkungsgrad</li>
+            </ul>
+            <p><em>Hinweis: Als Nulleinspeiser wird die gesamte Solar-Erzeugung als Ersparnis gerechnet. Solarweb zeigt DC-Werte (vor Wechselrichter), während diese Berechnung AC-Werte (nach Wechselrichter, ~95% Wirkungsgrad) verwendet. Die Autarkie-Berechnung basiert auf realen AC-Werten.</em></p>
+        </div>
+
+    {% include 'info_overlay.html' %}
+</body>
+</html>

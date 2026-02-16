@@ -1,0 +1,221 @@
+/* ═══════════════════════════════════════════════════════════
+ * monitoring.css
+ * Gemeinsames CSS für: tag_view, erzeuger_view, verbraucher_view
+ * ═══════════════════════════════════════════════════════════ */
+
+/* ── Global Reset ── */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+    height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+}
+
+body {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* ── Container ── */
+.container {
+    flex: 1;
+    max-width: 1400px;
+    margin: 20px auto;
+    width: calc(100% - 40px);
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Top Navigation Bar ── */
+.top-nav-bar {
+    background: rgba(30, 41, 59, 0.95);
+    color: white;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.top-nav-bar .nav-left,
+.top-nav-bar .nav-center,
+.top-nav-bar .nav-right {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.top-nav-bar .nav-center {
+    gap: 6px;
+}
+
+.top-nav-bar button, .top-nav-bar a {
+    background: rgba(255,255,255,0.15);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.25);
+    padding: 7px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.top-nav-bar button:hover, .top-nav-bar a:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+/* Haupt-Navigation */
+.top-nav-bar a.nav-main {
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 600;
+}
+.top-nav-bar a.nav-main:hover {
+    transform: translateY(-1px);
+}
+.top-nav-bar a.nav-main.active {
+    background: rgba(255,255,255,0.3);
+    border-color: rgba(255,255,255,0.5);
+}
+
+/* Sub-Navigation Links */
+.top-nav-bar a.nav-sub {
+    padding: 5px 10px;
+    background: rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.8);
+    border: 1px solid rgba(255,255,255,0.15);
+    font-size: 12px;
+    font-weight: 500;
+}
+.top-nav-bar a.nav-sub:hover {
+    background: rgba(255,255,255,0.15);
+    color: white;
+}
+.top-nav-bar a.nav-sub.active {
+    background: rgba(255,255,255,0.25);
+    color: white;
+    border-color: rgba(255,255,255,0.35);
+}
+
+/* Sub-Navigation Buttons */
+.top-nav-bar button:not(.nav-main),
+.top-nav-bar button.date-label,
+.top-nav-bar .btn-jetzt {
+    padding: 5px 10px;
+    background: rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.8);
+    border: 1px solid rgba(255,255,255,0.15);
+    font-size: 12px;
+    font-weight: 500;
+}
+.top-nav-bar button:not(.nav-main):hover {
+    background: rgba(255,255,255,0.15);
+    color: white;
+}
+
+.top-nav-bar button.active {
+    background: rgba(255,255,255,0.2);
+    color: white;
+    border-color: rgba(255,255,255,0.3);
+}
+
+.top-nav-bar .nav-separator {
+    width: 1px;
+    height: 24px;
+    background: rgba(255,255,255,0.3);
+    margin: 0 4px;
+}
+
+.top-nav-bar .date-label {
+    min-width: 120px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: default;
+    background: transparent;
+    border-color: transparent;
+}
+
+.top-nav-bar .btn-jetzt {
+    background: rgba(255,255,255,0.85);
+    color: #667eea;
+    font-weight: 700;
+}
+
+.top-nav-bar .btn-jetzt:hover {
+    background: white;
+}
+
+/* ── Nav Summary (tag_view) ── */
+.nav-summary {
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.95);
+    white-space: nowrap;
+}
+
+.nav-summary .summary-val {
+    font-weight: 700;
+}
+
+/* ── Chart Area (erzeuger/verbraucher) ── */
+.chart-area {
+    position: relative;
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    padding: 15px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: rgba(15, 23, 42, 0.5);
+}
+
+/* ── Status Chips (erzeuger/verbraucher) ── */
+.status-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+.status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 16px;
+    font-size: 13px;
+    color: white;
+    white-space: nowrap;
+}
+.status-chip.gesamt { background: rgba(255,255,255,0.15); }
+.status-chip .label { font-size: 11px; opacity: 0.85; }
+.status-chip .val { font-weight: bold; font-size: 13px; }
+.status-chip .pct { font-size: 10px; opacity: 0.75; }
+
+/* ── Loading / Error ── */
+.loading {
+    text-align: center;
+    padding: 60px;
+    color: rgba(255,255,255,0.5);
+    font-size: 16px;
+}
+.error {
+    text-align: center;
+    padding: 60px;
+    color: #ef4444;
+    font-size: 16px;
+}

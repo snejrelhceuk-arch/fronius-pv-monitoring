@@ -1,0 +1,18 @@
+{
+  "ghi_factor": 6.749,
+  "model": "multi",
+  "model_coeffs": {
+    "a": 5.955,
+    "b": 2.604,
+    "c": -2.448
+  },
+  "calibrated_at": "2026-02-09 19:49",
+  "data_points": 38,
+  "r_squared": 0.414,
+  "r_squared_multi": 0.551,
+  "avg_error_pct": 57.3,
+  "monthly_factors": {
+    "1": 6.862,
+    "2": 5.523
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "_info": "Konfiguration für solar_geometry.py — alle Parameter hier anpassbar",
+  "_updated": "2026-02-10",
+
+  "system": {
+    "_doc": "Globale Systemparameter",
+    "performance_ratio": 0.96,
+    "performance_ratio_info": "Systemverluste: nur Kabel+Mismatch (~4%). Verschmutzung/Degradation entfernt — Anlage liefert real >18kW Peak",
+    "temp_coeff": -0.0035,
+    "temp_coeff_info": "Temperaturkoeffizient Pmax (%/°C über STC=25°C), Module: -0.35% typisch Si",
+    "ground_albedo": 0.20,
+    "ground_albedo_info": "Bodenreflexion: 0.20 Wiese/Erde, 0.25 Beton, 0.60-0.80 Schnee"
+  },
+
+  "atmosphere": {
+    "_doc": "Atmosphärische Parameter für Clear-Sky-Modell",
+    "turbidity": 0.70,
+    "turbidity_info": "Linke-Trübungsfaktor τ bei AM=1 (0.75=sehr klar, 0.65=leicht trüb, 0.50=Stadt)",
+    "dhi_coefficient": 0.20,
+    "dhi_coefficient_info": "Diffus-Koeffizient für Clear-Sky DHI (0.18-0.25 je nach Aerosol)",
+    "climate_diffuse_fraction": 0.52,
+    "climate_diffuse_fraction_info": "Jahres-Diffusanteil für Effizienztabelle (deutsches Klima ~0.50-0.55)"
+  },
+
+  "string_factors": {
+    "_doc": "Per-String Korrekturfaktoren (1.0 = unverändert). Für iteratives Tuning: Verschattung, Verschmutzung, Optimierer-Boost etc.",
+    "F1-S1 SSO-52°": 1.0,
+    "F1-S2 NNW-52°": 1.0,
+    "F1-S3 SSO-45°": 1.0,
+    "F1-S4 NNW-45°": 1.0,
+    "F2-S5 WSW-18°": 1.0,
+    "F2-S6+7 WSW-90°": 1.0,
+    "F3-S8 SSO-90°": 1.0
+  },
+
+  "optimizer_gain": {
+    "_doc": "Per-String Optimierer-Gain (1.0 = neutral). Fuer Strings mit Optimierern hier anheben.",
+    "F1-S1 SSO-52°": 1.0,
+    "F1-S2 NNW-52°": 1.0,
+    "F1-S3 SSO-45°": 1.0,
+    "F1-S4 NNW-45°": 1.0,
+    "F2-S5 WSW-18°": 1.0,
+    "F2-S6+7 WSW-90°": 1.0,
+    "F3-S8 SSO-90°": 1.0
+  },
+
+  "inverter_efficiency": {
+    "_doc": "Wechselrichter-Wirkungsgrad (0.96=96% typisch). Wird auf AC-Leistung angewandt.",
+    "F1": 0.96,
+    "F2": 0.96,
+    "F3": 0.96
+  },
+
+  "forecast_adjustments": {
+    "_doc": "Globale Prognose-Korrekturfaktoren (multiplikativ)",
+    "global_factor": 1.0,
+    "global_factor_info": "Pauschal-Skalierung der Gesamtprognose (z.B. 0.95 = 5% konservativer)",
+    "cloud_enhancement": 1.0,
+    "cloud_enhancement_info": "Verstärkungsfaktor bei teilbewölktem Himmel (Wolkenlinsen-Effekt, 1.0-1.15)",
+    "winter_boost": 1.0,
+    "winter_boost_info": "Korrekturfaktor Nov-Feb (z.B. 1.1 wenn Winter-Ertrag systematisch unterschätzt)",
+    "summer_factor": 1.0,
+    "summer_factor_info": "Korrekturfaktor Mai-Aug (z.B. 0.95 wenn Sommer-Ertrag überschätzt)"
+  },
+
+  "azimuth_offset": -10,
+  "azimuth_offset_info": "Gebäude-Azimut-Korrektur in Grad. Negativ = Richtung Ost drehen. Verschiebt die gesamte Clear-Sky-Kurve zeitlich nach morgens. -10° ≈ 15 Min früher. Anpassbar: Werte zwischen -5 und -20 testen.",
+
+  "shading_mask": {
+    "_doc": "Verschattungsmaske als Lookup: Azimut/Elevation -> Faktor 0..1. Aktualisierung ueber das Jahr moeglich.",
+    "azimuth_bins": [-180, -150, -120, -90, -60, -30, 0, 30, 60, 90, 120, 150, 180],
+    "elevation_bins": [0, 10, 20, 30, 40, 50, 60, 70, 80, 90],
+    "mask": [
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    ]
+  },
+
+  "clearsky_module_temp": {
+    "_doc": "Geschätzte Modultemperatur (°C) pro Monat für Clear-Sky-Kurve. Kalte Module im Winter produzieren mehr als die STC-Referenz (25°C). Typisch: -0.35%/°C über STC → bei 5°C: +7% Boost.",
+    "1": 5,  "2": 7,  "3": 12,  "4": 18,
+    "5": 22, "6": 28, "7": 30,  "8": 28,
+    "9": 22, "10": 15, "11": 8, "12": 4
+  }
+}

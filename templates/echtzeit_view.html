@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Echtzeit-Monitoring - Fronius PV</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background: transparent;
+        }
+        
+        .header {
+            background: rgba(30, 41, 59, 0.95);
+            color: white;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header .nav-links { display: flex; gap: 8px; }
+        
+        .back-btn {
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 6px;
+            color: rgba(255,255,255,0.9);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        
+        .back-btn:hover {
+            background: rgba(255,255,255,0.2);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .zoom-label {
+            color: rgba(255,255,255,0.7);
+            font-size: 13px;
+        }
+        
+        .main-content {
+            display: flex;
+            flex: 1;
+            min-height: 0;
+        }
+        
+        .sidebar {
+            width: 200px;
+            background: rgba(15, 23, 42, 0.95);
+            border-right: 1px solid rgba(255,255,255,0.1);
+            padding: 15px 10px;
+            overflow-y: auto;
+        }
+        
+        .topic-group {
+            margin-bottom: 16px;
+        }
+        
+        .topic-group-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.5);
+            text-transform: uppercase;
+            margin-bottom: 6px;
+            letter-spacing: 0.5px;
+        }
+        
+        .topic-btn {
+            display: block;
+            width: 100%;
+            padding: 8px 10px;
+            margin-bottom: 4px;
+            border: 1px solid rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.05);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            text-align: left;
+            transition: all 0.2s;
+            color: rgba(255,255,255,0.8);
+        }
+        
+        .topic-btn:hover {
+            background: rgba(102,126,234,0.2);
+            border-color: #667eea;
+        }
+        
+        .topic-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+            font-weight: 600;
+        }
+        
+        .chart-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 15px;
+            min-width: 0;
+            position: relative;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .btn {
+            padding: 8px 14px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+            color: rgba(255,255,255,0.8);
+        }
+        
+        .btn:hover { background: rgba(255,255,255,0.2); }
+        .btn.active { background: #0d9488; color: white; border-color: #0d9488; }
+        
+
+        .nav-group {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+        
+        .nav-btn {
+            padding: 6px 12px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            color: rgba(255,255,255,0.8);
+        }
+        
+        .nav-btn:hover { background: rgba(255,255,255,0.2); }
+        .nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        
+        .status-info {
+            margin-left: auto;
+            font-size: 13px;
+            color: rgba(255,255,255,0.5);
+        }
+        
+        .chart-container {
+            flex: 1;
+            width: 100%;
+            min-height: 0;
+            background: white;
+            border-radius: 8px;
+        }
+        
+        .live-values {
+            position: absolute;
+            top: 60px;
+            right: 20px;
+            background: rgba(15, 23, 42, 0.95);
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 13px;
+            line-height: 1.9;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+            min-width: 200px;
+            max-width: 280px;
+        }
+        .live-values .live-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .live-values .live-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+        }
+        .live-values .live-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 5px;
+            vertical-align: middle;
+        }
+        .live-values .live-val {
+            font-weight: 700;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        
+        .footer {
+            padding: 10px 20px;
+            background: rgba(30, 41, 59, 0.95);
+            border-top: 1px solid rgba(255,255,255,0.1);
+            text-align: center;
+            font-size: 12px;
+            color: rgba(255,255,255,0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="nav-links">
+                <a href="/" class="back-btn">Flow</a>
+                <a href="/monitoring" class="back-btn">Monitoring</a>
+                <a href="/analyse/pv" class="back-btn">Analyse</a>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center;">
+                <div class="nav-group">
+                    <button class="nav-btn" id="navPrev">◀</button>
+                    <button class="nav-btn" id="navToday">Heute</button>
+                    <button class="nav-btn" id="navNext" disabled>▶</button>
+                </div>
+                <div class="zoom-controls" style="display:flex; gap:5px; align-items:center;">
+                    <span class="zoom-label">Auflösung:</span>
+                    <button class="btn active" data-resolution="300" data-hours="24">5 min</button>
+                    <button class="btn" data-resolution="60" data-hours="6">1 min</button>
+                    <button class="btn" data-resolution="3" data-hours="1">3 s</button>
+                </div>
+                <div class="status-info" id="statusInfo">Lädt...</div>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="sidebar" id="topicSidebar">
+                <div class="topic-group">
+                    <div class="topic-group-title">📊 Lade verfügbare Felder...</div>
+                </div>
+            </div>
+            
+            <div class="chart-area">
+                <div class="live-values" id="liveValues" style="display:none;">
+                    <div class="live-title">🔴 Live-Werte (3s)</div>
+                    <div id="liveContent"></div>
+                </div>
+                <div class="chart-container" id="mainChart"></div>
+            </div>
+        </div>
+        
+        <div class="footer" id="footer">
+            Bereit
+        </div>
+    </div>
+
+    <script>
+        // === Konfiguration ===
+        let chart = null;
+        let currentRange = 'day';
+        let currentResolution = 300;  // Sekunden
+        let currentHours = 24;  // Stunden im Zeitfenster
+        let currentOffset = 0;  // Tage zurück (0 = heute)
+        let activeTopics = [];  // Initial leer - User wählt selbst aus
+        let chartData = [];
+        let availableFields = [];  // Wird aus Daten extrahiert
+        let COLOR_SCHEME = {};  // Wird aus config/color_config.json geladen
+        
+        // === Farbschema FALLBACK (falls JSON nicht lädt) ===
+        const COLOR_SCHEME_FALLBACK = {
+            // Ströme - Rot→Orange→Dunkelrot (guter Kontrast)
+            'I_Netz': '#ef4444',       // Rot
+            'I_L1_Netz': '#dc2626',    // Dunkelrot
+            'I_L2_Netz': '#f97316',    // Orange
+            'I_L3_Netz': '#b91c1c',    // Sehr dunkelrot
+            'I_Batt_API': '#ea580c',   // Dunkles Orange
+            'I_DC1': '#fb923c',        // Helles Orange
+            'I_DC2': '#7c2d12',        // Bräunlich-Rot
+            'I_L1_Inv': '#dc2626',     // Dunkelrot
+            'I_L2_Inv': '#f97316',     // Orange
+            'I_L3_Inv': '#b91c1c',     // Sehr dunkelrot
+            
+            // Spannungen - Blau→Königsblau→Indigo (kein Cyan/Türkis!)
+            'U_Netz': '#3b82f6',       // Blau
+            'U_L1_N_Netz': '#1d4ed8',  // Königsblau (dunkel)
+            'U_L2_N_Netz': '#2563eb',  // Blau (mittel)
+            'U_L3_N_Netz': '#6366f1',  // Indigo (violettlich)
+            'U_Batt_API': '#4f46e5',   // Indigo
+            'U_DC1': '#4338ca',        // Dunkles Indigo
+            'U_DC2': '#5b21b6',        // Violett
+            'U_L1_N_Inv': '#1d4ed8',   // Königsblau
+            'U_L2_N_Inv': '#2563eb',   // Blau
+            'U_L3_N_Inv': '#6366f1',   // Indigo
+            
+            // AC-Wirkleistungen - Magenta/Pink/Rose (NEUE Farbfamilie!)
+            'P_Netz': '#db2777',       // Pink-600
+            'P_AC_Inv': '#ec4899',     // Pink-500
+            'P_F2': '#f472b6',         // Pink-400
+            'P_F3': '#f9a8d4',         // Pink-300
+            'P_WP': '#be185d',         // Pink-700
+            
+            // DC-Leistungen - Grün-Töne (Kontrast zu Pink!)
+            'P_DC_Inv': '#059669',     // Emerald-600
+            'P_DC1': '#10b981',        // Emerald-500
+            'P_DC2': '#34d399',        // Emerald-400
+            
+            // Scheinleistungen - Violett/Purple
+            'S_Netz': '#9333ea',       // Purple-600
+            'S_Inv': '#a855f7',        // Purple-500
+            'S_F2': '#c084fc',         // Purple-400
+            'S_F3': '#d8b4fe',         // Purple-300
+            'S_WP': '#7e22ce',         // Purple-700
+            
+            // Blindleistungen - Violett dunkler
+            'Q_Netz': '#6d28d9',       // Violet-700
+            'Q_Inv': '#7c3aed',        // Violet-600
+            'Q_F2': '#8b5cf6',         // Violet-500
+            'Q_F3': '#a78bfa',         // Violet-400
+            'Q_WP': '#5b21b6',         // Violet-800
+            
+            // Leistungsfaktor - Graustufen
+            'PF_Netz': '#000000',      // Schwarz
+            'PF_Inv': '#374151',       // Gray-700
+            'PF_F2': '#6b7280',        // Gray-500
+            'PF_F3': '#9ca3af',        // Gray-400
+            'PF_WP': '#1f2937',        // Gray-800
+            
+            // SOC - Hellgrün (Kontrast zu Emerald)
+            'SOC_Batt': '#22c55e',     // Green-500
+            
+            // Frequenz - Gelb/Amber
+            'f_Netz': '#f59e0b'        // Amber-500
+        };
+        
+        // === Farben aus JSON laden ===
+        async function loadColorConfig() {
+            try {
+                const response = await fetch('/static/config/color_config.json');
+                const config = await response.json();
+                COLOR_SCHEME = config.colors || COLOR_SCHEME_FALLBACK;
+                console.log('✓ Farb-Konfiguration geladen:', Object.keys(COLOR_SCHEME).length, 'Felder');
+            } catch (e) {
+                console.warn('⚠ Farb-Konfiguration nicht geladen, verwende Fallback:', e.message);
+                COLOR_SCHEME = COLOR_SCHEME_FALLBACK;
+            }
+        }
+        
+        // === Einheiten ===
+        const UNITS = {
+            'P_': 'W', 'I_': 'A', 'U_': 'V', 
+            'S_': 'VA', 'Q_': 'VAr', 'PF_': '',
+            'SOC_': '%', 'f_': 'Hz'
+        };
+        
+        function getUnit(topic) {
+            for (let prefix in UNITS) {
+                if (topic.startsWith(prefix)) return UNITS[prefix];
+            }
+            return '';
+        }
+        
+        function getYAxisGroup(unit) {
+            // Gruppiere Einheiten nach physikalischer Größe
+            if (unit === 'W' || unit === 'VA' || unit === 'VAr') return 'Leistung (W, VA, VAr)';
+            if (unit === 'V') return 'Spannung (V)';
+            if (unit === 'A') return 'Strom (A)';
+            if (unit === '%' || unit === '') return 'Prozent / Faktor';
+            if (unit === 'Wh') return 'Energie (Wh)';
+            if (unit === 'Hz') return 'Frequenz (Hz)';
+            return unit || 'Sonstige';
+        }
+        
+        function getDateLabel(offsetDays) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const targetDate = new Date(today);
+            targetDate.setDate(today.getDate() - offsetDays);
+            
+            if (offsetDays === 0) return 'heute';
+            if (offsetDays === 1) return 'gestern';
+            if (offsetDays === 2) return 'vorgestern';
+            return targetDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+        }
+        
+        function getYAxisLabel() {
+            if (activeTopics.length === 0) return '';
+            if (activeTopics.length === 1) return getUnit(activeTopics[0]);
+            
+            // Prüfe ob alle gleiche Einheit haben
+            const units = [...new Set(activeTopics.map(t => getUnit(t)))];
+            if (units.length === 1) return units[0];
+            
+            // Gemischte Einheiten
+            return units.filter(u => u).join(' / ');
+        }
+        
+        // === Init ===
+        async function init() {
+            console.log('=== Echtzeit-View initialisiert ===');
+            console.log('Initial Resolution:', currentResolution, 's');
+            console.log('Initial Hours:', currentHours, 'h');
+            
+            // Farben laden
+            await loadColorConfig();
+            
+            chart = echarts.init(document.getElementById('mainChart'));
+            chart.on('datazoom', checkLiveMode);
+            setupEventListeners();
+            loadData();
+        }
+        
+        // === Topic-Buttons dynamisch generieren ===
+        function generateTopicButtons() {
+            console.log('→ Generiere Topic-Buttons für', availableFields.length, 'Felder');
+            
+            // Kategorisierung nach Devices (nur RAW-Felder!)
+            const categories = {
+                '🔌 Netz': availableFields.filter(f => f.includes('_Netz')),
+                '☀️ WR F1': availableFields.filter(f => 
+                    (f.includes('_Inv') || f.includes('_DC1') || f.includes('_DC2')) && 
+                    !f.includes('_Netz') && !f.includes('_Batt')
+                ),
+                '☀️ WR F2': availableFields.filter(f => f.includes('_F2')),
+                '☀️ WR F3': availableFields.filter(f => f.includes('_F3')),
+                '🔋 Batterie': availableFields.filter(f => f.includes('_Batt') || f.startsWith('SOC')),
+                '🌡️ Wärmepumpe': availableFields.filter(f => f.includes('_WP'))
+            };
+            
+            const sidebar = document.getElementById('topicSidebar');
+            sidebar.innerHTML = '';
+            
+            Object.entries(categories).forEach(([title, fields]) => {
+                if (fields.length === 0) return;
+                
+                const group = document.createElement('div');
+                group.className = 'topic-group';
+                
+                const groupTitle = document.createElement('div');
+                groupTitle.className = 'topic-group-title';
+                groupTitle.textContent = title + ` (${fields.length})`;
+                group.appendChild(groupTitle);
+                
+                fields.sort().forEach(field => {
+                    const btn = document.createElement('button');
+                    btn.className = 'topic-btn';
+                    btn.dataset.topic = field;
+                    btn.textContent = field;
+                    
+                    // Aktive Topics markieren
+                    if (activeTopics.includes(field)) {
+                        btn.classList.add('active');
+                    }
+                    
+                    group.appendChild(btn);
+                });
+                
+                sidebar.appendChild(group);
+            });
+            
+            // Event-Listener für neue Buttons registrieren
+            attachTopicButtonListeners();
+        }
+        
+        // === Topic-Button Event-Listener ===
+        function attachTopicButtonListeners() {
+            document.querySelectorAll('.topic-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const topic = e.target.dataset.topic;
+                    const isActive = activeTopics.includes(topic);
+                    
+                    if (isActive) {
+                        // Abwählen erlaubt (auch alle abwählbar)
+                        activeTopics = activeTopics.filter(t => t !== topic);
+                        e.target.classList.remove('active');
+                    } else {
+                        // Max 6 Graphen gleichzeitig
+                        if (activeTopics.length >= 6) {
+                            alert('⚠️ Maximum erreicht: 6 Graphen gleichzeitig.\nBitte wählen Sie einen anderen ab.');
+                            return;
+                        }
+                        activeTopics.push(topic);
+                        e.target.classList.add('active');
+                    }
+                    
+                    console.log('→ Aktive Topics:', activeTopics.length, '/', 6);
+                    updateChart();
+                });
+            });
+        }
+        
+        // === Event Listeners ===
+        function setupEventListeners() {
+            console.log('→ Event Listeners werden registriert...');
+            
+            // Topic-Buttons werden nach loadData dynamisch generiert
+            // Siehe attachTopicButtonListeners()
+            
+            // Range-Buttons (Tag/Woche/Monat/Jahr)
+            document.querySelectorAll('[data-range]').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    currentRange = e.target.dataset.range;
+                    document.querySelectorAll('[data-range]').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    currentOffset = 0;
+                    
+                    // Automatische Anpassung des Zeitfensters
+                    if (currentRange === 'day') {
+                        currentHours = 24;
+                    } else if (currentRange === 'week') {
+                        currentHours = 168;
+                    } else if (currentRange === 'month') {
+                        currentHours = 720;
+                    } else if (currentRange === 'year') {
+                        currentHours = 8760;
+                    }
+                    
+                    loadData();
+                });
+            });
+            
+            // Auflösungs-Buttons (5min/1min/3s)
+            document.querySelectorAll('[data-resolution]').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    currentResolution = parseInt(e.target.dataset.resolution);
+                    currentHours = parseInt(e.target.dataset.hours);
+                    
+                    console.log('Resolution Button geklickt:', currentResolution, 's, Zeitfenster:', currentHours, 'h');
+                    
+                    document.querySelectorAll('[data-resolution]').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    
+                    loadData();
+                });
+            });
+            
+            // Navigation
+            document.getElementById('navPrev').addEventListener('click', () => {
+                currentOffset++;
+                updateNavButtons();
+                loadData();
+            });
+            
+            document.getElementById('navNext').addEventListener('click', () => {
+                if (currentOffset > 0) {
+                    currentOffset--;
+                    updateNavButtons();
+                    loadData();
+                }
+            });
+            
+            document.getElementById('navToday').addEventListener('click', () => {
+                currentOffset = 0;
+                updateNavButtons();
+                loadData();
+            });
+            
+            // Resize
+            window.addEventListener('resize', () => chart?.resize());
+            
+            console.log('✓ Alle Event Listeners registriert');
+            console.log('✓ Auflösungs-Buttons gefunden:', document.querySelectorAll('[data-resolution]').length);
+        }
+        
+        // === Navigation Update ===
+        function updateNavButtons() {
+            document.getElementById('navNext').disabled = (currentOffset === 0);
+        }
+        
+        // === Daten laden ===
+        async function loadData() {
+            try {
+                console.log('→ loadData() gestartet: Resolution=' + currentResolution + 's, Hours=' + currentHours + 'h');
+                document.getElementById('footer').textContent = 'Lade Daten...';
+                
+                // Zeitfenster: currentHours wird von Auflösungs-Buttons gesetzt
+                let end = Math.floor(Date.now() / 1000) - (currentOffset * 86400);
+                
+                const url = `/api/realtime_smart?hours=${currentHours}&resolution=${currentResolution}&end=${end}`;
+                console.log('→ API-Call:', url);
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                chartData = data.data || [];
+                
+                console.log('→ Daten erhalten:', chartData.length, 'Datenpunkte');
+                
+                // Verfügbare Felder extrahieren (nur beim ersten Laden)
+                if (availableFields.length === 0 && chartData.length > 0) {
+                    availableFields = Object.keys(chartData[0]).filter(key => key !== 'ts');
+                    console.log('→ Verfügbare Felder:', availableFields.length);
+                    generateTopicButtons();
+                }
+                
+                // Status aktualisieren
+                const date = new Date(end * 1000);
+                const dateLabel = getDateLabel(currentOffset);
+                const dateStr = date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                const resolutionText = currentResolution < 60 ? `${currentResolution}s` : `${currentResolution/60}min`;
+                const timeWindow = currentHours < 24 ? `${currentHours}h` : `${currentHours/24}d`;
+                document.getElementById('statusInfo').textContent = 
+                    `${dateStr} (${dateLabel}) | ${timeWindow} | ${data.points} Punkte | ${data.source} | ${resolutionText}`;
+                
+                updateChart();
+                document.getElementById('footer').textContent = 
+                    `Letzte Aktualisierung: ${new Date().toLocaleTimeString('de-DE')}`;
+                    
+            } catch (e) {
+                document.getElementById('footer').textContent = `Fehler: ${e.message}`;
+                console.error('Fehler beim Laden:', e);
+            }
+        }
+        
+        // === Chart Update ===
+        function updateChart() {
+            console.log('→ updateChart() gestartet, Datenpunkte:', chartData.length, 'Active Topics:', activeTopics.length);
+            
+            if (!chartData || chartData.length === 0) {
+                chart.setOption({
+                    title: { text: 'Keine Daten verfügbar', left: 'center', top: 'center' }
+                });
+                return;
+            }
+            
+            // Wenn keine Topics gewählt: Leeres Chart
+            if (activeTopics.length === 0) {
+                chart.setOption({
+                    title: { text: 'Wählen Sie Felder aus der linken Sidebar', left: 'center', top: 'center' },
+                    xAxis: null,
+                    yAxis: null,
+                    series: []
+                });
+                return;
+            }
+            
+            // Gruppiere Topics nach Y-Achsen-Gruppe (Leistung/Spannung/Strom/...)
+            const axisGroups = {};
+            activeTopics.forEach(topic => {
+                const unit = getUnit(topic);
+                const group = getYAxisGroup(unit);
+                if (!axisGroups[group]) axisGroups[group] = [];
+                axisGroups[group].push(topic);
+            });
+            
+            const groups = Object.keys(axisGroups);
+            console.log('→ Y-Achsen benötigt:', groups.length, 'für Gruppen:', groups);
+            
+            // Erstelle Y-Achsen (max 6, nach Gruppen)
+            const yAxisConfigs = groups.map((group, idx) => {
+                const position = idx % 2 === 0 ? 'left' : 'right';
+                const offset = Math.floor(idx / 2) * 60;  // Jede 2. Achse 60px versetzt
+                
+                return {
+                    type: 'value',
+                    name: group,
+                    position: position,
+                    offset: offset,
+                    nameLocation: 'end',
+                    nameTextStyle: {
+                        fontSize: 11,
+                        fontWeight: 'bold',
+                        color: '#111',
+                        padding: [0, 5, 0, 5]
+                    },
+                    nameGap: 12,
+                    splitLine: {
+                        show: idx === 0,  // Nur erste Achse zeigt Grid-Linien
+                        lineStyle: { color: '#e5e7eb', width: 1 }
+                    },
+                    axisLabel: {
+                        formatter: '{value}',
+                        fontSize: 10
+                    }
+                };
+            });
+            
+            // Series mit Y-Achsen-Index und Einheit in Legende
+            const series = activeTopics.map(topic => {
+                const unit = getUnit(topic);
+                const group = getYAxisGroup(unit);
+                const yAxisIndex = groups.indexOf(group);
+                const data = chartData.map(dp => [dp.ts * 1000, dp[topic] ?? null]);
+                const color = COLOR_SCHEME[topic] || '#999';
+                
+                return {
+                    name: `${topic} ${unit ? '(' + unit + ')' : ''}`,  // Einheit in Legende!
+                    type: 'line',
+                    yAxisIndex: yAxisIndex,
+                    data: data,
+                    smooth: true,
+                    smoothMonotone: 'x',
+                    symbol: 'none',
+                    sampling: 'lttb',
+                    lineStyle: { color: color, width: 2 },
+                    itemStyle: { color: color }
+                };
+            });
+            
+            // Legend mit Einheiten
+            const legendData = activeTopics.map(topic => {
+                const unit = getUnit(topic);
+                return {
+                    name: `${topic} ${unit ? '(' + unit + ')' : ''}`,
+                    itemStyle: { color: COLOR_SCHEME[topic] || '#999' }
+                };
+            });
+            
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'cross' },
+                    formatter: function(params) {
+                        if (!params || params.length === 0) return '';
+                        const time = new Date(params[0].axisValue).toLocaleString('de-DE');
+                        let result = `<b>${time}</b><br/>`;
+                        params.forEach(item => {
+                            // seriesName enthält bereits Einheit: "P_Netz (W)"
+                            const val = Array.isArray(item.value) ? item.value[1] : item.value;
+                            const value = val != null ? val.toFixed(1) : 'N/A';
+                            result += `${item.marker} ${item.seriesName}: <b>${value}</b><br/>`;
+                        });
+                        return result;
+                    }
+                },
+                legend: {
+                    data: legendData,
+                    bottom: 0,
+                    type: 'scroll'
+                },
+                grid: {
+                    left: groups.length > 2 ? '10%' : '5%',   // Mehr Platz bei mehreren Y-Achsen links
+                    right: groups.length > 2 ? '10%' : '5%',  // Mehr Platz bei mehreren Y-Achsen rechts
+                    bottom: '10%',
+                    top: '8%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'time',
+                    boundaryGap: false,
+                    splitNumber: 12,
+                    splitLine: {
+                        show: true,
+                        lineStyle: {
+                            color: '#e5e7eb',
+                            width: 1,
+                            type: 'solid'
+                        }
+                    },
+                    axisTick: {
+                        show: true
+                    },
+                    axisLabel: {
+                        formatter: function(value) {
+                            const date = new Date(value);
+                            return date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                        },
+                        fontSize: 11,
+                        rotate: 0,
+                        hideOverlap: true,
+                        showMinLabel: false,
+                        showMaxLabel: false
+                    }
+                },
+                yAxis: yAxisConfigs,
+                series: series,
+                dataZoom: [
+                    {
+                        type: 'inside',
+                        start: 0,
+                        end: 100
+                    },
+                    {
+                        type: 'slider',
+                        start: 0,
+                        end: 100,
+                        bottom: '4%'
+                    }
+                ]
+            };
+            
+            // WICHTIG: notMerge=true → Chart komplett neu aufbauen
+            // Sonst bleiben alte Y-Achsen stehen!
+            chart.setOption(option, true);
+            
+            // Live-Modus prüfen (rechter Rand = aktuelle Zeit?)
+            setTimeout(checkLiveMode, 100);
+        }
+        
+        // === Live-Werte Modus ===
+        let liveInterval = null;
+        let isLive = false;
+        
+        function checkLiveMode() {
+            // Live-Modus: Heute (kein Offset) + DataZoom am rechten Rand + aktive Topics
+            if (currentOffset !== 0 || activeTopics.length === 0) {
+                stopLiveUpdate();
+                return;
+            }
+            
+            // Prüfe DataZoom-Position
+            const option = chart.getOption();
+            if (option && option.dataZoom && option.dataZoom.length > 0) {
+                const end = option.dataZoom[0].end;
+                if (end >= 98) {
+                    startLiveUpdate();
+                } else {
+                    stopLiveUpdate();
+                }
+            } else {
+                // Kein DataZoom = alles sichtbar = am rechten Rand
+                startLiveUpdate();
+            }
+        }
+        
+        function startLiveUpdate() {
+            if (isLive) return;
+            isLive = true;
+            document.getElementById('liveValues').style.display = 'block';
+            fetchLiveValues();
+            liveInterval = setInterval(fetchLiveValues, 3000);
+            console.log('🔴 Live-Modus: AN');
+        }
+        
+        function stopLiveUpdate() {
+            if (!isLive) return;
+            isLive = false;
+            document.getElementById('liveValues').style.display = 'none';
+            if (liveInterval) {
+                clearInterval(liveInterval);
+                liveInterval = null;
+            }
+            console.log('⚪ Live-Modus: AUS');
+        }
+        
+        async function fetchLiveValues() {
+            try {
+                const response = await fetch('/api/realtime_smart?hours=0.005&resolution=3');
+                const data = await response.json();
+                if (data.data && data.data.length > 0) {
+                    const latest = data.data[data.data.length - 1];
+                    const time = new Date(latest.ts * 1000);
+                    const timeStr = time.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    
+                    let html = `<div style="font-size:10px;color:#999;margin-bottom:2px;">\u23f1 ${timeStr}</div>`;
+                    activeTopics.forEach(topic => {
+                        const val = latest[topic];
+                        const unit = getUnit(topic);
+                        const color = COLOR_SCHEME[topic] || '#999';
+                        const display = val != null ? val.toFixed(1) : '\u2014';
+                        html += `<div class="live-row">` +
+                            `<span><span class="live-dot" style="background:${color}"></span>${topic}</span>` +
+                            `<span class="live-val">${display} ${unit}</span></div>`;
+                    });
+                    document.getElementById('liveContent').innerHTML = html;
+                }
+            } catch (e) {
+                console.warn('Live-Werte Fehler:', e.message);
+            }
+        }
+        
+        // === Start ===
+        window.addEventListener('load', init);
+    </script>
+
+    {% include 'info_overlay.html' %}
+</body>
+</html>

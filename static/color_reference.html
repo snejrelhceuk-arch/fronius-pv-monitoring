@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PV-Anlage - Farbschema Referenz</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #1f2937;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #6b7280;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .info-box {
+            background: #eff6ff;
+            border-left: 4px solid #3b82f6;
+            padding: 15px;
+            margin-bottom: 30px;
+            border-radius: 4px;
+        }
+        
+        .info-box p {
+            margin: 5px 0;
+            font-size: 14px;
+            color: #1e40af;
+        }
+        
+        .category {
+            margin-bottom: 40px;
+        }
+        
+        .category-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #374151;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        
+        .field-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 12px;
+        }
+        
+        .field-item {
+            display: flex;
+            align-items: center;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 12px;
+            transition: all 0.2s;
+        }
+        
+        .field-item:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        
+        .color-box {
+            width: 50px;
+            height: 50px;
+            border-radius: 4px;
+            border: 2px solid #d1d5db;
+            flex-shrink: 0;
+            margin-right: 15px;
+            position: relative;
+        }
+        
+        .color-box::after {
+            content: attr(data-hex);
+            position: absolute;
+            bottom: -20px;
+            left: 0;
+            font-size: 9px;
+            color: #6b7280;
+            font-family: monospace;
+        }
+        
+        .field-info {
+            flex: 1;
+        }
+        
+        .field-name {
+            font-weight: 600;
+            color: #1f2937;
+            font-size: 14px;
+            margin-bottom: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .field-unit {
+            font-size: 12px;
+            color: #6b7280;
+            background: #e5e7eb;
+            padding: 2px 8px;
+            border-radius: 3px;
+            display: inline-block;
+        }
+        
+        .stats {
+            background: #f3f4f6;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 30px;
+            display: flex;
+            gap: 30px;
+        }
+        
+        .stat-item {
+            font-size: 14px;
+            color: #374151;
+        }
+        
+        .stat-value {
+            font-weight: bold;
+            color: #1f2937;
+            font-size: 18px;
+        }
+        
+        .legend {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+        }
+        
+        .legend-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #374151;
+        }
+        
+        .legend-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            font-size: 12px;
+            color: #6b7280;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+            margin-right: 8px;
+            border: 1px solid #d1d5db;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 PV-Anlage Farbschema Referenz</h1>
+        <div class="subtitle">Übersicht aller konfigurierten Feldfarben für die Echtzeit-Ansicht</div>
+        
+        <div class="info-box">
+            <p><strong>📝 Farben bearbeiten:</strong> /pv-system/static/config/color_config.json</p>
+            <p><strong>🔄 Änderungen aktivieren:</strong> Datei speichern → Echtzeit-View mit Strg+F5 neu laden</p>
+        </div>
+        
+        <div class="stats" id="stats">
+            <div class="stat-item">
+                <div class="stat-value" id="totalFields">-</div>
+                <div>Felder gesamt</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="totalCategories">-</div>
+                <div>Kategorien</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="uniqueUnits">-</div>
+                <div>Verschiedene Einheiten</div>
+            </div>
+        </div>
+        
+        <div id="categories"></div>
+        
+        <div class="legend">
+            <div class="legend-title">Einheiten-Legende:</div>
+            <div class="legend-items" id="legend"></div>
+        </div>
+    </div>
+
+    <script>
+        const UNITS = {
+            'P_': 'W (Watt)', 
+            'I_': 'A (Ampere)', 
+            'U_': 'V (Volt)', 
+            'S_': 'VA (Scheinleistung)', 
+            'Q_': 'VAr (Blindleistung)', 
+            'PF_': '(Leistungsfaktor)',
+            'SOC_': '% (Ladezustand)', 
+            'f_': 'Hz (Frequenz)', 
+            'W_': 'Wh (Energiezähler)',
+            'ChaSt_': '(Status)'
+        };
+        
+        function getUnit(field) {
+            for (let prefix in UNITS) {
+                if (field.startsWith(prefix)) return UNITS[prefix];
+            }
+            return 'keine Einheit';
+        }
+        
+        async function loadAndDisplay() {
+            try {
+                const response = await fetch('/static/config/color_config.json');
+                const config = await response.json();
+                const colors = config.colors;
+                
+                // Kategorisierung
+                const categories = {
+                    '🔌 Netz': Object.keys(colors).filter(f => f.includes('_Netz')),
+                    '☀️ WR F1 (Inverter)': Object.keys(colors).filter(f => 
+                        (f.includes('_Inv') || f.includes('_DC1') || f.includes('_DC2')) && 
+                        !f.includes('_Netz') && !f.includes('_Batt')
+                    ),
+                    '☀️ WR F2': Object.keys(colors).filter(f => f.includes('_F2')),
+                    '☀️ WR F3': Object.keys(colors).filter(f => f.includes('_F3')),
+                    '🔋 Batterie': Object.keys(colors).filter(f => f.includes('_Batt') || f.startsWith('SOC')),
+                    '🌡️ Wärmepumpe': Object.keys(colors).filter(f => f.includes('_WP')),
+                    '📊 System': Object.keys(colors).filter(f => 
+                        !f.includes('_Netz') && !f.includes('_Inv') && !f.includes('_F2') && 
+                        !f.includes('_F3') && !f.includes('_Batt') && !f.startsWith('SOC') && 
+                        !f.includes('_WP') && !f.includes('_DC1') && !f.includes('_DC2')
+                    )
+                };
+                
+                // Stats
+                const units = [...new Set(Object.keys(colors).map(f => getUnit(f)))];
+                document.getElementById('totalFields').textContent = Object.keys(colors).length;
+                document.getElementById('totalCategories').textContent = Object.keys(categories).filter(cat => categories[cat].length > 0).length;
+                document.getElementById('uniqueUnits').textContent = units.length;
+                
+                // Kategorien rendern
+                const container = document.getElementById('categories');
+                Object.entries(categories).forEach(([title, fields]) => {
+                    if (fields.length === 0) return;
+                    
+                    const catDiv = document.createElement('div');
+                    catDiv.className = 'category';
+                    
+                    const titleDiv = document.createElement('div');
+                    titleDiv.className = 'category-title';
+                    titleDiv.textContent = `${title} (${fields.length})`;
+                    catDiv.appendChild(titleDiv);
+                    
+                    const grid = document.createElement('div');
+                    grid.className = 'field-grid';
+                    
+                    fields.sort().forEach(field => {
+                        const item = document.createElement('div');
+                        item.className = 'field-item';
+                        
+                        const colorBox = document.createElement('div');
+                        colorBox.className = 'color-box';
+                        colorBox.style.backgroundColor = colors[field];
+                        colorBox.setAttribute('data-hex', colors[field]);
+                        
+                        const info = document.createElement('div');
+                        info.className = 'field-info';
+                        
+                        const name = document.createElement('div');
+                        name.className = 'field-name';
+                        name.textContent = field;
+                        
+                        const unit = document.createElement('div');
+                        unit.className = 'field-unit';
+                        unit.textContent = getUnit(field);
+                        
+                        info.appendChild(name);
+                        info.appendChild(unit);
+                        item.appendChild(colorBox);
+                        item.appendChild(info);
+                        grid.appendChild(item);
+                    });
+                    
+                    catDiv.appendChild(grid);
+                    container.appendChild(catDiv);
+                });
+                
+                // Legende
+                const legend = document.getElementById('legend');
+                const unitColors = {
+                    'W (Watt)': '#db2777',
+                    'A (Ampere)': '#ef4444',
+                    'V (Volt)': '#3b82f6',
+                    'VA (Scheinleistung)': '#9333ea',
+                    'VAr (Blindleistung)': '#6d28d9',
+                    '(Leistungsfaktor)': '#000000',
+                    '% (Ladezustand)': '#22c55e',
+                    'Hz (Frequenz)': '#f59e0b',
+                    'Wh (Energiezähler)': '#84cc16'
+                };
+                
+                Object.entries(unitColors).forEach(([unit, color]) => {
+                    const item = document.createElement('div');
+                    item.className = 'legend-item';
+                    
+                    const colorBox = document.createElement('div');
+                    colorBox.className = 'legend-color';
+                    colorBox.style.backgroundColor = color;
+                    
+                    const text = document.createElement('span');
+                    text.textContent = unit;
+                    
+                    item.appendChild(colorBox);
+                    item.appendChild(text);
+                    legend.appendChild(item);
+                });
+                
+            } catch (e) {
+                document.getElementById('categories').innerHTML = `
+                    <div style="color: red; padding: 20px; background: #fee; border-radius: 4px;">
+                        <strong>Fehler beim Laden der Farb-Konfiguration:</strong><br>${e.message}
+                    </div>
+                `;
+            }
+        }
+        
+        loadAndDisplay();
+    </script>
+</body>
+</html>

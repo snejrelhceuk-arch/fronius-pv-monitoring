@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verbraucher — PV-Anlage</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <link rel="stylesheet" href="/static/css/monitoring.css">
+    <style>
+        /* Verbraucher-spezifische Farben */
+        .status-chip.wp { background: rgba(198,40,40,0.35); }
+        .status-chip.wattpilot { background: rgba(21,101,192,0.3); }
+        .status-chip.haushalt { background: rgba(255,138,101,0.25); }
+        #verbraucherChart {
+            width: 100%;
+            flex: 1;
+            min-height: 0;
+            background: white;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Top Navigation Bar -->
+        <div class="top-nav-bar">
+            <div class="nav-left">
+                <a href="/" class="nav-main">Flow</a>
+                <a href="/monitoring" class="nav-main">Monitoring</a>
+                <a href="/analyse/pv" class="nav-main active">Analyse</a>
+                <div class="nav-separator"></div>
+                <a href="/erzeuger" class="nav-sub">Erzeuger</a>
+                <a href="/verbraucher" class="nav-sub active">Verbraucher</a>
+                <div class="nav-separator"></div>
+                <button class="active" id="btnViewTag" onclick="switchView('tag')">Tag</button>
+                <button id="btnViewMonat" onclick="switchView('monat')">Monat</button>
+                <button id="btnViewJahr" onclick="switchView('jahr')">Jahr</button>
+                <button id="btnViewGesamt" onclick="switchView('gesamt')">Gesamt</button>
+            </div>
+            <div class="nav-center">
+                <div id="tagNavigation" style="display:flex; gap:4px; align-items:center;">
+                    <button onclick="navigate(-1)">&#9664;</button>
+                    <button class="date-label" id="tagDateDisplay">Heute</button>
+                    <button onclick="navigate(1)">&#9654;</button>
+                </div>
+                <div id="monatNavigation" style="display:none; gap:4px; align-items:center;">
+                    <button onclick="navigate(-1)">&#9664;</button>
+                    <button class="date-label" id="monatDateDisplay">Monat</button>
+                    <button onclick="navigate(1)">&#9654;</button>
+                </div>
+                <div id="jahrNavigation" style="display:none; gap:4px; align-items:center;">
+                    <button onclick="navigate(-1)">&#9664;</button>
+                    <button class="date-label" id="jahrDateDisplay">Jahr</button>
+                    <button onclick="navigate(1)">&#9654;</button>
+                </div>
+                <button class="btn-jetzt" id="btnHeute" onclick="navigateToday()">&#9201; Heute</button>
+            </div>
+            <div class="nav-right"></div>
+        </div>
+
+        <!-- Chart Area -->
+        <div class="chart-area">
+            <div id="summaryGrid" class="status-bar" style="display:none;"></div>
+            <div id="chartLoading" class="loading">Lade Verbrauchsdaten...</div>
+            <div id="chartError" class="error" style="display:none;"></div>
+            <div id="verbraucherChart" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script>
+        // ═══════════════════════════════════════
+        // STATE
+        // ═══════════════════════════════════════
+        const COLORS = { wp: '#C62828', wattpilot: '#1565C0', haushalt: '#FF8A65' };
+        const NAMES  = { wp: 'Wärmepumpe', wattpilot: 'E-Auto', haushalt: 'Sonstige' };
+
+        let currentView = 'tag';
+        let currentDate = new Date();
+        let currentYear = currentDate.getFullYear();
+        let currentMonth = currentDate.getMonth() + 1;
+        let chart = null;
+
+        const MONTHS_DE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+                           'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+
+        // ═══════════════════════════════════════
+        // VIEW SWITCHING
+        // ═══════════════════════════════════════
+        function switchView(view) {
+            currentView = view;
+            ['Tag', 'Monat', 'Jahr', 'Gesamt'].forEach(v => {
+                document.getElementById('btnView' + v).classList.remove('active');
+            });
+            document.getElementById('btnView' + view.charAt(0).toUpperCase() + view.slice(1)).classList.add('active');
+            updateNavUI();
+            loadData();
+        }
+
+        function updateNavUI() {
+            document.getElementById('tagNavigation').style.display = currentView === 'tag' ? 'flex' : 'none';
+            document.getElementById('monatNavigation').style.display = currentView === 'monat' ? 'flex' : 'none';
+            document.getElementById('jahrNavigation').style.display = currentView === 'jahr' ? 'flex' : 'none';
+
+            const btnHeute = document.getElementById('btnHeute');
+
+            if (currentView === 'tag') {
+                document.getElementById('tagDateDisplay').textContent =
+                    currentDate.toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' });
+                btnHeute.style.display = '';
+            } else if (currentView === 'monat') {
+                document.getElementById('monatDateDisplay').textContent =
+                    `${MONTHS_DE[currentMonth - 1]} ${currentYear}`;
+                btnHeute.style.display = '';
+            } else if (currentView === 'jahr') {
+                document.getElementById('jahrDateDisplay').textContent = String(currentYear);
+                btnHeute.style.display = '';
+            } else {
+                btnHeute.style.display = 'none';
+            }
+        }
+
+        function navigate(delta) {
+            if (currentView === 'tag') {
+                currentDate.setDate(currentDate.getDate() + delta);
+            } else if (currentView === 'monat') {
+                currentMonth += delta;
+                if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+                if (currentMonth < 1) { currentMonth = 12; currentYear--; }
+            } else if (currentView === 'jahr') {
+                currentYear += delta;
+            }
+            updateNavUI();
+            loadData();
+        }
+
+        function navigateToday() {
+            const now = new Date();
+            currentDate = new Date(now);
+            currentYear = now.getFullYear();
+            currentMonth = now.getMonth() + 1;
+            updateNavUI();
+            loadData();
+        }
+
+        function formatDateISO(d) {
+            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        }
+
+        // ═══════════════════════════════════════
+        // DATA LOADING
+        // ═══════════════════════════════════════
+        async function loadData() {
+            document.getElementById('chartLoading').style.display = 'block';
+            document.getElementById('chartError').style.display = 'none';
+            document.getElementById('verbraucherChart').style.display = 'none';
+            document.getElementById('summaryGrid').style.display = 'none';
+
+            let url;
+            if (currentView === 'tag') {
+                url = `/api/verbraucher/tag?date=${formatDateISO(currentDate)}`;
+            } else if (currentView === 'monat') {
+                url = `/api/verbraucher/monat?year=${currentYear}&month=${currentMonth}`;
+            } else if (currentView === 'jahr') {
+                url = `/api/verbraucher/jahr?year=${currentYear}`;
+            } else {
+                url = '/api/verbraucher/gesamt';
+            }
+
+            try {
+                const resp = await fetch(url);
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const data = await resp.json();
+
+                document.getElementById('chartLoading').style.display = 'none';
+                document.getElementById('verbraucherChart').style.display = 'block';
+                document.getElementById('summaryGrid').style.display = 'flex';
+
+                updateSummary(data.totals);
+
+                if (currentView === 'tag') {
+                    createDayChart(data);
+                } else {
+                    createBarChart(data);
+                }
+            } catch (err) {
+                document.getElementById('chartLoading').style.display = 'none';
+                document.getElementById('chartError').style.display = 'block';
+                document.getElementById('chartError').textContent = 'Fehler: ' + err.message;
+            }
+        }
+
+        // ═══════════════════════════════════════
+        // SUMMARY
+        // ═══════════════════════════════════════
+        function formatEnergy(kwh) {
+            if (kwh >= 1000) return `${(kwh / 1000).toFixed(2)} MWh`;
+            if (kwh >= 100) return `${kwh.toFixed(0)} kWh`;
+            if (kwh >= 10) return `${kwh.toFixed(1)} kWh`;
+            return `${kwh.toFixed(2)} kWh`;
+        }
+
+        function updateSummary(totals) {
+            if (!totals) return;
+            const grid = document.getElementById('summaryGrid');
+            const gesamt = totals.gesamt || 0.001;
+            const pctWP = (totals.wp / gesamt * 100).toFixed(0);
+            const pctWatt = (totals.wattpilot / gesamt * 100).toFixed(0);
+            const pctHH = (totals.haushalt / gesamt * 100).toFixed(0);
+
+            grid.innerHTML = `
+                <div class="status-chip wp">
+                    <span class="label">WP</span>
+                    <span class="val">${formatEnergy(totals.wp)}</span>
+                    <span class="pct">${pctWP}%</span>
+                </div>
+                <div class="status-chip wattpilot">
+                    <span class="label">E-Auto</span>
+                    <span class="val">${formatEnergy(totals.wattpilot)}</span>
+                    <span class="pct">${pctWatt}%</span>
+                </div>
+                <div class="status-chip haushalt">
+                    <span class="label">Sonstige</span>
+                    <span class="val">${formatEnergy(totals.haushalt)}</span>
+                    <span class="pct">${pctHH}%</span>
+                </div>
+                <div class="status-chip gesamt">
+                    <span class="label">Gesamt</span>
+                    <span class="val">${formatEnergy(totals.gesamt)}</span>
+                </div>
+            `;
+        }
+
+        // ═══════════════════════════════════════
+        // TAG-CHART (Linien, 5-min, feste 24h-Achse)
+        // ═══════════════════════════════════════
+        function createDayChart(data) {
+            if (chart) { chart.dispose(); chart = null; }
+            const el = document.getElementById('verbraucherChart');
+            chart = echarts.init(el);
+
+            // Feste 24h x-Achse (00:00 bis 23:55, 5-min-Intervalle = 288 Slots)
+            const allTimes = [];
+            for (let h = 0; h < 24; h++) {
+                for (let m = 0; m < 60; m += 5) {
+                    allTimes.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+                }
+            }
+
+            // Daten auf Zeitslots mappen
+            const dp = data.datapoints;
+            const byTime = {};
+            dp.forEach(d => {
+                const dt = new Date(d.timestamp * 1000);
+                const key = `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+                byTime[key] = d;
+            });
+
+            const wpData = allTimes.map(t => byTime[t] ? byTime[t].p_wp : null);
+            const wattData = allTimes.map(t => byTime[t] ? byTime[t].p_wattpilot : null);
+            const hhData = allTimes.map(t => byTime[t] ? byTime[t].p_haushalt : null);
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    formatter: function(params) {
+                        if (!params || params.length === 0) return '';
+                        const timeStr = params[0].axisValue;
+                        const d = byTime[timeStr];
+                        if (!d) return `<strong>${timeStr}</strong><br/>Keine Daten`;
+                        let html = `<strong>${timeStr}</strong><br/><br/>`;
+                        html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.wp};border-radius:2px;margin-right:5px;"></span>Wärmepumpe: <strong>${d.p_wp.toFixed(0)} W</strong><br/>`;
+                        html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.wattpilot};border-radius:2px;margin-right:5px;"></span>E-Auto: <strong>${d.p_wattpilot.toFixed(0)} W</strong><br/>`;
+                        html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.haushalt};border-radius:2px;margin-right:5px;"></span>Sonstige: <strong>${d.p_haushalt.toFixed(0)} W</strong><br/>`;
+                        html += `<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>`;
+                        html += `<strong>Gesamt: ${d.p_gesamt.toFixed(0)} W</strong>`;
+                        return html;
+                    }
+                },
+                legend: {
+                    data: ['Wärmepumpe', 'E-Auto', 'Sonstige'],
+                    bottom: 10
+                },
+                grid: {
+                    left: '3%', right: '4%',
+                    bottom: '70px', top: '35px',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: allTimes,
+                    boundaryGap: false,
+                    axisLabel: {
+                        interval: function(idx) {
+                            return idx % 12 === 0;
+                        },
+                        fontSize: 11
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: 'Leistung (W)',
+                    nameLocation: 'end',
+                    min: 0,
+                    max: function(value) {
+                        return Math.min(30000, Math.max(10000, Math.ceil(value.max / 1000) * 1000));
+                    },
+                    axisLabel: { formatter: '{value} W' }
+                },
+                series: [
+                    {
+                        name: 'Wärmepumpe',
+                        type: 'line',
+                        data: wpData,
+                        itemStyle: { color: COLORS.wp },
+                        lineStyle: { width: 2 },
+                        smooth: true,
+                        symbol: 'none',
+                        areaStyle: { color: COLORS.wp, opacity: 0.15 }
+                    },
+                    {
+                        name: 'E-Auto',
+                        type: 'line',
+                        data: wattData,
+                        itemStyle: { color: COLORS.wattpilot },
+                        lineStyle: { width: 2 },
+                        smooth: true,
+                        symbol: 'none',
+                        areaStyle: { color: COLORS.wattpilot, opacity: 0.15 }
+                    },
+                    {
+                        name: 'Sonstige',
+                        type: 'line',
+                        data: hhData,
+                        itemStyle: { color: COLORS.haushalt },
+                        lineStyle: { width: 2 },
+                        smooth: true,
+                        symbol: 'none',
+                        areaStyle: { color: COLORS.haushalt, opacity: 0.15 }
+                    }
+                ]
+            };
+
+            chart.setOption(option);
+            window.addEventListener('resize', () => { if (chart) chart.resize(); });
+        }
+
+        // ═══════════════════════════════════════
+        // BAR-CHART (Monat/Jahr/Gesamt)
+        // ═══════════════════════════════════════
+        function createBarChart(data) {
+            if (chart) { chart.dispose(); chart = null; }
+            const el = document.getElementById('verbraucherChart');
+            chart = echarts.init(el);
+
+            const dp = data.datapoints;
+            let labels;
+
+            if (currentView === 'monat') {
+                const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+                labels = Array.from({length: daysInMonth}, (_, i) => `${i + 1}.`);
+            } else if (currentView === 'jahr') {
+                labels = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+            } else {
+                if (data.year_range) {
+                    const minY = data.year_range[0];
+                    const maxY = data.year_range[1];
+                    labels = [];
+                    for (let y = minY; y <= maxY; y++) labels.push(String(y));
+                } else {
+                    labels = dp.map(d => d.label);
+                }
+            }
+
+            const byKey = {};
+            dp.forEach(d => {
+                if (currentView === 'monat') byKey[d.day] = d;
+                else if (currentView === 'jahr') byKey[d.month] = d;
+                else byKey[d.label] = d;
+            });
+
+            const wpData = labels.map((l, i) => {
+                const key = currentView === 'monat' ? (i + 1) : (currentView === 'jahr' ? (i + 1) : l);
+                return byKey[key] ? byKey[key].w_wp : null;
+            });
+            const wattData = labels.map((l, i) => {
+                const key = currentView === 'monat' ? (i + 1) : (currentView === 'jahr' ? (i + 1) : l);
+                return byKey[key] ? byKey[key].w_wattpilot : null;
+            });
+            const hhData = labels.map((l, i) => {
+                const key = currentView === 'monat' ? (i + 1) : (currentView === 'jahr' ? (i + 1) : l);
+                return byKey[key] ? byKey[key].w_haushalt : null;
+            });
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    formatter: function(params) {
+                        if (!params || params.length === 0) return '';
+                        const idx = params[0].dataIndex;
+                        let key, titleStr;
+
+                        if (currentView === 'monat') {
+                            const day = idx + 1;
+                            key = day;
+                            const datum = new Date(currentYear, currentMonth - 1, day);
+                            titleStr = datum.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                        } else if (currentView === 'jahr') {
+                            key = idx + 1;
+                            titleStr = labels[idx] + ' ' + currentYear;
+                        } else {
+                            key = labels[idx];
+                            titleStr = key;
+                        }
+
+                        const d = byKey[key];
+                        if (!d) return `<strong>${titleStr}</strong><br/>Keine Daten`;
+
+                        let html = `<strong>${titleStr}</strong><br/><br/>`;
+                        html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.wp};border-radius:2px;margin-right:5px;"></span>WP: <strong>${formatEnergy(d.w_wp)}</strong><br/>`;
+                        html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.wattpilot};border-radius:2px;margin-right:5px;"></span>E-Auto: <strong>${formatEnergy(d.w_wattpilot)}</strong><br/>`;
+                        html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.haushalt};border-radius:2px;margin-right:5px;"></span>Sonstige: <strong>${formatEnergy(d.w_haushalt)}</strong><br/>`;
+                        html += `<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>`;
+                        html += `<strong>Gesamt: ${formatEnergy(d.w_gesamt)}</strong>`;
+                        return html;
+                    }
+                },
+                legend: {
+                    data: ['Wärmepumpe', 'E-Auto', 'Sonstige'],
+                    bottom: 10
+                },
+                grid: {
+                    left: '3%', right: '4%',
+                    bottom: '70px', top: '35px',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: labels,
+                    axisLabel: {
+                        interval: 0,
+                        rotate: labels.length > 15 ? 45 : 0,
+                        fontSize: 11
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: 'kWh',
+                    nameLocation: 'end',
+                    axisLabel: { formatter: '{value}' }
+                },
+                series: [
+                    {
+                        name: 'Wärmepumpe',
+                        type: 'bar',
+                        stack: 'verbrauch',
+                        data: wpData,
+                        itemStyle: { color: COLORS.wp },
+                        emphasis: { focus: 'series' }
+                    },
+                    {
+                        name: 'E-Auto',
+                        type: 'bar',
+                        stack: 'verbrauch',
+                        data: wattData,
+                        itemStyle: { color: COLORS.wattpilot },
+                        emphasis: { focus: 'series' }
+                    },
+                    {
+                        name: 'Sonstige',
+                        type: 'bar',
+                        stack: 'verbrauch',
+                        data: hhData,
+                        itemStyle: { color: COLORS.haushalt },
+                        emphasis: { focus: 'series' }
+                    }
+                ]
+            };
+
+            chart.setOption(option);
+            window.addEventListener('resize', () => { if (chart) chart.resize(); });
+        }
+
+        // ═══════════════════════════════════════
+        // INIT
+        // ═══════════════════════════════════════
+        updateNavUI();
+        loadData();
+    </script>
+
+    {% include 'info_overlay.html' %}
+</body>
+</html>

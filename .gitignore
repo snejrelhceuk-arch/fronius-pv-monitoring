@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.venv/
+venv/
+ENV/
+
+# Datenbank
+*.db
+*.db-shm
+*.db-wal
+data_backup_*.db
+
+# Logs
+*.log
+/tmp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Runtime-Dateien (werden von laufenden Services generiert)
+collector.pid
+wattpilot_collector.pid
+config/battery_scheduler_state.json
+
+# Lokale Kontroll-Datei (nicht im Repo)
+ToExamine.md
+
+# Archiv & Backup (nur lokal, nicht im Repo)
+archive/
+backup/
+2026-01-01-Archiv/
+2025-12-30-Archiv/
+
+# Zugangsdaten / Secrets
+.secrets
+*.secrets
+
+# Wattpilot Dumps (enthalten WiFi-Passwörter, RFID-Daten etc.)
+tools/wattpilot_dump_*.json
+*.bak_*
+backup/db/
+*.empty_after_crash
+*.bak

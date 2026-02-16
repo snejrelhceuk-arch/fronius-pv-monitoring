@@ -1,0 +1,99 @@
+{
+  "_doc": "Batterie-Steuerungs-Konfiguration — Fronius Gen24 + BYD HVS 10.2 kWh",
+  "_updated": "2026-02-10",
+  "batterie": {
+    "_doc": "Hardware-Parameter der Batterie (selten ändern)",
+    "kapazitaet_kwh": 10.2,
+    "chemie": "LFP",
+    "modell": "BYD HVS 10.2",
+    "soh_prozent": 92,
+    "max_lade_w": 10240,
+    "max_entlade_w": 10240
+  },
+  "soc_grenzen": {
+    "_doc": "SOC-Bereiche — immer gleicher Algorithmus, keine Saisons",
+    "komfort_min": 25,
+    "komfort_max": 75,
+    "stress_min": 5,
+    "stress_max": 100,
+    "absolutes_minimum": 5,
+    "kritisch_soc": 10,
+    "_komfort_doc": "Komfort-Bereich 25–75%: Optimiert für LFP-Lebensdauer (BatteryUniversity: 75-25% SOC = ~3.000 Zyklen bis 90% Kapazität). Unterhalb 25% oder oberhalb 75% = Stress, nur wenn Prognose es rechtfertigt. Im Winter wird 25→5%/100% häufiger nötig, im Sommer 5%/75→100%."
+  },
+  "morgen_algorithmus": {
+    "_doc": "SOC_MIN-Öffnung: Batterie entleeren bevor PV übernimmt",
+    "aktiv": true,
+    "min_pv_prognose_kwh": 5.0,
+    "uebernahme_schwelle": 0.8,
+    "live_pv_schwelle_w": 500,
+    "_live_pv_doc": "Wenn kein Übernahme-Stunde berechnet werden kann (schwache Prognose), warten wir bis Live-PV diesen Schwellwert überschreitet bevor SOC_MIN geöffnet wird",
+    "max_vorlauf_h": 0.25,
+    "_vorlauf_doc": "Max. Stunden VOR PV-Takeover, in denen SOC_MIN geöffnet wird. 0.25 = 15 min. Verhindert Netzbezug-Risiko bei schwachem PV-Morgen (z.B. Wärmepumpe). Altes Verhalten (volle Rückwärtsrechnung) wäre z.B. 2.0",
+    "fenster_start_stunde": 5,
+    "fenster_stunden_nach_sunrise": 3,
+    "drain_rate_fallback_kw": 1.5,
+    "drain_rate_mix": {
+      "_doc": "Gewichtung: 70% historisch (stabil) + 30% live (aktuell)",
+      "historisch_gewicht": 0.7,
+      "live_gewicht": 0.3
+    }
+  },
+  "nachmittag_algorithmus": {
+    "_doc": "SOC_MAX-Erhöhung: Mehr Kapazität freigeben wenn PV-Fenster sich schliesst",
+    "aktiv": true,
+    "start_stunde": 12,
+    "surplus_sicherheitsfaktor": 1.3,
+    "wolken_schwer_prozent": 85,
+    "max_stunden_vor_sunset": 1.5
+  },
+  "zellausgleich": {
+    "_doc": "Monatlicher Vollzyklus für BYD-Zellbalancing — prognosegesteuert, NICHT fixer Tag",
+    "aktiv": true,
+    "modus": "auto",
+    "soc_min_waehrend": 5,
+    "soc_max_waehrend": 100,
+    "min_prognose_kwh": 50.0,
+    "fruehester_tag": 1,
+    "spaetester_tag": 28,
+    "max_tage_ohne_ausgleich": 45,
+    "notfall_min_prognose_kwh": 25.0,
+    "letzter_ausgleich": "2026-02-10",
+    "beschreibung": "Prüft täglich die PV-Prognose. Am ersten Tag im Monat mit genug Sonne (>=25 kWh) wird der Vollzyklus ausgelöst. Wenn bis zum 28. kein passender Tag kam, wird die Schwelle auf 15 kWh gesenkt. Absolute Obergrenze: 45 Tage ohne Ausgleich."
+  },
+  "leistungsbegrenzung": {
+    "_doc": "Lade-/Entladeraten-Begrenzung (Modbus Model 124)",
+    "laderate_sommer_prozent": 68,
+    "entladerate_abend_prozent": 29,
+    "entladerate_nacht_prozent": 10,
+    "temperatur_limits": {
+      "_doc": "Laderate [%] abhängig von Zelltemperatur [°C]",
+      "25": 100,
+      "30": 80,
+      "35": 68,
+      "40": 50
+    }
+  },
+  "zeitsteuerung": {
+    "_doc": "Prüfintervall und Strategie-Zeitfenster",
+    "pruef_intervall_minuten": 15,
+    "mitternacht_reset": false,
+    "abend_entladelimit_ab": 15,
+    "abend_entladelimit_bis": 0,
+    "nacht_entladelimit_ab": 0,
+    "nacht_entladelimit_bis": 6
+  },
+  "sicherheit": {
+    "_doc": "Fail-Safe-Werte bei Scheduler-Ausfall oder Fehler",
+    "netzladung_immer_an": true,
+    "failsafe_soc_min": 25,
+    "failsafe_soc_max": 100,
+    "failsafe_lade_prozent": 100,
+    "failsafe_entlade_prozent": 100,
+    "watchdog_timeout_sekunden": 300
+  },
+  "logging": {
+    "level": "INFO",
+    "db_logging": true,
+    "log_warten_meldungen": false
+  }
+}

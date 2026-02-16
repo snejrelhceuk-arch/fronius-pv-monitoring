@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Energieflow — PV-Anlage</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ══════ Top Navigation ══════ */
+        .top-nav {
+            background: rgba(30, 41, 59, 0.95);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+
+        .nav-main { display: flex; gap: 8px; }
+
+        .nav-main a {
+            padding: 10px 20px; border: none;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 6px; cursor: pointer; font-size: 14px;
+            font-weight: 600; text-decoration: none; color: rgba(255,255,255,0.9);
+            transition: all 0.2s;
+        }
+
+        .nav-main a:hover {
+            background: rgba(255,255,255,0.2);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .nav-main a.active {
+            background: rgba(255,255,255,0.3);
+            border-color: rgba(255,255,255,0.5);
+        }
+        
+        /* Sub-Navigation */
+        .nav-separator {
+            width: 1px;
+            height: 24px;
+            background: rgba(255,255,255,0.3);
+            margin: 0 8px;
+        }
+        .nav-sub {
+            display: flex;
+            gap: 6px;
+        }
+        .nav-sub a {
+            padding: 6px 12px;
+            background: rgba(255,255,255,0.08);
+            color: rgba(255,255,255,0.8);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 3px;
+            font-weight: 500;
+            font-size: 12px;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .nav-sub a:hover {
+            background: rgba(255,255,255,0.15);
+            color: white;
+        }
+        .nav-sub a.active {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border-color: rgba(255,255,255,0.3);
+        }
+
+        /* ══════ Main Content ══════ */
+        .container {
+            flex: 1; display: flex; justify-content: flex-start;
+            align-items: flex-start; padding: 20px; min-height: 0;
+        }
+
+        .flow-chart {
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            padding: 30px;
+            padding-top: 50px;
+            max-width: 1200px;
+            width: 100%;
+            position: relative;
+        }
+
+        .timestamp {
+            position: absolute; top: 16px; left: 30px;
+            text-align: left; font-size: 20px; font-weight: 700;
+            color: rgba(255,255,255,0.4);
+        }
+
+        #flow-svg { width: 100%; height: 420px; max-width: 900px; display: block; margin: 0 auto; }
+
+        /* ══════ Status Badge ══════ */
+        .status-badge {
+            position: absolute; top: 16px; right: 20px;
+            padding: 6px 14px; background: rgba(16,185,129,0.2);
+            border: 1px solid #10b981; color: #10b981;
+            border-radius: 20px; font-size: 11px; font-weight: 600;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .status-dot {
+            width: 7px; height: 7px; background: #10b981;
+            border-radius: 50%; animation: blink 1.5s infinite;
+        }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        .error-badge { background: rgba(239,68,68,0.2); border-color:#ef4444; color:#ef4444; }
+        .error-badge .status-dot { background: #ef4444; }
+
+        /* ══════ Battery Detail Bar ══════ */
+        .battery-detail {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            padding: 6px 0 2px 0;
+            color: rgba(255,255,255,0.45);
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .battery-detail .bd-val {
+            color: #10b981;
+            font-weight: 600;
+        }
+        .battery-detail .bd-sep {
+            color: rgba(255,255,255,0.15);
+        }
+        .inverter-temps {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+            padding: 2px 0 4px 0;
+            color: rgba(255,255,255,0.35);
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .inverter-temps .it-val {
+            color: #60a5fa;
+            font-weight: 600;
+        }
+        .inverter-temps .it-label {
+            color: rgba(255,255,255,0.50);
+            font-weight: 600;
+        }
+        .inverter-temps .it-sep {
+            color: rgba(255,255,255,0.12);
+            font-size: 13px;
+        }
+
+        @media (max-width: 768px) {
+            .flow-chart { padding: 15px; }
+            #flow-svg { height: 400px; }
+            .title { font-size: 16px; }
+            .battery-detail { gap: 10px; font-size: 11px; }
+            .inverter-temps { gap: 8px; font-size: 10px; }
+        }
+
+        /* ══════ Mobile Responsive ══════ */
+
+        /* Tablet & kleiner: kompaktere Nav + weniger Padding */
+        @media (max-width: 900px) {
+            .top-nav { padding: 6px 10px; }
+            .nav-main { gap: 4px; }
+            .nav-main a { padding: 7px 12px; font-size: 13px; }
+            .container { padding: 8px; }
+            .flow-chart { padding: 10px; padding-top: 40px; border-radius: 10px; }
+            .timestamp { font-size: 14px; top: 12px; left: 12px; }
+            .status-badge { top: 12px; right: 10px; padding: 4px 10px; font-size: 10px; }
+        }
+
+        /* Handy Landscape: SVG Fullscreen, maximaler Platz */
+        @media (max-height: 500px) and (orientation: landscape) {
+            body { overflow: auto; }
+            .top-nav { padding: 4px 8px; }
+            .nav-main a { padding: 5px 10px; font-size: 12px; }
+            .container { padding: 4px; }
+            .flow-chart { padding: 6px; padding-top: 32px; border-radius: 8px;
+                          box-shadow: none; border: none; background: transparent; }
+            #flow-svg { height: calc(100vh - 70px); max-width: 100%; }
+            .timestamp { font-size: 12px; top: 8px; left: 8px; }
+            .status-badge { top: 8px; right: 8px; }
+        }
+
+        /* Handy Portrait: Hinweis + brauchbare Darstellung */
+        @media (max-width: 600px) and (orientation: portrait) {
+            .container { padding: 4px; align-items: flex-start; }
+            .flow-chart { padding: 6px; padding-top: 34px; border-radius: 8px; }
+            #flow-svg { height: auto; max-height: calc(100vh - 100px); }
+            .timestamp { font-size: 12px; top: 10px; left: 8px; max-width: 60%; overflow: hidden;
+                         text-overflow: ellipsis; white-space: nowrap; }
+        }
+
+        /* Querformat-Hinweis (nur Portrait + schmal) */
+        .rotate-hint {
+            display: none;
+            position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
+            background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(255,255,255,0.15);
+            color: rgba(255,255,255,0.6); padding: 8px 18px; border-radius: 20px;
+            font-size: 12px; z-index: 100; white-space: nowrap;
+            animation: fadeInOut 6s ease-in-out forwards;
+        }
+        .rotate-hint svg { vertical-align: middle; margin-right: 6px; }
+        @media (max-width: 600px) and (orientation: portrait) {
+            .rotate-hint { display: flex; align-items: center; }
+        }
+        @keyframes fadeInOut {
+            0% { opacity: 0; } 10% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; display: none; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <div class="top-nav">
+        <div class="nav-main">
+            <a href="/" class="active">Flow</a>
+            <a href="/monitoring">Monitoring</a>
+            <a href="/analyse/pv">Analyse</a>
+        </div>
+        <div class="nav-separator"></div>
+        <div class="nav-sub">
+            <a href="/echtzeit">Echtzeit</a>
+        </div>
+    </div>
+
+    <!-- Rotate Hint (nur auf Portrait-Handys sichtbar) -->
+    <div class="rotate-hint" id="rotate-hint">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/>
+            <path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/>
+        </svg>
+        Querformat für beste Darstellung
+    </div>
+
+    <!-- Main Content -->
+    <div class="container">
+        <div class="flow-chart">
+            <div class="status-badge" id="status">
+                <div class="status-dot"></div><span>Live</span>
+            </div>
+
+            <div class="timestamp" id="timestamp">Lade Daten...</div>
+
+            <svg id="flow-svg" viewBox="60 -30 750 420">
+                <defs>
+                    <filter id="glow">
+                        <feGaussianBlur stdDeviation="2.5" result="blur"/>
+                        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                    </filter>
+                </defs>
+
+                <!-- ═══ FLOW-LEITUNGEN (Hintergrund) ═══ -->
+                <g id="flow-pipes"></g>
+
+                <!-- ═══ ANIMIERTE PARTIKEL ═══ -->
+                <g id="flow-particles"></g>
+
+                <!-- ════════════════════════════════════════════════════════
+                     LAYOUT — Hauptachse horizontal bei y=300
+                     
+                        F1(370,42)  F2(520,26)  F3(670,42)
+                            \          |          /
+                           PV Gesamt (520,120)
+                                 |
+                     Netz ────── + ────── Verbrauch ─── Haushalt
+                    (140,300)  (520,300)  (880,300)     (1020,190)
+                                 |                  ├── Wattpilot(1040,300)
+                            Batterie                └── WP(1020,410)
+                           (520,480)
+                     ════════════════════════════════════════════════════════ -->
+
+                <!-- ── Knotenpunkt (Kreuzung Hauptachse, dezent) ── -->
+                <circle cx="350" cy="225" r="5" fill="none"
+                        stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+
+                <!-- ═══ GAUGE ARCS (dezente Zustandsanzeige) ═══ -->
+                <g id="gauge-arcs"></g>
+
+                <!-- ═══ HAUPT-KNOTEN (Kreise OHNE Füllung) ═══ -->
+
+                <!-- Netz -->
+                <circle cx="200" cy="225" r="58" fill="none"
+                        stroke="#ef4444" stroke-width="3" id="node-netz"/>
+                <text x="200" y="207" text-anchor="middle"
+                      fill="#ef4444" font-size="15" font-weight="600">Netz</text>
+                <text x="200" y="232" text-anchor="middle"
+                      fill="white" font-size="18" font-weight="700" id="value-netz">0 W</text>
+                <text x="200" y="250" text-anchor="middle"
+                      fill="#ef4444" font-size="13" font-weight="700" id="sub-netz">0 kWh</text>
+
+                <!-- PV Gesamt -->
+                <circle cx="350" cy="135" r="62" fill="none"
+                        stroke="#fbbf24" stroke-width="3" id="node-pv"/>
+                <text x="350" y="117" text-anchor="middle"
+                      fill="#fbbf24" font-size="15" font-weight="600">PV Gesamt</text>
+                <text x="350" y="140" text-anchor="middle"
+                      fill="white" font-size="18" font-weight="700" id="value-pv">0 W</text>
+                <text x="350" y="156" text-anchor="middle"
+                      fill="#fbbf24" font-size="13" font-weight="700" id="sub-pv">0 kWh</text>
+                <text x="350" y="170" text-anchor="middle"
+                      fill="#fbbf24" font-size="13" font-weight="700" id="sub-pv-autarkie">0%</text>
+
+                <!-- Batterie -->
+                <circle cx="350" cy="315" r="55" fill="none"
+                        stroke="#10b981" stroke-width="3" id="node-battery"/>
+                <text x="350" y="297" text-anchor="middle"
+                      fill="#10b981" font-size="15" font-weight="600">Batterie</text>
+                <text x="350" y="318" text-anchor="middle"
+                      fill="white" font-size="18" font-weight="700" id="value-battery">0 W</text>
+                <text x="350" y="335" text-anchor="middle"
+                      fill="#10b981" font-size="13" font-weight="700" id="sub-battery-soc">SOC: 0%</text>
+
+                <!-- Verbrauch -->
+                <circle cx="500" cy="225" r="62" fill="none"
+                        stroke="#60a5fa" stroke-width="3" id="node-consumption"/>
+                <text x="500" y="207" text-anchor="middle"
+                      fill="#60a5fa" font-size="15" font-weight="600">Verbrauch</text>
+                <text x="500" y="233" text-anchor="middle"
+                      fill="white" font-size="18" font-weight="700" id="value-consumption">0 W</text>
+                <text x="500" y="251" text-anchor="middle"
+                      fill="#60a5fa" font-size="13" font-weight="700" id="sub-consumption">0 kWh</text>
+
+                <!-- ═══ SUB-ERZEUGER (kurze Linien, Fluss immer → PV) ═══ -->
+                <circle cx="250" cy="30" r="39" fill="none"
+                        stroke="#fcd34d" stroke-width="2" id="circle-f1"/>
+                <text x="250" y="24" text-anchor="middle"
+                      fill="#fcd34d" font-size="14" font-weight="600">F1</text>
+                <text x="250" y="42" text-anchor="middle"
+                      fill="rgba(255,255,255,0.7)" font-size="15"
+                      font-weight="600" id="value-f1">0W</text>
+
+                <circle cx="350" cy="15" r="39" fill="none"
+                        stroke="#fcd34d" stroke-width="2" id="circle-f2"/>
+                <text x="350" y="9" text-anchor="middle"
+                      fill="#fcd34d" font-size="14" font-weight="600">F2</text>
+                <text x="350" y="27" text-anchor="middle"
+                      fill="rgba(255,255,255,0.7)" font-size="15"
+                      font-weight="600" id="value-f2">0W</text>
+
+                <circle cx="450" cy="30" r="39" fill="none"
+                        stroke="#fcd34d" stroke-width="2" id="circle-f3"/>
+                <text x="450" y="24" text-anchor="middle"
+                      fill="#fcd34d" font-size="14" font-weight="600">F3</text>
+                <text x="450" y="42" text-anchor="middle"
+                      fill="rgba(255,255,255,0.7)" font-size="15"
+                      font-weight="600" id="value-f3">0W</text>
+
+                <!-- ═══ SUB-VERBRAUCHER (kurze Linien, Fluss immer → Verbraucher) ═══ -->
+                <circle cx="640" cy="130" r="39" fill="none"
+                        stroke="#dbeafe" stroke-width="2" id="circle-household"/>
+                <text x="640" y="123" text-anchor="middle"
+                      fill="#dbeafe" font-size="13" font-weight="600">Haushalt</text>
+                <text x="640" y="142" text-anchor="middle"
+                      fill="rgba(255,255,255,0.7)" font-size="15"
+                      font-weight="600" id="value-household">0W</text>
+
+                <circle cx="680" cy="225" r="39" fill="none"
+                        stroke="#93c5fd" stroke-width="2" id="circle-wattpilot"/>
+                <text x="680" y="218" text-anchor="middle"
+                      fill="#93c5fd" font-size="13" font-weight="600">Wattpilot</text>
+                <text x="680" y="237" text-anchor="middle"
+                      fill="rgba(255,255,255,0.7)" font-size="15"
+                      font-weight="600" id="value-wattpilot">0W</text>
+
+                <circle cx="640" cy="320" r="39" fill="none"
+                        stroke="#60a5fa" stroke-width="2" id="circle-heatpump"/>
+                <text x="640" y="313" text-anchor="middle"
+                      fill="#60a5fa" font-size="14" font-weight="600">WP</text>
+                <text x="640" y="332" text-anchor="middle"
+                      fill="rgba(255,255,255,0.7)" font-size="15"
+                      font-weight="600" id="value-heatpump">0W</text>
+
+                <!-- Reserve (placeholder) -->
+                <circle cx="670" cy="360" r="18" fill="none"
+                        stroke="rgba(255,255,255,0.12)" stroke-width="1"
+                        stroke-dasharray="4,4"/>
+                <text x="670" y="363" text-anchor="middle"
+                      fill="rgba(255,255,255,0.12)" font-size="9">Reserve</text>
+            </svg>
+
+            <!-- Battery Detail -->
+            <div class="battery-detail" id="batteryDetail">
+                <span>SOH: <span class="bd-val" id="bd-soh">--</span>%</span>
+                <span class="bd-sep">|</span>
+                <span>Ladung: <span class="bd-val" id="bd-charge">--</span> kWh</span>
+                <span class="bd-sep">|</span>
+                <span>Entladung: <span class="bd-val" id="bd-discharge">--</span> kWh</span>
+                <span class="bd-sep">|</span>
+                <span>SOC: <span class="bd-val" id="bd-soc-range">--</span></span>
+                <span class="bd-sep">|</span>
+                <span>Temp: <span class="bd-val" id="bd-temp">--</span> °C</span>
+            </div>
+            <div class="inverter-temps" id="inverterTemps">
+                <span class="it-label">F1</span>
+                <span>Gehäuse <span class="it-val" id="it-intern">--</span>°</span>
+                <span>AC-KK <span class="it-val" id="it-ac">--</span>°</span>
+                <span>DC <span class="it-val" id="it-dc">--</span>°</span>
+                <span>DC/Batt <span class="it-val" id="it-dc-batt">--</span>°</span>
+                <span class="it-sep">│</span>
+                <span class="it-label">F2</span>
+                <span>Gehäuse <span class="it-val" id="it-f2-intern">--</span>°</span>
+                <span>AC-KK <span class="it-val" id="it-f2-ac">--</span>°</span>
+                <span>DC <span class="it-val" id="it-f2-dc">--</span>°</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ══════════════════════════════════════════════════════════════
+    //  FLOW-CHART ENGINE v2
+    //  Animierte Punkte bewegen sich auf Leitungen in Flussrichtung.
+    //  Hauptachse: Netz ─ Hub ─ Verbrauch (horizontal y=300)
+    //  Vertikalachse: PV ─ Hub ─ Batterie
+    //  Sub-Erzeuger → PV (kurz, nie umkehrbar)
+    //  Verbrauch → Sub-Verbraucher (kurz, nie umkehrbar)
+    // ══════════════════════════════════════════════════════════════
+
+    const API_BASE = {{ api_base_url | tojson }};
+    const apiUrl = (path) => API_BASE ? `${API_BASE}${path}` : path;
+
+    const N = {  // Knoten-Koordinaten + Radien
+        netz:       {x:200, y:225, r:58},
+        pv:         {x:350, y:135, r:62},
+        battery:    {x:350, y:315, r:55},
+        consumption:{x:500, y:225, r:62},
+        hub:        {x:350, y:225, r:5},
+        f1: {x:250,y:30, r:39}, f2: {x:350,y:15, r:39}, f3: {x:450,y:30, r:39},
+        household:  {x:640,y:130, r:39},
+        wattpilot:  {x:680,y:225, r:39},
+        heatpump:   {x:640,y:320, r:39},
+    };
+
+    const C = {  // Farben
+        netz:'#ef4444', pv:'#fbbf24', battery:'#10b981',
+        consumption:'#60a5fa', producer:'#fcd34d',
+        household:'#dbeafe', wattpilot:'#93c5fd', heatpump:'#60a5fa',
+    };
+
+    // Flow-Definitionen: Pfad + Funktion die Leistung aus Daten extrahiert
+    const FLOWS = [
+        // ── Hauptflüsse über Hub ──
+        { id:'pv_hub',      path:[N.pv, N.hub],          color:C.pv,
+          get: d => (d.flows.pv_to_consumption||0)+(d.flows.pv_to_grid||0)+(d.flows.pv_to_battery||0) },
+        { id:'hub_cons',    path:[N.hub, N.consumption],  color:C.consumption,
+          get: d => (d.flows.pv_to_consumption||0)+(d.flows.battery_to_consumption||0)+(d.flows.grid_to_consumption||0) },
+        { id:'hub_netz',    path:[N.hub, N.netz],         color:C.netz,
+          get: d => d.flows.pv_to_grid||0 },
+        { id:'netz_hub',    path:[N.netz, N.hub],         color:C.netz,
+          get: d => d.flows.grid_to_consumption||0 },
+        { id:'hub_batt',    path:[N.hub, N.battery],      color:C.battery,
+          get: d => d.flows.pv_to_battery||0 },
+        { id:'batt_hub',    path:[N.battery, N.hub],      color:C.battery,
+          get: d => d.flows.battery_to_consumption||0 },
+
+        // ── Sub-Erzeuger → PV (kurz, fest) ──
+        { id:'f1_pv', path:[N.f1, N.pv], color:C.producer, get: d => d.producers.f1||0 },
+        { id:'f2_pv', path:[N.f2, N.pv], color:C.producer, get: d => d.producers.f2||0 },
+        { id:'f3_pv', path:[N.f3, N.pv], color:C.producer, get: d => d.producers.f3||0 },
+
+        // ── Verbrauch → Sub-Verbraucher (kurz, fest) ──
+        { id:'c_hh', path:[N.consumption, N.household],  color:C.household,
+          get: d => Math.max(0, d.consumption.household||0) },
+        { id:'c_wallbox', path:[N.consumption, N.wattpilot],  color:C.wattpilot,
+          get: d => Math.max(0, d.consumption.wattpilot||0) },
+        { id:'c_hp', path:[N.consumption, N.heatpump],   color:C.heatpump,
+          get: d => Math.max(0, d.consumption.heatpump||0) },
+    ];
+
+    // ── Konstanten ──
+    const SVG_NS = "http://www.w3.org/2000/svg";
+    const MIN_W  = 10;          // Min. Leistung für Animation (sehr niedrig, damit Partikel fast immer da sind)
+    const GAP    = 40;          // Partikel-Abstand (px)
+    const V_BASE = 0.4;         // Basis-Speed (px/frame)
+    const V_MAX  = 2.5;         // Max-Speed
+
+    // ══════════════════════════════════════════════════════════
+    //  GAUGE ARCS — dezente Zustandsanzeige (Tacho-Stil)
+    //  PV: 0–26,5 kW | Netz: 0–24 kW | Batterie: SOC 0–100%
+    // ══════════════════════════════════════════════════════════
+
+    const GAUGE_START  = 180;   // Startwinkel (6-Uhr-Position, unten)
+    const GAUGE_SWEEP  = 360;   // Voller Kreis
+    const GAUGE_STROKE = 12;    // Strichbreite (dicker Ring innerhalb der Kreise)
+
+    const GAUGE_CFG = {
+        pv:      { cx:350, cy:135, gr:54, max:26500, color:'#fbbf24' },
+        netz:    { cx:200, cy:225, gr:50, max:24000, color:'#ef4444' },
+        battery: { cx:350, cy:315, gr:47, max:100,   color:'#10b981' },
+    };
+
+    function polarToCart(cx, cy, r, deg) {
+        const rad = (deg - 90) * Math.PI / 180;
+        return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+    }
+
+    function gaugeArcPath(cx, cy, r, startDeg, endDeg) {
+        const sweep = endDeg - startDeg;
+        if (Math.abs(sweep) < 0.5) return '';
+        // SVG kann keinen vollen 360°-Bogen mit einem Arc → zwei Halbkreise
+        if (sweep >= 359.5) {
+            const top = polarToCart(cx, cy, r, startDeg);
+            const bot = polarToCart(cx, cy, r, startDeg + 180);
+            return `M${top.x.toFixed(1)},${top.y.toFixed(1)} A${r},${r} 0 1 1 ${bot.x.toFixed(1)},${bot.y.toFixed(1)} A${r},${r} 0 1 1 ${top.x.toFixed(1)},${top.y.toFixed(1)}`;
+        }
+        const s = polarToCart(cx, cy, r, startDeg);
+        const e = polarToCart(cx, cy, r, endDeg);
+        const large = sweep > 180 ? 1 : 0;
+        return `M${s.x.toFixed(1)},${s.y.toFixed(1)} A${r},${r} 0 ${large} 1 ${e.x.toFixed(1)},${e.y.toFixed(1)}`;
+    }
+
+    function initGauges() {
+        const g = document.getElementById('gauge-arcs');
+        for (const [key, cfg] of Object.entries(GAUGE_CFG)) {
+            // Hintergrund-Track (volle 270°, sehr dezent)
+            const bg = document.createElementNS(SVG_NS, 'path');
+            bg.setAttribute('d', gaugeArcPath(cfg.cx, cfg.cy, cfg.gr, GAUGE_START, GAUGE_START + GAUGE_SWEEP));
+            bg.setAttribute('fill', 'none');
+            bg.setAttribute('stroke', cfg.color);
+            bg.setAttribute('stroke-width', GAUGE_STROKE);
+            bg.setAttribute('stroke-opacity', '0.06');
+            bg.setAttribute('stroke-linecap', 'round');
+            g.appendChild(bg);
+
+            // Wert-Arc (dynamisch, halbtransparent)
+            const val = document.createElementNS(SVG_NS, 'path');
+            val.setAttribute('fill', 'none');
+            val.setAttribute('stroke', cfg.color);
+            val.setAttribute('stroke-width', GAUGE_STROKE);
+            val.setAttribute('stroke-opacity', '0.3');
+            val.setAttribute('stroke-linecap', 'round');
+            val.id = `gauge-val-${key}`;
+            g.appendChild(val);
+        }
+    }
+
+    function updateGauges(d) {
+        const pctPV   = Math.max(0, Math.min(1, Math.abs(d.producers.pv_total) / GAUGE_CFG.pv.max));
+        const pctNetz = Math.max(0, Math.min(1, Math.abs(d.grid.power)         / GAUGE_CFG.netz.max));
+        const pctBatt = Math.max(0, Math.min(1, (d.battery.soc || 0)           / GAUGE_CFG.battery.max));
+
+        const vals = { pv: pctPV, netz: pctNetz, battery: pctBatt };
+        for (const [key, cfg] of Object.entries(GAUGE_CFG)) {
+            const el = document.getElementById(`gauge-val-${key}`);
+            const pct = vals[key];
+            if (pct < 0.005) {
+                el.setAttribute('d', '');
+            } else {
+                el.setAttribute('d', gaugeArcPath(cfg.cx, cfg.cy, cfg.gr,
+                    GAUGE_START, GAUGE_START + pct * GAUGE_SWEEP));
+            }
+        }
+    }
+
+    // ── Zustand ──
+    let smoothedData = null;
+    let activeFlows  = [];
+    let animId       = null;
+
+    // ══════════════════════════════════════════════════════════
+    //  Pfad-Geometrie
+    // ══════════════════════════════════════════════════════════
+
+    // Berechne Punkt auf dem Kreisrand in Richtung eines Zielpunkts
+    function getCircleEdgePoint(center, radius, targetPoint) {
+        const dx = targetPoint.x - center.x;
+        const dy = targetPoint.y - center.y;
+        const len = Math.hypot(dx, dy);
+        if (len === 0) return center;
+        
+        const ux = dx / len;
+        const uy = dy / len;
+        
+        return {
+            x: center.x + ux * radius,
+            y: center.y + uy * radius
+        };
+    }
+
+    // Passe Pfad an: Schneide Start/Ende an Kreisgrenzen ab
+    function adjustPathForCircles(path) {
+        if (path.length < 2) return path;
+        
+        const adjusted = [...path];
+        const first = adjusted[0];
+        const second = adjusted[1];
+        const last = adjusted[adjusted.length - 1];
+        const beforeLast = adjusted[adjusted.length - 2];
+        
+        // Start-Kreis: Punkt auf dem Kreisrand in Richtung des zweiten Punkts
+        if (first.r && first.r > 0) {
+            adjusted[0] = getCircleEdgePoint(first, first.r, second);
+        }
+        
+        // End-Kreis: Punkt auf dem Kreisrand in Richtung des vorletzten Punkts
+        if (last.r && last.r > 0) {
+            adjusted[adjusted.length - 1] = getCircleEdgePoint(last, last.r, beforeLast);
+        }
+        
+        return adjusted;
+    }
+
+    function pathLen(pts) {
+        let l = 0;
+        for (let i = 1; i < pts.length; i++)
+            l += Math.hypot(pts[i].x-pts[i-1].x, pts[i].y-pts[i-1].y);
+        return l;
+    }
+
+    function posAt(pts, t, len) {
+        const target = t * len;
+        let acc = 0;
+        for (let i = 1; i < pts.length; i++) {
+            const seg = Math.hypot(pts[i].x-pts[i-1].x, pts[i].y-pts[i-1].y);
+            if (acc + seg >= target) {
+                const f = (target - acc) / seg;
+                return {
+                    x: pts[i-1].x + (pts[i].x - pts[i-1].x) * f,
+                    y: pts[i-1].y + (pts[i].y - pts[i-1].y) * f
+                };
+            }
+            acc += seg;
+        }
+        return pts[pts.length - 1];
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  Flow-Rendering
+    // ══════════════════════════════════════════════════════════
+
+    function rebuildFlows(data) {
+        const pipesG = document.getElementById('flow-pipes');
+        const partG  = document.getElementById('flow-particles');
+        pipesG.innerHTML = '';
+        partG.innerHTML  = '';
+        activeFlows = [];
+
+        for (const def of FLOWS) {
+            const power = def.get(data);
+            
+            // Passe Pfad an Kreisgrenzen an
+            const pts = adjustPathForCircles(def.path);
+            const len = pathLen(pts);
+            
+            // Stroke-Breite und Geschwindigkeit basierend auf Leistung
+            const sw  = power >= MIN_W ? Math.max(2, Math.min(6, 2 + power / 1500 * 4)) : 2;
+            const spd = power >= MIN_W ? Math.min(V_MAX, V_BASE + (power / 5000) * (V_MAX - V_BASE)) : 0;
+
+            // Leitungs-Linie (IMMER anzeigen, auch bei 0 W)
+            const d = pts.map((p,i) => `${i?'L':'M'}${p.x},${p.y}`).join(' ');
+            const pipe = document.createElementNS(SVG_NS, 'path');
+            pipe.setAttribute('d', d);
+            pipe.setAttribute('fill', 'none');
+            pipe.setAttribute('stroke', def.color);
+            pipe.setAttribute('stroke-width', sw);
+            pipe.setAttribute('stroke-opacity', power >= MIN_W ? '0.18' : '0.08');  // Dezenter bei 0 W
+            pipe.setAttribute('stroke-linecap', 'round');
+            pipesG.appendChild(pipe);
+
+            // Partikel (IMMER erstellen, bewegen sich nur bei Power > MIN_W)
+            const n = Math.max(2, Math.floor(len / GAP));
+            const dots = [];
+            for (let i = 0; i < n; i++) {
+                const el = document.createElementNS(SVG_NS, 'circle');
+                el.setAttribute('r', Math.max(2.5, sw * 0.55));
+                el.setAttribute('fill', def.color);
+                el.setAttribute('opacity', power >= MIN_W ? '0.9' : '0.3');  // Dezenter bei 0 W
+                el.setAttribute('filter', 'url(#glow)');
+                partG.appendChild(el);
+                dots.push({ el, t: i / n });
+            }
+
+            activeFlows.push({ pts, len, spd, dots, power });
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  Animations-Loop (requestAnimationFrame)
+    // ══════════════════════════════════════════════════════════
+
+    function animate() {
+        for (const f of activeFlows) {
+            // Nur bewegen wenn Geschwindigkeit > 0 (bei Power > MIN_W)
+            if (f.spd > 0) {
+                const dt = f.spd / f.len;
+                for (const p of f.dots) {
+                    p.t += dt;
+                    if (p.t > 1) p.t -= 1;
+                    const pos = posAt(f.pts, p.t, f.len);
+                    p.el.setAttribute('cx', pos.x);
+                    p.el.setAttribute('cy', pos.y);
+                }
+            } else {
+                // Bei 0 W: Partikel bleiben stehen, aber werden angezeigt
+                for (const p of f.dots) {
+                    const pos = posAt(f.pts, p.t, f.len);
+                    p.el.setAttribute('cx', pos.x);
+                    p.el.setAttribute('cy', pos.y);
+                }
+            }
+        }
+        animId = requestAnimationFrame(animate);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  Data Fetching + Smoothing + Labels
+    // ══════════════════════════════════════════════════════════
+
+    async function fetchFlow() {
+        try {
+            const r = await fetch(apiUrl('/api/flow_realtime'));
+            if (!r.ok) throw new Error('API ' + r.status);
+            const data = await r.json();
+
+            smoothedData = smoothedData
+                ? smooth(smoothedData, data, 0.7)
+                : data;
+
+            updateLabels(smoothedData);
+            rebuildFlows(smoothedData);
+            updateStatus('live');
+        } catch (e) {
+            console.error('Flow:', e);
+            updateStatus('error');
+        }
+    }
+
+    function smooth(o, n, w) {
+        const s = (a,b) => Math.round(a*(1-w) + b*w);
+        const sf = (a,b) => parseFloat((a*(1-w) + b*w).toFixed(1));
+        const sf2 = (a,b) => parseFloat((a*(1-w) + b*w).toFixed(2));
+        return {
+            timestamp: n.timestamp, age_seconds: n.age_seconds,
+            producers: { f1:s(o.producers.f1,n.producers.f1), f2:s(o.producers.f2,n.producers.f2),
+                         f3:s(o.producers.f3,n.producers.f3), pv_total:s(o.producers.pv_total,n.producers.pv_total),
+                         pv_today_kwh:sf2(o.producers.pv_today_kwh||0,n.producers.pv_today_kwh||0),
+                         autarkie_today:sf(o.producers.autarkie_today||0,n.producers.autarkie_today||0) },
+            battery:   { power:s(o.battery.power,n.battery.power), soc:sf(o.battery.soc,n.battery.soc),
+                         soh:sf(o.battery.soh||100,n.battery.soh||100),
+                         state:n.battery.state, charging:n.battery.charging, discharging:n.battery.discharging },
+            grid:      { power:s(o.grid.power,n.grid.power), importing:n.grid.importing, exporting:n.grid.exporting,
+                         import_today_kwh:sf2(o.grid.import_today_kwh||0,n.grid.import_today_kwh||0) },
+            consumption:{ total:s(o.consumption.total,n.consumption.total),
+                          household:s(o.consumption.household,n.consumption.household),
+                          wattpilot:s(o.consumption.wattpilot,n.consumption.wattpilot),
+                          heatpump:s(o.consumption.heatpump,n.consumption.heatpump),
+                          total_today_kwh:sf2(o.consumption.total_today_kwh||0,n.consumption.total_today_kwh||0) },
+            flows:     { pv_to_consumption:s(o.flows.pv_to_consumption,n.flows.pv_to_consumption),
+                         pv_to_grid:s(o.flows.pv_to_grid,n.flows.pv_to_grid),
+                         pv_to_battery:s(o.flows.pv_to_battery,n.flows.pv_to_battery),
+                         battery_to_consumption:s(o.flows.battery_to_consumption,n.flows.battery_to_consumption),
+                         grid_to_consumption:s(o.flows.grid_to_consumption,n.flows.grid_to_consumption),
+                         grid_to_battery:0 }
+        };
+    }
+
+    function updateLabels(d) {
+        const age = Math.round(d.age_seconds);
+        const ts = new Date(d.timestamp * 1000).toLocaleString('de-DE');
+        document.getElementById('timestamp').textContent = `${ts}  (${age}s)`;
+
+        document.getElementById('value-f1').textContent = fmt(d.producers.f1);
+        document.getElementById('value-f2').textContent = fmt(d.producers.f2);
+        document.getElementById('value-f3').textContent = fmt(d.producers.f3);
+        document.getElementById('value-pv').textContent = fmt(d.producers.pv_total);
+        document.getElementById('sub-pv').textContent = `${d.producers.pv_today_kwh} kWh`;
+        document.getElementById('sub-pv-autarkie').textContent = `${d.producers.autarkie_today}%`;
+
+        const bp = d.battery.power;
+        document.getElementById('value-battery').textContent = fmt(Math.abs(bp));
+        document.getElementById('sub-battery-soc').textContent = `SOC: ${d.battery.soc}%`;
+
+        const gp = d.grid.power;
+        document.getElementById('value-netz').textContent = fmt(Math.abs(gp));
+        document.getElementById('sub-netz').textContent = `${d.grid.import_today_kwh} kWh`;
+
+        document.getElementById('value-consumption').textContent = fmt(Math.max(0, d.consumption.total));
+        document.getElementById('sub-consumption').textContent = `${d.consumption.total_today_kwh} kWh`;
+        document.getElementById('value-household').textContent   = fmt(Math.max(0, d.consumption.household));
+        document.getElementById('value-wattpilot').textContent   = fmt(Math.max(0, d.consumption.wattpilot));
+        document.getElementById('value-heatpump').textContent    = fmt(Math.max(0, d.consumption.heatpump));
+
+        // Aktivitätslevel-Füllung (transparent)
+        const GREEN  = 'rgba(34, 197, 94, 0.12)';   // grünlich
+        const RED    = 'rgba(220, 38, 72, 0.22)';    // weinrot (heller, weniger transparent)
+        const NONE   = 'none';
+
+        document.getElementById('circle-f1').setAttribute('fill',        d.producers.f1 >= 5000 ? GREEN : NONE);
+        document.getElementById('circle-f2').setAttribute('fill',        d.producers.f2 >= 3000 ? GREEN : NONE);
+        document.getElementById('circle-f3').setAttribute('fill',        d.producers.f3 >= 1000 ? GREEN : NONE);
+        document.getElementById('circle-household').setAttribute('fill', d.consumption.household >= 1000 ? RED : NONE);
+        document.getElementById('circle-wattpilot').setAttribute('fill', d.consumption.wattpilot >= 4000 ? RED : NONE);
+        document.getElementById('circle-heatpump').setAttribute('fill',  d.consumption.heatpump >= 2000 ? RED : NONE);
+        document.getElementById('node-consumption').setAttribute('fill', d.consumption.total >= 5000 ? RED : NONE);
+
+        updateGauges(d);
+    }
+
+    function fmt(w) {
+        return Math.abs(w) >= 1000 ? `${(w/1000).toFixed(1)} kW` : `${Math.round(w)} W`;
+    }
+
+    function updateStatus(s) {
+        const el = document.getElementById('status');
+        if (s === 'live') {
+            el.className = 'status-badge';
+            el.innerHTML = '<div class="status-dot"></div><span>Live</span>';
+        } else {
+            el.className = 'status-badge error-badge';
+            el.innerHTML = '<div class="status-dot"></div><span>Fehler</span>';
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  INIT
+    // ══════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════
+    //  Battery Detail (SOH, Ladung/Entladung, SOC-Range)
+    // ══════════════════════════════════════════════════════════
+    async function fetchBatteryDetail() {
+        try {
+            const r = await fetch(apiUrl('/api/battery_status'));
+            if (!r.ok) return;
+            const d = await r.json();
+            document.getElementById('bd-soh').textContent = d.soh != null ? d.soh : '--';
+            document.getElementById('bd-charge').textContent = d.batt_charge_kwh != null ? d.batt_charge_kwh : '--';
+            document.getElementById('bd-discharge').textContent = d.batt_discharge_kwh != null ? d.batt_discharge_kwh : '--';
+            const sMin = d.soc_min != null ? d.soc_min : '?';
+            const sMax = d.soc_max != null ? d.soc_max : '?';
+            const socModeRaw = d.soc_mode != null ? String(d.soc_mode).toLowerCase() : '';
+            const socModeLabel = socModeRaw === 'manual' ? 'Manuell' : (socModeRaw === 'auto' ? 'Auto' : '?');
+            document.getElementById('bd-soc-range').textContent = `${sMin}–${sMax}% (${socModeLabel})`;
+            document.getElementById('bd-temp').textContent = d.battery_temp != null ? d.battery_temp : '--';
+            // WR-Temperaturen
+            document.getElementById('it-intern').textContent = d.wr_temp_intern != null ? d.wr_temp_intern : '--';
+            document.getElementById('it-ac').textContent = d.wr_temp_ac != null ? d.wr_temp_ac : '--';
+            document.getElementById('it-dc').textContent = d.wr_temp_dc != null ? d.wr_temp_dc : '--';
+            document.getElementById('it-dc-batt').textContent = d.wr_temp_dc_batt != null ? d.wr_temp_dc_batt : '--';
+            // F2-Temperaturen
+            document.getElementById('it-f2-intern').textContent = d.f2_temp_intern != null ? d.f2_temp_intern : '--';
+            document.getElementById('it-f2-ac').textContent = d.f2_temp_ac != null ? d.f2_temp_ac : '--';
+            document.getElementById('it-f2-dc').textContent = d.f2_temp_dc != null ? d.f2_temp_dc : '--';
+        } catch(e) { console.warn('BatteryDetail:', e); }
+    }
+
+    initGauges();
+    fetchFlow();
+    fetchBatteryDetail();
+    setInterval(fetchFlow, 10000);
+    setInterval(fetchBatteryDetail, 60000);
+    animate();
+    </script>
+
+    {% include 'info_overlay.html' %}
+</body>
+</html>
