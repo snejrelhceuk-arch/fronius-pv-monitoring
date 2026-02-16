@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Haushalt — PV-Anlage</title>
+    <link rel="stylesheet" href="/static/css/analyse-dark.css">
+</head>
+<body>
+    <div class="container">
+        <div class="top-nav">
+            <a href="/" class="nav-main">Flow</a>
+            <a href="/monitoring" class="nav-main">Monitoring</a>
+            <a href="/analyse/pv" class="nav-main active">Analyse</a>
+            <div class="nav-separator"></div>
+            <a href="/erzeuger" class="nav-sub">Erzeuger</a>
+            <a href="/verbraucher" class="nav-sub">Verbraucher</a>
+            <div class="nav-separator"></div>
+            <a href="/analyse/pv" class="nav-sub">PV-Übersicht</a>
+            <a href="/analyse/haushalt" class="nav-sub active">Haushalt</a>
+            <a href="/analyse/amortisation" class="nav-sub">Amortisation</a>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Jährliche Haushalt-Kennzahlen</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Jahr</th>
+                        <th>Gesamt-Verbrauch</th>
+                        <th>Solar</th>
+                        <th>Netzbezug</th>
+                        <th>Autarkie</th>
+                        <th>E-Auto (km)</th>
+                        <th>Strom-Netto</th>
+                        <th>Heiz-Ersparnis</th>
+                        <th>Benzin-Ersparnis</th>
+                        <th>GESAMT Ersparnis</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for year in yearly_data %}
+                    <tr>
+                        <td><strong>{{ year.year }}</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.gesamt_verbr) }} kWh</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.solar) }} kWh</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.netz_bezug) }} kWh</strong></td>
+                        <td><strong>{{ "%.1f"|format(year.autarkie) }}%</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.km_gefahren) }} km</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.netto_ersparnis_strom) }} €</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.heiz_ersparnis) }} €</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.benzin_ersparnis) }} €</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.netto_ersparnis) }} €</strong></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Investitionsübersicht -->
+        <div class="header-info">
+            <h3>Investitionsübersicht</h3>
+            <p><strong>Jan 2022:</strong> 24.000 € (PV-Anlage + Batterie) + 12.000 € (Wärmepumpe)</p>
+            <p><strong>Jan 2024:</strong> 8.000 € (PV-Erweiterung/Wattpilot)</p>
+            <p><strong>PV-Gesamt:</strong> {{ "{:,.0f}".format(gesamt_invest_pv) }} €</p>
+            <p><strong>Haushalt-Gesamt:</strong> {{ "{:,.0f}".format(gesamt_invest_haushalt) }} €</p>
+            <br>
+            <p><strong>Strompreise:</strong> 2022/23: 0,30 €/kWh, 2024/25: 0,33 €/kWh, ab 22.2.26: 0,30 €/kWh</p>
+            <p><strong>Einspeisevergütung:</strong> Nulleinspeiser</p>
+            <p><strong>Zusätzliche Ersparnisse:</strong> Heizkosten (elektrisch statt Brennstoff) + Benzin (E-Auto statt Verbrenner)</p>
+        </div>
+
+        <div class="footer-note">
+            <h4>Wichtige Erkenntnisse:</h4>
+            <ul style="margin: 10px 0; padding-left: 20px;">
+                <li><strong>Autarkie sinkt</strong> mit höherem Verbrauch (E-Autos) — mehr Verbrauch als PV-Erzeugung</li>
+                <li><strong>Batteriewirkungsgrad steigt</strong> mit höheren Lade-/Entladeströmen (E-Auto-Ladung)</li>
+                <li><strong>Amortisation verbessert sich trotzdem</strong> — mehr Eigenverbrauch = mehr Ersparnis!</li>
+                <li>Batterie in 2022/23: Kleine Ströme (Nachtverbrauch) → schlechterer Wirkungsgrad</li>
+                <li>Batterie in 2024/25: Hohe Ströme (E-Auto) → besserer Wirkungsgrad</li>
+            </ul>
+            <p><strong>Berechnungen:</strong></p>
+            <ul style="margin: 10px 0; padding-left: 20px;">
+                <li><strong>Gesamt-Verbrauch</strong> = Netzbezug + Solar-Erzeugung</li>
+                <li><strong>Strom-Netto</strong> = (Solar × Strompreis) − Netzkosten</li>
+                <li><strong>Heizung</strong> = Eingesparte Brennstoffkosten, nur Heizperiode Okt–Mär (Budget/6 pro Heizmonat: 2022: 250€, 2023: 500€, ab 2024: 450€)</li>
+                <li><strong>Benzin</strong> = E-Auto statt Verbrenner (15 kWh/100km → 10 €/100km gespart)</li>
+            </ul>
+        </div>
+    </div>
+
+    {% include 'info_overlay.html' %}
+</body>
+</html>

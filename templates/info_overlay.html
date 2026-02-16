@@ -1,0 +1,409 @@
+<!-- ══════════════════════════════════════════════════════════\n     INFO OVERLAY — Globaler Info-Button + Accordion-Modal\n     ═══════════════════════════════════════════════════════════ -->
+
+<style>
+/* ── Info Button (fixed, unten rechts) ── */
+.info-btn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: rgba(30, 41, 59, 0.9);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.6);
+    font-size: 18px;
+    font-weight: 700;
+    font-family: Georgia, serif;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    z-index: 900;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+}
+.info-btn:hover {
+    background: rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.9);
+    border-color: rgba(255,255,255,0.4);
+    transform: scale(1.08);
+}
+
+/* ── Overlay Backdrop ── */
+.info-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 40px 16px;
+    overflow-y: auto;
+}
+.info-overlay.open {
+    display: flex;
+}
+
+/* ── Modal Box ── */
+.info-modal {
+    background: rgba(15, 23, 42, 0.97);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 14px;
+    box-shadow: 0 12px 48px rgba(0,0,0,0.5);
+    max-width: 520px;
+    width: 100%;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+    padding: 0;
+}
+
+/* ── Modal Header ── */
+.info-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.info-header h2 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.85);
+}
+.info-close {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.4);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+    transition: color 0.2s;
+}
+.info-close:hover {
+    color: rgba(255,255,255,0.8);
+}
+
+/* ── Accordion Sections ── */
+.info-section {
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.info-section:last-child {
+    border-bottom: none;
+}
+.info-section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    cursor: pointer;
+    color: rgba(255,255,255,0.7);
+    font-size: 13px;
+    font-weight: 600;
+    transition: background 0.15s;
+    user-select: none;
+}
+.info-section-head:hover {
+    background: rgba(255,255,255,0.04);
+}
+.info-section-head .arrow {
+    font-size: 10px;
+    transition: transform 0.2s;
+    color: rgba(255,255,255,0.3);
+}
+.info-section.open .info-section-head .arrow {
+    transform: rotate(90deg);
+}
+.info-section-body {
+    display: none;
+    padding: 0 20px 14px 20px;
+}
+.info-section.open .info-section-body {
+    display: block;
+}
+
+/* ── Info Table ── */
+.info-tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+.info-tbl tr {
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.info-tbl tr:last-child {
+    border-bottom: none;
+}
+.info-tbl td {
+    padding: 5px 0;
+    vertical-align: top;
+}
+.info-tbl td:first-child {
+    color: rgba(255,255,255,0.4);
+    white-space: nowrap;
+    padding-right: 14px;
+    width: 42%;
+}
+.info-tbl td:last-child {
+    color: rgba(255,255,255,0.75);
+}
+.info-tbl .sub {
+    color: rgba(255,255,255,0.35);
+    font-size: 11px;
+}
+.info-tbl .highlight {
+    color: #fbbf24;
+    font-weight: 600;
+}
+
+/* ── Live Stats ── */
+.sys-bar {
+    height: 4px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 2px;
+    margin-top: 3px;
+    overflow: hidden;
+}
+.sys-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.5s;
+}
+.sys-bar-fill.green { background: #10b981; }
+.sys-bar-fill.yellow { background: #fbbf24; }
+.sys-bar-fill.red { background: #ef4444; }
+
+/* ── Mobile ── */
+@media (max-width: 600px) {
+    .info-overlay { padding: 20px 8px; }
+    .info-modal { max-width: 100%; border-radius: 10px; }
+    .info-btn { bottom: 12px; right: 12px; width: 34px; height: 34px; font-size: 16px; }
+}
+</style>
+
+<!-- Button -->
+<button class="info-btn" id="infoBtn" title="System-Info">i</button>
+
+<!-- Overlay -->
+<div class="info-overlay" id="infoOverlay">
+    <div class="info-modal">
+        <div class="info-header">
+            <h2>PV-Referenzsystem</h2>
+            <button class="info-close" id="infoClose">&times;</button>
+        </div>
+
+        <!-- ═══ ANLAGE ═══ -->
+        <div class="info-section open" id="sec-anlage">
+            <div class="info-section-head" onclick="toggleInfoSection('sec-anlage')">
+                Anlage <span class="arrow">&#9654;</span>
+            </div>
+            <div class="info-section-body">
+                <table class="info-tbl">
+                    <tr><td>Generator</td><td class="highlight">37,59 kWp</td></tr>
+                    <tr><td>Module</td><td>62 &times; 345 Wp + 36 &times; 450 Wp</td></tr>
+                    <tr><td>Wechselrichter</td><td>26,5 kW (3 WR)</td></tr>
+                    <tr><td></td><td class="sub">F1: Gen24 12 kW &mdash; 19,32 kWp</td></tr>
+                    <tr><td></td><td class="sub">F2: Gen24 10 kW &mdash; 12,42 kWp</td></tr>
+                    <tr><td></td><td class="sub">F3: Symo 4,5 kW &mdash; 5,85 kWp</td></tr>
+                    <tr><td>Overpaneling</td><td>142%</td></tr>
+                    <tr><td>Batterie</td><td>BYD HVS 10,2 kWh (LFP)</td></tr>
+                    <tr><td></td><td class="sub">max. 10,24 kW Lade-/Entladeleistung</td></tr>
+                    <tr><td>Standort</td><td>51,01&deg;N 12,95&deg;E &mdash; 315 m</td></tr>
+                    <tr><td>Strategie</td><td>Nulleinspeiser (&Oslash; 98,6% EV)</td></tr>
+                    <tr><td>In Betrieb seit</td><td>November 2021</td></tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- ═══ VERBRAUCHER ═══ -->
+        <div class="info-section" id="sec-verbraucher">
+            <div class="info-section-head" onclick="toggleInfoSection('sec-verbraucher')">
+                Verbraucher <span class="arrow">&#9654;</span>
+            </div>
+            <div class="info-section-body">
+                <table class="info-tbl">
+                    <tr><td>Haushalt</td><td>5-Personen &mdash; ~5.400 kWh/a</td></tr>
+                    <tr><td>W&auml;rmepumpe</td><td>Dimplex SIK 11 TES</td></tr>
+                    <tr><td></td><td class="sub">2,5&ndash;4 kW el. / 11 kW th.</td></tr>
+                    <tr><td>E-Autos</td><td>2&times; Renault Zoe + 1&times; Citro&euml;n</td></tr>
+                    <tr><td>Wallbox</td><td>Fronius Wattpilot go (max 22 kW)</td></tr>
+                    <tr><td></td><td class="sub">PV-&Uuml;berschussladen</td></tr>
+                    <tr><td>Heizpatrone</td><td>2 kW (WW-Speicher)</td></tr>
+                    <tr><td>Klimager&auml;t</td><td>1,3 kW (Split)</td></tr>
+                    <tr><td>Verbrauch 2025</td><td class="highlight">19.407 kWh</td></tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- ═══ HARDWARE ═══ -->
+        <div class="info-section" id="sec-hardware">
+            <div class="info-section-head" onclick="toggleInfoSection('sec-hardware')">
+                Hardware <span class="arrow">&#9654;</span>
+            </div>
+            <div class="info-section-body">
+                <table class="info-tbl">
+                    <tr><td>Produktion</td><td>Raspberry Pi 4 (192.0.2.181)</td></tr>
+                    <tr><td></td><td class="sub">Collector + Web-Server, 14,8 GB SD</td></tr>
+                    <tr><td>Backup</td><td>Raspberry Pi 5 (192.0.2.195)</td></tr>
+                    <tr><td></td><td class="sub">476 GB NVMe, GFS-Backup 03:00</td></tr>
+                    <tr><td>Datenquelle</td><td>Fronius Modbus TCP (192.0.2.122)</td></tr>
+                    <tr><td></td><td class="sub">3s Polling &rarr; 1-min Aggregation</td></tr>
+                    <tr><td>Smart Meter</td><td>4 St&uuml;ck (Netz, F2, F3, WP)</td></tr>
+                    <tr><td>DB-Strategie</td><td>tmpfs (RAM) + alternierende Sicherung</td></tr>
+                    <tr><td></td><td class="sub">Max. 1 Tag Datenverlust bei Ausfall</td></tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- ═══ SOFTWARE ═══ -->
+        <div class="info-section" id="sec-software">
+            <div class="info-section-head" onclick="toggleInfoSection('sec-software')">
+                Software <span class="arrow">&#9654;</span>
+            </div>
+            <div class="info-section-body">
+                <table class="info-tbl">
+                    <tr><td>Anwendung</td><td>pv-system</td></tr>
+                    <tr><td>Framework</td><td>Python / Flask / Gunicorn</td></tr>
+                    <tr><td>Charts</td><td>ECharts 5.4.3</td></tr>
+                    <tr><td>Datenbank</td><td>SQLite (13 Tabellen)</td></tr>
+                    <tr><td>DB-Gr&ouml;&szlig;e</td><td id="info-db-size">--</td></tr>
+                    <tr><td>Python</td><td id="info-python">--</td></tr>
+                    <tr><td>Pipeline</td><td class="sub">raw 3s &rarr; 1min &rarr; 15min &rarr; 1h &rarr; daily &rarr; monthly</td></tr>
+                    <tr><td>Historisch</td><td class="sub">2022&ndash;2025 CSV-Import (Solar.web)</td></tr>
+                    <tr><td>Live seit</td><td class="sub">06.02.2026 (Modbus)</td></tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- ═══ SYSTEM LIVE ═══ -->
+        <div class="info-section" id="sec-system">
+            <div class="info-section-head" onclick="toggleInfoSection('sec-system')">
+                System <span class="arrow">&#9654;</span>
+            </div>
+            <div class="info-section-body">
+                <table class="info-tbl">
+                    <tr><td>Host</td><td id="info-hostname">--</td></tr>
+                    <tr><td>Modell</td><td id="info-model">--</td></tr>
+                    <tr><td>Uptime</td><td id="info-uptime">--</td></tr>
+                    <tr><td>CPU-Temp</td><td id="info-cpu-temp">--</td></tr>
+                    <tr>
+                        <td>CPU-Last</td>
+                        <td>
+                            <span id="info-cpu-load">--</span>
+                            <div class="sys-bar"><div class="sys-bar-fill green" id="info-cpu-bar" style="width:0%"></div></div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>RAM</td>
+                        <td>
+                            <span id="info-ram">--</span>
+                            <div class="sys-bar"><div class="sys-bar-fill green" id="info-ram-bar" style="width:0%"></div></div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Disk</td>
+                        <td>
+                            <span id="info-disk">--</span>
+                            <div class="sys-bar"><div class="sys-bar-fill green" id="info-disk-bar" style="width:0%"></div></div>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ── Info Overlay Logic ──
+(function() {
+    const btn = document.getElementById('infoBtn');
+    const overlay = document.getElementById('infoOverlay');
+    const closeBtn = document.getElementById('infoClose');
+    let sysInterval = null;
+
+    btn.addEventListener('click', () => {
+        overlay.classList.add('open');
+        fetchSystemInfo();
+        sysInterval = setInterval(fetchSystemInfo, 10000);
+    });
+
+    function closeOverlay() {
+        overlay.classList.remove('open');
+        if (sysInterval) { clearInterval(sysInterval); sysInterval = null; }
+    }
+
+    closeBtn.addEventListener('click', closeOverlay);
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeOverlay();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && overlay.classList.contains('open')) closeOverlay();
+    });
+
+    function barColor(pct) {
+        if (pct > 85) return 'red';
+        if (pct > 60) return 'yellow';
+        return 'green';
+    }
+
+    function setBar(id, pct) {
+        const el = document.getElementById(id);
+        el.style.width = pct + '%';
+        el.className = 'sys-bar-fill ' + barColor(pct);
+    }
+
+    async function fetchSystemInfo() {
+        try {
+            const base = (typeof apiUrl === 'function') ? apiUrl('/api/system_info') : '/api/system_info';
+            const r = await fetch(base);
+            if (!r.ok) return;
+            const d = await r.json();
+
+            // Static
+            document.getElementById('info-hostname').textContent = d.hostname || '--';
+            document.getElementById('info-model').textContent = d.model || '--';
+            document.getElementById('info-python').textContent = 'Python ' + (d.python || '--');
+            document.getElementById('info-db-size').textContent = d.db_size_mb != null ? d.db_size_mb + ' MB (tmpfs)' : '--';
+            document.getElementById('info-uptime').textContent = d.uptime || '--';
+            document.getElementById('info-cpu-temp').textContent = d.cpu_temp_c != null ? d.cpu_temp_c + ' °C' : '--';
+
+            // CPU Load
+            if (d.cpu_load) {
+                const cores = d.cpu_cores || 1;
+                const loadPct = Math.min(100, Math.round(d.cpu_load['1min'] / cores * 100));
+                document.getElementById('info-cpu-load').textContent =
+                    `${d.cpu_load['1min']} / ${d.cpu_load['5min']} / ${d.cpu_load['15min']}`;
+                setBar('info-cpu-bar', loadPct);
+            }
+
+            // RAM
+            if (d.ram) {
+                document.getElementById('info-ram').textContent =
+                    `${d.ram.used_mb} / ${d.ram.total_mb} MB (${d.ram.percent}%)`;
+                setBar('info-ram-bar', d.ram.percent);
+            }
+
+            // Disk
+            if (d.disk) {
+                const used = (d.disk.total_gb - d.disk.free_gb).toFixed(1);
+                document.getElementById('info-disk').textContent =
+                    `${used} / ${d.disk.total_gb} GB (${d.disk.percent}%)`;
+                setBar('info-disk-bar', d.disk.percent);
+            }
+        } catch(e) {
+            console.warn('SystemInfo:', e);
+        }
+    }
+})();
+
+function toggleInfoSection(id) {
+    const el = document.getElementById(id);
+    const wasOpen = el.classList.contains('open');
+    document.querySelectorAll('.info-section.open').forEach(s => s.classList.remove('open'));
+    if (!wasOpen) el.classList.add('open');
+}
+</script>
