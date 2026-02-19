@@ -69,6 +69,22 @@
             border-radius: 8px;
         }
 
+        #freqInfoLine {
+            width: 100%;
+            flex-shrink: 0;
+            background: rgba(15, 23, 42, 0.85);
+            border-radius: 8px;
+            padding: 6px 14px;
+            font-size: 13px;
+            color: #ffffff;
+            text-align: center;
+            display: none;
+            font-weight: normal;
+        }
+        #freqInfoLine .freq-label { color: #ffffff; }
+        #freqInfoLine .freq-max { color: #ffffff; font-weight: normal; }
+        #freqInfoLine .freq-min { color: #ffffff; font-weight: normal; }
+
         #mainChart {
             width: 100%;
             flex: 1;
@@ -140,6 +156,7 @@
             <div id="loading" class="loading">Lade Daten...</div>
             <div id="error" class="error" style="display:none;"></div>
             <div id="frequencyChart" style="display:none;"></div>
+            <div id="freqInfoLine" style="display:none;"></div>
             <div id="mainChart" style="display:none;"></div>
         </div>
         
@@ -637,11 +654,29 @@
             return `${year}-${month}-${day}`;
         }
         
+        function renderFreqInfoLine(freqExtremes) {
+            const el = document.getElementById('freqInfoLine');
+            if (!freqExtremes || (!freqExtremes.f_min && !freqExtremes.f_max)) {
+                el.style.display = 'none';
+                return;
+            }
+            let parts = [];
+            if (freqExtremes.f_max != null) {
+                parts.push(`<span class="freq-max">Max. ${freqExtremes.f_max.toFixed(3).replace('.', ',')} Hz</span> (${freqExtremes.f_max_date}, ${freqExtremes.f_max_time} Uhr)`);
+            }
+            if (freqExtremes.f_min != null) {
+                parts.push(`<span class="freq-min">Min. ${freqExtremes.f_min.toFixed(3).replace('.', ',')} Hz</span> (${freqExtremes.f_min_date}, ${freqExtremes.f_min_time} Uhr)`);
+            }
+            el.innerHTML = `<span class="freq-label">Netzfrequenz:</span> ${parts.join(' · ')}`;
+            el.style.display = 'block';
+        }
+
         async function loadData() {
             try {
                 document.getElementById('loading').style.display = 'block';
                 document.getElementById('error').style.display = 'none';
                 document.getElementById('frequencyChart').style.display = 'none';
+                document.getElementById('freqInfoLine').style.display = 'none';
                 document.getElementById('mainChart').style.display = 'none';
                 
                 // Stale-State verhindern: immer zurücksetzen vor neuem Laden
@@ -1595,6 +1630,7 @@
                 document.getElementById('loading').style.display = 'block';
                 document.getElementById('error').style.display = 'none';
                 document.getElementById('frequencyChart').style.display = 'none';
+                document.getElementById('freqInfoLine').style.display = 'none';
                 document.getElementById('mainChart').style.display = 'none';
                 
                 const url = `/api/monat_visualization?year=${currentYear}&month=${currentMonth}`;
@@ -1657,18 +1693,11 @@
                 
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('mainChart').style.display = 'block';
-                
-                // Frequenzlinie: zeige f_Netz Min/Max/Avg pro Tag
-                const hasFreqData = chartData.datapoints.some(dp => !dp.is_forecast && dp.f_netz_min != null);
-                if (hasFreqData) {
-                    document.getElementById('frequencyChart').style.display = 'block';
-                }
+
+                // Frequenz-Infozeile statt Chart
+                renderFreqInfoLine(chartData.freq_extremes);
                 
                 createMonthChart();
-                
-                if (hasFreqData) {
-                    createMonthFrequencyChart();
-                }
                 
             } catch (error) {
                 console.error('Fehler beim Laden der Monatsdaten:', error);
@@ -1683,6 +1712,7 @@
                 document.getElementById('loading').style.display = 'block';
                 document.getElementById('error').style.display = 'none';
                 document.getElementById('frequencyChart').style.display = 'none';
+                document.getElementById('freqInfoLine').style.display = 'none';
                 document.getElementById('mainChart').style.display = 'none';
                 
                 const url = `/api/jahr_visualization?year=${currentYear}`;
@@ -1699,6 +1729,9 @@
                 
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('mainChart').style.display = 'block';
+
+                // Frequenz-Infozeile
+                renderFreqInfoLine(chartData.freq_extremes);
                 
                 createYearChart();
                 
@@ -1715,6 +1748,7 @@
                 document.getElementById('loading').style.display = 'block';
                 document.getElementById('error').style.display = 'none';
                 document.getElementById('frequencyChart').style.display = 'none';
+                document.getElementById('freqInfoLine').style.display = 'none';
                 document.getElementById('mainChart').style.display = 'none';
                 
                 const url = '/api/gesamt_visualization';
@@ -1729,6 +1763,9 @@
                 
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('mainChart').style.display = 'block';
+
+                // Frequenz-Infozeile
+                renderFreqInfoLine(chartData.freq_extremes);
                 
                 createGesamtChart();
                 
@@ -1962,10 +1999,12 @@
                     }
                 },
                 legend: {
+                    type: 'scroll',
                     data: ['Direkt (Ertrag)', 'Batterieladung', 'Einspeisung', 'Prognose (Rest)', 'Direkt (Verbrauch)', 'Batterieentladung', 'Netzbezug', 'Prognose'],
                     bottom: daysInMonth > visibleDays ? 50 : 10,
                     left: 'center',
-                    ...(isMobile() ? { textStyle: { fontSize: 9 }, itemWidth: 10, itemHeight: 8, itemGap: 5 } : {})
+                    width: '90%',
+                    ...(isMobile() ? { textStyle: { fontSize: 9 }, itemWidth: 10, itemHeight: 8, itemGap: 5 } : { itemGap: 14 })
                 },
                 grid: isMobile() ? {
                     left: 5,
@@ -2186,156 +2225,7 @@
                 }
             });
         }
-        
-        function createMonthFrequencyChart() {
-            // Stündliche Netzfrequenz-Daten: senkrechte Peaks bei Anomalien
-            try {
-                const freqDom = document.getElementById('frequencyChart');
-                if (frequencyChart) {
-                    frequencyChart.dispose();
-                }
-                frequencyChart = echarts.init(freqDom);
-                
-                const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
-                
-                // Lade stündliche Frequenz-Daten vom neuen Endpunkt
-                fetch(`/api/monat_frequency?year=${currentYear}&month=${currentMonth}`)
-                    .then(r => r.json())
-                    .then(freqData => {
-                        if (!freqData.datapoints || freqData.datapoints.length === 0) {
-                            console.log('Keine stündlichen Frequenzdaten');
-                            return;
-                        }
-                        
-                        // Daten als [x, y] Paare: x = fraktionale Tagesposition
-                        // Hauptchart hat category-Achse mit boundaryGap=true:
-                        // Index 0 = Tag 1, Index 1 = Tag 2, ...
-                        // Damit dataZoom-Sync (prozentual) passt, nutze day_frac
-                        // wobei 0.5 = Mittag Tag 1 auf Index 0 zentriert
-                        const avgData = [];
-                        const minData = [];
-                        const maxData = [];
-                        
-                        freqData.datapoints.forEach(dp => {
-                            avgData.push([dp.day_frac, dp.f_avg]);
-                            minData.push([dp.day_frac, dp.f_min]);
-                            maxData.push([dp.day_frac, dp.f_max]);
-                        });
-                        
-                        // DataZoom synchron zum Hauptchart
-                        const screenWidth = window.innerWidth;
-                        let visibleDays = 31;
-                        if (screenWidth < 480) visibleDays = 7;
-                        else if (screenWidth < 768) visibleDays = 14;
-                        else if (screenWidth < 1024) visibleDays = 21;
-                        
-                        const zoomEnd = 100;
-                        const zoomStart = Math.max(0, 100 - (visibleDays / daysInMonth * 100));
-                        
-                        const option = {
-                            tooltip: {
-                                trigger: 'axis',
-                                formatter: function(params) {
-                                    if (!params || params.length === 0) return '';
-                                    const dp = freqData.datapoints.find(d => 
-                                        Math.abs(d.day_frac - params[0].data[0]) < 0.001);
-                                    if (!dp) return '';
-                                    const monthNames = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
-                                    return `<strong>${dp.day}. ${monthNames[currentMonth-1]}, ${dp.hour}:00 Uhr</strong><br/>` +
-                                           `f<sub>Netz</sub> Min: <strong>${dp.f_min.toFixed(3)} Hz</strong><br/>` +
-                                           `f<sub>Netz</sub> Avg: <strong>${dp.f_avg.toFixed(3)} Hz</strong><br/>` +
-                                           `f<sub>Netz</sub> Max: <strong>${dp.f_max.toFixed(3)} Hz</strong>`;
-                                }
-                            },
-                            backgroundColor: 'transparent',
-                            grid: {
-                                left: '3%',
-                                right: '4%',
-                                top: '5%',
-                                bottom: '0%',
-                                containLabel: false
-                            },
-                            visualMap: {
-                                type: 'piecewise',
-                                show: false,
-                                min: 49.2,
-                                max: 50.8,
-                                dimension: 1,
-                                seriesIndex: 0,
-                                pieces: [
-                                    { min: 49.2, max: 49.4, color: '#d73027' },
-                                    { min: 49.4, max: 49.8, color: '#fc8d59' },
-                                    { min: 49.8, max: 49.95, color: '#fee08b' },
-                                    { min: 49.95, max: 50.05, color: '#1a9850' },
-                                    { min: 50.05, max: 50.2, color: '#fee08b' },
-                                    { min: 50.2, max: 50.6, color: '#fc8d59' },
-                                    { min: 50.6, max: 50.8, color: '#d73027' }
-                                ]
-                            },
-                            xAxis: {
-                                type: 'value',
-                                min: 0,
-                                max: daysInMonth - 1,
-                                show: false
-                            },
-                            yAxis: {
-                                type: 'value',
-                                min: 49.2,
-                                max: 50.8,
-                                show: false
-                            },
-                            dataZoom: daysInMonth > visibleDays ? [{
-                                type: 'inside',
-                                xAxisIndex: 0,
-                                start: zoomStart,
-                                end: zoomEnd,
-                                zoomOnMouseWheel: true,
-                                moveOnMouseMove: true
-                            }] : [],
-                            series: [
-                                // Avg-Linie (visualMap-gefärbt)
-                                {
-                                    type: 'line',
-                                    smooth: false,
-                                    symbol: 'none',
-                                    lineStyle: { width: 1.5 },
-                                    data: avgData,
-                                    z: 3
-                                },
-                                // Min-Linie (scharfe Peaks nach unten)
-                                {
-                                    type: 'line',
-                                    smooth: false,
-                                    symbol: 'none',
-                                    lineStyle: { width: 1, color: 'rgba(180, 60, 60, 0.5)', type: 'dotted' },
-                                    data: minData,
-                                    z: 1
-                                },
-                                // Max-Linie (scharfe Peaks nach oben)
-                                {
-                                    type: 'line',
-                                    smooth: false,
-                                    symbol: 'none',
-                                    lineStyle: { width: 1, color: 'rgba(180, 60, 60, 0.5)', type: 'dotted' },
-                                    data: maxData,
-                                    z: 2
-                                }
-                            ]
-                        };
-                        
-                        frequencyChart.setOption(option);
-                        frequencyChart.group = 'monthSync';
-                        echarts.connect('monthSync');
-                        
-                        console.log('Monat-Frequenz-Chart (stündlich):', freqData.count, 'Messpunkte');
-                    })
-                    .catch(err => console.error('Fehler beim Laden der Frequenzdaten:', err));
-                
-            } catch (error) {
-                console.error('Fehler in createMonthFrequencyChart:', error);
-            }
-        }
-        
+
         function createStackedBarChart(title, xLabels, dataByKey, keyField) {
             /**
              * Generische Funktion für gestapelte Balken-Charts (Jahr, Gesamt).
@@ -2425,10 +2315,12 @@
                     }
                 },
                 legend: {
+                    type: 'scroll',
                     data: ['Direkt (Ertrag)', 'Batterieladung', 'Einspeisung', 'Direkt (Verbrauch)', 'Batterieentladung', 'Netzbezug'],
                     bottom: 10,
                     left: 'center',
-                    ...(isMobile() ? { textStyle: { fontSize: 9 }, itemWidth: 10, itemHeight: 8, itemGap: 5 } : {})
+                    width: '90%',
+                    ...(isMobile() ? { textStyle: { fontSize: 9 }, itemWidth: 10, itemHeight: 8, itemGap: 5 } : { itemGap: 14 })
                 },
                 grid: isMobile() ? {
                     left: 5,

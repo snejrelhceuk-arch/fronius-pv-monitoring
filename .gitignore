@@ -50,3 +50,7 @@ tools/wattpilot_dump_*.json
 backup/db/
 *.empty_after_crash
 *.bak
+
+# Private Daten / Solarweb-Arbeitsverzeichnisse
+E/
+imports/

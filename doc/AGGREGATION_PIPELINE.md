@@ -167,7 +167,24 @@ Zeiträume.
 Für `yearly_statistics` werden alle Jahre aus `monthly_statistics` summiert.
 Die historischen Monatswerte (CSV) fließen somit korrekt in die Jahressummen ein.
 
-## 8. Entfernte Komponenten (2026-02-08)
+## 8. Solarweb-Import für daily_data (2026-02-19)
+
+Die Counter-basierte Tagesaggregation hatte im Januar/Februar 2026
+Abweichungen gegenüber den Solarweb-Referenzwerten (Zähler-Resets,
+Modbus-Aussetzer). Um die Datenqualität zu sichern, wurde ein
+einmaliger Import durchgeführt:
+
+1. **`scripts/import_solarweb_daily.py`** liest CSV-Dateien aus
+   `imports/solarweb/` und aktualisiert `daily_data` (50 Tage: 01.01.–19.02.2026)
+2. `FIRST_AUTO_MONTH` in `aggregate_statistics.py` wurde auf `(2026, 1)` gesetzt,
+   sodass Jan+Feb nun aus den korrigierten daily_data aggregiert werden
+3. `monthly_statistics` und `yearly_statistics` wurden neu berechnet
+
+Parallel wurde `aggregate_daily.py` auf eine **Counter End−Start**-Strategie
+umgestellt (mit Fallback auf SUM(Δ) bei Zähler-Resets), sodass zukünftige
+Tage korrekte Werte ohne manuellen Import liefern.
+
+## 9. Entfernte Komponenten (2026-02-08)
 
 | Komponente | Grund |
 |-----------|-------|
@@ -176,7 +193,7 @@ Die historischen Monatswerte (CSV) fließen somit korrekt in die Jahressummen ei
 | `data_15min` Cron-Cleanup | Redundant mit `cleanup_db()` in modbus_v3.py |
 | `data_weekly` Tabelle | Nie genutzt (bereits früher entfernt) |
 
-## 9. Frontend-Zuordnung
+## 10. Frontend-Zuordnung
 
 | Ansicht | API-Endpunkt | Datenquelle |
 |---------|-------------|-------------|
@@ -187,10 +204,14 @@ Die historischen Monatswerte (CSV) fließen somit korrekt in die Jahressummen ei
 | Amortisation | `/amortisation` | `monthly_statistics` |
 | Echtzeit | `/echtzeit` | RAM-DB (aus raw_data) |
 
+**Netzfrequenz-Info**: Monat/Jahr/Gesamt/Analysen zeigen eine kompakte
+Infozeile mit MIN/MAX der Netzfrequenz (aus `data_1min.f_Netz_min/max`).
+Der separate Frequenz-Chart in der Monatsansicht wurde in v6.1.0 entfernt.
+
 Hinweis: Die Web-API liest fuer Charts aus der RAM-DB; die Persist-DB wird
 regelmaessig aus der RAM-DB ueberschrieben.
 
-## 10. Überwachung / Debugging
+## 11. Überwachung / Debugging
 
 ### Logs prüfen
 ```bash

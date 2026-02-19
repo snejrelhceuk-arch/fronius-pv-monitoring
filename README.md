@@ -165,6 +165,7 @@ cd /home/admin/Documents/PVAnlage/pv-system && python3 aggregate.py
 
 ## Version
 
+- **v6.1.0** (19.02.2026) - Solarweb-Import, Counter-Strategie, Frequenz-Infozeile, Scroll-Legende
 - **v6.0.0** (16.02.2026) - Workspace-Cleanup, Solar-Forecast-Scaffold-Dokumentation
 - **v5.0.0** (14.02.2026) - UI-Redesign, minimalistisches Design, Analysen
 - **v4.0.0** - Batterie-Management, Aggregation-Pipeline

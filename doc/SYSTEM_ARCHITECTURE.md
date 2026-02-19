@@ -2,7 +2,7 @@
 
 > **WICHTIG**: Dieses Dokument ist die zentrale Referenz für LLMs und Entwickler.
 > Vor jeder Änderung am System DIESES DOKUMENT ZUERST LESEN.
-> Stand: 2026-02-14
+> Stand: 2026-02-19
 
 ---
 

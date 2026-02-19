@@ -1,8 +1,11 @@
 """
 Blueprint: Visualisierungs-APIs.
 
-Enthält: /api/tag_visualization, /api/monat_visualization, /api/monat_frequency,
+Enthält: /api/tag_visualization, /api/monat_visualization,
          /api/jahr_visualization, /api/gesamt_visualization
+
+Alle Perioden-APIs (monat/jahr/gesamt) liefern freq_extremes mit
+Netzfrequenz-Min/Max inkl. Zeitstempel aus data_1min.
 """
 import sqlite3
 import logging
@@ -11,6 +14,73 @@ from flask import Blueprint, jsonify, request
 from routes.helpers import get_db_connection
 
 bp = Blueprint('visualization', __name__)
+
+# Plausibilitätsfaktor: Counter-Delta darf max. diesen Faktor × Fallback betragen
+_COUNTER_PLAUSIBILITY_FACTOR = 3.0
+_MIN_DELTA_WH = 50.0
+
+
+def _plausible_counter_delta(start, end, fallback):
+    """Berechne Counter-Delta mit Plausibilitätsprüfung.
+
+    Wenn Start/End vorhanden sind, wird End−Start berechnet.
+    Falls das Ergebnis negativ ist oder um Faktor > 3 vom Fallback (SUM Δ)
+    abweicht, wird der Fallback-Wert (bereits reset-korrigiert) verwendet.
+    """
+    if start is not None and end is not None:
+        delta = end - start
+        fb = fallback or 0
+        # Negativer Counter → Zähler-Reset
+        if delta < -_MIN_DELTA_WH:
+            return fb
+        # Counter viel größer als SUM(Δ) → Zähler-Sprint
+        if abs(fb) > _MIN_DELTA_WH and delta > _COUNTER_PLAUSIBILITY_FACTOR * abs(fb):
+            return fb
+        # Plausibel
+        return delta
+    return fallback or 0
+
+
+def _get_freq_extremes(cursor, ts_start, ts_end):
+    """Ermittle Netzfrequenz-Extremwerte (Min/Max) mit Zeitstempel aus data_1min.
+
+    Returns dict mit f_min, f_min_ts, f_max, f_max_ts oder None.
+    """
+    try:
+        cursor.execute("""
+            SELECT ts, f_Netz_min FROM data_1min
+            WHERE ts >= ? AND ts < ? AND f_Netz_min IS NOT NULL
+            ORDER BY f_Netz_min ASC LIMIT 1
+        """, (ts_start, ts_end))
+        min_row = cursor.fetchone()
+
+        cursor.execute("""
+            SELECT ts, f_Netz_max FROM data_1min
+            WHERE ts >= ? AND ts < ? AND f_Netz_max IS NOT NULL
+            ORDER BY f_Netz_max DESC LIMIT 1
+        """, (ts_start, ts_end))
+        max_row = cursor.fetchone()
+
+        if not min_row and not max_row:
+            return None
+
+        result = {}
+        if min_row:
+            dt_min = datetime.fromtimestamp(min_row[0])
+            result['f_min'] = round(min_row[1], 3)
+            result['f_min_ts'] = min_row[0]
+            result['f_min_date'] = dt_min.strftime('%d.%m.%y')
+            result['f_min_time'] = dt_min.strftime('%H:%M')
+        if max_row:
+            dt_max = datetime.fromtimestamp(max_row[0])
+            result['f_max'] = round(max_row[1], 3)
+            result['f_max_ts'] = max_row[0]
+            result['f_max_date'] = dt_max.strftime('%d.%m.%y')
+            result['f_max_time'] = dt_max.strftime('%H:%M')
+        return result
+    except Exception as e:
+        logging.warning(f"Freq-Extremwerte Fehler: {e}")
+        return None
 
 
 @bp.route('/api/tag_visualization')
@@ -330,9 +400,11 @@ def monat_visualization():
                 w_exp = w_exp_fallback or 0
                 w_imp = w_imp_fallback or 0
             else:
-                w_pv = (w_ac_end - w_ac_start) if (w_ac_start and w_ac_end) else (w_pv_fallback or 0)
-                w_exp = (w_exp_end - w_exp_start) if (w_exp_start and w_exp_end) else (w_exp_fallback or 0)
-                w_imp = (w_imp_end - w_imp_start) if (w_imp_start and w_imp_end) else (w_imp_fallback or 0)
+                # PV: IMMER Fallback (W_PV_total) verwenden, da W_AC_Inv nur F1
+                # (DC1+DC2) trackt, W_PV_total dagegen alle 3 Inverter enthält.
+                w_pv = w_pv_fallback or 0
+                w_exp = _plausible_counter_delta(w_exp_start, w_exp_end, w_exp_fallback)
+                w_imp = _plausible_counter_delta(w_imp_start, w_imp_end, w_imp_fallback)
 
             # Gesamtverbrauch und Autarkie berechnen
             w_erzeugung_kwh = (w_pv or 0) / 1000
@@ -375,11 +447,16 @@ def monat_visualization():
                 'forecast_kwh': round(fc_kwh, 1) if fc_kwh is not None else (round(forecast_kwh, 1) if forecast_kwh else None),
             })
 
+        # Frequenz-Extremwerte für den Monat
+        freq_extremes = _get_freq_extremes(cursor, first_ts, last_ts)
+
         response = {
             'year': year,
             'month': month,
             'datapoints': datapoints
         }
+        if freq_extremes:
+            response['freq_extremes'] = freq_extremes
 
         conn.close()
         return jsonify(response)
@@ -393,74 +470,6 @@ def monat_visualization():
                 conn.close()
             except Exception:
                 pass
-
-
-@bp.route('/api/monat_frequency')
-def monat_frequency():
-    """Stündliche Netzfrequenz-Daten für Monatsansicht.
-
-    Liefert f_Netz avg/min/max pro Stunde aus hourly_data.
-    """
-    try:
-        year = request.args.get('year', type=int)
-        month = request.args.get('month', type=int)
-
-        if not year or not month:
-            now = datetime.now()
-            year = now.year
-            month = now.month
-
-        first_day = datetime(year, month, 1)
-        if month == 12:
-            last_day = datetime(year + 1, 1, 1)
-        else:
-            last_day = datetime(year, month + 1, 1)
-
-        first_ts = int(first_day.timestamp())
-        last_ts = int(last_day.timestamp())
-        daysInMonth = (last_day - first_day).days
-
-        conn = get_db_connection()
-        if not conn:
-            return jsonify({"error": "DB nicht verfügbar"}), 500
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT ts, f_Netz_avg, f_Netz_min, f_Netz_max
-            FROM hourly_data
-            WHERE ts >= ? AND ts < ?
-              AND f_Netz_avg IS NOT NULL
-            ORDER BY ts
-        """, (first_ts, last_ts))
-
-        rows = cursor.fetchall()
-        conn.close()
-
-        datapoints = []
-        for ts, f_avg, f_min, f_max in rows:
-            dt = datetime.fromtimestamp(ts)
-            day_frac = (dt.day - 1) + dt.hour / 24.0
-            datapoints.append({
-                'ts': ts,
-                'day_frac': round(day_frac, 3),
-                'day': dt.day,
-                'hour': dt.hour,
-                'f_avg': round(f_avg, 3),
-                'f_min': round(f_min, 3),
-                'f_max': round(f_max, 3),
-            })
-
-        return jsonify({
-            'year': year,
-            'month': month,
-            'days_in_month': daysInMonth,
-            'count': len(datapoints),
-            'datapoints': datapoints
-        })
-
-    except Exception as e:
-        logging.error(f"Monat-Frequency Fehler: {e}")
-        return jsonify({"error": str(e)}), 500
 
 
 @bp.route('/api/jahr_visualization')
@@ -513,12 +522,20 @@ def jahr_visualization():
             if sonnenstd:
                 total_sonnenstunden += sonnenstd
 
+        # Frequenz-Extremwerte für das gesamte Jahr
+        year_start_ts = int(datetime(year, 1, 1).timestamp())
+        year_end_ts = int(datetime(year + 1, 1, 1).timestamp())
+        freq_extremes = _get_freq_extremes(cursor, year_start_ts, year_end_ts)
+
         conn.close()
-        return jsonify({
+        response = {
             'year': year,
             'datapoints': datapoints,
             'sonnenstunden': round(total_sonnenstunden, 1) if total_sonnenstunden > 0 else None
-        })
+        }
+        if freq_extremes:
+            response['freq_extremes'] = freq_extremes
+        return jsonify(response)
 
     except Exception as e:
         logging.error(f"Jahr-Visualisierung Fehler: {e}")
@@ -572,10 +589,20 @@ def gesamt_visualization():
                 'autarkie': round(autarkie, 1)
             })
 
+        # Frequenz-Extremwerte über gesamten Datenbestand
+        cursor.execute("SELECT MIN(ts), MAX(ts) FROM data_1min WHERE f_Netz_min IS NOT NULL")
+        range_row = cursor.fetchone()
+        freq_extremes = None
+        if range_row and range_row[0]:
+            freq_extremes = _get_freq_extremes(cursor, range_row[0], range_row[1] + 1)
+
         conn.close()
-        return jsonify({
+        response = {
             'datapoints': datapoints
-        })
+        }
+        if freq_extremes:
+            response['freq_extremes'] = freq_extremes
+        return jsonify(response)
 
     except Exception as e:
         logging.error(f"Gesamt-Visualisierung Fehler: {e}")
