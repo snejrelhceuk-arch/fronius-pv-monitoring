@@ -346,10 +346,79 @@ Nur die Tag-Ansicht (Intraday) des verlorenen Tages ist betroffen.
 | Batterie P×t vs Hardware | Offen | BMS-Counter via Component-API verfügbar, noch nicht im Hauptpfad |
 | Daten-Lücke 14.2. 03-12h | Akzeptiert | Pi4-Reboot, nicht rekonstruierbar |
 | SQLite 3.45.1 | Manuell | System-Lib ersetzt (/lib/arm-linux-gnueabihf/) |
+| System-Updates | Bewusst deaktiviert | Siehe Abschnitt "Update-Strategie" |
 
 ---
 
-## 7. Dateien-Übersicht
+## 7. Update-Strategie
+
+> **Stand: 2026-02-19** — Bewusste Entscheidung: KEINE automatischen Updates.
+
+### Warum keine automatischen Updates?
+
+Dieses System ist ein **headless Produktivsystem** auf einer 14,8 GB SD-Card,
+das 24/7 Messdaten sammelt. Automatische Updates (apt, pip) sind hier **riskant**:
+
+| Risiko | Auswirkung |
+|--------|-----------|
+| `apt upgrade` überschreibt SQLite 3.45.1 | DB-Operationen mit HAVING-Clause brechen |
+| Kernel-Update erzwingt Reboot | tmpfs-DB verloren, Datenlücke bis nächster Persist |
+| pip-Upgrade von Flask 1.1.2 → 2.x/3.x | Breaking API-Changes (Werkzeug, Jinja2) |
+| numpy 1.19.5 → 2.x | Massiv inkompatible API (deprecated Funktionen entfernt) |
+| SD-Card-Platz (14,8 GB, 1302 Pakete) | apt-Cache kann SD füllen → System unbenutzbar |
+| Kein Monitor/Tastatur am Pi4 | Fehlgeschlagenes Update → SSH evtl. auch kaputt |
+
+### Versions-Freeze (aktueller Stand)
+
+| Komponente | Version | Quelle |
+|-----------|---------|--------|
+| Raspbian | Bullseye 11 (EOL ~Juni 2026) | System |
+| Kernel | 6.1.21-v8+ | System |
+| Python | 3.9.2 | System |
+| SQLite | 3.45.1 | Manuell kompiliert |
+| Flask | 1.1.2 | pip |
+| gunicorn | 23.0.0 | pip |
+| numpy | 1.19.5 | pip |
+| requests | 2.25.1 | pip |
+| websockets | 15.0.1 | pip |
+
+Python-Dependencies sind in `requirements.txt` exakt gepinnt (`==`).
+
+### Empfohlene Wartungs-Routine (manuell, ~2×/Jahr)
+
+```
+1. VORHER: Backup sicherstellen (Pi5 GFS aktuell?)
+   ssh admin@192.0.2.195 "ls -la ~/Documents/PVAnlage/pv-system/backup/db/daily/"
+
+2. Security-Check (nur schauen, NICHT installieren):
+   sudo apt update && apt list --upgradable 2>/dev/null | head -20
+
+3. Nur bei kritischen Sicherheitslücken (SSH, OpenSSL, Kernel):
+   sudo apt install --only-upgrade <paket>   # gezielt, NICHT apt upgrade!
+
+4. Python-Pakete: NICHT upgraden solange System funktioniert
+   pip3 list --outdated   # nur zur Info
+
+5. Nach jedem manuellen Eingriff:
+   systemctl status pv-collector pv-web
+   sqlite3 /dev/shm/fronius_data.db "SELECT COUNT(*) FROM raw_data WHERE ts > strftime('%s','now') - 300;"
+```
+
+### Wann wird ein OS-Upgrade nötig?
+
+Raspbian Bullseye erreicht EOL ca. Juni 2026. Ein Upgrade auf Bookworm
+erfordert eine **Neuinstallation** (kein In-Place-Upgrade empfohlen):
+
+- SD-Card-Image frisch flashen (Bookworm)
+- Python 3.11 → alle pip-Pakete neu installieren & testen
+- SQLite manuell neu kompilieren
+- data.db von Pi5-Backup wiederherstellen
+- Services + Cron neu einrichten (`scripts/install_services.sh`)
+- **Zeitfenster**: ~2-4 Stunden, am besten abends (keine Solar-Daten verloren)
+
+---
+
+## 8. Dateien-Übersicht
 
 ### Kern-Scripts
 

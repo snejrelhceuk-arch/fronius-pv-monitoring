@@ -1,9 +1,21 @@
 # Fronius PV-Monitoring - Python-Abhängigkeiten
 # Installation: pip3 install -r requirements.txt
-flask>=2.2.2
-gunicorn>=21.2.0
-requests>=2.28.1
-pvlib>=0.10.4
-numpy>=1.24.0
-pandas>=2.0.0
-websockets>=11.0
+#
+# VERSIONS-PINNING (Stand: 2026-02-19)
+# =====================================
+# EXAKTE Versionen vom laufenden Pi4-Produktivsystem.
+# NICHT blind upgraden — siehe doc/SYSTEM_ARCHITECTURE.md Abschnitt "Updates".
+#
+# Hintergrund:
+# - Flask 1.1.2 + Werkzeug sind aufeinander abgestimmt
+# - numpy 1.19.5 ist letzte Version für Python 3.9 ohne Build-Probleme auf armv7l
+# - SQLite 3.45.1 wurde manuell kompiliert (nicht über pip/apt aktualisieren!)
+#
+flask==1.1.2
+gunicorn==23.0.0
+requests==2.25.1
+numpy==1.19.5
+websockets==15.0.1
+# pvlib und pandas: derzeit NICHT installiert (nur für solar_forecast.py geplant)
+# pvlib>=0.10.4
+# pandas>=2.0.0
