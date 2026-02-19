@@ -3,7 +3,7 @@
 ## PV-Monitoring-System „PVAnlage" — Beitragsanalyse
 
 **Erstellt:** 10. Februar 2026  
-**Aktualisiert:** 16. Februar 2026 (v6.0.0)  
+**Aktualisiert:** 19. Februar 2026 (v6.1.0)  
 **Projektstart:** ca. Dezember 2025  
 **Produktionsstart:** 01. Januar 2026  
 **Analyse-Zeitraum:** ~8 Wochen aktive Entwicklung  
@@ -23,7 +23,7 @@
 | **Dokumentation** | 13 Markdown-Dateien (4.291 LOC) |
 | **Flask-Blueprints (Routes)** | 9 Module (4.199 LOC) |
 | **Cron-gesteuerte Aggregation** | 5 Stufen (1min → yearly) |
-| **Versionshistorie** | v1.0 → v6.0.0 (6 Releases) |
+| **Versionshistorie** | v1.0 → v6.1.0 (7 Releases) |
 
 ---
 

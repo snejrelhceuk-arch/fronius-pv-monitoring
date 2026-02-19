@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PV-Übersicht — PV-Anlage</title>
-    <link rel="stylesheet" href="/static/css/analyse-dark.css">
+    <link rel="stylesheet" href="/static/css/analyse-dark.css?v=20260219b">
     <style>
         /* PV-Analyse spezifisch */
         .header-row {
@@ -29,6 +29,15 @@
             <a href="/analyse/haushalt" class="nav-sub">Haushalt</a>
             <a href="/analyse/amortisation" class="nav-sub">Amortisation</a>
         </div>
+
+        {% if freq_extremes %}
+        <div class="freq-info-line">
+            Netzfrequenz:
+            {% if freq_extremes.f_max %}<span class="freq-max">Max. {{ "%.3f"|format(freq_extremes.f_max)|replace('.', ',') }} Hz</span> ({{ freq_extremes.f_max_label }} Uhr){% endif %}
+            {% if freq_extremes.f_max and freq_extremes.f_min %} · {% endif %}
+            {% if freq_extremes.f_min %}<span class="freq-min">Min. {{ "%.3f"|format(freq_extremes.f_min)|replace('.', ',') }} Hz</span> ({{ freq_extremes.f_min_label }} Uhr){% endif %}
+        </div>
+        {% endif %}
 
         <div class="section">
             <div class="section-title">Jährliche PV-Kennzahlen</div>

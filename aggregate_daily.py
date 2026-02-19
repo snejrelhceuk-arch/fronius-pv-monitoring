@@ -2,11 +2,30 @@
 """
 Tägliche Aggregation: hourly_data → daily_data
 Läuft alle 15min via Cron (für Status-Visualisierung)
-Verwendet aktuelles DB-Schema von hourly_data/daily_data
+
+Energiesummen-Strategie (seit 19.02.2026):
+  Primär:   Counter End−Start aus data_1min (lückenresistent innerhalb des Tages)
+  Fallback: SUM(Δ) aus hourly_data (bei Zähler-Reset oder fehlenden Countern)
+
+Verfügbare Counter-Paare in data_1min:
+  W_Imp_Netz_start/end  → Netzbezug
+  W_Exp_Netz_start/end  → Einspeisung
+  W_DC1_start/end        → PV F1 String 1
+  W_DC2_start/end        → PV F1 String 2
+  W_AC_Inv_start/end     → Inverter AC (inkl. Batterie-Durchfluss)
+
+Nicht als Counter verfügbar (bleiben P×t):
+  Batterie Laden/Entladen    → BMS-Checkpoints (separat, in Arbeit)
+  Direktverbrauch             → berechnet (PV − Einsp − inBatt)
+  Wärmepumpe (W_WP)          → P×t in hourly (W_Imp_WP Counter nur in raw_data ab 12.02)
+  Wattpilot                   → eigener Zähler in wattpilot_daily
+
+WP = Wärmepumpe, NICHT Wattpilot!
 """
 import sqlite3
 import time
 import logging
+from datetime import datetime, timedelta
 import config
 from db_utils import get_db_connection
 
@@ -14,22 +33,76 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 
 DB_PATH = config.DB_PATH
 
+# Schwellwert für Counter-Reset-Erkennung:
+# Wenn Counter(End−Start) > RESET_FACTOR × SUM(Δ), liegt ein Zähler-Reset vor → Fallback auf SUM(Δ)
+RESET_FACTOR = 3.0
+
+# Mindestdelta damit ein Reset-Check greift (vermeidet Division durch ~0)
+MIN_DELTA_WH = 50.0
+
+
 def get_db():
     return get_db_connection()
 
+
+def _local_day_boundaries(utc_midnight_ts):
+    """Berechne CET/CEST-Tagesgrenzen für einen UTC-Mitternacht-Timestamp.
+
+    day_ts (UTC midnight) → (query_start, query_end) in UTC,
+    die den lokalen Kalendertag vollständig abdecken.
+
+    Beispiel CET (Winter, UTC+1):
+      day_ts = 2026-02-19 00:00 UTC → localtime = 01:00 CET
+      query_start = 2026-02-18 23:00 UTC (= 00:00 CET am 19.)
+      query_end   = 2026-02-19 23:00 UTC (= 00:00 CET am 20.)
+
+    Behandelt DST-Übergänge korrekt (23h/25h Tage).
+    """
+    local_dt = datetime.fromtimestamp(utc_midnight_ts)
+    date_str = local_dt.strftime('%Y-%m-%d')
+    midnight_local = datetime.strptime(date_str, '%Y-%m-%d')
+    next_midnight_local = midnight_local + timedelta(days=1)
+    return int(midnight_local.timestamp()), int(next_midnight_local.timestamp())
+
+
+def _counter_or_fallback(counter_val, sum_delta, label=""):
+    """Wähle Counter-Wert oder SUM(Δ) mit Reset-Erkennung.
+
+    Returns (value_wh, source_str)
+    """
+    if counter_val is None or sum_delta is None:
+        return (sum_delta or 0.0, "sum_delta")
+
+    # Beide Werte nahe Null → kein Unterschied, nimm Counter
+    if abs(counter_val) < MIN_DELTA_WH and abs(sum_delta) < MIN_DELTA_WH:
+        return (counter_val, "counter")
+
+    # Negativer Counter → Zähler-Reset (neuer Zählerstand < alter)
+    if counter_val < -MIN_DELTA_WH:
+        logging.info(f"  {label}: Counter negativ ({counter_val:.0f} Wh) → Fallback SUM(Δ)={sum_delta:.0f}")
+        return (sum_delta, "sum_delta/reset_neg")
+
+    # Counter viel größer als SUM(Δ) → Zähler-Sprint (z.B. 04.02. Umstellung)
+    if abs(sum_delta) > MIN_DELTA_WH and counter_val > RESET_FACTOR * abs(sum_delta):
+        logging.info(f"  {label}: Counter ({counter_val:.0f}) >> SUM(Δ) ({sum_delta:.0f}) → Fallback SUM(Δ)")
+        return (sum_delta, "sum_delta/reset_jump")
+
+    return (counter_val, "counter")
+
+
 def aggregate_daily():
-    """Aggregiere hourly_data zu daily_data (aktuelles Schema)"""
+    """Aggregiere hourly_data + data_1min Counter zu daily_data (aktuelles Schema)"""
     conn = get_db()
     c = conn.cursor()
-    
+
     try:
         # Finde letzten aggregierten Tag
         c.execute("SELECT MAX(ts) FROM daily_data")
         last_day = c.fetchone()[0]
-        
+
         now = time.time()
         current_day = (int(now) // 86400) * 86400
-        
+
         if last_day is None:
             # Finde ersten Tag in hourly_data
             c.execute("SELECT MIN(ts) FROM hourly_data")
@@ -41,15 +114,14 @@ def aggregate_daily():
             start_day = (int(first_hour) // 86400) * 86400
         else:
             start_day = int(last_day)  # Re-aggregiere letzten Tag (könnte partial sein)
-        
+
         count = 0
         # Inkludiere aktuellen Tag (+86400): Monatsansicht zeigt heutigen Tag mit bisherigen Daten
         for day_ts in range(start_day, current_day + 86400, 86400):
-            next_day = day_ts + 86400
-            
-            # Aggregiere aus hourly_data
-            # W_*_delta sind in Wh, W_Batt_*_total sind in Wh
-            # daily_data soll alles in Wh speichern (API macht /1000 für kWh)
+            # Lokale Tagesgrenzen (CET/CEST) für Datenabfragen
+            q_start, q_end = _local_day_boundaries(day_ts)
+
+            # ── 1. Leistungsmittelwerte + P×t-Summen aus hourly_data (wie bisher) ──
             c.execute("""
                 SELECT
                     AVG(P_AC_Inv_avg), MIN(P_AC_Inv_min), MAX(P_AC_Inv_max),
@@ -61,7 +133,6 @@ def aggregate_daily():
                     SUM(W_PV_total_delta),
                     SUM(W_Exp_Netz_delta),
                     SUM(W_Imp_Netz_delta),
-                    SUM(W_PV_total_delta + W_Imp_Netz_delta - W_Exp_Netz_delta),
                     SUM(W_Batt_Charge_total),
                     SUM(W_Batt_Discharge_total),
                     SUM(W_WP_total),
@@ -74,19 +145,159 @@ def aggregate_daily():
                     MAX(W_Imp_Netz_end)
                 FROM hourly_data
                 WHERE ts >= ? AND ts < ?
-            """, (day_ts, next_day))
-            
+            """, (q_start, q_end))
+
             row = c.fetchone()
             if not row or row[0] is None:
                 continue
-            
-            # Prognose-kWh aus forecast_daily übernehmen (falls vorhanden)
-            from datetime import datetime as _dt
-            date_str = _dt.utcfromtimestamp(day_ts).strftime('%Y-%m-%d')
+
+            # Unpack hourly_data
+            (P_AC_Inv_avg, P_AC_Inv_min, P_AC_Inv_max,
+             f_Netz_avg, f_Netz_min, f_Netz_max,
+             P_Netz_avg, P_Netz_min, P_Netz_max,
+             P_F2_avg, P_F2_min, P_F2_max,
+             P_F3_avg, P_F3_min, P_F3_max,
+             SOC_Batt_avg, SOC_Batt_min, SOC_Batt_max,
+             sum_pv_delta, sum_exp_delta, sum_imp_delta,
+             sum_batt_charge, sum_batt_discharge,
+             sum_wp_total, sum_pv_direct,
+             h_inv_start, h_inv_end,
+             h_exp_start, h_exp_end,
+             h_imp_start, h_imp_end) = row
+
+            # ── 2. Counter End−Start aus data_1min (präziser, lückenresistent) ──
+            c.execute("""
+                SELECT
+                    MAX(W_Imp_Netz_end) - MIN(W_Imp_Netz_start),
+                    MAX(W_Exp_Netz_end) - MIN(W_Exp_Netz_start),
+                    MAX(W_DC1_end)  - MIN(W_DC1_start),
+                    MAX(W_DC2_end)  - MIN(W_DC2_start),
+                    MAX(W_AC_Inv_end) - MIN(W_AC_Inv_start),
+                    MIN(W_Imp_Netz_start), MAX(W_Imp_Netz_end),
+                    MIN(W_Exp_Netz_start), MAX(W_Exp_Netz_end),
+                    MIN(W_AC_Inv_start),   MAX(W_AC_Inv_end)
+                FROM data_1min
+                WHERE ts >= ? AND ts < ?
+            """, (q_start, q_end))
+            cnt_row = c.fetchone()
+
+            if cnt_row and cnt_row[0] is not None:
+                cnt_imp, cnt_exp, cnt_dc1, cnt_dc2, cnt_inv = cnt_row[:5]
+                cnt_imp_start, cnt_imp_end = cnt_row[5], cnt_row[6]
+                cnt_exp_start, cnt_exp_end = cnt_row[7], cnt_row[8]
+                cnt_inv_start, cnt_inv_end = cnt_row[9], cnt_row[10]
+
+                # PV F1 Counter = DC1 + DC2
+                cnt_pv_f1 = (cnt_dc1 or 0) + (cnt_dc2 or 0)
+            else:
+                cnt_imp = cnt_exp = cnt_pv_f1 = cnt_inv = None
+                cnt_imp_start = cnt_imp_end = h_imp_start, h_imp_end
+                cnt_exp_start = cnt_exp_end = h_exp_start, h_exp_end
+                cnt_inv_start = cnt_inv_end = h_inv_start, h_inv_end
+
+            # ── 3. F2/F3-Counter + Wärmepumpe-Counter aus raw_data (ab 12.02.) ──
+            c.execute("""
+                SELECT
+                    MAX(W_Exp_F2) - MIN(W_Exp_F2),
+                    MAX(W_Exp_F3) - MIN(W_Exp_F3),
+                    MAX(W_Imp_WP) - MIN(W_Imp_WP)
+                FROM raw_data
+                WHERE ts >= ? AND ts < ?
+            """, (q_start, q_end))
+            raw_row = c.fetchone()
+
+            cnt_f2 = raw_row[0] if (raw_row and raw_row[0] is not None) else None
+            cnt_f3 = raw_row[1] if (raw_row and raw_row[1] is not None) else None
+            cnt_waermepumpe = raw_row[2] if (raw_row and raw_row[2] is not None) else None
+
+            # ── 4. Wattpilot-Zähler aus wattpilot_daily ──
+            c.execute("""
+                SELECT energy_wh
+                FROM wattpilot_daily
+                WHERE ts = ?
+            """, (day_ts,))
+            wtp_row = c.fetchone()
+            wattpilot_wh = wtp_row[0] if (wtp_row and wtp_row[0] is not None) else None
+
+            # ── 5. Counter vs SUM(Δ) mit Reset-Erkennung ──
+            date_str = datetime.fromtimestamp(day_ts).strftime('%Y-%m-%d')
+
+            W_Imp_Netz, src_imp = _counter_or_fallback(cnt_imp, sum_imp_delta, f"{date_str} Bezug")
+            W_Exp_Netz, src_exp = _counter_or_fallback(cnt_exp, sum_exp_delta, f"{date_str} Einsp")
+
+            # PV: Counter = DC1+DC2 (F1) + F2 + F3 | Fallback = SUM(W_PV_total_delta)
+            if cnt_pv_f1 is not None:
+                pv_f1, src_pv1 = _counter_or_fallback(cnt_pv_f1, sum_pv_delta, f"{date_str} PV-F1")
+                # F2/F3: Counter aus raw_data oder Anteil aus P×t
+                pv_f2 = abs(cnt_f2) if cnt_f2 is not None else 0.0
+                pv_f3 = abs(cnt_f3) if cnt_f3 is not None else 0.0
+
+                if src_pv1 == "counter":
+                    # Bei Counter-Modus für F1: PV-Gesamt = F1-Counter + F2/F3-Counter
+                    # Falls F2/F3-Counter fehlt → PV-Gesamtdelta aus hourly als Fallback
+                    if cnt_f2 is not None and cnt_f3 is not None:
+                        W_PV_total = pv_f1 + pv_f2 + pv_f3
+                        src_pv = "counter(DC1+DC2+F2+F3)"
+                    else:
+                        # F2/F3-Counter fehlt: SUM(Δ) enthält bereits alle 3 Inverter
+                        W_PV_total = sum_pv_delta or 0.0
+                        src_pv = "sum_delta(kein F2/F3-Counter)"
+                else:
+                    W_PV_total = sum_pv_delta or 0.0
+                    src_pv = src_pv1
+            else:
+                W_PV_total = sum_pv_delta or 0.0
+                src_pv = "sum_delta"
+
+            # Wärmepumpe (WP = Wärmepumpe!): Counter aus raw_data oder P×t
+            if cnt_waermepumpe is not None:
+                W_WP, src_wp = _counter_or_fallback(cnt_waermepumpe, sum_wp_total, f"{date_str} Wärmepumpe")
+            else:
+                W_WP = sum_wp_total or 0.0
+                src_wp = "sum_delta"
+
+            # Batterie + Direktverbrauch: weiterhin P×t (kein Counter)
+            W_Batt_Charge = sum_batt_charge or 0.0
+            W_Batt_Discharge = sum_batt_discharge or 0.0
+            W_PV_Direct = sum_pv_direct or 0.0
+
+            # Verbrauch = PV + Bezug − Einspeisung (immer konsistent berechnet)
+            W_Consumption = W_PV_total + W_Imp_Netz - W_Exp_Netz
+
+            # Counter-Start/End für daily_data (bevorzuge data_1min, Fallback hourly)
+            # Bei erkanntem Zähler-Reset: Start/End auf None setzen,
+            # damit Visualisierung nicht aus falschen Zählerständen rechnet
+            inv_start = cnt_inv_start if (cnt_row and cnt_row[0] is not None) else h_inv_start
+            inv_end = cnt_inv_end if (cnt_row and cnt_row[0] is not None) else h_inv_end
+            exp_start = cnt_exp_start if (cnt_row and cnt_row[0] is not None) else h_exp_start
+            exp_end = cnt_exp_end if (cnt_row and cnt_row[0] is not None) else h_exp_end
+            imp_start = cnt_imp_start if (cnt_row and cnt_row[0] is not None) else h_imp_start
+            imp_end = cnt_imp_end if (cnt_row and cnt_row[0] is not None) else h_imp_end
+
+            # Plausibilitätsprüfung: Bei Reset Start/End nullen
+            if "reset" in src_exp:
+                logging.info(f"  {date_str}: Einsp-Reset erkannt → Start/End auf NULL")
+                exp_start = None
+                exp_end = None
+            if "reset" in src_imp:
+                logging.info(f"  {date_str}: Bezug-Reset erkannt → Start/End auf NULL")
+                imp_start = None
+                imp_end = None
+            if "reset" in src_pv:
+                logging.info(f"  {date_str}: PV-Reset erkannt → Start/End auf NULL")
+                inv_start = None
+                inv_end = None
+
+            # Logging für Debugging
+            if src_imp != "counter" or src_pv != "counter(DC1+DC2+F2+F3)":
+                logging.info(f"  {date_str}: Bezug={src_imp}, PV={src_pv}, Einsp={src_exp}, WP={src_wp}")
+
+            # ── 6. Prognose-kWh aus forecast_daily übernehmen ──
             c.execute("SELECT expected_kwh FROM forecast_daily WHERE date = ?", (date_str,))
             fc_row = c.fetchone()
             forecast_kwh = fc_row[0] if fc_row else None
 
+            # ── 7. INSERT OR REPLACE ──
             c.execute("""
                 INSERT OR REPLACE INTO daily_data (
                     ts,
@@ -103,14 +314,28 @@ def aggregate_daily():
                     W_Imp_Netz_start, W_Imp_Netz_end,
                     forecast_kwh
                 ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """, tuple([day_ts] + list(row) + [forecast_kwh]))
+            """, (day_ts,
+                  P_AC_Inv_avg, P_AC_Inv_min, P_AC_Inv_max,
+                  f_Netz_avg, f_Netz_min, f_Netz_max,
+                  P_Netz_avg, P_Netz_min, P_Netz_max,
+                  P_F2_avg, P_F2_min, P_F2_max,
+                  P_F3_avg, P_F3_min, P_F3_max,
+                  SOC_Batt_avg, SOC_Batt_min, SOC_Batt_max,
+                  W_PV_total, W_Exp_Netz, W_Imp_Netz, W_Consumption,
+                  W_Batt_Charge, W_Batt_Discharge, W_WP, W_PV_Direct,
+                  inv_start, inv_end,
+                  exp_start, exp_end,
+                  imp_start, imp_end,
+                  forecast_kwh))
             count += 1
-        
+
         conn.commit()
         logging.info(f"✓ {count} Tage aggregiert")
-        
+
     except Exception as e:
         logging.error(f"Fehler bei täglicher Aggregation: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         conn.close()
 

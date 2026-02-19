@@ -340,6 +340,38 @@ def analyse():
     # Aktuelle Werte für Info-Cards
     current_year = max(years_data.keys())
 
+    # Frequenz-Extremwerte (Gesamtzeitraum) aus data_1min
+    freq_extremes = None
+    try:
+        from datetime import datetime as dt
+        cursor.execute("SELECT MIN(ts), MAX(ts) FROM data_1min WHERE f_Netz_min IS NOT NULL")
+        range_row = cursor.fetchone()
+        if range_row and range_row[0]:
+            cursor.execute("""
+                SELECT ts, f_Netz_min FROM data_1min
+                WHERE ts >= ? AND ts <= ? AND f_Netz_min IS NOT NULL
+                ORDER BY f_Netz_min ASC LIMIT 1
+            """, (range_row[0], range_row[1]))
+            min_row = cursor.fetchone()
+            cursor.execute("""
+                SELECT ts, f_Netz_max FROM data_1min
+                WHERE ts >= ? AND ts <= ? AND f_Netz_max IS NOT NULL
+                ORDER BY f_Netz_max DESC LIMIT 1
+            """, (range_row[0], range_row[1]))
+            max_row = cursor.fetchone()
+            if min_row or max_row:
+                freq_extremes = {}
+                if min_row:
+                    dt_min = dt.fromtimestamp(min_row[0])
+                    freq_extremes['f_min'] = round(min_row[1], 3)
+                    freq_extremes['f_min_label'] = dt_min.strftime('%d.%m.%y, %H:%M')
+                if max_row:
+                    dt_max = dt.fromtimestamp(max_row[0])
+                    freq_extremes['f_max'] = round(max_row[1], 3)
+                    freq_extremes['f_max_label'] = dt_max.strftime('%d.%m.%y, %H:%M')
+    except Exception:
+        pass
+
     # Template je nach Route wählen
     template_map = {
         '/analyse/pv': 'analyse_pv_view.html',
@@ -357,4 +389,5 @@ def analyse():
                          yearly_data=list(years_data.values()),
                          amort_pv_data=amort_pv_data,
                          amort_haushalt_data=amort_haushalt_data,
-                         current_year=current_year)
+                         current_year=current_year,
+                         freq_extremes=freq_extremes)

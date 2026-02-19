@@ -39,8 +39,8 @@ EINSPEISEVERGUETUNG = config.EINSPEISEVERGUETUNG
 
 # Monate VOR diesem Datum sind manuell aus Solarweb korrigiert und werden NICHT überschrieben.
 # Erst ab diesem Monat aggregiert das Script automatisch aus daily_data.
-# Anpassen sobald die Zählerstand-Delta-Kalibrierung den vollen Monat abdeckt.
-FIRST_AUTO_MONTH = (2026, 2)  # (Jahr, Monat) - ab Februar 2026 (Jan manuell aus Solarweb)
+# Jan+Feb 2026: daily_data enthält Solarweb-Werte (import_solarweb_daily.py, 2026-02-19)
+FIRST_AUTO_MONTH = (2026, 1)  # (Jahr, Monat) - ab Januar 2026 (daily_data = Solarweb-Import)
 
 
 def update_monthly_statistics():
