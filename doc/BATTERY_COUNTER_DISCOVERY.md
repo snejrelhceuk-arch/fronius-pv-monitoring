@@ -258,4 +258,49 @@ ersetzt werden — gleiche Methode wie für alle anderen Energieflüsse.
 
 ---
 
-*Nächster Schritt: 12.02.2026 — Counter-Aktualisierungsrate testen + Implementierung*
+## 8. Implementierungsstatus (19.02.2026)
+
+### 8.1 Umgestellt: Batterie-Energieberechnung auf I×U-Integration
+
+Die gesamte Pipeline wurde von der alten Proxy-Formel
+`P_Batt = P_DC1 + P_DC2 - P_AC_Inv` auf direkte Strom×Spannung-Integration
+umgestellt:
+
+```
+P_charge    = I_Batt_API × U_Batt_API   (wenn I_Batt >= 0, Ladung)
+P_discharge = |I_Batt_API| × U_Batt_API (wenn I_Batt < 0, Entladung)
+```
+
+**Betroffene Dateien:**
+
+| Datei | Änderung |
+|-------|----------|
+| `aggregate_1min.py` | W_inBatt/W_outBatt: P×t statt AC-Inv-Differenz |
+| `aggregate.py` | Hourly: I×U×0.25h statt (P_DC-P_AC)×0.25h |
+| `aggregate_monthly.py` | Monatlich: gleiche I×U-Formel |
+| `routes/system.py` | Tages-Batterie: I×U mit W_inBatt-Fallback für Altdaten |
+
+### 8.2 Neu: BMS-Lifetime-Counter als Crosscheck
+
+Der `/api/battery_status`-Endpoint liest jetzt zusätzlich die BMS-Hardware-Zähler
+und vergleicht sie mit den berechneten Tageswerten:
+
+- **DB-Checkpoint** (primär): `energy_checkpoints` Tabelle (via `capture_energy_checkpoints.py`)
+- **JSON-Fallback**: `config/battery_bms_checkpoints.json` (auto-generiert)
+- **Schwellwert**: ±25% oder min. 0.25 kWh Abweichung
+
+### 8.3 Neue Scripts und Services
+
+| Script | Zweck | Timer |
+|--------|-------|-------|
+| `scripts/capture_energy_checkpoints.py` | Täglicher Fixpunkt aller Counter | 00:01 |
+| `scripts/check_energy_counters.py` | Plausibilitätsprüfung + Monotonie-Check | 00:10 |
+
+Systemd-Services: `pv-energy-checkpoint.timer`, `pv-counter-check.timer`
+
+### 8.4 Bekannte Einschränkung
+
+Die I×U-Methode in höheren Aggregationsstufen (15min, hourly, monthly) berechnet
+`AVG(I) × AVG(U)` statt `AVG(I × U)`. Bei relativ stabiler Batteriespannung
+(~320–467 V) liegt der Fehler unter 2% und ist damit deutlich besser als die
+alte Proxy-Formel.

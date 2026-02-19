@@ -242,17 +242,11 @@ def _aggregate_1min_impl(conn, cur, bucket_ts):
     # W_Bezug = Was vom Netz bezogen wurde (bleibt positiv)
     W_Bezug = W_Imp_Netz_delta
     
-    # W_inBatt / W_outBatt aus AC-Inv Differenz
-    # Formel von User: W_AC_Inv - W_DC1 - W_DC2
-    # Negativ = Ladung, Positiv = Entladung
-    batt_diff = W_AC_Inv_delta - W_DC1_delta - W_DC2_delta
-    
-    if batt_diff < 0:
-        W_inBatt_total = abs(batt_diff)
-        W_outBatt = 0.0
-    else:
-        W_inBatt_total = 0.0
-        W_outBatt = batt_diff
+    # W_inBatt / W_outBatt robust aus Batterie-Strom×Spannung integrieren
+    # Vorzeichenkonvention: I_Batt > 0 = Ladung, I_Batt < 0 = Entladung
+    # 1-Minuten-Bucket: Wh = W * (1/60 h)
+    W_inBatt_total = (P_inBatt_total / 60.0) if P_inBatt_total > 0 else 0.0
+    W_outBatt = (P_outBatt / 60.0) if P_outBatt > 0 else 0.0
     
     # === BATTERIE-ENERGIE QUELLEN TRENNEN ===
     # Analog zur Leistung: Wenn Bezug > Batterie-Ladung → Netz-Quelle
