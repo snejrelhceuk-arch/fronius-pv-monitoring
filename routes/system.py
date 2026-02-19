@@ -51,6 +51,8 @@ def api_battery_status():
             'em_mode': values.get('HYB_EM_MODE'),
         }
 
+        result['batt_energy_method'] = 'integration_ui_with_counter_fallback'
+
         # Scheduler-State hinzufügen (wenn vorhanden)
         try:
             import json as _json
@@ -78,7 +80,25 @@ def api_battery_status():
                     cb = conn_b.cursor()
                     today_start = int(_time.mktime(_time.localtime(now)[:3] + (0,0,0, 0,0, -1)))
                     cb.execute("""
-                        SELECT SUM(W_inBatt)/1000.0, SUM(W_outBatt)/1000.0
+                        SELECT
+                            SUM(
+                                CASE
+                                    WHEN U_Batt_API_avg IS NULL OR I_Batt_API_avg IS NULL
+                                    THEN COALESCE(W_inBatt, 0)
+                                    WHEN I_Batt_API_avg >= 0
+                                    THEN (I_Batt_API_avg * U_Batt_API_avg) / 60.0
+                                    ELSE 0
+                                END
+                            ) / 1000.0,
+                            SUM(
+                                CASE
+                                    WHEN U_Batt_API_avg IS NULL OR I_Batt_API_avg IS NULL
+                                    THEN COALESCE(W_outBatt, 0)
+                                    WHEN I_Batt_API_avg < 0
+                                    THEN (ABS(I_Batt_API_avg) * U_Batt_API_avg) / 60.0
+                                    ELSE 0
+                                END
+                            ) / 1000.0
                         FROM data_1min WHERE ts >= ?
                     """, (today_start,))
                     erow = cb.fetchone()
@@ -92,6 +112,127 @@ def api_battery_status():
                     conn_b.close()
         except Exception as e:
             logging.warning(f"Batterie-Tageswerte Fehler: {e}")
+
+        # BMS-Lifetime-Counter + Tages-Fixpunkt-Deltas
+        try:
+            import json as _json_bms
+            import requests as _req_bms
+
+            _bms_url = f'http://{config.INVERTER_IP}/components/BatteryManagementSystem/readable'
+            _bms_resp = _req_bms.get(_bms_url, timeout=2)
+            if _bms_resp.status_code == 200:
+                _bms_payload = _bms_resp.json()
+                _channels = None
+                _bms_data = _bms_payload.get('Body', {}).get('Data', {})
+
+                if isinstance(_bms_data, dict):
+                    for _comp in _bms_data.values():
+                        _candidate = (_comp or {}).get('channels', {})
+                        if _candidate:
+                            _channels = _candidate
+                            break
+
+                if _channels:
+                    _ws_charge = _channels.get('BAT_ENERGYACTIVE_LIFETIME_CHARGED_F64')
+                    _ws_discharge = _channels.get('BAT_ENERGYACTIVE_LIFETIME_DISCHARGED_F64')
+
+                    if _ws_charge is not None and _ws_discharge is not None:
+                        _bms_charge_life_kwh = float(_ws_charge) / 3600000.0
+                        _bms_discharge_life_kwh = float(_ws_discharge) / 3600000.0
+
+                        result['bms_lifetime_charge_kwh'] = round(_bms_charge_life_kwh, 3)
+                        result['bms_lifetime_discharge_kwh'] = round(_bms_discharge_life_kwh, 3)
+
+                        _checkpoint_created = False
+                        _today_start_ts = int(_time.mktime(_time.localtime(now)[:3] + (0,0,0, 0,0, -1)))
+                        _start_charge = None
+                        _start_discharge = None
+
+                        # Primär: feste day_start Checkpoints in DB
+                        try:
+                            _conn_cp = get_db_connection()
+                            if _conn_cp:
+                                try:
+                                    _cur_cp = _conn_cp.cursor()
+                                    _cur_cp.execute("""
+                                        SELECT W_Batt_Charge_BMS, W_Batt_Discharge_BMS
+                                        FROM energy_checkpoints
+                                        WHERE ts = ? AND checkpoint_type = 'day_start'
+                                        LIMIT 1
+                                    """, (_today_start_ts,))
+                                    _cp_row = _cur_cp.fetchone()
+                                    if _cp_row and _cp_row[0] is not None and _cp_row[1] is not None:
+                                        # DB speichert in Wh, wir rechnen in kWh
+                                        _start_charge = _cp_row[0] / 1000.0
+                                        _start_discharge = _cp_row[1] / 1000.0
+                                        result['bms_checkpoint_source'] = 'energy_checkpoints'
+                                finally:
+                                    _conn_cp.close()
+                        except Exception:
+                            pass
+
+                        # Fallback: bestehende JSON-Checkpoint-Datei
+                        if _start_charge is None or _start_discharge is None:
+                            _checkpoint_path = Path(__file__).resolve().parent.parent / 'config' / 'battery_bms_checkpoints.json'
+                            _today_key = datetime.fromtimestamp(now).strftime('%Y-%m-%d')
+                            _cp_data = {'days': {}}
+
+                            if _checkpoint_path.exists():
+                                try:
+                                    with open(_checkpoint_path, 'r') as _fcp:
+                                        _loaded = _json_bms.load(_fcp)
+                                        if isinstance(_loaded, dict):
+                                            _cp_data = _loaded
+                                            if 'days' not in _cp_data or not isinstance(_cp_data['days'], dict):
+                                                _cp_data['days'] = {}
+                                except Exception:
+                                    _cp_data = {'days': {}}
+
+                            _days = _cp_data['days']
+                            if _today_key not in _days:
+                                _days[_today_key] = {
+                                    'charge_kwh': _bms_charge_life_kwh,
+                                    'discharge_kwh': _bms_discharge_life_kwh,
+                                    'captured_ts': int(now)
+                                }
+                                _checkpoint_created = True
+                                with open(_checkpoint_path, 'w') as _fcp:
+                                    _json_bms.dump(_cp_data, _fcp, indent=2)
+
+                            _start_charge = _days[_today_key].get('charge_kwh')
+                            _start_discharge = _days[_today_key].get('discharge_kwh')
+                            result['bms_checkpoint_source'] = 'battery_bms_checkpoints.json'
+
+                        if _start_charge is not None and _start_discharge is not None:
+                            _delta_charge = max(0.0, _bms_charge_life_kwh - float(_start_charge))
+                            _delta_discharge = max(0.0, _bms_discharge_life_kwh - float(_start_discharge))
+
+                            result['bms_day_charge_kwh'] = round(_delta_charge, 3)
+                            result['bms_day_discharge_kwh'] = round(_delta_discharge, 3)
+                            if _checkpoint_created:
+                                result['batt_discharge_check'] = {
+                                    'ok': None,
+                                    'status': 'checkpoint_initialized',
+                                    'method': 'calc_vs_bms_fixpoint'
+                                }
+                            elif _delta_discharge < 0.2:
+                                result['batt_discharge_check'] = {
+                                    'ok': None,
+                                    'status': 'warmup',
+                                    'method': 'calc_vs_bms_fixpoint'
+                                }
+                            else:
+                                _calc_discharge = float(result.get('batt_discharge_kwh') or 0.0)
+                                _diff = abs(_calc_discharge - _delta_discharge)
+                                _threshold = max(0.25, _delta_discharge * 0.25)
+                                result['batt_discharge_check'] = {
+                                    'ok': _diff <= _threshold,
+                                    'diff_kwh': round(_diff, 3),
+                                    'threshold_kwh': round(_threshold, 3),
+                                    'method': 'calc_vs_bms_fixpoint'
+                                }
+        except Exception as e:
+            logging.debug(f"BMS Counter Check Fehler: {e}")
 
         # Temperaturen aus Fronius /components/readable (WR + Batterie)
         try:
