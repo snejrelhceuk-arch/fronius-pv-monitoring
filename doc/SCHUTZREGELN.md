@@ -21,7 +21,7 @@
 
 | Feld | Wert |
 |---|---|
-| **Auslöser** | SOC < 10 % |
+| **Auslöser** | SOC < 5 % |
 | **Aktion** | Sofort-Ladung aus PV erzwingen (OutWRte = 0 %) |
 | **Zusatz** | SOC_MIN auf 10 % setzen (Modbus MinRsvPct) |
 | **Freigabe** | SOC > 20 % für > 5 min |
@@ -196,18 +196,73 @@
 
 ---
 
+## Failover & Dual-Host Schutzregeln
+
+> Hintergrund: Das PV-System läuft auf zwei Pi4-Hosts (Primary: 181, Failover: failover-host 105).
+> Die `.role`-Datei steuert, welche Prozesse aktiv sind.
+> Siehe [DUAL_HOST_ARCHITECTURE.md](DUAL_HOST_ARCHITECTURE.md) für die komplette Architektur.
+
+### SR-FO-01 — Doppel-Collector-Schutz (Kritisch)
+
+| Eigenschaft | Wert |
+|---|---|
+| **Regel** | Es darf zu keinem Zeitpunkt auf zwei Hosts gleichzeitig ein Collector (`collector.py`) mit Modbus-Schreibzugriff auf den Fronius-Wechselrichter laufen. |
+| **Begründung** | Zwei konkurrierende Modbus-Writer können widersprüchliche Batterie-Befehle senden und den Wechselrichter in einen Fehlerzustand versetzen. |
+| **Umsetzung** | `host_role.py` + `role_guard.sh` — Collector/Scheduler starten nur bei `.role = primary`. Failover-Collector ist per Default gestoppt. Aktivierung NUR über `failover_activate.sh`. |
+| **Status** | ✅ Implementiert (2026-02-20) |
+
+### SR-FO-02 — Failover-Scripts NIE auf Primary ausführen (Kritisch)
+
+| Eigenschaft | Wert |
+|---|---|
+| **Regel** | Die Scripts `failover_set_mode.sh`, `failover_activate.sh`, `failover_passive.sh` dürfen NIEMALS auf dem Production-Pi ausgeführt werden. |
+| **Begründung** | `failover_set_mode.sh` setzt `PV_MIRROR_MODE=1` und stoppt Collector + Wattpilot. Auf dem Primary ausgeführt → Produktionsausfall! (Vorfall 2026-02-19) |
+| **Umsetzung** | Manuell (Disziplin). Die Scripts prüfen `.role`, aber das schützt nicht bei falscher `.role`. |
+| **Status** | ⚠️ Organisatorisch (kein technischer Automatismus) |
+
+### SR-FO-03 — .role Datei Schutz (Hoch)
+
+| Eigenschaft | Wert |
+|---|---|
+| **Regel** | Die `.role`-Datei darf auf dem Production-Pi (181) NUR den Wert `primary` enthalten (oder fehlen, Default=primary). |
+| **Begründung** | `.role = failover` auf Production blockiert: Aggregation (5 Jobs), Battery-Scheduler, Monitor-Scripts, reduziert Gunicorn auf 1 Worker. (Vorfall 2026-02-19, 20:19 Uhr) |
+| **Umsetzung** | Manuell. Prüfung: `cat .role` sollte `primary` zeigen oder Datei nicht existieren. |
+| **Status** | ⚠️ Organisatorisch |
+
+### SR-FO-04 — Mirror-Freshness (Mittel)
+
+| Eigenschaft | Wert |
+|---|---|
+| **Regel** | Die Mirror-DB auf dem Failover-Host darf nicht älter als 15 Minuten sein (Sync-Intervall: 10 Min). |
+| **Begründung** | Bei einem Failover-Schwenk wäre eine veraltete DB ein Datenverlust-Risiko. |
+| **Umsetzung** | `failover_health_check.sh` (systemd-Timer, 1× pro Minute) überwacht Sync-Marker-Alter und schreibt Empfehlung in `health_recommendation.json`. |
+| **Status** | ✅ Implementiert (2026-02-20) |
+
+### SR-FO-05 — Keine SD-Writes im Normalbetrieb (Mittel)
+
+| Eigenschaft | Wert |
+|---|---|
+| **Regel** | Der Failover-Host (failover-host) darf im Normalbetrieb KEINE SD-Card-Writes für die Datenbank erzeugen. |
+| **Begründung** | failover-host dient zusätzlich als Küchen-Display. SD-Wear muss minimiert werden. Die DB liegt in tmpfs (/dev/shm). |
+| **Umsetzung** | Mirror-Sync schreibt ausschließlich nach `/dev/shm/`. SD-Persistenz nur alle 2 Tage via `backup_db_every2d`. |
+| **Status** | ✅ Implementiert (2026-02-20) |
+
+---
+
 ## Prioritäten-Hierarchie
 
 ```
 1. SR-EV-03  Hauptsicherung (Hardware-Limit — sofortige Aktion)
 2. SR-BAT-02 Batterietemperatur (Brandschutz)
-3. SR-BAT-01 Tiefentladeschutz
-4. SR-WP-01  WP Übertemperatur
-5. SR-WP-02  WP Pflichtlauf
-6. SR-NET-01 Export-Begrenzung
-7. SR-EV-01  NMC Überladeschutz
-8. SR-EV-02  Mindest-Ladezeit
-9. SR-NET-02 Frequenzüberwachung (Monitoring)
+3. SR-FO-01  Doppel-Collector-Schutz (Modbus-Konflikt)
+4. SR-FO-02  Failover-Scripts NIE auf Primary
+5. SR-BAT-01 Tiefentladeschutz
+6. SR-WP-01  WP Übertemperatur
+7. SR-WP-02  WP Pflichtlauf
+8. SR-NET-01 Export-Begrenzung
+9. SR-EV-01  NMC Überladeschutz
+10. SR-EV-02  Mindest-Ladezeit
+11. SR-NET-02 Frequenzüberwachung (Monitoring)
 ```
 
 ---
@@ -220,6 +275,11 @@
 | SR-MODBUS-02 | Mittel | ✅ Implementiert |
 | SR-BAT-03 | Hoch | ✅ Implementiert |
 | SR-BAT-04 | Mittel | ⚠️ Teilweise |
+| SR-FO-01 | Kritisch | ✅ Implementiert |
+| SR-FO-02 | Kritisch | ⚠️ Organisatorisch |
+| SR-FO-03 | Hoch | ⚠️ Organisatorisch |
+| SR-FO-04 | Mittel | ✅ Implementiert |
+| SR-FO-05 | Mittel | ✅ Implementiert |
 | SR-BAT-01 | Hoch | 🔲 Geplant |
 | SR-BAT-02 | Kritisch | 🔲 Geplant |
 | SR-EV-03 | Kritisch | 🔲 Geplant |
@@ -235,4 +295,4 @@
 ---
 
 *Letzte Aktualisierung: 2026-02-20*  
-*Verwandte Dokumente:* [PARAMETER_MATRIZEN.md](PARAMETER_MATRIZEN.md) · [BEOBACHTUNGSKONZEPT.md](BEOBACHTUNGSKONZEPT.md) · [FRONIUS_SOC_MODUS.md](FRONIUS_SOC_MODUS.md) · [BATTERY_ALGORITHM.md](BATTERY_ALGORITHM.md)
+*Verwandte Dokumente:* [PARAMETER_MATRIZEN.md](PARAMETER_MATRIZEN.md) · [BEOBACHTUNGSKONZEPT.md](BEOBACHTUNGSKONZEPT.md) · [FRONIUS_SOC_MODUS.md](FRONIUS_SOC_MODUS.md) · [BATTERY_ALGORITHM.md](BATTERY_ALGORITHM.md) · [DUAL_HOST_ARCHITECTURE.md](DUAL_HOST_ARCHITECTURE.md)

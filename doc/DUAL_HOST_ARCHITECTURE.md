@@ -10,10 +10,13 @@
 
 ```
 ┌─────────────────────────────────┐     ┌─────────────────────────────────┐
-│  Pi4 — PRIMÄR (Produktion)      │     │  Pi4 — FAILOVER (Standby)       │
-│  192.0.2.181 (eth0)           │     │  192.0.2.182 (wlan0)          │
+│  Pi4 — PRIMÄR (Produktion)      │     │  Pi4 — FAILOVER (failover-host)       │
+│  192.0.2.181 (eth0)           │     │  192.0.2.105 (eth0)           │
+│  User: admin                    │     │  User: jk                       │
+│  Hostname: primary-host          │     │  Hostname: failover-host              │
 │  .role = "primary"              │     │  .role = "failover"             │
-│                                 │     │                                 │
+│  SD: 16 GB, RAM: 4 GB           │     │  SD: 128 GB, RAM: 8 GB          │
+│                                 │     │  (+ Küchen-Display mit GUI)     │
 │  ✓ Collector (Modbus → raw_data)│     │  ✗ Collector (gestoppt)         │
 │  ✓ Wattpilot Collector          │     │  ✗ Wattpilot (gestoppt)         │
 │  ✓ Web-API (3 Gunicorn Worker)  │     │  ✓ Web-API (1 Worker, read-only)│
@@ -22,14 +25,18 @@
 │  ✓ Monitor-Scripts (Cron)       │     │  ✗ Monitor-Scripts (role_guard)  │
 │  ✓ DB in tmpfs (/dev/shm)      │     │  ✓ DB in tmpfs (Mirror → tmpfs) │
 │  ✓ Persist: tmpfs → SD (1×/2d) │     │  ✓ Mirror-Sync (alle 10 Min)    │
-│                                 │rsync│  ✓ Backup SD (1×/2d)            │
-│  SD-Card: 15 GB                 │────►│  SD-Card: 15 GB                 │
+│  WLAN/BT: deaktiviert           │     │  ✓ Backup SD (1×/2d)            │
+│                                 │rsync│                                 │
+│  SD-Card: 16 GB                 │────►│  SD-Card: 128 GB                │
 └──────────┬──────────────────────┘     └─────────────────────────────────┘
            │ Alternierend 1×/2 Tage
            ▼
 ┌─────────────────────────────────┐
 │  Pi5 — BACKUP-Empfänger         │
-│  192.0.2.195                  │
+│  192.0.2.195 (eth0)           │
+│  192.0.2.196 (wlan0)          │
+│  User: admin                    │
+│  Hostname: backup-host                │
 │  476 GB NVMe                    │
 │                                 │
 │  Empfängt alternierende DB-     │
@@ -42,8 +49,8 @@
 ### Datenbankfluss (KRITISCH)
 
 ```
-Pi4 Primär (181)                    Pi4 Failover (182)
-═══════════════                     ══════════════════
+Pi4 Primär (181)                    Pi4 Failover failover-host (105)
+═══════════════                     ══════════════════════════
 Collector → raw_data
          ↓
     /dev/shm/fronius_data.db        /dev/shm/fronius_data.db
@@ -67,18 +74,18 @@ Collector → raw_data
 
 Jeder Host hat eine lokale Datei `.role` im Repo-Root:
 
-| Host | IP | Inhalt | Bedeutung |
-|------|-----|--------|-----------|
-| Pi4 Produktion | 192.0.2.181 | `primary`  | Volle Produktion: Collector, Aggregation, Battery-Steuerung |
-| Pi4 Failover   | 192.0.2.182 | `failover` | Nur DB-Mirror (→tmpfs) + Web read-only. Kein Modbus, keine Writes |
-| Pi5 Backup     | 192.0.2.195 | —          | Kein pv-system aktiv, nur Backup-Empfänger |
+| Host | IP | User | Inhalt | Bedeutung |
+|------|-----|------|--------|----------|
+| Pi4 Produktion (primary-host) | 192.0.2.181 | admin | `primary`  | Volle Produktion: Collector, Aggregation, Battery-Steuerung |
+| Pi4 Failover (failover-host)       | 192.0.2.105 | jk    | `failover` | Nur DB-Mirror (→tmpfs) + Web read-only. Kein Modbus, keine Writes |
+| Pi5 Backup (backup-host)           | 192.0.2.195 | admin | —          | Kein pv-system aktiv, nur Backup-Empfänger |
 
 **Die Datei ist gitignored** — sie gehört zum Host, nicht zum Repo.  
 Fehlt sie, gilt der Default `primary` (sicherer Rückfall).
 
 ### Ersteinrichtung .role
 ```bash
-# Auf dem Failover-Pi4 (182):
+# Auf dem Failover-Pi4 failover-host (105):
 echo "failover" > /srv/pv-system/.role
 
 # Auf dem Produktions-Pi4 (181):
@@ -95,7 +102,7 @@ if is_failover():
 
 ### Prüfung in Shell-Scripts
 ```bash
-source /srv/pv-system/scripts/role_guard.sh 2>/dev/null || exit 0
+source "$(dirname "$0")/scripts/role_guard.sh" 2>/dev/null || exit 0
 # Ab hier: nur primary-Code
 ```
 
@@ -153,7 +160,7 @@ echo "primary" > .role
 # sudo systemctl restart pv-web.service
 ```
 
-### Nach git pull auf dem Failover-Pi4 (182)
+### Nach git pull auf dem Failover-Pi4 failover-host (105)
 ```bash
 cd /srv/pv-system
 git pull
@@ -186,7 +193,7 @@ Kein automatischer Failover — zu riskant für Modbus-Steuerung.
 
 ### Manuell aktivieren (Stufe 1: Collector)
 ```bash
-# Auf dem Failover-Pi4 (182):
+# Auf dem Failover-Pi4 failover-host (105):
 /srv/pv-system/scripts/failover_activate.sh
 ```
 Das macht:
@@ -228,7 +235,7 @@ Wenn du auf einem dieser Pis arbeitest:
 
 ---
 
-## 8. Ressourcen-Budget Failover (Pi4, 182)
+## 8. Ressourcen-Budget Failover (Pi4, failover-host 105)
 
 | Ressource | Budget | Aktuell |
 |-----------|--------|---------|
@@ -237,6 +244,7 @@ Wenn du auf einem dieser Pis arbeitest:
 | SD-I/O Writes | **~0** im Normalbetrieb | Nur 1×/2 Tage Backup (~130 MB) |
 | tmpfs (RAM) | ~150 MB | Mirror-DB in /dev/shm |
 | Netzwerk | rsync alle 10 Min | ~130 MB × 6/h = ~780 MB/h max |
+| GUI/Browser | failover-host dient als Küchen-Display | Unberührt, kein Konflikt |
 
 ### Warum kaum SD-Writes?
 Der Mirror-Sync (`failover_sync_db.sh`) schreibt **direkt nach /dev/shm** (tmpfs = RAM).  
