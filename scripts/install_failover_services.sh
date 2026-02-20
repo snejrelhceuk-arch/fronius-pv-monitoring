@@ -30,7 +30,7 @@ sudo tee /etc/systemd/system/pv-mirror-sync.timer >/dev/null <<'EOF'
 Description=PV Failover Mirror Sync Timer (alle 10 Minuten)
 
 [Timer]
-OnBootSec=45s
+OnBootSec=15s
 OnUnitActiveSec=10min
 AccuracySec=30s
 Persistent=true
