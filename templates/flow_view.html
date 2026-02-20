@@ -117,21 +117,27 @@
 
         #flow-svg { width: 100%; height: 420px; max-width: 900px; display: block; margin: 0 auto; }
 
-        /* ══════ Status Badge ══════ */
+        /* ══════ Status Badges ══════ */
+        .status-group {
+            position: absolute; top: 12px; right: 20px;
+            display: flex; flex-direction: column; gap: 4px; align-items: flex-end;
+        }
         .status-badge {
-            position: absolute; top: 16px; right: 20px;
-            padding: 6px 14px; background: rgba(16,185,129,0.2);
+            padding: 4px 12px; background: rgba(16,185,129,0.2);
             border: 1px solid #10b981; color: #10b981;
-            border-radius: 20px; font-size: 11px; font-weight: 600;
-            display: flex; align-items: center; gap: 6px;
+            border-radius: 20px; font-size: 10px; font-weight: 600;
+            display: flex; align-items: center; gap: 5px;
+            white-space: nowrap;
         }
         .status-dot {
-            width: 7px; height: 7px; background: #10b981;
+            width: 6px; height: 6px; background: #10b981;
             border-radius: 50%; animation: blink 1.5s infinite;
         }
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
         .error-badge { background: rgba(239,68,68,0.2); border-color:#ef4444; color:#ef4444; }
         .error-badge .status-dot { background: #ef4444; }
+        .warn-badge  { background: rgba(245,158,11,0.2); border-color:#f59e0b; color:#f59e0b; }
+        .warn-badge .status-dot  { background: #f59e0b; animation: none; }
 
         /* ══════ Battery Detail Bar ══════ */
         .battery-detail {
@@ -250,7 +256,8 @@
             .nav-main a { padding: 7px 12px; font-size: 13px; }
             .container { padding: 0 8px 8px 8px; }
             .flow-chart { padding: 8px; border-radius: 10px; }
-            .status-badge { top: 12px; right: 10px; padding: 4px 10px; font-size: 10px; }
+            .status-group { top: 8px; right: 10px; gap: 3px; }
+            .status-badge { padding: 3px 8px; font-size: 9px; }
         }
 
         /* Handy Landscape: SVG Fullscreen, maximaler Platz */
@@ -263,7 +270,8 @@
             .flow-chart { padding: 4px; border-radius: 8px;
                           box-shadow: none; border: none; background: transparent; }
             #flow-svg { height: calc(100vh - 70px); max-width: 100%; }
-            .status-badge { top: 8px; right: 8px; }
+            .status-group { top: 6px; right: 8px; gap: 2px; }
+            .status-badge { padding: 3px 8px; font-size: 9px; }
         }
 
         /* Handy Portrait: kompakte Darstellung, scrollbar für Status-Daten */
@@ -337,8 +345,13 @@
     <!-- Main Content -->
     <div class="container">
         <div class="flow-chart">
-            <div class="status-badge" id="status">
-                <div class="status-dot"></div><span>Live</span>
+            <div class="status-group">
+                <div class="status-badge" id="status">
+                    <div class="status-dot"></div><span>API: Live</span>
+                </div>
+                <div class="status-badge warn-badge" id="status-failover">
+                    <div class="status-dot"></div><span>Safe: …</span>
+                </div>
             </div>
 
             <svg id="flow-svg" viewBox="60 -30 750 420">
@@ -936,10 +949,38 @@
         const el = document.getElementById('status');
         if (s === 'live') {
             el.className = 'status-badge';
-            el.innerHTML = '<div class="status-dot"></div><span>Live</span>';
+            el.innerHTML = '<div class="status-dot"></div><span>API: Live</span>';
         } else {
             el.className = 'status-badge error-badge';
-            el.innerHTML = '<div class="status-dot"></div><span>Fehler</span>';
+            el.innerHTML = '<div class="status-dot"></div><span>API: Fehler</span>';
+        }
+    }
+
+    function updateFailoverStatus(s) {
+        const el = document.getElementById('status-failover');
+        if (s === 'live') {
+            el.className = 'status-badge';
+            el.innerHTML = '<div class="status-dot"></div><span>Safe: Live</span>';
+        } else if (s === 'reachable') {
+            el.className = 'status-badge warn-badge';
+            el.innerHTML = '<div class="status-dot"></div><span>Safe: Host</span>';
+        } else if (s === 'down') {
+            el.className = 'status-badge error-badge';
+            el.innerHTML = '<div class="status-dot"></div><span>Safe: Down</span>';
+        } else {
+            el.className = 'status-badge warn-badge';
+            el.innerHTML = '<div class="status-dot"></div><span>Safe: …</span>';
+        }
+    }
+
+    async function fetchFailoverStatus() {
+        try {
+            const r = await fetch(apiUrl('/api/failover_status'));
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const d = await r.json();
+            updateFailoverStatus(d.status);
+        } catch (e) {
+            updateFailoverStatus('unknown');
         }
     }
 
@@ -1078,8 +1119,10 @@
     initGauges();
     fetchFlow();
     fetchBatteryDetail();
+    fetchFailoverStatus();
     setInterval(fetchFlow, 10000);
     setInterval(fetchBatteryDetail, 60000);
+    setInterval(fetchFailoverStatus, 30000);  // Failover-Check alle 30s (Cache serverseitig: 30s)
     animate();
 
     // Mobile Portrait: SVG viewBox auf Hauptknoten beschränken (ohne Sub-Kreise)

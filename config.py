@@ -56,6 +56,10 @@ FRONIUS_API_BASE = f'http://{INVERTER_IP}/solar_api/v1'
 WEB_API_HOST = '0.0.0.0'
 WEB_API_PORT = 8000
 
+# --- Failover-Host (fronipi) ---
+FAILOVER_IP = '192.168.2.105'
+FAILOVER_WEB_PORT = 8000
+
 # --- Wattpilot (Wallbox) ---
 WATTPILOT_IP = '192.168.2.197'
 WATTPILOT_TIMEOUT = 10             # WebSocket Timeout (Sek.)

@@ -2,7 +2,8 @@
 Blueprint: System-Status-APIs.
 
 Enthält: /api/battery_status, /api/system_info,
-         /api/wattpilot/status, /api/wattpilot/history
+         /api/wattpilot/status, /api/wattpilot/history,
+         /api/failover_status
 """
 import sqlite3
 import logging
@@ -15,6 +16,10 @@ import config
 from routes.helpers import get_db_connection, get_fronius_api, battery_cache, wattpilot_cache
 
 bp = Blueprint('system', __name__)
+
+# ── Failover-Status Cache (30 s) ──────────────────────────────
+_failover_cache = {'ts': 0, 'result': None}
+_FAILOVER_CACHE_TTL = 30  # Sekunden
 
 
 @bp.route('/api/battery_status')
@@ -535,3 +540,55 @@ def wattpilot_history():
     except Exception as e:
         logging.error(f"Wattpilot History Fehler: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+# ══════════════════════════════════════════════════════════════
+#  Failover-Status  (nur auf Primary relevant)
+# ══════════════════════════════════════════════════════════════
+@bp.route('/api/failover_status')
+def api_failover_status():
+    """
+    Prüft, ob der Failover-Host (fronipi) erreichbar ist.
+    Stufe 1: HTTP /api/system_info → status=live
+    Stufe 2: TCP-Connect auf SSH (Port 22) → status=reachable (Host da, Web nicht)
+    Fallback: status=down
+    Cache: 30 Sekunden.
+    """
+    import urllib.request
+    import urllib.error
+    import socket
+
+    now = time.time()
+    if now - _failover_cache['ts'] < _FAILOVER_CACHE_TTL and _failover_cache['result'] is not None:
+        return jsonify(_failover_cache['result'])
+
+    failover_ip = getattr(config, 'FAILOVER_IP', None)
+    failover_port = getattr(config, 'FAILOVER_WEB_PORT', 8000)
+
+    if not failover_ip:
+        result = {'status': 'unknown', 'detail': 'FAILOVER_IP nicht konfiguriert'}
+        _failover_cache.update(ts=now, result=result)
+        return jsonify(result)
+
+    # Stufe 1: Web-API erreichbar?
+    url = f'http://{failover_ip}:{failover_port}/api/system_info'
+    try:
+        req = urllib.request.Request(url, method='GET')
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            if resp.status == 200:
+                result = {'status': 'live', 'detail': f'fronipi Web-API erreichbar'}
+                _failover_cache.update(ts=now, result=result)
+                return jsonify(result)
+    except Exception:
+        pass
+
+    # Stufe 2: SSH-Port erreichbar? (Host läuft, nur Web nicht)
+    try:
+        sock = socket.create_connection((failover_ip, 22), timeout=2)
+        sock.close()
+        result = {'status': 'reachable', 'detail': f'fronipi erreichbar (SSH), Web-API nicht'}
+    except Exception:
+        result = {'status': 'down', 'detail': f'fronipi ({failover_ip}) nicht erreichbar'}
+
+    _failover_cache.update(ts=now, result=result)
+    return jsonify(result)
