@@ -1,7 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-BASE="/srv/pv-system"
+BASE="$(cd "$(dirname "$0")/.." && pwd)"
+RUN_USER="$(whoami)"
 PRIMARY_SOURCE="${PRIMARY_SOURCE:-Pi4 Primär (192.0.2.181)}"
 
 echo "=== Installiere Failover-Services (Mirror + 2-Tage-Backup) ==="
@@ -15,7 +16,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-User=admin
+User=${RUN_USER}
 WorkingDirectory=${BASE}
 ExecStart=${BASE}/scripts/failover_sync_db.sh
 Nice=10
@@ -47,7 +48,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-User=admin
+User=${RUN_USER}
 WorkingDirectory=${BASE}
 ExecStart=${BASE}/scripts/backup_db_every2d.sh
 Nice=10
@@ -78,7 +79,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-User=admin
+User=${RUN_USER}
 WorkingDirectory=${BASE}
 ExecStart=${BASE}/scripts/failover_health_check.sh
 Nice=10

@@ -4,7 +4,8 @@ set -euo pipefail
 PRIMARY_IP="${PRIMARY_IP:-192.0.2.181}"
 PRIMARY_WEB_PORT="${PRIMARY_WEB_PORT:-8000}"
 MAX_SYNC_AGE_SEC="${MAX_SYNC_AGE_SEC:-600}"
-STATE_DIR="${STATE_DIR:-/srv/pv-system/.state}"
+_SCRIPT_BASE="$(cd "$(dirname "$0")/.." && pwd)"
+STATE_DIR="${STATE_DIR:-${_SCRIPT_BASE}/.state}"
 LOG_FILE="/tmp/pv_failover_health.log"
 RECOMMEND_FILE="${STATE_DIR}/failover_recommendation"
 SYNC_MARKER_FILE="${STATE_DIR}/last_mirror_sync.ok"
@@ -30,8 +31,8 @@ fi
 
 sync_age=$(python3 - <<'PY'
 import os, time
-marker='/srv/pv-system/.state/last_mirror_sync.ok'
-db='/srv/pv-system/data.db'
+marker='${_SCRIPT_BASE}/.state/last_mirror_sync.ok'
+db='${_SCRIPT_BASE}/data.db'
 if os.path.exists(marker):
   print(int(time.time()-os.path.getmtime(marker)))
 elif os.path.exists(db):
@@ -54,7 +55,7 @@ elif [ "$sync_ok" -eq 0 ]; then
 fi
 
 if [ -n "$reason" ]; then
-  msg="FAILOVER-EMPFEHLUNG: ${reason}. Prüfen und ggf. aktivieren: /srv/pv-system/scripts/failover_activate.sh"
+  msg="FAILOVER-EMPFEHLUNG: ${reason}. Prüfen und ggf. aktivieren: ${_SCRIPT_BASE}/scripts/failover_activate.sh"
   echo "$msg" > "$RECOMMEND_FILE"
   log "WARN $msg"
   exit 1

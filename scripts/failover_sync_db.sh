@@ -14,7 +14,7 @@ set -euo pipefail
 # Siehe doc/DUAL_HOST_ARCHITECTURE.md
 # =============================================================
 
-BASE="/srv/pv-system"
+BASE="$(cd "$(dirname "$0")/.." && pwd)"
 PRIMARY_HOST="${PRIMARY_HOST:-admin@192.0.2.181}"
 REMOTE_DB_PATH="${REMOTE_DB_PATH:-/srv/pv-system/data.db}"
 TMPFS_DB_PATH="/dev/shm/fronius_data.db"

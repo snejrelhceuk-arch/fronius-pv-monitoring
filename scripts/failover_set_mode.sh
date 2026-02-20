@@ -7,7 +7,7 @@ if [ "$MODE" != "active" ] && [ "$MODE" != "passive" ]; then
   exit 1
 fi
 
-BASE="/srv/pv-system"
+BASE="$(cd "$(dirname "$0")/.." && pwd)"
 PRIMARY_SOURCE="${PRIMARY_SOURCE:-Pi4 Primär (192.0.2.181)}"
 OVERRIDE_DIR="/etc/systemd/system/pv-web.service.d"
 OVERRIDE_FILE="${OVERRIDE_DIR}/override.conf"

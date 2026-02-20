@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-BASE="/srv/pv-system"
+BASE="$(cd "$(dirname "$0")/.." && pwd)"
 STAMP_DIR="/var/lib/pv-system"
 STAMP_FILE="${STAMP_DIR}/backup_db_last_ts"
 MIN_AGE_SEC=$((46*3600))
