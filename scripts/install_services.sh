@@ -23,6 +23,8 @@ sudo tee /etc/systemd/system/pv-collector.service > /dev/null <<EOF
 Description=PV-System Modbus Data Collector
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=600
+StartLimitBurst=10
 
 [Service]
 User=admin
@@ -30,8 +32,6 @@ WorkingDirectory=${BASE}
 ExecStart=/usr/bin/python3 ${BASE}/collector.py
 Restart=always
 RestartSec=30
-StartLimitIntervalSec=600
-StartLimitBurst=10
 StandardOutput=journal
 StandardError=journal
 
@@ -46,6 +46,8 @@ sudo tee /etc/systemd/system/pv-web.service > /dev/null <<EOF
 Description=PV-System Web API (Flask)
 After=network-online.target pv-collector.service
 Wants=network-online.target
+StartLimitIntervalSec=600
+StartLimitBurst=10
 
 [Service]
 User=admin
@@ -53,8 +55,6 @@ WorkingDirectory=${BASE}
 ExecStart=/usr/bin/python3 ${BASE}/web_api.py
 Restart=always
 RestartSec=10
-StartLimitIntervalSec=600
-StartLimitBurst=10
 StandardOutput=journal
 StandardError=journal
 
@@ -69,6 +69,8 @@ sudo tee /etc/systemd/system/pv-wattpilot.service > /dev/null <<EOF
 Description=PV-System Wattpilot Wallbox Collector
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=600
+StartLimitBurst=10
 
 [Service]
 User=admin
@@ -76,8 +78,6 @@ WorkingDirectory=${BASE}
 ExecStart=/usr/bin/python3 ${BASE}/wattpilot_collector.py
 Restart=always
 RestartSec=30
-StartLimitIntervalSec=600
-StartLimitBurst=10
 StandardOutput=journal
 StandardError=journal
 

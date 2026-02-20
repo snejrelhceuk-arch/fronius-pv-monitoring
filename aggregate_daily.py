@@ -22,7 +22,12 @@ Nicht als Counter verfügbar (bleiben P×t):
 
 WP = Wärmepumpe, NICHT Wattpilot!
 """
+import sys
 import sqlite3
+from host_role import is_failover
+
+if is_failover():
+    sys.exit(0)
 import time
 import logging
 from datetime import datetime, timedelta

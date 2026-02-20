@@ -10,10 +10,15 @@ KORRIGIERTE VORZEICHEN-KONVENTIONEN (10.01.2026):
 - W_Exp_F2/F3: negativ aus TotWhImp (wird abs() für Ertrag)
 """
 
+import sys
 import sqlite3
 import time
 import config
+from host_role import is_failover
 from db_utils import get_db_connection
+
+if is_failover():
+    sys.exit(0)
 
 DB_PATH = config.DB_PATH
 

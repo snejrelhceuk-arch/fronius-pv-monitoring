@@ -20,9 +20,14 @@ Mapping:
   wattpilot_daily  →  wattpilot_kwh  (Wallbox, aus wattpilot_daily Tabelle)
 """
 
+import sys
 import sqlite3
 from datetime import datetime
 import logging
+from host_role import is_failover
+
+if is_failover():
+    sys.exit(0)
 import config
 from db_utils import get_db_connection
 

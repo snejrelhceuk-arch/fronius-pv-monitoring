@@ -23,15 +23,15 @@ IOSchedulingClass=best-effort
 IOSchedulingPriority=7
 EOF
 
-# Mirror Sync Timer (alle 2 Minuten)
+# Mirror Sync Timer (alle 10 Minuten — schont SD-Karte, reicht für Failover)
 sudo tee /etc/systemd/system/pv-mirror-sync.timer >/dev/null <<'EOF'
 [Unit]
-Description=PV Failover Mirror Sync Timer (alle 2 Minuten)
+Description=PV Failover Mirror Sync Timer (alle 10 Minuten)
 
 [Timer]
 OnBootSec=45s
-OnUnitActiveSec=2min
-AccuracySec=15s
+OnUnitActiveSec=10min
+AccuracySec=30s
 Persistent=true
 
 [Install]
@@ -127,4 +127,4 @@ echo "ACTIVE setzen:   ${BASE}/scripts/failover_activate.sh"
 echo "Mirror-Status:   systemctl status pv-mirror-sync.timer --no-pager"
 echo "Backup-Status:   systemctl status pv-backup-2d.timer --no-pager"
 echo "Health-Status:   systemctl status pv-failover-health.timer --no-pager"
-echo "Empfehlung:      cat /var/lib/pv-system/failover_recommendation"
+echo "Empfehlung:      cat ${BASE}/.state/failover_recommendation"

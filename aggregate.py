@@ -4,11 +4,16 @@ Aggregations-Script für Fronius PV-Datenbank
 Aggregiert: 5s → 15min → hourly
 Cleanup: raw_data >72h
 """
+import sys
 import sqlite3
 import time
 import logging
 import config
+from host_role import is_failover
 from db_utils import get_db_connection
+
+if is_failover():
+    sys.exit(0)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 

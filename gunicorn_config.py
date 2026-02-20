@@ -7,13 +7,15 @@ Nutzung:
 """
 import multiprocessing
 import os
+from host_role import is_failover
 
 # --- Binding ---
 bind = "0.0.0.0:8000"
 
 # --- Workers ---
-# Pi4 hat 4 Kerne, aber auch andere Prozesse → 3 Worker reichen
-workers = 3
+# Primary (Pi4): 3 Worker (4 Kerne, aber auch andere Prozesse)
+# Failover: 1 Worker reicht (nur read-only Zugriffe)
+workers = 1 if is_failover() else 3
 worker_class = "sync"  # Einfacher, stabiler als gthread
 # threads = 2  # nur bei gthread relevant
 
@@ -33,7 +35,13 @@ daemon = False  # systemd managt den Lifecycle
 
 # --- Startup Hook: tmpfs-DB initialisieren ---
 def on_starting(server):
-    """Wird einmal beim Gunicorn-Master-Start ausgeführt."""
+    """Wird einmal beim Gunicorn-Master-Start ausgeführt.
+    
+    Primary: Kopiert data.db (SD) → tmpfs falls tmpfs leer (nach Reboot).
+    Failover: tmpfs wird per Mirror-Sync befüllt — hier nur prüfen ob da.
+              Falls tmpfs noch leer (erster Start nach Reboot), einmalig
+              aus SD-Kopie (data.db) laden als Fallback.
+    """
     import db_init
     import config
     

@@ -28,6 +28,10 @@ import os
 import json
 import time
 import sqlite3
+from host_role import is_failover
+
+if is_failover():
+    sys.exit(0)
 import logging
 import argparse
 from datetime import datetime, date, timedelta
