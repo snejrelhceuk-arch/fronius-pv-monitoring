@@ -29,10 +29,10 @@ if curl -fsS --max-time 3 "http://${PRIMARY_IP}:${PRIMARY_WEB_PORT}/api/system_i
   api_ok=1
 fi
 
-sync_age=$(python3 - <<'PY'
-import os, time
-marker='${_SCRIPT_BASE}/.state/last_mirror_sync.ok'
-db='${_SCRIPT_BASE}/data.db'
+sync_age=$(python3 - "$SYNC_MARKER_FILE" "${_SCRIPT_BASE}/data.db" <<'PY'
+import os, sys, time
+marker = sys.argv[1]
+db = sys.argv[2]
 if os.path.exists(marker):
   print(int(time.time()-os.path.getmtime(marker)))
 elif os.path.exists(db):
