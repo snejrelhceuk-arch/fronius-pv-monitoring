@@ -20,7 +20,9 @@
 # Siehe doc/DUAL_HOST_ARCHITECTURE.md für Details.
 # =============================================================
 
-_ROLE_FILE="${ROLE_FILE:-/home/admin/Dokumente/PVAnlage/pv-system/.role}"
+# Auto-detect: Script-Verzeichnis → Repo-Root (user-agnostisch)
+_ROLE_GUARD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)"
+_ROLE_FILE="${ROLE_FILE:-${_ROLE_GUARD_DIR}/.role}"
 
 get_role() {
     if [ -f "$_ROLE_FILE" ]; then
