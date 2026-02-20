@@ -19,14 +19,26 @@
 
         /* ══════ Top Navigation ══════ */
         .top-nav {
-            background: rgba(30, 41, 59, 0.95);
-            padding: 10px 20px;
+            padding: 14px 20px 0 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .top-nav-inner {
+            width: 100%;
+            max-width: 1200px;
             display: flex;
             justify-content: flex-start;
             align-items: center;
             gap: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-            z-index: 10;
+            padding: 10px 14px;
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-bottom: none;
+            border-radius: 16px 16px 0 0;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
         }
 
         .nav-main { display: flex; gap: 8px; }
@@ -86,13 +98,14 @@
         /* ══════ Main Content ══════ */
         .container {
             flex: 1; display: flex; justify-content: center;
-            align-items: center; padding: 20px; min-height: 0;
+            align-items: flex-start; padding: 0 20px 20px 20px; min-height: 0;
         }
 
         .flow-chart {
             background: rgba(15, 23, 42, 0.95);
             border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 16px;
+            border-top: none;
+            border-radius: 0 0 16px 16px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.4);
             padding: 20px;
             max-width: 1200px;
@@ -231,10 +244,11 @@
 
         /* Tablet & kleiner: kompaktere Nav + weniger Padding */
         @media (max-width: 900px) {
-            .top-nav { padding: 6px 10px; }
+            .top-nav { padding: 6px 10px 0 10px; }
+            .top-nav-inner { padding: 8px 10px; border-radius: 10px 10px 0 0; }
             .nav-main { gap: 4px; }
             .nav-main a { padding: 7px 12px; font-size: 13px; }
-            .container { padding: 8px; }
+            .container { padding: 0 8px 8px 8px; }
             .flow-chart { padding: 8px; border-radius: 10px; }
             .status-badge { top: 12px; right: 10px; padding: 4px 10px; font-size: 10px; }
         }
@@ -242,9 +256,10 @@
         /* Handy Landscape: SVG Fullscreen, maximaler Platz */
         @media (max-height: 500px) and (orientation: landscape) {
             body { overflow: auto; }
-            .top-nav { padding: 4px 8px; }
+            .top-nav { padding: 4px 8px 0 8px; }
+            .top-nav-inner { padding: 6px 8px; border-radius: 8px 8px 0 0; }
             .nav-main a { padding: 5px 10px; font-size: 12px; }
-            .container { padding: 4px; }
+            .container { padding: 0 4px 4px 4px; }
             .flow-chart { padding: 4px; border-radius: 8px;
                           box-shadow: none; border: none; background: transparent; }
             #flow-svg { height: calc(100vh - 70px); max-width: 100%; }
@@ -254,7 +269,9 @@
         /* Handy Portrait: kompakte Darstellung, scrollbar für Status-Daten */
         @media (max-width: 600px) and (orientation: portrait) {
             body { overflow: auto; }
-            .container { padding: 4px; }
+            .top-nav { padding: 4px 4px 0 4px; }
+            .top-nav-inner { border-radius: 8px 8px 0 0; }
+            .container { padding: 0 4px 4px 4px; }
             .flow-chart { padding: 4px; border-radius: 8px; }
             #flow-svg { height: auto; min-height: 250px; max-height: calc(100vh - 180px); }
             /* Sub-Kreise (Detail-Erzeuger + Detail-Verbraucher) ausblenden */
@@ -295,14 +312,16 @@
 <body>
     <!-- Navigation -->
     <div class="top-nav">
-        <div class="nav-main">
-            <a href="/" class="active">Flow</a>
-            <a href="/monitoring">Monitoring</a>
-            <a href="/analyse/pv">Analyse</a>
-        </div>
-        <div class="nav-separator"></div>
-        <div class="nav-sub">
-            <a href="/echtzeit">Echtzeit</a>
+        <div class="top-nav-inner">
+            <div class="nav-main">
+                <a href="/" class="active">Flow</a>
+                <a href="/monitoring">Monitoring</a>
+                <a href="/analyse/pv">Analyse</a>
+            </div>
+            <div class="nav-separator"></div>
+            <div class="nav-sub">
+                <a href="/echtzeit">Echtzeit</a>
+            </div>
         </div>
     </div>
 
@@ -391,9 +410,9 @@
                 <text x="350" y="335" text-anchor="middle"
                       fill="#10b981" font-size="13" font-weight="700" id="sub-battery-soc">SOC: 0%</text>
 
-                <!-- Timestamp (klein, zwischen PV und Verbrauch) -->
-                <text x="440" y="170" text-anchor="middle"
-                      fill="rgba(255,255,255,0.3)" font-size="10" font-weight="500"
+                    <!-- Timestamp (rechts neben PV, über Verbrauch) -->
+                        <text x="505" y="125" text-anchor="middle"
+                        fill="rgba(255,255,255,0.45)" font-size="13" font-weight="600"
                       id="timestamp">Lade Daten...</text>
 
                 <!-- Verbrauch -->
