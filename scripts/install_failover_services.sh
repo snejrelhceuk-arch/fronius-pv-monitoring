@@ -2,7 +2,7 @@
 set -euo pipefail
 
 BASE="$(cd "$(dirname "$0")/.." && pwd)"
-RUN_USER="$(whoami)"
+RUN_USER="${SUDO_USER:-$(whoami)}"
 PRIMARY_SOURCE="${PRIMARY_SOURCE:-Pi4 Primär (192.168.2.181)}"
 
 echo "=== Installiere Failover-Services (Mirror + 2-Tage-Backup) ==="

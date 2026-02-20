@@ -58,7 +58,8 @@ WEB_API_PORT = 8000
 
 # --- Failover-Host (fronipi) ---
 FAILOVER_IP = '192.168.2.105'
-FAILOVER_WEB_PORT = 8000
+FAILOVER_USER = 'jk'
+FAILOVER_PV_BASE = '/home/jk/Dokumente/PVAnlage/pv-system'
 
 # --- Wattpilot (Wallbox) ---
 WATTPILOT_IP = '192.168.2.197'

@@ -19,7 +19,7 @@ bp = Blueprint('system', __name__)
 
 # ── Failover-Status Cache (30 s) ──────────────────────────────
 _failover_cache = {'ts': 0, 'result': None}
-_FAILOVER_CACHE_TTL = 30  # Sekunden
+_FAILOVER_CACHE_TTL = 60  # Sekunden (max. 1 SSH-Aufruf pro Minute)
 
 
 @bp.route('/api/battery_status')
@@ -548,47 +548,60 @@ def wattpilot_history():
 @bp.route('/api/failover_status')
 def api_failover_status():
     """
-    Prüft, ob der Failover-Host (fronipi) erreichbar ist.
-    Stufe 1: HTTP /api/system_info → status=live
-    Stufe 2: TCP-Connect auf SSH (Port 22) → status=reachable (Host da, Web nicht)
-    Fallback: status=down
-    Cache: 30 Sekunden.
+    Prüft den Failover-Host (fronipi) via SSH:
+    Liest den Timestamp der Sync-Marker-Datei (.state/last_mirror_sync.ok).
+    Wenn ≤ 15 Min alt → live, ≤ 30 Min → stale, sonst → down.
+    Fallback: SSH-Connect prüfen (Host da, aber Sync kaputt).
+    Cache: 60 Sekunden — max. 1 SSH-Aufruf pro Minute.
     """
-    import urllib.request
-    import urllib.error
-    import socket
+    import subprocess
 
     now = time.time()
     if now - _failover_cache['ts'] < _FAILOVER_CACHE_TTL and _failover_cache['result'] is not None:
         return jsonify(_failover_cache['result'])
 
     failover_ip = getattr(config, 'FAILOVER_IP', None)
-    failover_port = getattr(config, 'FAILOVER_WEB_PORT', 8000)
+    failover_user = getattr(config, 'FAILOVER_USER', 'jk')
+    failover_pv_base = getattr(config, 'FAILOVER_PV_BASE',
+                               '/home/jk/Dokumente/PVAnlage/pv-system')
 
     if not failover_ip:
         result = {'status': 'unknown', 'detail': 'FAILOVER_IP nicht konfiguriert'}
         _failover_cache.update(ts=now, result=result)
         return jsonify(result)
 
-    # Stufe 1: Web-API erreichbar?
-    url = f'http://{failover_ip}:{failover_port}/api/system_info'
-    try:
-        req = urllib.request.Request(url, method='GET')
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            if resp.status == 200:
-                result = {'status': 'live', 'detail': f'fronipi Web-API erreichbar'}
-                _failover_cache.update(ts=now, result=result)
-                return jsonify(result)
-    except Exception:
-        pass
+    marker = f'{failover_pv_base}/.state/last_mirror_sync.ok'
+    ssh_target = f'{failover_user}@{failover_ip}'
 
-    # Stufe 2: SSH-Port erreichbar? (Host läuft, nur Web nicht)
     try:
-        sock = socket.create_connection((failover_ip, 22), timeout=2)
-        sock.close()
-        result = {'status': 'reachable', 'detail': f'fronipi erreichbar (SSH), Web-API nicht'}
-    except Exception:
-        result = {'status': 'down', 'detail': f'fronipi ({failover_ip}) nicht erreichbar'}
+        # SSH: Marker-Timestamp lesen (stat -c %Y = modtime als epoch)
+        proc = subprocess.run(
+            ['ssh', '-o', 'ConnectTimeout=3', '-o', 'StrictHostKeyChecking=no',
+             ssh_target, f'stat -c %Y "{marker}" 2>/dev/null || echo 0'],
+            capture_output=True, text=True, timeout=6
+        )
+        marker_ts = int(proc.stdout.strip() or '0')
+        age_sec = int(now - marker_ts) if marker_ts > 0 else -1
+
+        if age_sec < 0:
+            result = {'status': 'stale', 'age': None,
+                      'detail': 'Sync-Marker nicht gefunden'}
+        elif age_sec <= 900:   # ≤ 15 Min
+            result = {'status': 'live', 'age': age_sec,
+                      'detail': f'Mirror OK ({age_sec // 60} Min)'}
+        elif age_sec <= 1800:  # ≤ 30 Min
+            result = {'status': 'stale', 'age': age_sec,
+                      'detail': f'Mirror veraltet ({age_sec // 60} Min)'}
+        else:
+            result = {'status': 'stale', 'age': age_sec,
+                      'detail': f'Mirror zu alt ({age_sec // 60} Min)'}
+
+    except subprocess.TimeoutExpired:
+        result = {'status': 'down', 'age': None,
+                  'detail': 'SSH-Timeout (fronipi nicht erreichbar)'}
+    except Exception as e:
+        result = {'status': 'down', 'age': None,
+                  'detail': f'Fehler: {e}'}
 
     _failover_cache.update(ts=now, result=result)
     return jsonify(result)
