@@ -69,12 +69,45 @@ RandomizedDelaySec=120
 WantedBy=timers.target
 EOF
 
+# Healthcheck Service (nur Empfehlung, kein Auto-Failover)
+sudo tee /etc/systemd/system/pv-failover-health.service >/dev/null <<EOF
+[Unit]
+Description=PV Failover Health Check (nur Empfehlung)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=admin
+WorkingDirectory=${BASE}
+ExecStart=${BASE}/scripts/failover_health_check.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+EOF
+
+# Healthcheck Timer (jede Minute)
+sudo tee /etc/systemd/system/pv-failover-health.timer >/dev/null <<'EOF'
+[Unit]
+Description=PV Failover Health Timer (jede Minute)
+
+[Timer]
+OnBootSec=60s
+OnUnitActiveSec=1min
+AccuracySec=15s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
 sudo systemctl daemon-reload
 
 # Ensure executable scripts
 sudo chmod +x \
   ${BASE}/scripts/failover_sync_db.sh \
   ${BASE}/scripts/backup_db_every2d.sh \
+  ${BASE}/scripts/failover_health_check.sh \
   ${BASE}/scripts/failover_set_mode.sh \
   ${BASE}/scripts/failover_passive.sh \
   ${BASE}/scripts/failover_activate.sh
@@ -82,6 +115,7 @@ sudo chmod +x \
 # Enable timers
 sudo systemctl enable --now pv-mirror-sync.timer
 sudo systemctl enable --now pv-backup-2d.timer
+sudo systemctl enable --now pv-failover-health.timer
 
 # Put node into passive mode by default
 PRIMARY_SOURCE="$PRIMARY_SOURCE" ${BASE}/scripts/failover_passive.sh
@@ -92,3 +126,5 @@ echo "PASSIVE setzen:  ${BASE}/scripts/failover_passive.sh"
 echo "ACTIVE setzen:   ${BASE}/scripts/failover_activate.sh"
 echo "Mirror-Status:   systemctl status pv-mirror-sync.timer --no-pager"
 echo "Backup-Status:   systemctl status pv-backup-2d.timer --no-pager"
+echo "Health-Status:   systemctl status pv-failover-health.timer --no-pager"
+echo "Empfehlung:      cat /var/lib/pv-system/failover_recommendation"
