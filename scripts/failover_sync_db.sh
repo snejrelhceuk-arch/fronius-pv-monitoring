@@ -56,3 +56,26 @@ fi
 mv -f "$TMP_INCOMING" "$TMPFS_DB_PATH"
 touch "$SYNC_MARKER_FILE"
 log "OK: DB synchronisiert nach tmpfs von ${PRIMARY_HOST}"
+
+# SD-Fallback: data.db auf SD aktualisieren (nur wenn > 24h alt)
+# Damit ensure_tmpfs_db() nach einem Reboot sofort eine Kopie hat,
+# BEVOR der Timer (OnBootSec=45s) den ersten Mirror-Sync durchführt.
+SD_DB="${BASE}/data.db"
+SD_MAX_AGE=$((24*3600))
+need_sd_update=0
+if [ ! -f "$SD_DB" ]; then
+  need_sd_update=1
+elif [ -f "$SD_DB" ]; then
+  sd_age=$(( $(date +%s) - $(stat -c %Y "$SD_DB") ))
+  if [ "$sd_age" -gt "$SD_MAX_AGE" ]; then
+    need_sd_update=1
+  fi
+fi
+if [ "$need_sd_update" -eq 1 ]; then
+  if cp "$TMPFS_DB_PATH" "${SD_DB}.tmp" && mv -f "${SD_DB}.tmp" "$SD_DB"; then
+    log "SD-Fallback aktualisiert: ${SD_DB}"
+  else
+    log "WARN: SD-Fallback-Update fehlgeschlagen"
+    rm -f "${SD_DB}.tmp"
+  fi
+fi

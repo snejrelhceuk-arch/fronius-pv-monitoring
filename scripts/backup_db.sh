@@ -12,8 +12,9 @@
 
 set -euo pipefail
 
-DB_PATH="/srv/pv-system/data.db"
-BACKUP_DIR="/srv/pv-system/backup/db"
+BASE="$(cd "$(dirname "$0")/.." && pwd)"
+DB_PATH="${BASE}/data.db"
+BACKUP_DIR="${BASE}/backup/db"
 LOG_FILE="/tmp/db_backup.log"
 DAILY_KEEP=7
 
