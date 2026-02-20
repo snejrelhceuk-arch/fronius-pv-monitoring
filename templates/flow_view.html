@@ -960,10 +960,10 @@
         const el = document.getElementById('status-failover');
         if (s === 'live') {
             el.className = 'status-badge';
-            el.innerHTML = '<div class="status-dot"></div><span>Safe: Live</span>';
-        } else if (s === 'reachable') {
+            el.innerHTML = '<div class="status-dot"></div><span>Safe: Sync</span>';
+        } else if (s === 'stale') {
             el.className = 'status-badge warn-badge';
-            el.innerHTML = '<div class="status-dot"></div><span>Safe: Host</span>';
+            el.innerHTML = '<div class="status-dot"></div><span>Safe: Alt</span>';
         } else if (s === 'down') {
             el.className = 'status-badge error-badge';
             el.innerHTML = '<div class="status-dot"></div><span>Safe: Down</span>';
@@ -1122,7 +1122,7 @@
     fetchFailoverStatus();
     setInterval(fetchFlow, 10000);
     setInterval(fetchBatteryDetail, 60000);
-    setInterval(fetchFailoverStatus, 30000);  // Failover-Check alle 30s (Cache serverseitig: 30s)
+    setInterval(fetchFailoverStatus, 60000);  // Failover-Check 1×/Min (SSH-basiert, Cache: 60s)
     animate();
 
     // Mobile Portrait: SVG viewBox auf Hauptknoten beschränken (ohne Sub-Kreise)
