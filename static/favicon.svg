@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Hintergrund: helles Türkis-Grün -->
+  <rect width="64" height="64" rx="10" fill="#d0f5ee"/>
+
+  <!-- Sonnenstrahlen: 8 Strahlen, alle vom Mittelpunkt (32,20) ausgehend -->
+  <g stroke="#e08800" stroke-width="2.5" stroke-linecap="round">
+    <!-- oben -->
+    <line x1="32" y1="9"  x2="32" y2="3"/>
+    <!-- oben-rechts -->
+    <line x1="40" y1="12" x2="44" y2="8"/>
+    <!-- rechts -->
+    <line x1="43" y1="20" x2="49" y2="20"/>
+    <!-- unten-rechts -->
+    <line x1="40" y1="28" x2="44" y2="32"/>
+    <!-- unten -->
+    <line x1="32" y1="31" x2="32" y2="37"/>
+    <!-- unten-links -->
+    <line x1="24" y1="28" x2="20" y2="32"/>
+    <!-- links -->
+    <line x1="21" y1="20" x2="15" y2="20"/>
+    <!-- oben-links -->
+    <line x1="24" y1="12" x2="20" y2="8"/>
+  </g>
+
+  <!-- Sonnenkreis -->
+  <circle cx="32" cy="20" r="9" fill="#f5a623"/>
+
+  <!-- Batterie Körper -->
+  <rect x="14" y="39" width="34" height="18" rx="3" fill="none" stroke="#0277bd" stroke-width="2"/>
+  <!-- Batterie Pol (rechts) -->
+  <rect x="46" y="44" width="4" height="8" rx="1.5" fill="#0277bd"/>
+  <!-- Batterie Füllung ca. 75% -->
+  <rect x="16.5" y="41.5" width="19" height="13" rx="2" fill="#0277bd" opacity="0.8"/>
+
+  <!-- Blitz-Symbol -->
+  <polygon points="34,41 30,49 33,49 30,57 37,47 33,47" fill="#e08800"/>
+</svg>

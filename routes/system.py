@@ -68,9 +68,39 @@ def api_battery_status():
                     'evening_rate_percent': sched_state.get('evening_rate_percent'),
                     'manual_override': sched_state.get('manual_override', False),
                     'last_date': sched_state.get('last_date'),
+                    # Simulation-Modus: Plan + Entscheidungen für Flow-View
+                    'sim_mode': sched_state.get('sim_mode', False),
+                    'sim_last_run': sched_state.get('sim_last_run'),
+                    'sim_plan': sched_state.get('sim_plan', {}),
+                    'sim_decisions': sched_state.get('sim_decisions', []),
                 }
         except Exception as e:
             logging.warning(f"Scheduler-State nicht lesbar: {e}")
+
+        # Letzte SOC-Umschaltung aus battery_control_log
+        try:
+            with sqlite3.connect(config.DB_PATH) as _ldb:
+                row = _ldb.execute("""
+                    SELECT ts, action, param, old_value, new_value, reason
+                    FROM battery_control_log
+                    WHERE action IN (
+                        'morning_open', 'afternoon_raise', 'comfort_reset',
+                        'comfort_defaults', 'balancing_start', 'evening_limit',
+                        'evening_auto', 'manual_set'
+                    )
+                    ORDER BY ts DESC LIMIT 1
+                """).fetchone()
+                if row:
+                    result['last_soc_switch'] = {
+                        'ts':     datetime.fromtimestamp(row[0]).strftime('%d.%m %H:%M'),
+                        'action': row[1],
+                        'param':  row[2],
+                        'old':    row[3],
+                        'new':    row[4],
+                        'reason': (row[5] or '')[:90],
+                    }
+        except Exception as e:
+            logging.debug(f"last_soc_switch query: {e}")
 
         # Tages-Batterieenergie + SOC/SOH aus Echtzeit
         try:
