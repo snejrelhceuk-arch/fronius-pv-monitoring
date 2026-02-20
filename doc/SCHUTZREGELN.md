@@ -1,0 +1,238 @@
+# Schutzregeln — PV-Anlage Erlau
+
+**Erstellt:** 2026-02-20  
+**Geltungsbereich:** Alle automatisch gesteuerten Komponenten  
+**Priorität:** Schutzregeln sind **deterministisch und nicht übersteuerbar** — sie gelten vor allen Strategiealgorithmen
+
+---
+
+## Grundprinzip
+
+> **Schutzregeln sind Hardgrenzen, keine Empfehlungen.**  
+> Sie werden in jeder Scheduler-Iteration ausgeführt, *bevor* Morgen-/Nachmittag-/Abend-Algorithmen laufen.  
+> Kein manueller Override, kein Fuzzy-Score kann eine Schutzregel außer Kraft setzen.  
+> Bei Widerspruch: Schutzregel gewinnt immer.
+
+---
+
+## 1. Heimspeicher BYD HVS 10.2 kWh (F1)
+
+### SR-BAT-01: Tiefentladeschutz
+
+| Feld | Wert |
+|---|---|
+| **Auslöser** | SOC < 10 % |
+| **Aktion** | Sofort-Ladung aus PV erzwingen (OutWRte = 0 %) |
+| **Zusatz** | SOC_MIN auf 10 % setzen (Modbus MinRsvPct) |
+| **Freigabe** | SOC > 20 % für > 5 min |
+| **Protokoll** | DB-Eintrag + Log: `protection_bat_low_soc` |
+| **Status** | Geplant — noch nicht implementiert |
+
+### SR-BAT-02: Übertemperatur-Schutz
+
+| Feld | Wert |
+|---|---|
+| **Auslöser** | Batterie-Temperatur > 40 °C |
+| **Aktion** | Laderate auf 50 % reduzieren (InWRte = 50 %) |
+| **Auslöser 2** | Temp > 45 °C |
+| **Aktion 2** | Laden komplett stoppen (InWRte = 0 %) |
+| **Freigabe** | Temp < 38 °C |
+| **Protokoll** | `protection_bat_overtemp` |
+| **Status** | Geplant |
+
+### SR-BAT-03: RvrtTms = 0 — Dauerhafte Modbus-Werte
+
+| Feld | Wert |
+|---|---|
+| **Hintergrund** | Fronius-Modbus M124 kennt `RvrtTms` (Revert-Timer). Bei `RvrtTms = 0` gelten geschriebene Werte **dauerhaft** bis zum nächsten Schreibzugriff oder WR-Neustart. |
+| **Risiko** | Wenn Scheduler abstürzt nachdem er `OutWRte = 0 %` gesetzt hat → Batterie entlädt nie wieder! |
+| **Schutzmaßnahme** | Nach jedem Reboot des Schedulers: Modbus-Status lesen und plausibilisieren. Wenn `StorCtl_Mod ≠ 0` und kein evening_rate_active → Reset via `_apply_comfort_defaults()`. |
+| **Monitoring** | `_verify_consistency()` in battery_scheduler.py |
+| **Status** | ✅ Implementiert (verify_consistency) |
+
+### SR-BAT-04: SOC_MODE-Konsistenz
+
+| Feld | Wert |
+|---|---|
+| **Auslöser** | `SOC_MODE = "auto"` aber `morning_done = False` oder `afternoon_done = False` |
+| **Problem** | Im Auto-Modus sind SOC_MIN/MAX nicht steuerbar (siehe FRONIUS_SOC_MODUS.md) |
+| **Aktion** | Warnung im Log; beim nächsten Scheduler-Lauf auf Manual zurücksetzen |
+| **Status** | Dokumentiert — `_verify_consistency()` prüft SOC_MIN/MAX aber nicht SOC_MODE korrekt |
+
+---
+
+## 2. E-Auto (Wattpilot / NMC-Zellen)
+
+### SR-EV-01: NMC Überladeschutz
+
+| Feld | Wert |
+|---|---|
+| **Hintergrund** | NMC-Zellen (Renault Zoe, Citroën) degradieren bei SOC > 85–90 % schnell |
+| **Auslöser** | Geschätzter E-Auto-SOC > 85 % |
+| **Aktion** | Wattpilot-Freigabe deaktivieren (Ladefreigabe = false) |
+| **Freigabe** | Fahrzeug wieder verbunden mit SOC-Schätzung < 85 % (neue Session) |
+| **Protokoll** | `protection_ev_soc_limit` |
+| **Status** | Geplant (SOC-Schätzung noch nicht implementiert) |
+
+### SR-EV-02: Minimale Ladezeit
+
+| Feld | Wert |
+|---|---|
+| **Auslöser** | Ladevorgang aktiv |
+| **Minimum** | Wattpilot mindestens 15 min laden lassen bevor Abschalten |
+| **Grund** | BMS-Kommunikation, Fahrzeug-Eigensteuerung braucht Zeit |
+| **Status** | Geplant |
+
+### SR-EV-03: Überlastschutz Hauptsicherung
+
+| Feld | Wert |
+|---|---|
+| **Auslöser** | Netz-Bezug > 24 kW |
+| **Aktion 1** | Wattpilot auf max. 16 A (= 11 kW) drosseln |
+| **Auslöser 2** | Netz-Bezug > 26 kW |
+| **Aktion 2** | Wattpilot auf 6 A (= 1.4 kW) = Minimum |
+| **Freigabe** | Netz-Bezug < 20 kW für > 2 min |
+| **Protokoll** | `protection_grid_overload` |
+| **Hintergrund** | Hauptsicherung 3 × 40 A = 27.6 kW. WP (4.3) + EV (22) + Haushalt (2) = 28.3 kW → Überlast möglich! |
+| **Status** | Geplant |
+
+---
+
+## 3. Wärmepumpe Dimplex SIK 11 TES (geplant)
+
+> **Hinweis:** WP Modbus RTU noch nicht integriert (LWPM 410 Modul bestellt). Regeln sind Planung.
+
+### SR-WP-01: Warmwasser-Übertemperatur
+
+| Feld | Wert |
+|---|---|
+| **Auslöser** | WW-Speicher Temp > 80 °C |
+| **Aktion** | WP sofort abschalten (SG-Ready OFF) |
+| **Auslöser Soft** | WW-Temp > 78 °C |
+| **Aktion Soft** | WP in Wartemodus, Hysterese 5 °C |
+| **Protokoll** | `protection_wp_overtemp` |
+| **Status** | Geplant, Temp-Sensor fehlt |
+
+### SR-WP-02: Pflichtlauf-Schutz
+
+| Feld | Wert |
+|---|---|
+| **Hintergrund** | WP muss mindestens 1× täglich laufen (Legionellenschutz, Viskositätserhalt) |
+| **Auslöser** | WP seit > 23 h nicht gelaufen |
+| **Aktion** | WP-Freigabe erzwingen für min. 30 min |
+| **Protokoll** | `protection_wp_mandatory_run` |
+| **Status** | Geplant |
+
+### SR-WP-03: SG-Ready bei Eigenbedarfs-Mangel
+
+| Feld | Wert |
+|---|---|
+| **Auslöser** | PV-Ertrag < Hausverbrauch für > 15 min UND Batterie-SOC < 30 % |
+| **Aktion** | WP auf SG-Ready-0 (minimaler Betrieb) wechseln |
+| **Freigabe** | PV > Verbrauch oder SOC > 40 % |
+| **Status** | Geplant |
+
+---
+
+## 4. Netz-Schutzregeln
+
+### SR-NET-01: Export-Begrenzung
+
+| Feld | Wert |
+|---|---|
+| **Konzept** | Nulleinspeiser — Export ins Netz nur als Übergangsmaßnahme |
+| **Auslöser** | Netz-Einspeisung > 500 W für > 5 min |
+| **Aktion 1** | Wattpilot-Leistung erhöhen (wenn EV verbunden) |
+| **Aktion 2** | WP SG-Ready erhöhen |
+| **Aktion 3** | Wenn alles voll: F2 oder F3 Leistung reduzieren |
+| **Protokoll** | `protection_net_export_limit` |
+| **Status** | Geplant |
+
+### SR-NET-02: Frequenz-Grenzwert
+
+| Feld | Wert |
+|---|---|
+| **Auslöser** | Netzfrequenz < 49.0 Hz oder > 51.0 Hz |
+| **Aktion** | Log-Alarm; keine automatische Abschaltung (WR regelt selbst nach VDE AR N 4105) |
+| **Status** | Monitoring vorhanden, keine Automation |
+
+---
+
+## 5. Modbus-Sicherheit
+
+### SR-MODBUS-01: WriteLock nach Fehler
+
+| Feld | Wert |
+|---|---|
+| **Auslöser** | 3× Modbus-Schreibfehler in Folge |
+| **Aktion** | Modbus-Schreibversuche für 5 min pausieren |
+| **Protokoll** | `protection_modbus_write_lock` |
+| **Status** | Geplant |
+
+### SR-MODBUS-02: Konsistenzprüfung (implementiert)
+
+| Feld | Wert |
+|---|---|
+| **Funktion** | `_verify_consistency()` in battery_scheduler.py |
+| **Prüft** | SOC_MIN vs. erwarteter Wert, StorCtl_Mod vs. erwartetem Modus |
+| **Auslöser** | Jeder Scheduler-Lauf (alle 15 min) |
+| **Risiko** | Überschreibt manuell gesetzte Werte! |
+| **Schutz** | `manual_override` Flag verhindert Überschreiben |
+| **Status** | ✅ Implementiert |
+
+---
+
+## 6. Simulation-Modus Schutz
+
+### SR-SIM-01: Keine Schreibzugriffe im Sim-Modus
+
+| Feld | Wert |
+|---|---|
+| **Auslöser** | `simulation_mode: true` in battery_control.json |
+| **Sicherung** | `_DRY_RUN = True` in battery_scheduler.py → `InverterControl` verwirft alle Schreib-Calls |
+| **Prüfung** | `log_action()` prüft `_DRY_RUN` vor jedem DB-Schreib-Versuch |
+| **Sicherheitsnetz** | Selbst wenn Code-Fehler dazu führt, dass Funktionen aufgerufen werden: `InverterControl.set_*()` Methoden sind im DryRun-Modus no-ops |
+| **Status** | ✅ Implementiert (2026-02-20) |
+
+---
+
+## Prioritäten-Hierarchie
+
+```
+1. SR-EV-03  Hauptsicherung (Hardware-Limit — sofortige Aktion)
+2. SR-BAT-02 Batterietemperatur (Brandschutz)
+3. SR-BAT-01 Tiefentladeschutz
+4. SR-WP-01  WP Übertemperatur
+5. SR-WP-02  WP Pflichtlauf
+6. SR-NET-01 Export-Begrenzung
+7. SR-EV-01  NMC Überladeschutz
+8. SR-EV-02  Mindest-Ladezeit
+9. SR-NET-02 Frequenzüberwachung (Monitoring)
+```
+
+---
+
+## Status-Übersicht
+
+| Regel | Priorität | Status |
+|---|---|---|
+| SR-SIM-01 | — | ✅ Implementiert |
+| SR-MODBUS-02 | Mittel | ✅ Implementiert |
+| SR-BAT-03 | Hoch | ✅ Implementiert |
+| SR-BAT-04 | Mittel | ⚠️ Teilweise |
+| SR-BAT-01 | Hoch | 🔲 Geplant |
+| SR-BAT-02 | Kritisch | 🔲 Geplant |
+| SR-EV-03 | Kritisch | 🔲 Geplant |
+| SR-EV-01 | Mittel | 🔲 Geplant |
+| SR-EV-02 | Niedrig | 🔲 Geplant |
+| SR-WP-01 | Kritisch | 🔲 Geplant (WP fehlt) |
+| SR-WP-02 | Mittel | 🔲 Geplant (WP fehlt) |
+| SR-WP-03 | Niedrig | 🔲 Geplant (WP fehlt) |
+| SR-NET-01 | Mittel | 🔲 Geplant |
+| SR-NET-02 | Niedrig | 🔲 Monitoring |
+| SR-MODBUS-01 | Niedrig | 🔲 Geplant |
+
+---
+
+*Letzte Aktualisierung: 2026-02-20*  
+*Verwandte Dokumente:* [PARAMETER_MATRIZEN.md](PARAMETER_MATRIZEN.md) · [BEOBACHTUNGSKONZEPT.md](BEOBACHTUNGSKONZEPT.md) · [FRONIUS_SOC_MODUS.md](FRONIUS_SOC_MODUS.md) · [BATTERY_ALGORITHM.md](BATTERY_ALGORITHM.md)

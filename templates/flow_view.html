@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <title>Energieflow — PV-Anlage</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -141,6 +142,65 @@
         }
         .battery-detail .bd-sep {
             color: rgba(255,255,255,0.15);
+        }
+        /* ══════ Scheduler Simulation Bar ══════ */
+        .scheduler-sim {
+            display: none;   /* nur sichtbar wenn sim_mode aktiv */
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 14px;
+            padding: 4px 12px;
+            margin: 2px 8px;
+            background: rgba(234,179,8,0.08);
+            border: 1px solid rgba(234,179,8,0.25);
+            border-radius: 6px;
+            color: rgba(255,255,255,0.5);
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .scheduler-sim.active { display: flex; }
+        .scheduler-sim .ss-label {
+            color: #eab308;
+            font-weight: 700;
+            font-size: 11.5px;
+        }
+        .scheduler-sim .ss-val {
+            color: #fde68a;
+            font-weight: 600;
+        }
+        .scheduler-sim .ss-sep {
+            color: rgba(255,255,255,0.15);
+        }
+        .scheduler-sim .ss-ok  { color: #4ade80; }
+        .scheduler-sim .ss-wait{ color: #60a5fa; }
+        .scheduler-sim .ss-skip{ color: rgba(255,255,255,0.35); }
+        /* ══════ SOC-Umschaltung Infozeile ══════ */
+        .soc-switch-info {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            padding: 3px 12px;
+            color: rgba(255,255,255,0.38);
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .soc-switch-info .sw-label {
+            color: rgba(100,220,255,0.7);
+            font-weight: 700;
+        }
+        .soc-switch-info .sw-val {
+            color: rgba(100,220,255,0.9);
+            font-weight: 600;
+        }
+        .soc-switch-info .sw-next-val {
+            color: #fde68a;
+            font-weight: 600;
+        }
+        .soc-switch-info .sw-sep {
+            color: rgba(255,255,255,0.12);
         }
         .inverter-temps {
             display: flex;
@@ -426,6 +486,27 @@
                 <span>SOC: <span class="bd-val" id="bd-soc-range">--</span></span>
                 <span class="bd-sep">|</span>
                 <span>Temp: <span class="bd-val" id="bd-temp">--</span> °C</span>
+            </div>
+            <!-- Scheduler-Simulation Bar: nur sichtbar wenn simulation_mode aktiv -->
+            <div class="scheduler-sim" id="schedulerSim">
+                <span class="ss-label">&#9881; SIM</span>
+                <span class="ss-sep">|</span>
+                <span id="ss-morning">Morgen: --</span>
+                <span class="ss-sep">|</span>
+                <span id="ss-afternoon">Nachmittag: --</span>
+                <span class="ss-sep">|</span>
+                <span id="ss-evening">Abend: --</span>
+                <span class="ss-sep">|</span>
+                <span id="ss-ts" style="color:rgba(255,255,255,0.3);font-size:10px">--</span>
+            </div>
+            <!-- SOC-Umschaltung: letzte + nächste -->
+            <div class="soc-switch-info" id="socSwitchInfo">
+                <span class="sw-label">Letzte Umschaltung</span>
+                <span id="sw-last-ts" style="color:rgba(255,255,255,0.3)">--</span>
+                <span id="sw-last-desc">--</span>
+                <span class="sw-sep">│</span>
+                <span class="sw-label">Nächste (Sim)</span>
+                <span id="sw-next-desc" class="sw-next-val">--</span>
             </div>
             <div class="inverter-temps" id="inverterTemps">
                 <span class="it-label">F1</span>
@@ -864,8 +945,17 @@
             const sMin = d.soc_min != null ? d.soc_min : '?';
             const sMax = d.soc_max != null ? d.soc_max : '?';
             const socModeRaw = d.soc_mode != null ? String(d.soc_mode).toLowerCase() : '';
-            const socModeLabel = socModeRaw === 'manual' ? 'Manuell' : (socModeRaw === 'auto' ? 'Auto' : '?');
-            document.getElementById('bd-soc-range').textContent = `${sMin}–${sMax}% (${socModeLabel})`;
+            // Fronius Auto-Modus: Grenzen 5–100% sind HARDWIRED (Firmware), nicht konfigurierbar!
+            // Eine Einstellung "Auto + 75% SOC_MAX" existiert NICHT.
+            let socRangeText;
+            if (socModeRaw === 'auto') {
+                socRangeText = '5–100 (Auto⋅FW)';
+            } else if (socModeRaw === 'manual') {
+                socRangeText = `${sMin}\u2013${sMax}% (Manuell)`;
+            } else {
+                socRangeText = `${sMin}\u2013${sMax}% (${socModeRaw || '?'})`;
+            }
+            document.getElementById('bd-soc-range').textContent = socRangeText;
             document.getElementById('bd-temp').textContent = d.battery_temp != null ? d.battery_temp : '--';
             // WR-Temperaturen
             document.getElementById('it-intern').textContent = d.wr_temp_intern != null ? d.wr_temp_intern : '--';
@@ -876,6 +966,97 @@
             document.getElementById('it-f2-intern').textContent = d.f2_temp_intern != null ? d.f2_temp_intern : '--';
             document.getElementById('it-f2-ac').textContent = d.f2_temp_ac != null ? d.f2_temp_ac : '--';
             document.getElementById('it-f2-dc').textContent = d.f2_temp_dc != null ? d.f2_temp_dc : '--';
+            // ── Scheduler Simulation Bar ──
+            const simBar = document.getElementById('schedulerSim');
+            const sc = d.scheduler || {};
+            if (sc.sim_mode && sc.sim_plan) {
+                simBar.classList.add('active');
+                const plan = sc.sim_plan;
+
+                function simPhaseHtml(phase, label) {
+                    if (!phase) return `<span class="ss-skip">${label}: ?</span>`;
+                    const s = phase.status;
+                    const r = (phase.reason || '').substring(0, 55);
+                    if (s === 'done')        return `<span class="ss-skip">${label}: &#10003;done</span>`;
+                    if (s === 'skip')        return `<span class="ss-skip">${label}: &#8213; ${r}</span>`;
+                    if (s === 'waiting')     return `<span class="ss-wait">${label}: &#9203; ${r}</span>`;
+                    if (s === 'would_open')  return `<span class="ss-ok">${label}: &#9654; ${phase.from_soc_min}%→${phase.to_soc_min}%</span>`;
+                    if (s === 'would_raise') return `<span class="ss-ok">${label}: &#9650; ${phase.from_soc_max}%→${phase.to_soc_max}%</span>`;
+                    if (s === 'would_limit') return `<span class="ss-val">${label}: ${phase.phase} ${phase.rate_pct}%</span>`;
+                    if (s === 'auto')        return `<span class="ss-skip">${label}: Tag-Auto</span>`;
+                    if (s === 'error')       return `<span style="color:#f87171">${label}: Fehler</span>`;
+                    return `<span>${label}: ${s}</span>`;
+                }
+
+                document.getElementById('ss-morning').innerHTML   = simPhaseHtml(plan.morning,   'Morgen');
+                document.getElementById('ss-afternoon').innerHTML = simPhaseHtml(plan.afternoon, 'Nachm');
+                document.getElementById('ss-evening').innerHTML   = simPhaseHtml(plan.evening,   'Abend');
+                const ts = sc.sim_last_run ? sc.sim_last_run.substring(11) : '';
+                const fcStr = plan.forecast_kwh != null ? ` | Prog: ${plan.forecast_kwh} kWh` : '';
+                document.getElementById('ss-ts').textContent = ts + fcStr;
+            } else {
+                simBar.classList.remove('active');
+            }
+
+            // ── SOC-Umschaltung: letzte + nächste ──────────────────────────
+            // Letzte echte Umschaltung (aus DB via API)
+            const sw = d.last_soc_switch;
+            if (sw) {
+                document.getElementById('sw-last-ts').textContent = sw.ts || '';
+                const actionLabels = {
+                    'morning_open':    'Morgen: SOC_MIN',
+                    'afternoon_raise': 'Nachm: SOC_MAX',
+                    'comfort_reset':   'Komfort-Reset',
+                    'comfort_defaults':'Komfort-Reset',
+                    'balancing_start': 'Zellausgleich',
+                    'evening_limit':   'Abend-Limit',
+                    'evening_auto':    'Tag-Freigabe',
+                    'manual_set':      'Manuell',
+                };
+                const lbl = actionLabels[sw.action] || sw.action;
+                let desc = lbl;
+                if (sw.old != null && sw.new != null && sw.param) {
+                    desc += ` ${sw.old}→${sw.new}%`;
+                } else if (sw.reason) {
+                    desc += ': ' + sw.reason.substring(0, 45);
+                }
+                document.getElementById('sw-last-desc').textContent = desc;
+            } else {
+                document.getElementById('sw-last-ts').textContent = '(keine DB-Einträge)';
+                document.getElementById('sw-last-desc').textContent = '';
+            }
+
+            // Nächste wahrscheinliche Umschaltung — aus sim_plan ableiten
+            function decimalHourToHHMM(h) {
+                if (h == null) return '?';
+                const hh = Math.floor(h);
+                const mm = Math.round((h - hh) * 60);
+                return String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0');
+            }
+            let nextDesc = '—';
+            if (sc.sim_plan) {
+                const mp = sc.sim_plan.morning;
+                const ap = sc.sim_plan.afternoon;
+                const ep = sc.sim_plan.evening;
+                if (mp && mp.status === 'would_open') {
+                    nextDesc = `Morgen: SOC_MIN ${mp.from_soc_min}→${mp.to_soc_min}% (jetzt möglich)`;
+                } else if (mp && mp.status === 'waiting' && mp.open_time_h != null) {
+                    nextDesc = `Morgen: SOC_MIN öffnen ~${decimalHourToHHMM(mp.open_time_h)} Uhr`;
+                    if (mp.target_soc_min != null) nextDesc += ` → ${mp.target_soc_min}%`;
+                } else if (ap && ap.status === 'would_raise') {
+                    nextDesc = `Nachm: SOC_MAX ${ap.from_soc_max}→${ap.to_soc_max}%`;
+                } else if (ap && ap.status === 'waiting') {
+                    nextDesc = `Nachm: SOC_MAX wenn Überschuss (${ap.surplus_kwh != null ? ap.surplus_kwh + ' kWh' : '?'})`;
+                } else if (ep && ep.status === 'would_limit') {
+                    nextDesc = `${ep.phase}: Entladerate ${ep.rate_pct}%`;
+                } else if (mp && mp.status === 'done' && ap && ap.status === 'done') {
+                    nextDesc = 'Heute: alle Phasen abgeschlossen';
+                } else if (mp && mp.status === 'skip') {
+                    nextDesc = 'Heute kein Öffnen (' + (mp.reason || '').substring(0,40) + ')';
+                }
+            }
+            document.getElementById('sw-next-desc').textContent = nextDesc;
+
         } catch(e) { console.warn('BatteryDetail:', e); }
     }
 

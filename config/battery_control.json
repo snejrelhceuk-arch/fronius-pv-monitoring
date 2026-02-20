@@ -95,5 +95,7 @@
     "level": "INFO",
     "db_logging": true,
     "log_warten_meldungen": false
-  }
+  },
+  "simulation_mode": true,
+  "_simulation_mode_doc": "true = Scheduler läuft nur als Simulation (kein Schreibzugriff auf Inverter). Entscheidungen werden in battery_scheduler_state.json unter 'sim_plan' gespeichert und in der Flow-Ansicht (Batterie-InfoZeile) angezeigt. false = Normalbetrieb."
 }

@@ -17,7 +17,7 @@ Modulare Blueprint-Architektur:
   routes/system.py        — System-/Batterie-/Wattpilot-Status
   routes/forecast.py      — Prognose-APIs (Clear-Sky, Forecast)
 """
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 import logging
 import os
 import time
@@ -29,6 +29,10 @@ import socket as _socket
 # ─── Flask App ──────────────────────────────────────────────────────
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
+
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, 'static'), 'favicon.ico', mimetype='image/x-icon')
 
 # ─── Mirror/Entwicklungs-Modus ─────────────────────────────────────
 # Wenn PV_MIRROR_MODE=1: Read-Only Spiegel, keine externen Zugriffe.
