@@ -34,6 +34,10 @@ config/battery_bms_checkpoints.json
 # Lokale Kontroll-Datei (nicht im Repo)
 ToExamine.md
 
+# Host-Rolle (pro Pi individuell, siehe doc/DUAL_HOST_ARCHITECTURE.md)
+.role
+.state/
+
 # Archiv & Backup (nur lokal, nicht im Repo)
 archive/
 backup/

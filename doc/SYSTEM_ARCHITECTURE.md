@@ -59,10 +59,15 @@
 
 ### Monitoring-Hardware
 
-| System | IP | Speicher | Rolle |
-|--------|-----|---------|-------|
-| **Pi4** | 192.168.2.181 | 14,8 GB SD-Card | **Produktion** (Collector + Web) |
-| **Pi5** | 192.168.2.195 | 476 GB NVMe | Backup-Empfänger (GFS, Cron 03:00) |
+| System | IP | Speicher | Rolle | .role |
+|--------|-----|---------|-------|-------|
+| **Pi4 Produktion** | 192.168.2.181 (eth0) | 15 GB SD-Card | **Produktion** (Collector + Web) | `primary` |
+| **Pi4 Failover**   | 192.168.2.182 (wlan0) | 15 GB SD-Card | **Failover** (DB-Mirror + Web read-only) | `failover` |
+| **Pi5 Backup**     | 192.168.2.195 | 476 GB NVMe | Backup-Empfänger (GFS, 1×/2 Tage) | — |
+
+> **Produktion und Failover teilen dasselbe Git-Repository.**  
+> Rollenabhängiges Verhalten wird durch die lokale `.role`-Datei gesteuert (gitignored).  
+> Details: [DUAL_HOST_ARCHITECTURE.md](DUAL_HOST_ARCHITECTURE.md)
 
 ---
 ## 2. Energiefluss-Modell (KRITISCH!)

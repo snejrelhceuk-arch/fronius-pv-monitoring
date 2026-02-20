@@ -4,9 +4,10 @@ set -euo pipefail
 PRIMARY_IP="${PRIMARY_IP:-192.168.2.181}"
 PRIMARY_WEB_PORT="${PRIMARY_WEB_PORT:-8000}"
 MAX_SYNC_AGE_SEC="${MAX_SYNC_AGE_SEC:-600}"
-STATE_DIR="/var/lib/pv-system"
+STATE_DIR="${STATE_DIR:-/home/admin/Dokumente/PVAnlage/pv-system/.state}"
 LOG_FILE="/tmp/pv_failover_health.log"
 RECOMMEND_FILE="${STATE_DIR}/failover_recommendation"
+SYNC_MARKER_FILE="${STATE_DIR}/last_mirror_sync.ok"
 
 mkdir -p "$STATE_DIR"
 
@@ -29,9 +30,12 @@ fi
 
 sync_age=$(python3 - <<'PY'
 import os, time
-p='/home/admin/Dokumente/PVAnlage/pv-system/data.db'
-if os.path.exists(p):
-    print(int(time.time()-os.path.getmtime(p)))
+marker='/home/admin/Dokumente/PVAnlage/pv-system/.state/last_mirror_sync.ok'
+db='/home/admin/Dokumente/PVAnlage/pv-system/data.db'
+if os.path.exists(marker):
+  print(int(time.time()-os.path.getmtime(marker)))
+elif os.path.exists(db):
+  print(int(time.time()-os.path.getmtime(db)))
 else:
     print(999999)
 PY

@@ -2,6 +2,9 @@
 # Cron-Job: Überwacht collector.py auf Duplikate
 # Empfohlen: */5 * * * * /home/admin/Dokumente/PVAnlage/pv-system/monitor_collector.sh
 
+# --- Role Guard: Auf Failover-Host nichts tun ---
+source /home/admin/Dokumente/PVAnlage/pv-system/scripts/role_guard.sh 2>/dev/null || exit 0
+
 LOG_FILE="/home/admin/Dokumente/PVAnlage/pv-system/collector_monitor.log"
 # Nur collector.py zählen, NICHT wattpilot_collector.py
 PROCESS_COUNT=$(pgrep -afc "python3 collector.py|python3 .*/collector.py")

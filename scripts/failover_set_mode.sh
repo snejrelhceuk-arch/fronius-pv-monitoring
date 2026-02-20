@@ -18,7 +18,7 @@ if [ "$MODE" = "passive" ]; then
   cat <<EOF | sudo tee "$OVERRIDE_FILE" >/dev/null
 [Service]
 Environment=PV_MIRROR_MODE=1
-Environment=PV_MIRROR_SOURCE=${PRIMARY_SOURCE}
+Environment="PV_MIRROR_SOURCE=${PRIMARY_SOURCE}"
 EOF
 
   sudo systemctl daemon-reload
