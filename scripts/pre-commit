@@ -1,0 +1,57 @@
+#!/bin/bash
+# =============================================================
+# Git Pre-Commit Hook — Commit-Sperre auf Failover-Hosts
+# =============================================================
+#
+# Verhindert versehentliche git-Commits auf allen Hosts,
+# die NICHT die Rolle "primary" haben.
+#
+# Installation:
+#   cp scripts/pre-commit .git/hooks/pre-commit
+#   chmod +x .git/hooks/pre-commit
+#
+# Oder per Installer:
+#   ./scripts/install_hooks.sh
+#
+# Override für Notfälle (z.B. Failover wurde zum Primary):
+#   GIT_ALLOW_COMMIT=1 git commit -m "emergency fix"
+#
+# Siehe doc/DUAL_HOST_ARCHITECTURE.md Abschnitt 9.
+# =============================================================
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+ROLE_FILE="${REPO_ROOT}/.role"
+
+# --- Notfall-Override ---
+if [ "${GIT_ALLOW_COMMIT:-0}" = "1" ]; then
+    echo "⚠️  GIT_ALLOW_COMMIT=1 gesetzt → Commit-Sperre umgangen."
+    exit 0
+fi
+
+# --- Rolle lesen ---
+ROLE="primary"
+if [ -f "$ROLE_FILE" ]; then
+    ROLE="$(head -1 "$ROLE_FILE" | tr -d '[:space:]')"
+fi
+
+# --- Guard ---
+if [ "$ROLE" != "primary" ]; then
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════╗"
+    echo "║  ❌  COMMIT BLOCKIERT — dieser Host ist '$ROLE'         ║"
+    echo "║                                                          ║"
+    echo "║  Entwicklung und Commits nur auf dem PRIMARY-Host (181). ║"
+    echo "║  Code-Änderungen werden per sync_code_to_peer.sh        ║"
+    echo "║  vom Primary hierher synchronisiert.                     ║"
+    echo "║                                                          ║"
+    echo "║  Notfall-Override:                                       ║"
+    echo "║    GIT_ALLOW_COMMIT=1 git commit -m 'emergency fix'     ║"
+    echo "╚══════════════════════════════════════════════════════════╝"
+    echo ""
+    exit 1
+fi
+
+# Primary-Host → Commit erlaubt
+exit 0
