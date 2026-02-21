@@ -1,0 +1,23 @@
+name: PR Compliance Check
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  compliance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate required compliance checkbox
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request?.body || "";
+            const required = "Ich bestätige, dass die Veröffentlichungsregeln in `doc/ABC_TRENNUNGSPOLICY.md` Kapitel 9 geprüft und eingehalten wurden.";
+            const checked = new RegExp(`-\\s*\\[x\\]\\s*${required.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}`, "i").test(body);
+
+            if (!checked) {
+              core.setFailed("Pflicht-Compliance-Checkbox nicht bestätigt. Bitte PR-Template ausfüllen.");
+            } else {
+              core.info("Pflicht-Compliance-Checkbox bestätigt.");
+            }
