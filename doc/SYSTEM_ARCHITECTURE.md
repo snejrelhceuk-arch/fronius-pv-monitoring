@@ -521,6 +521,14 @@ erfordert eine **Neuinstallation** (kein In-Place-Upgrade empfohlen):
 | config/solar_calibration.json | Kalibrationsfaktoren Clear-Sky |
 | config/efficiency_table.json | WR-Wirkungsgrad-Kurve |
 
+### Governance / Architektur-Regeln
+
+| Dokument | Zweck |
+|----------|-------|
+| [ABC_TRENNUNGSPOLICY.md](ABC_TRENNUNGSPOLICY.md) | Trennung A Datenbank / B Web-API / C Automatisierung (dokumentierend, ohne Laufzeitwirkung) |
+| [SCHUTZREGELN.md](SCHUTZREGELN.md) | Schutzregeln und Prioritäten für automatisierte Eingriffe |
+| [DUAL_HOST_ARCHITECTURE.md](DUAL_HOST_ARCHITECTURE.md) | Rollenmodell `primary`/`failover`, Betriebsgrenzen, Failover-Abläufe |
+
 Hinweis: Die Verschattungsmaske kann als globale Lookup-Tabelle oder pro String
 in config/geometry_config.json gepflegt werden. Das erlaubt schrittweise
 Ergaenzung ueber das Jahr (Azimut/Elevation -> Faktor 0..1). Optimierer werden
