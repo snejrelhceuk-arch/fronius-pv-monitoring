@@ -3,7 +3,7 @@ Blueprint: System-Status-APIs.
 
 Enthält: /api/battery_status, /api/system_info,
          /api/wattpilot/status, /api/wattpilot/history,
-         /api/failover_status
+         /api/failover_status, /api/backup_status
 """
 import sqlite3
 import logging
@@ -20,6 +20,8 @@ bp = Blueprint('system', __name__)
 # ── Failover-Status Cache (30 s) ──────────────────────────────
 _failover_cache = {'ts': 0, 'result': None}
 _FAILOVER_CACHE_TTL = 60  # Sekunden (max. 1 SSH-Aufruf pro Minute)
+_backup_cache = {'ts': 0, 'result': None}
+_BACKUP_CACHE_TTL = 600  # Sekunden (10 Minuten)
 
 
 @bp.route('/api/battery_status')
@@ -604,4 +606,75 @@ def api_failover_status():
                   'detail': f'Fehler: {e}'}
 
     _failover_cache.update(ts=now, result=result)
+    return jsonify(result)
+
+
+@bp.route('/api/backup_status')
+def api_backup_status():
+    """
+    Prüft den Backup-Pfad auf Pi5 via SSH (Existenz Zielverzeichnis).
+
+    Status:
+      - up:   Zielverzeichnis vorhanden
+      - down: Zielverzeichnis fehlt oder SSH-Fehler
+
+    Cache: 10 Minuten (kein häufiger SSH-Check nötig).
+    """
+    import subprocess
+
+    now = time.time()
+    if now - _backup_cache['ts'] < _BACKUP_CACHE_TTL and _backup_cache['result'] is not None:
+        return jsonify(_backup_cache['result'])
+
+    pi5_host = getattr(config, 'PI5_BACKUP_HOST', None)
+    pi5_db_path = getattr(config, 'PI5_BACKUP_DB_PATH', '/srv/pv-system/data.db')
+    default_gfs_base = os.path.join(os.path.dirname(pi5_db_path), 'backup', 'db')
+    target_dir = getattr(config, 'PI5_BACKUP_GFS_BASE', default_gfs_base)
+
+    if not pi5_host:
+        result = {'status': 'down', 'detail': 'PI5_BACKUP_HOST nicht konfiguriert', 'target_dir': target_dir}
+        _backup_cache.update(ts=now, result=result)
+        return jsonify(result)
+
+    try:
+        proc = subprocess.run(
+            [
+                'ssh', '-o', 'ConnectTimeout=5', '-o', 'StrictHostKeyChecking=no',
+                pi5_host,
+                f'test -d "{target_dir}" && echo up || echo down'
+            ],
+            capture_output=True, text=True, timeout=8
+        )
+
+        out = (proc.stdout or '').strip().lower()
+        if out == 'up':
+            result = {
+                'status': 'up',
+                'detail': 'Zielverzeichnis erreichbar',
+                'target_dir': target_dir,
+                'checked_at': int(now),
+            }
+        else:
+            result = {
+                'status': 'down',
+                'detail': 'Zielverzeichnis fehlt/nicht erreichbar',
+                'target_dir': target_dir,
+                'checked_at': int(now),
+            }
+    except subprocess.TimeoutExpired:
+        result = {
+            'status': 'down',
+            'detail': 'SSH-Timeout zu Pi5',
+            'target_dir': target_dir,
+            'checked_at': int(now),
+        }
+    except Exception as e:
+        result = {
+            'status': 'down',
+            'detail': f'Fehler: {e}',
+            'target_dir': target_dir,
+            'checked_at': int(now),
+        }
+
+    _backup_cache.update(ts=now, result=result)
     return jsonify(result)
