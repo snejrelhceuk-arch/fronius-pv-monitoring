@@ -59,8 +59,9 @@ Siehe [doc/SYSTEM_ARCHITECTURE.md](doc/SYSTEM_ARCHITECTURE.md) Abschnitt 2.
 
 1. **Polling:** Alle 3s Modbus-Read → RAM-Buffer → raw_data (Flush 60s)
 2. **Aggregation:** 5 Stufen via Cron (1min / 15min / hourly / daily / monthly)
-3. **Persist:** tmpfs-DB → SD-Card (Stunde/Tag konfigurierbar)
-4. **Cleanup:** raw_data 7d, data_1min 90d, hourly 365d, daily 10y
+3. **Persist:** tmpfs-DB → SD-Card (stündlich) + periodisch Pi5
+4. **GFS-Backup:** `backup_db_gfs.sh` (03:00 täglich via systemd, Sohn intern alle 3 Tage aus RAM)
+5. **Cleanup:** raw_data 7d, data_1min 90d, hourly 365d, daily 10y
 
 ## Technische Spezifikation
 
@@ -121,6 +122,16 @@ cp data.db data_backup_$(date +%Y%m%d_%H%M).db
 2,17,32,47 * * * aggregate_daily.py     # hourly → daily
 6,21,36,51 * * * aggregate_monthly.py   # 15min → monthly
 8,23,38,53 * * * aggregate_statistics.py # daily → monthly_stats → yearly
+# Optional/Legacy statt systemd-Timer:
+# 0 3 * * * /home/admin/Dokumente/PVAnlage/pv-system/scripts/backup_db_gfs.sh
+```
+
+## Systemd-Timer
+
+```bash
+# GFS-Backup (Primary): täglich 03:00, Sohn-Intervall intern 3 Tage
+systemctl status pv-backup-gfs.timer
+systemctl list-timers pv-backup-gfs.timer
 ```
 
 ## API-Endpunkte
