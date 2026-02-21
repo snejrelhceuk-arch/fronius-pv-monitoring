@@ -59,11 +59,11 @@
 
 ### Monitoring-Hardware
 
-| System | IP | Speicher | Rolle | .role |
-|--------|-----|---------|-------|-------|
-| **Pi4 Produktion** | 192.0.2.181 (eth0) | 15 GB SD-Card | **Produktion** (Collector + Web) | `primary` |
-| **Pi4 Failover**   | 192.0.2.182 (wlan0) | 15 GB SD-Card | **Failover** (DB-Mirror + Web read-only) | `failover` |
-| **Pi5 Backup**     | 192.0.2.195 | 476 GB NVMe | Backup-Empfänger (GFS, 1×/2 Tage) | — |
+| System | IP | User | Speicher | RAM | Rolle | .role |
+|--------|-----|------|---------|-----|-------|-------|
+| **Pi4 Produktion** (primary-host) | 192.0.2.181 (eth0) | admin | 16 GB SD | 4 GB | **Produktion** (Collector + Web + Aggregation + Battery) | `primary` |
+| **Pi4 Failover** (failover-host) | 192.0.2.105 (eth0) | jk | 128 GB SD | 8 GB | **Failover** (DB-Mirror + Web read-only + Küchen-Display) | `failover` |
+| **Pi5 Backup** (backup-host) | 192.0.2.195 (eth0) | admin | 476 GB NVMe | — | Backup-Empfänger (GFS, 1×/2 Tage) | — |
 
 > **Produktion und Failover teilen dasselbe Git-Repository.**  
 > Rollenabhängiges Verhalten wird durch die lokale `.role`-Datei gesteuert (gitignored).  
@@ -297,31 +297,71 @@ Siehe `doc/BATTERY_COUNTER_DISCOVERY.md` für vollständige Analyse.
 
 ---
 
-## 5. Systemdienste
+## 5. Systemdienste (nach Host)
+
+### Pi4 Primary — primary-host (192.0.2.181, admin)
+
+Volle Produktion: Collector, Aggregation, Battery-Steuerung, Web.
 
 | Service | Typ | Beschreibung |
 |---------|-----|-------------|
 | pv-collector | systemd (enabled) | modbus_v3.py (Poller + Persist-Thread) |
-| pv-web | systemd (enabled) | web_api.py (gunicorn, Port 8000), After=pv-collector |
-| Cron (5 Jobs) | crontab (admin) | Aggregation (siehe Pipeline) |
+| pv-wattpilot | systemd (enabled) | wattpilot_collector.py (WebSocket → raw_wattpilot) |
+| pv-web | systemd (enabled) | web_api.py (gunicorn, 3 Worker, Port 8000), After=pv-collector |
+| Cron (5 Aggregations-Jobs) | crontab (admin) | aggregate_1min, aggregate, aggregate_daily, monthly, statistics |
+| Cron (Monitor-Scripts) | crontab (admin) | monitor_collector.sh, monitor_wattpilot.sh, monitor_web_service.sh |
+| battery_scheduler.py | Cron | Batterie-Steuerung (Modbus-Writes zum WR!) |
+| capture_energy_checkpoints.py | Cron | Energie-Fixpunkte sichern |
 
-**Pi5-Dienste:**
+**Persistierung**: tmpfs → SD alternierend 1×/2 Tage, rsync → Pi5 alternierend 1×/2 Tage.
+
+### Pi4 Failover — failover-host (192.0.2.105, jk)
+
+Passiv-Modus: Nur DB-Mirror, Read-Only-Web, Health-Check. **Kein Modbus, keine Writes.**
+
+| Service | Typ | Status | Beschreibung |
+|---------|-----|--------|-------------|
+| pv-web | systemd (enabled) | ✅ aktiv | web_api.py (gunicorn, 1 Worker, read-only) |
+| pv-mirror-sync | systemd timer (10 Min) | ✅ aktiv | rsync DB von Primary (181) → tmpfs |
+| pv-failover-health | systemd timer (1 Min) | ✅ aktiv | Prüft Erreichbarkeit Primary |
+| pv-backup-2d | systemd timer (1×/2 Tage) | ✅ aktiv | Lokales DB-Backup (SD) |
+| ~~pv-collector~~ | — | ❌ gestoppt | Doppelte Modbus-Abfragen verboten |
+| ~~pv-wattpilot~~ | — | ❌ gestoppt | WebSocket-Konflikt (nur 1 Verbindung) |
+| ~~Aggregation (Cron)~~ | — | ❌ role_guard | Sinnlos — DB wird alle 10 Min überschrieben |
+| ~~battery_scheduler~~ | — | ❌ role_guard | **GEFÄHRLICH** — schreibt Modbus-Register! |
+| ~~Monitor-Scripts~~ | — | ❌ role_guard | Collector/Wattpilot bewusst aus |
+
+**Wichtig**: Die `.role`-Datei (`failover`) steuert alle Guards.  
+Kein Collector, keine Aggregation, keine Batterie-Steuerung auf diesem Host.
+
+### Pi5 Backup — backup-host (192.0.2.195, admin)
+
+Reiner Backup-Empfänger. Kein Collector, kein Web, kein tmpfs.
+
 | Service | Status | Beschreibung |
 |---------|--------|-------------|
-| Cron (GFS-Backup) | enabled | backup_db_gfs.sh täglich 03:00 |
-| SSH | enabled | Empfang rsync von Pi4 |
+| Cron (GFS-Backup) | ✅ enabled | backup_db_gfs.sh täglich 03:00 |
+| SSH | ✅ enabled | Empfang rsync von Pi4 Primary |
 | ~~pv-db-restore~~ | disabled (2026-02-14) | Nicht nötig (data.db auf NVMe, kein tmpfs) |
 | ~~pv-collector~~ | disabled | Nicht aktiv auf Pi5 |
 | ~~pv-web~~ | disabled | Nicht aktiv auf Pi5 |
 
-**Nicht vorhanden (kein separater Service!):**
-- DB-Restore auf Pi4 läuft über `db_init.ensure_tmpfs_db()` im Collector selbst
-- ~~pv-wattpilot~~ — Service-File existiert nicht (Wattpilot-Wallbox hat eigene API)
+**data.db liegt direkt auf NVMe** — überlebt Reboot, kein tmpfs nötig.
 
-### Boot-Sequenz (nach Reboot/Stromausfall)
+### Hinweise
+
+- DB-Restore auf Pi4 Primary läuft über `db_init.ensure_tmpfs_db()` im Collector selbst
+- ~~pv-wattpilot Service-File~~ existiert als `pv-wattpilot.service` (nur auf Primary enabled)
+- **Entwicklung und Git-Commits nur auf Pi4 Primary (181)**  
+  → Pre-Commit-Hook blockt Commits auf Failover (siehe `scripts/pre-commit`)
+- **Code-Sync** von 181 → 105 per `scripts/sync_code_to_peer.sh` (rsync, ohne host-spezifische Dateien)
+
+### Boot-Sequenz nach Reboot/Stromausfall
+
+#### Pi4 Primary (181) — Volle Wiederherstellung
 
 ```
-1. systemd multi-user.target (CLI, kein GUI)
+1. systemd multi-user.target (CLI, kein GUI, WLAN/BT deaktiviert)
 2. tmpfs /dev/shm ist LEER (RAM war weg)
 3. pv-collector startet → db_init.ensure_tmpfs_db():
    a) data.db (SD-Card) → SQLite .backup() → /dev/shm/fronius_data.db
@@ -330,12 +370,35 @@ Siehe `doc/BATTERY_COUNTER_DISCOVERY.md` für vollständige Analyse.
    d) Falls alles fehlt → leere DB (Collector befüllt sie)
 4. pv-collector: start_persist_thread() + poller_loop()
 5. pv-web startet (After=pv-collector): eigenes ensure_tmpfs_db() (idempotent)
-6. Cron-Jobs: db_utils-Import → ensure_tmpfs_db() (idempotent, no-op)
+6. pv-wattpilot startet: WebSocket → Wallbox
+7. Cron-Jobs: db_utils-Import → ensure_tmpfs_db() (idempotent, no-op)
 ```
 
-**Maximaler Datenverlust bei Ausfall: ~1 Tag** (dank alternierender Sicherung).
-Fixpunkte (daily_data._start/_end) sichern Tages-/Monats-/Jahres-/Gesamt-Werte.
-Nur die Tag-Ansicht (Intraday) des verlorenen Tages ist betroffen.
+**Maximaler Datenverlust: ~1 Tag** (dank alternierender Sicherung).  
+Fixpunkte (daily_data._start/_end) sichern Langzeit-Bilanzen.
+
+#### Pi4 Failover/failover-host (105) — Schneller Mirror-Start
+
+```
+1. systemd multi-user.target (GUI für Küchen-Display)
+2. tmpfs /dev/shm ist LEER (RAM war weg)
+3. pv-web startet → ensure_tmpfs_db():
+   a) data.db (SD-Card, letztes lokales Backup) → /dev/shm/fronius_data.db
+   b) Dashboard zeigt Daten vom letzten Backup (≤2 Tage alt)
+4. pv-mirror-sync.timer (≤10 Min): rsync von Primary (181)
+   → /dev/shm/fronius_data.db wird mit Live-Daten überschrieben
+5. Ab jetzt: Dashboard zeigt aktuelle Daten (max. 10 Min Verzögerung)
+```
+
+**Kein Datenverlust** — Failover hat nur gespiegelte Daten, keine eigenen.
+
+#### Pi5 Backup (195) — Sofort bereit
+
+```
+1. data.db liegt auf NVMe → überlebt Reboot, kein tmpfs
+2. SSH enabled → Pi4 kann rsync senden
+3. Cron enabled → GFS-Backup läuft täglich 03:00
+```
 
 ---
 
