@@ -1679,6 +1679,7 @@
                                 const expectedTotal = fcTodayData.expected_kwh || 0;
                                 const actualSoFar = todayDP.w_pv_total || 0;
                                 todayDP.w_forecast_remaining = Math.max(0, +(expectedTotal - actualSoFar).toFixed(2));
+                                todayDP.forecast_total = expectedTotal;
                                 todayDP.forecast_quality = fcTodayData.quality;
                                 console.log('Heute Prognose-Rest:', todayDP.w_forecast_remaining, 'kWh',
                                     '(erwartet:', expectedTotal, '- gemessen:', actualSoFar, ')');
@@ -1979,9 +1980,10 @@
                         // Trennlinie
                         result += '<hr style="border:none;border-top:1px solid #ccc;margin:8px 0;"/>';
                         
-                        // Prognose-Rest für heute
-                        if (dp.w_forecast_remaining > 0) {
-                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(255,152,0,0.3);border:2px dashed #FF9800;margin-right:5px;"></span>Prognose Rest: ${formatEnergy(dp.w_forecast_remaining)}<br/>`;
+                        // Prognose (Gesamt-Wert, nicht Rest)
+                        const fcTotal = dp.forecast_total || dp.forecast_kwh;
+                        if (fcTotal > 0) {
+                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(255,152,0,0.3);border:2px dashed #FF9800;margin-right:5px;"></span>Prognose: ${formatEnergy(fcTotal)}<br/>`;
                         }
                         
                         // Trennlinie
@@ -1989,8 +1991,8 @@
                         
                         // Summen
                         result += `<strong>Erzeugung:</strong> ${formatEnergy(dp.w_pv_total)}`;
-                        if (dp.w_forecast_remaining > 0) {
-                            result += ` + ${formatEnergy(dp.w_forecast_remaining)} erwartet`;
+                        if (dp.w_forecast_remaining > 0 && fcTotal > 0) {
+                            result += ` <span style="color:#FF9800">(Prog. ${formatEnergy(fcTotal)})</span>`;
                         }
                         result += '<br/>';
                         result += `<strong>Verbrauch:</strong> ${formatEnergy(dp.w_gesamtverbrauch)}<br/>`;
@@ -2001,7 +2003,7 @@
                 },
                 legend: {
                     type: 'scroll',
-                    data: ['Direkt (Ertrag)', 'Batterieladung', 'Einspeisung', 'Prognose (Rest)', 'Direkt (Verbrauch)', 'Batterieentladung', 'Netzbezug', 'Prognose'],
+                    data: ['Direkt (Ertrag)', 'Batterieladung', 'Einspeisung', 'Prognose', 'Direkt (Verbrauch)', 'Batterieentladung', 'Netzbezug'],
                     bottom: daysInMonth > visibleDays ? 50 : 10,
                     left: 'center',
                     width: '90%',
@@ -2133,7 +2135,7 @@
                         data: einspeisungData
                     },
                     {
-                        name: 'Prognose (Rest)',
+                        name: 'Prognose',
                         type: 'bar',
                         stack: 'ertrag',
                         barMaxWidth: 40,
@@ -2184,7 +2186,7 @@
                     },
                     // Prognose-Linie: dünne graue horizontale Striche pro Tag
                     {
-                        name: 'Prognose',
+                        name: 'Prognose-Linie',
                         type: 'scatter',
                         symbol: 'rect',
                         symbolSize: function(val, params) {
