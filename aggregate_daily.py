@@ -120,11 +120,25 @@ def aggregate_daily():
         else:
             start_day = int(last_day)  # Re-aggregiere letzten Tag (könnte partial sein)
 
+        # ── Geschützte Tage: Manuell korrigierte SolarWeb-Werte nicht überschreiben ──
+        # Tage mit unvollständiger Datenerfassung, deren daily_data manuell aus
+        # SolarWeb-Referenzwerten gesetzt wurde. Die Aggregation würde hier
+        # falsche Werte aus den lückenhaften hourly/1min-Daten berechnen.
+        PROTECTED_DAYS = {
+            '2026-02-20',  # Collector-Ausfall 01:00-20:43, SolarWeb-Werte manuell gesetzt
+        }
+
         count = 0
         # Inkludiere aktuellen Tag (+86400): Monatsansicht zeigt heutigen Tag mit bisherigen Daten
         for day_ts in range(start_day, current_day + 86400, 86400):
             # Lokale Tagesgrenzen (CET/CEST) für Datenabfragen
             q_start, q_end = _local_day_boundaries(day_ts)
+
+            # Geschützte Tage überspringen
+            day_local = datetime.fromtimestamp(day_ts).strftime('%Y-%m-%d')
+            if day_local in PROTECTED_DAYS:
+                logging.info(f"  Tag {day_local} ist geschützt (SolarWeb-Korrektur) → übersprungen")
+                continue
 
             # ── 1. Leistungsmittelwerte + P×t-Summen aus hourly_data (wie bisher) ──
             c.execute("""
