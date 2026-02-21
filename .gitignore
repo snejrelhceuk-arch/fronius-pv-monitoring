@@ -55,6 +55,9 @@ backup/db/
 *.empty_after_crash
 *.bak
 
+# Host-spezifische Laufzeitdaten (nicht versioniert)
+*.db.before_restore_*
+
 # Private Daten / Solarweb-Arbeitsverzeichnisse
 E/
 imports/
