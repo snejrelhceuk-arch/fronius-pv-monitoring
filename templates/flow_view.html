@@ -352,6 +352,9 @@
                 <div class="status-badge warn-badge" id="status-failover">
                     <div class="status-dot"></div><span>Safe: …</span>
                 </div>
+                <div class="status-badge warn-badge" id="status-backup">
+                    <div class="status-dot"></div><span>Back: …</span>
+                </div>
             </div>
 
             <svg id="flow-svg" viewBox="60 -30 750 420">
@@ -973,6 +976,20 @@
         }
     }
 
+    function updateBackupStatus(s) {
+        const el = document.getElementById('status-backup');
+        if (s === 'up') {
+            el.className = 'status-badge';
+            el.innerHTML = '<div class="status-dot"></div><span>Back: up</span>';
+        } else if (s === 'down') {
+            el.className = 'status-badge error-badge';
+            el.innerHTML = '<div class="status-dot"></div><span>Back: down</span>';
+        } else {
+            el.className = 'status-badge warn-badge';
+            el.innerHTML = '<div class="status-dot"></div><span>Back: …</span>';
+        }
+    }
+
     async function fetchFailoverStatus() {
         try {
             const r = await fetch(apiUrl('/api/failover_status'));
@@ -981,6 +998,17 @@
             updateFailoverStatus(d.status);
         } catch (e) {
             updateFailoverStatus('unknown');
+        }
+    }
+
+    async function fetchBackupStatus() {
+        try {
+            const r = await fetch(apiUrl('/api/backup_status'));
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const d = await r.json();
+            updateBackupStatus(d.status);
+        } catch (e) {
+            updateBackupStatus('unknown');
         }
     }
 
@@ -1120,9 +1148,11 @@
     fetchFlow();
     fetchBatteryDetail();
     fetchFailoverStatus();
+    fetchBackupStatus();
     setInterval(fetchFlow, 10000);
     setInterval(fetchBatteryDetail, 60000);
     setInterval(fetchFailoverStatus, 60000);  // Failover-Check 1×/Min (SSH-basiert, Cache: 60s)
+    setInterval(fetchBackupStatus, 600000);   // Backup-Check 1×/10 Min (SSH-basiert, Cache: 10 Min)
     animate();
 
     // Mobile Portrait: SVG viewBox auf Hauptknoten beschränken (ohne Sub-Kreise)
