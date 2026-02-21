@@ -63,7 +63,7 @@
 |--------|-----|------|---------|-----|-------|-------|
 | **Pi4 Produktion** (primary-host) | 192.0.2.181 (eth0) | admin | 16 GB SD | 4 GB | **Produktion** (Collector + Web + Aggregation + Battery) | `primary` |
 | **Pi4 Failover** (failover-host) | 192.0.2.105 (eth0) | jk | 128 GB SD | 8 GB | **Failover** (DB-Mirror + Web read-only + Küchen-Display) | `failover` |
-| **Pi5 Backup** (backup-host) | 192.0.2.195 (eth0) | admin | 476 GB NVMe | — | Backup-Empfänger (GFS, 1×/2 Tage) | — |
+| **Pi5 Backup** (backup-host) | 192.0.2.195 (eth0) | admin | 476 GB NVMe | — | Backup-Empfänger (alternierendes data.db + GFS-Dateikopien) | — |
 
 > **Produktion und Failover teilen dasselbe Git-Repository.**  
 > Rollenabhängiges Verhalten wird durch die lokale `.role`-Datei gesteuert (gitignored).  
@@ -145,40 +145,45 @@ Gesamtverbrauch      = PV_total + W_Imp_Netz - W_Exp_Netz
 
 ## 3. Datenbank-Architektur
 
-### tmpfs + Alternierende Persistierung
+### tmpfs + Persistierung (laufender Betrieb)
 
 ```
 /dev/shm/fronius_data.db  (RAM, ~132 MB)
-        │
-        │  SQLite .backup() alternierend:
-        │
-    Ungerade Tage (1,3,5...)       Gerade Tage (2,4,6...)
-        │                                  │
-        ▼                                  ▼
-  data.db (SD-Card lokal)       data.db (Pi5 via rsync)
-  ~/Dokumente/.../data.db       admin@192.0.2.195:~/Documents/.../data.db
+     │
+     │  SQLite .backup() stündlich
+     ▼
+  data.db (SD-Card lokal)
+  ~/Dokumente/.../data.db
+     │
+     │  rsync alle 6 Persist-Zyklen
+     ▼
+  data.db (Pi5 via rsync)
+  admin@192.0.2.195:~/Documents/.../data.db
 ```
 
 - **DB im RAM**: Schnell, kein SD-Card-Verschleiß für Lese-/Schreiboperationen
-- **Persist alternierend**: Ungerade Tage → SD, gerade Tage → Pi5 (01:00 CET)
-- **Jede Einzelsicherung**: Max. 2 Tage alt
-- **Zusammen**: Max. 1 Tag Datenverlust bei Ausfall
+- **Persist lokal**: stündlich tmpfs → SD (`SQLite .backup()`)
+- **Pi5-Transfer**: alle 6 Persist-Zyklen per rsync
+- **Wiederherstellung**: Fallback-Kette SD → Pi5 → `backup/db/daily/*.db.gz`
 - **Fixpunkte**: daily_data._start/_end sichern Tages-/Monats-/Jahres-/Gesamt-Werte
-- **SD-Card Writes**: ~47 GB/Jahr (1×/2 Tage) statt 13,2 TB/Jahr (5min-Modus)
+- **SD-Card Writes**: stark reduziert gegenüber Dauerpersist (tmpfs als Primär-DB)
 - **SQLite**: Version 3.45.1 (kompiliert, wg. HAVING-Clause Kompatibilität)
 
-### GFS-Backup auf Pi5 (Sohn-Vater-Großvater)
+### GFS-Backup auf Pi4 Primary + Pi5-Spiegel (Sohn-Vater-Großvater)
 
 Nur **eine** Datenbank (`data.db`, ~127 MB) wird gesichert — sie enthält alle Tabellen.
 Andere Dateien (solar_cache.db, config/*.json) sind regenerierbar bzw. im Git.
 
 ```
-Pi5 Cron 03:00 → backup_db_gfs.sh
+Pi4 Primary systemd Timer 03:00 → backup_db_gfs.sh
 
-Sohn        (daily)   : data_YYYY-MM-DD.db.gz       → 7 Tage behalten
+Sohn        (3-tägig) : data_YYYY-MM-DD.db.gz       → 7 Dateien behalten
 Vater       (weekly)  : data_YYYY-WNN.db.gz (So)     → 5 Wochen
 Großvater   (monthly) : data_YYYY-MM.db.gz (1.)      → 12 Monate
 Urgroßvater (yearly)  : data_YYYY.db.gz (1. Jan)     → permanent
+
+Quelle Sohn: /dev/shm/fronius_data.db (RAM → SD via SQLite .backup)
+Nach jeder neu erzeugten GFS-Datei: zusätzliche Kopie nach Pi5 (NVMe)
 
 Speicher: ~38 MB × (7+5+12+N) < 1 GB
 Verzeichnis: ~/Documents/PVAnlage/pv-system/backup/db/{daily,weekly,monthly,yearly}
@@ -190,7 +195,7 @@ Pi5 ist reiner Backup-Empfänger (kein Collector, kein Web, kein tmpfs).
 Nach Reboot automatisch bereit:
 - `data.db` auf NVMe → überlebt Reboot
 - SSH (enabled) → Pi4 kann rsync senden
-- Cron (enabled) → GFS-Backup läuft täglich 03:00
+- Empfang der GFS-Dateikopien (`backup/db/{daily,weekly,monthly,yearly}`) vom Pi4 Primary
 
 ### Aggregations-Pipeline
 
@@ -308,12 +313,14 @@ Volle Produktion: Collector, Aggregation, Battery-Steuerung, Web.
 | pv-collector | systemd (enabled) | modbus_v3.py (Poller + Persist-Thread) |
 | pv-wattpilot | systemd (enabled) | wattpilot_collector.py (WebSocket → raw_wattpilot) |
 | pv-web | systemd (enabled) | web_api.py (gunicorn, 3 Worker, Port 8000), After=pv-collector |
+| pv-backup-gfs.timer | systemd (enabled) | backup_db_gfs.sh täglich 03:00 (Sohn intern alle 3 Tage) |
 | Cron (5 Aggregations-Jobs) | crontab (admin) | aggregate_1min, aggregate, aggregate_daily, monthly, statistics |
 | Cron (Monitor-Scripts) | crontab (admin) | monitor_collector.sh, monitor_wattpilot.sh, monitor_web_service.sh |
 | battery_scheduler.py | Cron | Batterie-Steuerung (Modbus-Writes zum WR!) |
 | capture_energy_checkpoints.py | Cron | Energie-Fixpunkte sichern |
 
-**Persistierung**: tmpfs → SD alternierend 1×/2 Tage, rsync → Pi5 alternierend 1×/2 Tage.
+**Persistierung**: tmpfs → SD stündlich, zusätzlicher Pi5-rsync alle 6 Persist-Zyklen.
+**GFS**: Sohn 3-tägig aus RAM→SD; Vater/Großvater/Urgroßvater unverändert; neue Dateien zusätzlich auf Pi5 gespiegelt.
 
 ### Pi4 Failover — failover-host (192.0.2.105, jk)
 
@@ -340,7 +347,6 @@ Reiner Backup-Empfänger. Kein Collector, kein Web, kein tmpfs.
 
 | Service | Status | Beschreibung |
 |---------|--------|-------------|
-| Cron (GFS-Backup) | ✅ enabled | backup_db_gfs.sh täglich 03:00 |
 | SSH | ✅ enabled | Empfang rsync von Pi4 Primary |
 | ~~pv-db-restore~~ | disabled (2026-02-14) | Nicht nötig (data.db auf NVMe, kein tmpfs) |
 | ~~pv-collector~~ | disabled | Nicht aktiv auf Pi5 |
@@ -397,7 +403,7 @@ Fixpunkte (daily_data._start/_end) sichern Langzeit-Bilanzen.
 ```
 1. data.db liegt auf NVMe → überlebt Reboot, kein tmpfs
 2. SSH enabled → Pi4 kann rsync senden
-3. Cron enabled → GFS-Backup läuft täglich 03:00
+3. Pi4 überträgt zusätzlich GFS-Dateien nach backup/db/{daily,weekly,monthly,yearly}
 ```
 
 ---

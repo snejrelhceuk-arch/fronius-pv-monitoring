@@ -6,6 +6,7 @@
 #   2. pv-web.service        (Flask Web-API)
 #   3. pv-wattpilot.service  (Wattpilot Wallbox-Collector)
 #   4. pv-restart.service + .timer (Neustart alle 3 Tage)
+#   5. pv-backup-gfs.service + .timer (GFS-Backup, Sohn alle 3 Tage)
 #
 # Periodische Jobs (Checkpoints, Counter-Checks) laufen via Cron
 # — siehe crontab -l
@@ -117,6 +118,39 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
+# 6. GFS Backup Service
+echo "→ pv-backup-gfs.service erstellen..."
+sudo tee /etc/systemd/system/pv-backup-gfs.service > /dev/null <<EOF
+[Unit]
+Description=PV-System GFS Database Backup (Sohn/Vater/Grossvater)
+After=network-online.target pv-collector.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=admin
+WorkingDirectory=${BASE}
+ExecStart=/bin/bash ${BASE}/scripts/backup_db_gfs.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+EOF
+
+# 7. GFS Backup Timer: täglich 03:00, Sohn-Intervall wird im Script gesteuert
+echo "→ pv-backup-gfs.timer erstellen..."
+sudo tee /etc/systemd/system/pv-backup-gfs.timer > /dev/null <<'EOF'
+[Unit]
+Description=PV-System GFS Backup Timer (daily run, Sohn every 3 days)
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+RandomizedDelaySec=180
+
+[Install]
+WantedBy=timers.target
+EOF
+
 # Services aktivieren
 echo "→ systemd reload..."
 sudo systemctl daemon-reload
@@ -126,6 +160,7 @@ sudo systemctl enable pv-collector.service
 sudo systemctl enable pv-web.service
 sudo systemctl enable pv-wattpilot.service
 sudo systemctl enable --now pv-restart.timer
+sudo systemctl enable --now pv-backup-gfs.timer
 
 # Alten manuellen Collector stoppen und durch systemd ersetzen
 echo "→ Prüfe laufende Prozesse..."
@@ -153,8 +188,13 @@ done
 echo "--- Restart Timer ---"
 systemctl status pv-restart.timer --no-pager | head -5
 echo ""
+echo "--- Backup Timer ---"
+systemctl status pv-backup-gfs.timer --no-pager | head -5
+echo ""
 echo "--- Nächster Restart ---"
 systemctl list-timers pv-restart.timer --no-pager
+echo "--- Nächstes Backup ---"
+systemctl list-timers pv-backup-gfs.timer --no-pager
 
 echo ""
 echo "✓ Installation abgeschlossen!"
@@ -162,6 +202,8 @@ echo "  Collector:   systemctl status pv-collector"
 echo "  Web API:     systemctl status pv-web"
 echo "  Wattpilot:   systemctl status pv-wattpilot"
 echo "  Timer:       systemctl list-timers pv-restart*"
+echo "  Backup:      systemctl list-timers pv-backup-gfs*"
 echo "  Cron-Jobs:   crontab -l"
 echo "  Logs:        journalctl -u pv-collector -f"
+echo "  Backup-Logs: journalctl -u pv-backup-gfs -n 100 --no-pager"
 echo "  Web:         http://$(hostname -I | awk '{print $1}'):8000"

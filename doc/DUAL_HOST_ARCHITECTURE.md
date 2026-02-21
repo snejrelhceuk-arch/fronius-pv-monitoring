@@ -24,7 +24,7 @@
 │  ✓ Battery Scheduler (Modbus!)  │     │  ✗ Battery Scheduler (role_guard)│
 │  ✓ Monitor-Scripts (Cron)       │     │  ✗ Monitor-Scripts (role_guard)  │
 │  ✓ DB in tmpfs (/dev/shm)      │     │  ✓ DB in tmpfs (Mirror → tmpfs) │
-│  ✓ Persist: tmpfs → SD (1×/2d) │     │  ✓ Mirror-Sync (alle 10 Min)    │
+│  ✓ Persist: tmpfs → SD (stündlich)│   │  ✓ Mirror-Sync (alle 10 Min)    │
 │  WLAN/BT: deaktiviert           │     │  ✓ Backup SD (1×/2d)            │
 │                                 │rsync│                                 │
 │  SD-Card: 16 GB                 │────►│  SD-Card: 128 GB                │
@@ -39,9 +39,9 @@
 │  Hostname: backup-host                │
 │  476 GB NVMe                    │
 │                                 │
-│  Empfängt alternierende DB-     │
-│  Kopie alle 2 Tage von Pi4     │
-│  (Primär). GFS-Rotation.        │
+│  Empfängt alternierende data.db │
+│  + GFS-Dateikopien von Pi4      │
+│  (Sohn 3-tägig, sonst unveränd.)│
 │  KEIN eigenes pv-system aktiv.  │
 └─────────────────────────────────┘
 ```
@@ -59,13 +59,19 @@ Collector → raw_data
          │ rsync alle 10 Min              │
          └────────────────────────────────┘
          │                                    Kein SD-Write!
-         │ SQLite .backup 1×/2d          SD nur via backup_db_every2d (1×/2d)
+         │ SQLite .backup stündlich       SD nur via backup_db_every2d (1×/2d)
          ▼
     data.db (SD-Card)               data.db (SD-Card, Fallback nach Reboot)
          │
-         │ rsync 1×/2d (alternierend)
+         │ rsync alle 6 Persist-Zyklen
          ▼
     Pi5 (195): data.db (NVMe)
+
+Pi4 Primary zusätzlich:
+  backup_db_gfs.sh (03:00 täglich via systemd)
+    - Sohn alle 3 Tage aus /dev/shm → backup/db/daily
+    - Vater/Großvater/Urgroßvater wie bisher
+    - jede neu erzeugte GFS-Datei zusätzlich per rsync nach Pi5 backup/db/*
 ```
 
 ---
