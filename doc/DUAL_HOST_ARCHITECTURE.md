@@ -255,3 +255,95 @@ Damit schont der Failover-Betrieb die SD-Karte maximal.
 Nach Reboot ist `/dev/shm` leer. Der Gunicorn-Start (`ensure_tmpfs_db`) lädt einmalig  
 die letzte `data.db` von der SD-Karte ins tmpfs als Fallback.  
 Der nächste Mirror-Sync (≤10 Min) überschreibt sie mit aktuellen Daten.
+---
+
+## 9. Entwicklung & Code-Sync
+
+> **Stand: 2026-02-21** — Commit-Sperre + Code-Sync implementiert.
+
+### Goldene Regeln
+
+1. **Entwickelt wird NUR auf dem Primary (181).**
+2. **Committet wird NUR auf dem Primary (181).**
+3. **Code-Sync zum Failover (105) per rsync** — ohne host-spezifische Dateien.
+4. **Auf dem Failover NIEMALS committen** — Pre-Commit-Hook blockiert das.
+
+### Schutzmechanismus: Pre-Commit-Hook
+
+Datei: `scripts/pre-commit` → wird nach `.git/hooks/pre-commit` installiert.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  git commit auf Host mit .role ≠ "primary"              │
+│  → BLOCKIERT mit Fehlermeldung                          │
+│                                                          │
+│  Notfall-Override:                                       │
+│    GIT_ALLOW_COMMIT=1 git commit -m "emergency fix"     │
+└─────────────────────────────────────────────────────────┘
+```
+
+Installation (einmalig pro Host, nach `git clone` oder `sync_code_to_peer.sh`):
+```bash
+./scripts/install_hooks.sh
+```
+
+### Workflow: Entwickeln → Committen → Syncen
+
+```
+  Primary (181)                    Failover/fronipi (105)
+  ═════════════                    ═══════════════════════
+
+  1. Code ändern (VSCode/LLM)
+  2. git add + git commit
+  3. git push origin main
+  4. ./scripts/sync_code_to_peer.sh
+         │
+         │  rsync (Code, Templates, Doku, .git/)
+         │  OHNE: .role, *.db, *.log, *.pid, __pycache__,
+         │        backup/, .secrets, Laufzeit-State
+         │
+         └──────────────────────────►  Code aktualisiert
+                                       .role bleibt "failover"
+                                       Hook blockiert Commits
+                                       Services unverändert
+```
+
+### Scripts
+
+| Script | Zweck | Aufruf |
+|--------|-------|--------|
+| `scripts/pre-commit` | Git-Hook: blockiert Commits auf Nicht-Primary | automatisch bei `git commit` |
+| `scripts/install_hooks.sh` | Installiert Hook in `.git/hooks/` | einmalig: `./scripts/install_hooks.sh` |
+| `scripts/sync_code_to_peer.sh` | rsync Code 181→105 (ohne host-spezifische Dateien) | `./scripts/sync_code_to_peer.sh [--dry-run] [--force]` |
+| `scripts/check_repo_parity.sh` | Prüft Commit-Gleichstand Primary↔Failover | `./scripts/check_repo_parity.sh [/mnt/failover-pv]` |
+
+### Was wird NICHT gesynct (host-spezifisch)
+
+| Muster | Grund |
+|--------|-------|
+| `.role` | Host-Identität (primary vs failover) |
+| `.state/` | Laufzeit-Status (Sync-Marker, Empfehlungen) |
+| `*.db`, `*.db-shm`, `*.db-wal` | Datenbank (eigener Mirror-Sync alle 10 Min) |
+| `*.log` | Logfiles (host-lokal) |
+| `*.pid` | Prozess-IDs |
+| `__pycache__/` | Python-Bytecode |
+| `backup/` | Lokale Backups |
+| `.secrets` | Zugangsdaten |
+| `config/battery_scheduler_state.json` | Laufzeitstatus Battery-Scheduler |
+| `config/battery_bms_checkpoints.json` | BMS-Checkpoints |
+
+### Ersteinrichtung auf neuem Host
+
+```bash
+# 1. Repo klonen
+git clone https://github.com/snejrelhceuk-arch/fronius-pv-monitoring.git pv-system
+cd pv-system
+
+# 2. Rolle setzen
+echo "failover" > .role    # oder "primary"
+
+# 3. Hook installieren
+./scripts/install_hooks.sh
+
+# 4. Fertig — auf Failover sind Commits blockiert
+```
