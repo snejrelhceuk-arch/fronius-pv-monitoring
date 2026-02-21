@@ -174,7 +174,7 @@ Sie ist separat verdrahtet mit eigenem 24V-Relais und Fritz!DECT-Steckdose.
 | **Betriebsmodus (Reg. 5015)** | 0=Sommer (Heizung AUS, WW bleibt!), 1=Auto, 5=Kühlen |
 | Investition | 12.000 EUR (2022) + 155 EUR LWPM 410 |
 
-**🔥 GAMECHANGER: Dimplex LWPM 410 — Modbus RTU über RS485**
+**Dimplex LWPM 410 — Modbus RTU über RS485 (Integrationsoption)**
 
 | Modul | Dimplex LWPM 410 |
 |-------|------------------|
@@ -185,7 +185,7 @@ Sie ist separat verdrahtet mit eigenem 24V-Relais und Fritz!DECT-Steckdose.
 | Offizielle Doku | [dimplex.atlassian.net/wiki — NWPM Modbus TCP](https://dimplex.atlassian.net/wiki/wiki/spaces/DW/pages/2873393288/NWPM+Modbus+TCP) |
 | Alternative | NWPM (Art.Nr. 356960) = Modbus **TCP** über Ethernet |
 
-**Kompatibilität (lt. offiz. Doku):**
+**Kompatibilität (lt. offizieller Dokumentation):**
 > Mindestsystemvoraussetzung: Dimplex WP mit **WPM 2004, WPM 2006, WPM 2007
 > oder WPM EconPlus** Baureihe, Softwarestand **H_H50** und höher.
 
@@ -194,25 +194,19 @@ Sie ist separat verdrahtet mit eigenem 24V-Relais und Fritz!DECT-Steckdose.
 - Softwarestand in Menü ablesen (z.B. `WPM_L23.7` oder `WPM_H60`)
 - Steckplatz "Serial Card / BMS Card" vorhanden?
 
-**Was Modbus RTU ermöglicht (R/W = Lesen UND Schreiben!):**
+**Was Modbus RTU im legitimen Betrieb ermöglicht:**
 
-| Datenpunkt | Register | R/W | Nutzen |
-|------------|----------|-----|--------|
-| Warmwasser-Solltemp. | 5047 | **R/W** | PV-Überschuss → Temp. hochsetzen |
-| Warmwasser-Isttemp. (R3) | 3 | R | Monitoring ohne ext. Sensor! |
-| Betriebsmodus | 5015 | **R/W** | Sommer/Auto/Urlaub/Party/Kühlen |
-| Außentemperatur (R1) | 1 | R | Redundant für Strategie-Logik |
-| Vorlauftemperatur (R9) | 5 | R | Effizienz-Monitoring |
-| Rücklauftemperatur (R2) | 2 | R | Effizienz-Monitoring |
-| Wärmequellenaustritt (R6) | 7 | R | Sole-Monitoring |
-| Statusmeldung | 103 | R | Heizen/WW/Kühlen/Sperre/Abtauen |
-| Störmeldungen | 105 | R | Fehlerüberwachung |
-| Verdichter-Laufstunden | 72 | R | Wartungsplanung |
-| Flanschheizung-Laufstunden | 78 | R | = Heizpatrone! |
-| Wärmemenge Heizen | 5096-5098 | R | COP-Berechnung |
-| Wärmemenge WW | 5099-5101 | R | COP-Berechnung |
-| **Smart Grid 1** | **Coil 3** | **R/W** | **SG-Ready via Software!** |
-| **Smart Grid 2** | **Coil 4** | **R/W** | **SG-Ready via Software!** |
+Hinweis: Schreibzugriffe nur mit eigener Berechtigung, im Rahmen offizieller
+Herstellerdokumentation und ohne Umgehung von Schutzmechanismen.
+
+| Funktionsbereich | Typischer Nutzen |
+|------------------|------------------|
+| Warmwasser-Soll/Isttemperatur | PV-Überschussgeführt anheben, Monitoring |
+| Betriebsmodus | Sommer/Auto/Absenkung im Regelbetrieb |
+| Vorlauf-/Rücklauf-/Quelltemperaturen | Effizienz- und Zustandsüberwachung |
+| Status- und Störmeldungen | Betriebssicherheit, Alarmierung |
+| Laufzeiten und Wärmemengen | COP-/Performance-Auswertung |
+| Smart-Grid-Signale | Lastverschiebung innerhalb freigegebener Betriebsarten |
 
 **SG-Ready via Modbus RTU (ab WPM_L20.2):**
 
@@ -223,7 +217,8 @@ Sie ist separat verdrahtet mit eigenem 24V-Relais und Fritz!DECT-Steckdose.
 | 1 | 0 | 🟢 grün | Verstärkt | **PV-Überschuss → WP heizen!** |
 | 1 | 1 | 🟢🟢 dunkelgrün | Maximum | **WP + Heizpatrone maximal!** |
 
-Ab WPM_M1.3: Einzelregister 5167 (Werte: 10=gelb, 11=grün, 12=rot, 13=dunkelgrün)
+Details zu Registern und Firmware-Abhängigkeiten sind ausschließlich der
+offiziellen Herstellerdokumentation zu entnehmen.
 
 **Physische Anbindung über MEGA-BAS RS485:**
 ```
@@ -237,10 +232,10 @@ MEGA-BAS RS485 [B] ──► LWPM 410 RS485 [B]
 → Smart Grid "dunkelgrün" aktiviert E9-Ausgang, aber dort ist nichts angeschlossen.
 → Python-Bibliothek: `pymodbus` (bereits Modbus-Erfahrung im Workspace via `modbus_v3.py`)
 
-**Community-Bestätigung:**
-- 6 GitHub-Repos für Dimplex-Modbus (HA, smarthomeNG, Prometheus)
-- HA-User mit SIW 8TES (gleiche SI-Familie!) erfolgreich angebunden
-- Offizielles Dimplex-Wiki mit vollständiger Registerliste
+**Compliance-Hinweis:**
+- Diese Doku dient der Interoperabilität im Eigenbetrieb.
+- Keine Gewähr für Vollständigkeit oder Freigabe einzelner Herstellerfunktionen.
+- Für Implementierung, Rechte und Grenzwerte gilt immer die offizielle Dokumentation.
 
 **Noch relevante Fallback-Optionen:**
 1. **Bypass-Ventil am Speicher** — Umschaltung über Stellantrieb (24VAC):

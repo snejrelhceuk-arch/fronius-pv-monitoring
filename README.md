@@ -134,6 +134,13 @@ cp data.db data_backup_$(date +%Y%m%d_%H%M).db
 - `GET /api/hourly` - Stunden-Aggregate (JSON)
 - `GET /api/daily` - Tages-Aggregate (JSON)
 
+## Recht & Compliance
+
+Dokumentation und Schnittstellenbeschreibungen im Repo sind als eigene technische
+Darstellung gedacht und dürfen keine kopierten Hersteller-Originalinhalte enthalten.
+Vor externer Veröffentlichung gilt die Checkliste in
+[doc/ABC_TRENNUNGSPOLICY.md](doc/ABC_TRENNUNGSPOLICY.md) (Kapitel 9).
+
 ## Hardware
 
 - **Inverter:** Fronius Symo Hybrid (192.168.2.122:502)

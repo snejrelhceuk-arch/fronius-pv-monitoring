@@ -16,6 +16,12 @@ Grundlage für die Automation ist immer eine vollständige Beobachtung aller
 relevanten Größen — erst dann können deterministische oder fuzzy Regeln sicher
 greifen, ohne auf Heuristiken oder Annahmen angewiesen zu sein.
 
+**Compliance-Hinweis:**
+Dieses Dokument beschreibt ausschließlich legitime Integrationsnutzung mit eigenen
+Berechtigungen. Es enthält keine Anleitung zur Umgehung von Hersteller- oder
+Plattform-Schutzmechanismen. Maßgeblich ist die Veröffentlichungsregel in
+`doc/ABC_TRENNUNGSPOLICY.md` (Kapitel 9).
+
 ---
 
 ## 2. Aktive Datenkanäle
@@ -33,7 +39,7 @@ greifen, ohne auf Heuristiken oder Annahmen angewiesen zu sein.
 
 **Status:** ✅ Aktiv, stabil. Latenz ~50 ms.
 
-### 2.2 Fronius HTTP Internal API
+### 2.2 Fronius HTTP-Schnittstelle (lokaler Zugriff)
 
 | Datenpunkt | Endpunkt | Intervall | Quelle |
 |---|---|---|---|
@@ -43,7 +49,8 @@ greifen, ohne auf Heuristiken oder Annahmen angewiesen zu sein.
 | Wechselrichter-Temperaturen | `/status/devices` | 60 s | fronius_api.py |
 | BMS-Daten (Zellspannung, Temp) | `/status/powersupply` | 60 s | fronius_api.py |
 
-**Status:** ✅ Aktiv. Auth: Custom Digest (HA1=MD5, Rest=SHA256). Latenz ~200 ms.
+**Status:** ✅ Aktiv. Authentifizierung gemäß legitimen Zugangsdaten und
+Hersteller-/Produktvorgaben. Latenz ~200 ms.
 
 ### 2.3 SolarWeb (Fronius Cloud)
 
@@ -53,6 +60,10 @@ greifen, ohne auf Heuristiken oder Annahmen angewiesen zu sein.
 | Historische kWh-Daten | SolarWeb API | bei Bedarf | scripts/import_solarweb_daily.py |
 
 **Status:** ✅ Import aktiv. Nur für Retrospektive/Kalibrierung, nicht für Echtzeit-Steuerung.
+
+**Hinweis zur Veröffentlichung:**
+Bei externer Veröffentlichung nur eigene Formulierungen verwenden und auf
+öffentliche Herstellerquellen verlinken (statt Inhalte zu kopieren).
 
 ### 2.4 Solar-Prognose (intern)
 
