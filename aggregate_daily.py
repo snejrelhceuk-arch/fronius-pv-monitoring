@@ -125,7 +125,16 @@ def aggregate_daily():
         # SolarWeb-Referenzwerten gesetzt wurde. Die Aggregation würde hier
         # falsche Werte aus den lückenhaften hourly/1min-Daten berechnen.
         PROTECTED_DAYS = {
-            '2026-02-20',  # Collector-Ausfall 01:00-20:43, SolarWeb-Werte manuell gesetzt
+            # ── Jan 2026: Collector unvollständig (F2/F3 fehlen, Batt=0) → Solarweb-Backfill ──
+            *(f'2026-01-{d:02d}' for d in range(1, 32)),
+            # ── Feb 01-06: Batt=0 / SmartMeter ohne Wattpilot-Circuit → Solarweb-Backfill ──
+            *(f'2026-02-{d:02d}' for d in range(1, 7)),
+            # ── Feb 13: Collector-Ausfall (626/1440 1min) → Solarweb-Backfill ──
+            '2026-02-13',
+            # ── Feb 14: Collector-Ausfall (901/1440 1min) → Solarweb-Backfill ──
+            '2026-02-14',
+            # ── Feb 20: Collector-Ausfall 01:00-20:43 → Solarweb-Backfill ──
+            '2026-02-20',
         }
 
         count = 0
@@ -238,6 +247,33 @@ def aggregate_daily():
             wtp_row = c.fetchone()
             wattpilot_wh = wtp_row[0] if (wtp_row and wtp_row[0] is not None) else None
 
+            # ── 4b. BMS-Checkpoint-Deltas für Batterie (ab 21.02.2026) ──
+            # Checkpoints sind zu lokaler Mitternacht gespeichert (= q_start/q_end)
+            bms_charge_wh = None
+            bms_discharge_wh = None
+            try:
+                c.execute("""
+                    SELECT W_Batt_Charge_BMS, W_Batt_Discharge_BMS
+                    FROM energy_checkpoints
+                    WHERE ts = ? AND W_Batt_Charge_BMS IS NOT NULL
+                """, (q_start,))
+                cp_start = c.fetchone()
+                c.execute("""
+                    SELECT W_Batt_Charge_BMS, W_Batt_Discharge_BMS
+                    FROM energy_checkpoints
+                    WHERE ts = ? AND W_Batt_Charge_BMS IS NOT NULL
+                """, (q_end,))
+                cp_end = c.fetchone()
+                if cp_start and cp_end:
+                    bms_charge_wh = cp_end[0] - cp_start[0]
+                    bms_discharge_wh = cp_end[1] - cp_start[1]
+                    if bms_charge_wh < 0 or bms_discharge_wh < 0:
+                        logging.warning(f"  {day_local}: BMS-Counter negativ (Ch={bms_charge_wh:.0f}, Dis={bms_discharge_wh:.0f}) → ignoriert")
+                        bms_charge_wh = None
+                        bms_discharge_wh = None
+            except Exception as e:
+                logging.debug(f"BMS-Checkpoints nicht verfügbar: {e}")
+
             # ── 5. Counter vs SUM(Δ) mit Reset-Erkennung ──
             date_str = datetime.fromtimestamp(day_ts).strftime('%Y-%m-%d')
 
@@ -268,6 +304,15 @@ def aggregate_daily():
                 W_PV_total = sum_pv_delta or 0.0
                 src_pv = "sum_delta"
 
+            # Sanity-Check: Counter-basierter PV < 80% des hourly SUM?
+            # Ursache: F2/F3-Counter aus raw_data mit Lücken → Undershoot
+            # Fallback auf hourly SUM (enthält alle 3 Inverter aus data_1min)
+            if src_pv.startswith("counter") and sum_pv_delta and sum_pv_delta > MIN_DELTA_WH:
+                if W_PV_total < 0.8 * sum_pv_delta:
+                    logging.info(f"  {date_str}: PV-Counter ({W_PV_total:.0f}) < 80% hourly SUM ({sum_pv_delta:.0f}) → Fallback")
+                    W_PV_total = sum_pv_delta
+                    src_pv = "sum_delta(counter_undershoot)"
+
             # Wärmepumpe (WP = Wärmepumpe!): Counter aus raw_data oder P×t
             if cnt_waermepumpe is not None:
                 W_WP, src_wp = _counter_or_fallback(cnt_waermepumpe, sum_wp_total, f"{date_str} Wärmepumpe")
@@ -275,10 +320,29 @@ def aggregate_daily():
                 W_WP = sum_wp_total or 0.0
                 src_wp = "sum_delta"
 
-            # Batterie + Direktverbrauch: weiterhin P×t (kein Counter)
+            # Batterie: BMS-Counter bevorzugt, Fallback I×U aus hourly
             W_Batt_Charge = sum_batt_charge or 0.0
             W_Batt_Discharge = sum_batt_discharge or 0.0
-            W_PV_Direct = sum_pv_direct or 0.0
+            W_Batt_Charge_BMS = bms_charge_wh   # None oder Wh
+            W_Batt_Discharge_BMS = bms_discharge_wh  # None oder Wh
+
+            if bms_charge_wh is not None:
+                logging.info(f"  {date_str}: BMS-Counter: Ch={bms_charge_wh:.0f} Wh, Dis={bms_discharge_wh:.0f} Wh"
+                             f" (I×U: Ch={W_Batt_Charge:.0f}, Dis={W_Batt_Discharge:.0f})")
+
+            # Beste verfügbare Batterie-Ladung für Restgrößen-Berechnung
+            best_batt_charge = bms_charge_wh if bms_charge_wh is not None else W_Batt_Charge
+
+            # Direktverbrauch: Für ABGELAUFENE Tage als Restgröße berechnen
+            # PV_Direct = PV − Einsp − BattCh (konsistent mit Zählerlogik)
+            # Für LAUFENDEN Tag: SUM(hourly) wie bisher (noch kein End-Checkpoint)
+            is_current = (day_ts >= current_day)
+            if is_current:
+                W_PV_Direct = sum_pv_direct or 0.0
+            else:
+                W_PV_Direct = max(0.0, W_PV_total - W_Exp_Netz - best_batt_charge)
+                if sum_pv_direct and abs(W_PV_Direct - sum_pv_direct) > 500:
+                    logging.info(f"  {date_str}: PV_Direct Restgröße={W_PV_Direct:.0f} vs hourly={sum_pv_direct:.0f} Δ={(W_PV_Direct-sum_pv_direct):.0f} Wh")
 
             # Verbrauch = PV + Bezug − Einspeisung (immer konsistent berechnet)
             W_Consumption = W_PV_total + W_Imp_Netz - W_Exp_Netz
@@ -331,8 +395,9 @@ def aggregate_daily():
                     W_AC_Inv_start, W_AC_Inv_end,
                     W_Exp_Netz_start, W_Exp_Netz_end,
                     W_Imp_Netz_start, W_Imp_Netz_end,
-                    forecast_kwh
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    forecast_kwh,
+                    W_Batt_Charge_BMS, W_Batt_Discharge_BMS
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (day_ts,
                   P_AC_Inv_avg, P_AC_Inv_min, P_AC_Inv_max,
                   f_Netz_avg, f_Netz_min, f_Netz_max,
@@ -345,7 +410,8 @@ def aggregate_daily():
                   inv_start, inv_end,
                   exp_start, exp_end,
                   imp_start, imp_end,
-                  forecast_kwh))
+                  forecast_kwh,
+                  W_Batt_Charge_BMS, W_Batt_Discharge_BMS))
             count += 1
 
         conn.commit()

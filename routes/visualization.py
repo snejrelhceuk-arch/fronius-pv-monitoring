@@ -329,7 +329,7 @@ def monat_visualization():
                    W_Batt_Charge_total, W_PV_Direct_total,
                    W_Batt_Discharge_total, W_WP_total,
                    SOC_Batt_avg,
-                   W_PV_total, W_Exp_Netz_total, W_Imp_Netz_total,
+                 W_PV_total, W_Exp_Netz_total, W_Imp_Netz_total, W_Consumption_total,
                    f_Netz_avg, f_Netz_min, f_Netz_max,
                    forecast_kwh
             FROM daily_data
@@ -389,7 +389,7 @@ def monat_visualization():
         for row in rows:
             ts, w_ac_start, w_ac_end, w_exp_start, w_exp_end, w_imp_start, w_imp_end, \
                 w_batt_charge, w_pv_direct, w_batt_discharge, w_wp, soc_avg, \
-                w_pv_fallback, w_exp_fallback, w_imp_fallback, \
+                w_pv_fallback, w_exp_fallback, w_imp_fallback, w_consumption_fallback, \
                 f_netz_avg, f_netz_min, f_netz_max, forecast_kwh = row
 
             # Für LAUFENDE Tage (heute): Nutze Fallback (Deltas)
@@ -406,20 +406,30 @@ def monat_visualization():
                 w_exp = _plausible_counter_delta(w_exp_start, w_exp_end, w_exp_fallback)
                 w_imp = _plausible_counter_delta(w_imp_start, w_imp_end, w_imp_fallback)
 
-            # Gesamtverbrauch und Autarkie berechnen
+            # Verbrauchskomponenten berechnen
             w_erzeugung_kwh = (w_pv or 0) / 1000
             w_direktverbrauch_kwh = (w_pv_direct or 0) / 1000
             w_batterieentladung_kwh = (w_batt_discharge or 0) / 1000
             w_netzbezug_kwh = (w_imp or 0) / 1000
 
-            eigenverbrauch = w_direktverbrauch_kwh + w_batterieentladung_kwh
-            gesamtverbrauch = eigenverbrauch + w_netzbezug_kwh
-            autarkie = (eigenverbrauch / gesamtverbrauch * 100) if gesamtverbrauch > 0 else 0
-
-            # Wattpilot-Verbrauch für diesen Tag
+            # Wattpilot-Verbrauch für diesen Tag (Info-Feld, NICHT in Gesamtverbrauch!)
+            # w_wattpilot ist der Wallbox-Gesamtzähler (PV + Netz-Anteil).
+            # Der PV-Anteil steckt bereits in w_direktverbrauch (PV_Direct).
             day_key = (int(ts) // 86400) * 86400
             wattpilot_day = wattpilot_by_day.get(day_key, {})
             w_wattpilot_kwh = (wattpilot_day.get('energy_wh', 0) or 0) / 1000
+
+            # Gesamtverbrauch und Autarkie berechnen
+            w_einspeisung_kwh = (w_exp or 0) / 1000
+            if w_consumption_fallback and w_consumption_fallback > 0:
+                gesamtverbrauch = w_consumption_fallback / 1000
+            else:
+                gesamtverbrauch = w_netzbezug_kwh + w_batterieentladung_kwh + w_direktverbrauch_kwh
+
+            # Eigenverbrauch = PV − Einspeisung (zähler-basiert, exakt)
+            # NICHT Direct+BattDis+Wattpilot (Doppelzählung Wattpilot-PV-Anteil!)
+            eigenverbrauch = w_erzeugung_kwh - w_einspeisung_kwh
+            autarkie = (eigenverbrauch / gesamtverbrauch * 100) if gesamtverbrauch > 0 else 0
 
             fc_day = forecast_by_day.get(day_key)
             fc_kwh = fc_day['forecast_kwh'] if fc_day and fc_day['forecast_kwh'] else None
