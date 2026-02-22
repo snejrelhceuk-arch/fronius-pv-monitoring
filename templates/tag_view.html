@@ -375,7 +375,7 @@
                     return sum + (dp.w_einspeisung || 0) + (dp.w_batterieladung || 0) + (dp.w_direktverbrauch || 0);
                 }, 0);
                 const verbrauchTotal = chartData.datapoints.filter(dp => !dp.is_forecast).reduce((sum, dp) => {
-                    return sum + (dp.w_netzbezug || 0) + (dp.w_batterieentladung || 0) + (dp.w_direktverbrauch || 0);
+                    return sum + (dp.w_gesamtverbrauch || 0);
                 }, 0);
                 const autarkiePeriod = verbrauchTotal > 0 ? Math.min(100, (ertragTotal / verbrauchTotal * 100)) : 0;
                 
@@ -1798,6 +1798,15 @@
             chartData.datapoints.forEach(dp => {
                 dataByDay[dp.day] = dp;
             });
+
+            const getDirektVerbrauchForConsumption = (dp) => {
+                if (!dp) return 0;
+                const total = dp.w_gesamtverbrauch || 0;
+                if (total > 0) {
+                    return Math.max(0, total - (dp.w_netzbezug || 0) - (dp.w_batterieentladung || 0));
+                }
+                return (dp.w_direktverbrauch || 0) + (dp.w_wattpilot || 0);
+            };
             
             // Erstelle Daten-Arrays für ERTRAG (linker Balken)
             // C: Prognose-Tage NUR als Ertrag-Balken (kein Verbrauch), extra transparent
@@ -1872,7 +1881,7 @@
                 const dp = dataByDay[day];
                 if (!dp || dp.is_forecast) return null;
                 return {
-                    value: dp.w_direktverbrauch,
+                    value: getDirektVerbrauchForConsumption(dp),
                     erzeugung: dp.w_pv_total,
                     autarkie: dp.autarkie
                 };
@@ -1973,8 +1982,9 @@
                         if (dp.w_batterieentladung > 0) {
                             result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(139,195,74,0.8);border:1px solid #000;margin-right:5px;"></span>${formatEnergy(dp.w_batterieentladung)}<br/>`;
                         }
-                        if (dp.w_direktverbrauch > 0) {
-                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(255,193,7,0.8);border:1px solid #000;margin-right:5px;"></span>${formatEnergy(dp.w_direktverbrauch)}<br/>`;
+                        const directForConsumption = getDirektVerbrauchForConsumption(dp);
+                        if (directForConsumption > 0) {
+                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(255,193,7,0.8);border:1px solid #000;margin-right:5px;"></span>${formatEnergy(directForConsumption)}<br/>`;
                         }
                         
                         // Trennlinie
@@ -2245,6 +2255,15 @@
             chartData.datapoints.forEach(dp => {
                 dataByLabel[dp[keyField]] = dp;
             });
+
+            const getDirektVerbrauchForConsumption = (dp) => {
+                if (!dp) return 0;
+                const total = dp.w_gesamtverbrauch || 0;
+                if (total > 0) {
+                    return Math.max(0, total - (dp.w_netzbezug || 0) - (dp.w_batterieentladung || 0));
+                }
+                return (dp.w_direktverbrauch || 0) + (dp.w_wattpilot || 0);
+            };
             
             // Ertrag-Stack
             const einspeisungData = xLabels.map((_, i) => {
@@ -2271,7 +2290,7 @@
             });
             const direktverbrauchVerbrauchData = xLabels.map((_, i) => {
                 const dp = chartData.datapoints[i];
-                return dp ? { value: dp.w_direktverbrauch, erzeugung: dp.w_pv_total, autarkie: dp.autarkie } : null;
+                return dp ? { value: getDirektVerbrauchForConsumption(dp), erzeugung: dp.w_pv_total, autarkie: dp.autarkie } : null;
             });
             
             updateSummaryDisplay();
@@ -2305,8 +2324,9 @@
                         if (dp.w_batterieentladung > 0) {
                             result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(139,195,74,0.8);border:1px solid #000;margin-right:5px;"></span>Batt.entl. ${formatEnergy(dp.w_batterieentladung)}<br/>`;
                         }
-                        if (dp.w_direktverbrauch > 0) {
-                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(255,193,7,0.8);border:1px solid #000;margin-right:5px;"></span>Direkt ${formatEnergy(dp.w_direktverbrauch)}<br/>`;
+                        const directForConsumption = getDirektVerbrauchForConsumption(dp);
+                        if (directForConsumption > 0) {
+                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(255,193,7,0.8);border:1px solid #000;margin-right:5px;"></span>Direkt ${formatEnergy(directForConsumption)}<br/>`;
                         }
                         
                         result += '<hr style="border:none;border-top:1px solid #ccc;margin:8px 0;"/>';
