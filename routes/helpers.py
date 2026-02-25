@@ -235,7 +235,12 @@ def store_forecast_15min(date_str, forecast_points, clearsky_points=None):
 
 
 def get_stored_forecast_from_15min(date_str):
-    """Lädt gespeicherte 15min Forecast/Clear-Sky und interpoliert auf 5min."""
+    """Lädt gespeicherte 15min Forecast/Clear-Sky und interpoliert auf 5min.
+
+    Gibt None zurück wenn die gespeicherten Daten unvollständig sind
+    (z.B. nur Nachtstunden mit 0 W), damit der Fallback auf
+    forecast_daily mit vollständigem Tagesprofil greifen kann.
+    """
     try:
         conn = get_db_connection()
         if not conn:
@@ -257,6 +262,19 @@ def get_stored_forecast_from_15min(date_str):
 
         fc_points = [(int(r['ts']), r['P_PV_FC_avg'] or 0) for r in rows if r['P_PV_FC_avg'] is not None]
         cs_points = [(int(r['ts']), r['P_PV_CS_avg'] or 0) for r in rows if r['P_PV_CS_avg'] is not None]
+
+        # ── Qualitätsprüfung: nur verwenden wenn Daten aussagekräftig sind ──
+        # Mindestens 20 Forecast-Punkte mit Wert > 0 UND über mind. 5h verteilt
+        fc_nonzero = [ts for ts, p in fc_points if p > 0]
+        if len(fc_nonzero) < 20:
+            logging.debug(f"15min-Prognose {date_str}: nur {len(fc_nonzero)} "
+                          f"non-zero Punkte → Fallback auf forecast_daily")
+            return None
+        fc_span_h = (max(fc_nonzero) - min(fc_nonzero)) / 3600.0
+        if fc_span_h < 5.0:
+            logging.debug(f"15min-Prognose {date_str}: nur {fc_span_h:.1f}h Abdeckung "
+                          f"→ Fallback auf forecast_daily")
+            return None
 
         targets_5m = _day_timestamps(date_str, 300)
         fc_5m = _interpolate_series(fc_points, targets_5m)

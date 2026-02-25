@@ -236,6 +236,8 @@ MEGA-BAS RS485 [B] ──► LWPM 410 RS485 [B]
 - Diese Doku dient der Interoperabilität im Eigenbetrieb.
 - Keine Gewähr für Vollständigkeit oder Freigabe einzelner Herstellerfunktionen.
 - Für Implementierung, Rechte und Grenzwerte gilt immer die offizielle Dokumentation.
+- Veröffentlichungs- und Compliance-Regeln stehen zentral in
+   `doc/VEROEFFENTLICHUNGSRICHTLINIE.md`.
 
 **Noch relevante Fallback-Optionen:**
 1. **Bypass-Ventil am Speicher** — Umschaltung über Stellantrieb (24VAC):

@@ -60,9 +60,75 @@ def api_battery_status():
 
         result['batt_energy_method'] = 'integration_ui_with_counter_fallback'
 
-        # Scheduler-State hinzufügen (wenn vorhanden)
+        # Automation Engine State (echte Daten aus automation_log)
         try:
             import json as _json
+
+            with sqlite3.connect(config.DB_PATH) as _adb:
+                _24h_ago = int(now) - 86400
+
+                # Vergangene SOC-Umschaltungen (letzte 24 h) — nur SOC-Befehle
+                soc_rows = _adb.execute("""
+                    SELECT ts, kommando, wert, grund, ergebnis
+                    FROM automation_log
+                    WHERE aktor = 'batterie'
+                      AND kommando IN ('set_soc_min', 'set_soc_max', 'set_soc_mode')
+                      AND ts >= datetime(?, 'unixepoch')
+                    ORDER BY ts DESC
+                    LIMIT 20
+                """, (_24h_ago,)).fetchall()
+
+                result['soc_switches'] = [{
+                    'ts': r[0],
+                    'kommando': r[1],
+                    'wert': r[2],
+                    'grund': (r[3] or '')[:120],
+                    'ergebnis': r[4],
+                } for r in soc_rows]
+
+                # ALLE Engine-Aktionen der letzten 24 h (inkl. Lade-/Entladerate, hold)
+                all_rows = _adb.execute("""
+                    SELECT ts, kommando, wert, grund, ergebnis
+                    FROM automation_log
+                    WHERE aktor = 'batterie'
+                      AND ts >= datetime(?, 'unixepoch')
+                    ORDER BY ts DESC
+                    LIMIT 50
+                """, (_24h_ago,)).fetchall()
+
+                result['engine_aktionen'] = [{
+                    'ts': r[0],
+                    'kommando': r[1],
+                    'wert': r[2],
+                    'grund': (r[3] or '')[:120],
+                    'ergebnis': r[4],
+                } for r in all_rows]
+
+                # Letzter Engine-Zyklus: Gewinner-Regel + Score
+                last_action = _adb.execute("""
+                    SELECT ts, kommando, wert, grund, ergebnis
+                    FROM automation_log
+                    WHERE aktor = 'batterie'
+                    ORDER BY id DESC LIMIT 1
+                """).fetchone()
+                if last_action:
+                    result['last_engine_action'] = {
+                        'ts': last_action[0],
+                        'kommando': last_action[1],
+                        'wert': last_action[2],
+                        'grund': (last_action[3] or '')[:120],
+                        'ergebnis': last_action[4],
+                    }
+
+            # Engine-Vorausschau (Dry-Run aller Regeln auf aktuellem Zustand)
+            try:
+                from automation.engine.automation_daemon import engine_vorausschau
+                result['vorausschau'] = engine_vorausschau()
+            except Exception as ev:
+                logging.debug(f"Vorausschau nicht verfügbar: {ev}")
+                result['vorausschau'] = []
+
+            # Scheduler-State (Phasen-Flags, Legacy-Kompatibilität)
             state_file = Path(__file__).resolve().parent.parent / 'config' / 'battery_scheduler_state.json'
             if state_file.exists():
                 with open(state_file, 'r') as f:
@@ -75,37 +141,51 @@ def api_battery_status():
                     'evening_rate_percent': sched_state.get('evening_rate_percent'),
                     'manual_override': sched_state.get('manual_override', False),
                     'last_date': sched_state.get('last_date'),
-                    # Simulation-Modus: Plan + Entscheidungen für Flow-View
-                    'sim_mode': sched_state.get('sim_mode', False),
-                    'sim_last_run': sched_state.get('sim_last_run'),
-                    'sim_plan': sched_state.get('sim_plan', {}),
-                    'sim_decisions': sched_state.get('sim_decisions', []),
                 }
         except Exception as e:
-            logging.warning(f"Scheduler-State nicht lesbar: {e}")
+            logging.warning(f"Automation-State nicht lesbar: {e}")
 
-        # Letzte SOC-Umschaltung aus battery_control_log
+        # Letzte SOC-Umschaltung (zuerst automation_log, Fallback battery_control_log)
         try:
             with sqlite3.connect(config.DB_PATH) as _ldb:
+                # Neue Quelle: automation_log
                 row = _ldb.execute("""
-                    SELECT ts, action, param, old_value, new_value, reason
-                    FROM battery_control_log
-                    WHERE action IN (
-                        'morning_open', 'afternoon_raise', 'comfort_reset',
-                        'comfort_defaults', 'balancing_start', 'evening_limit',
-                        'evening_auto', 'manual_set'
-                    )
-                    ORDER BY ts DESC LIMIT 1
+                    SELECT ts, kommando, wert, grund, ergebnis
+                    FROM automation_log
+                    WHERE aktor = 'batterie'
+                      AND kommando IN ('set_soc_min', 'set_soc_max', 'set_soc_mode')
+                    ORDER BY id DESC LIMIT 1
                 """).fetchone()
                 if row:
                     result['last_soc_switch'] = {
-                        'ts':     datetime.fromtimestamp(row[0]).strftime('%d.%m %H:%M'),
+                        'ts':     row[0][:16].replace('T', ' ') if row[0] else '?',
                         'action': row[1],
-                        'param':  row[2],
-                        'old':    row[3],
-                        'new':    row[4],
-                        'reason': (row[5] or '')[:90],
+                        'param':  row[1],
+                        'old':    None,
+                        'new':    row[2],
+                        'reason': (row[3] or '')[:90],
                     }
+                else:
+                    # Legacy-Fallback: battery_control_log
+                    row = _ldb.execute("""
+                        SELECT ts, action, param, old_value, new_value, reason
+                        FROM battery_control_log
+                        WHERE action IN (
+                            'morning_open', 'afternoon_raise', 'comfort_reset',
+                            'comfort_defaults', 'balancing_start', 'evening_limit',
+                            'evening_auto', 'manual_set'
+                        )
+                        ORDER BY ts DESC LIMIT 1
+                    """).fetchone()
+                    if row:
+                        result['last_soc_switch'] = {
+                            'ts':     datetime.fromtimestamp(row[0]).strftime('%d.%m %H:%M'),
+                            'action': row[1],
+                            'param':  row[2],
+                            'old':    row[3],
+                            'new':    row[4],
+                            'reason': (row[5] or '')[:90],
+                        }
         except Exception as e:
             logging.debug(f"last_soc_switch query: {e}")
 

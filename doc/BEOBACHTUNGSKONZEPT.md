@@ -20,7 +20,7 @@ greifen, ohne auf Heuristiken oder Annahmen angewiesen zu sein.
 Dieses Dokument beschreibt ausschließlich legitime Integrationsnutzung mit eigenen
 Berechtigungen. Es enthält keine Anleitung zur Umgehung von Hersteller- oder
 Plattform-Schutzmechanismen. Maßgeblich ist die Veröffentlichungsregel in
-`doc/ABC_TRENNUNGSPOLICY.md` (Kapitel 9).
+`doc/VEROEFFENTLICHUNGSRICHTLINIE.md`.
 
 ---
 

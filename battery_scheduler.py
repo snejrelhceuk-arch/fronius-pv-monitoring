@@ -513,7 +513,7 @@ def run_scheduler(args):
         # ═══════════════════════════════════════════════════════
         # KONSISTENZ-PRÜFUNG: Inverter vs. erwarteter Zustand
         # ═══════════════════════════════════════════════════════
-        _verify_consistency(cfg, state, inverter, current_hour)
+        _verify_consistency(cfg, state, inverter, current_hour, strategy)
 
         # --- Zellausgleich prüfen ---
         if cfg.get('zellausgleich', {}).get('aktiv', False):
@@ -1129,7 +1129,7 @@ def _update_config_balancing_date():
 # KONSISTENZ-PRÜFUNG
 # ═══════════════════════════════════════════════════════════════
 
-def _verify_consistency(cfg, state, inverter, current_hour):
+def _verify_consistency(cfg, state, inverter, current_hour, strategy=None):
     """Prüfe ob der Inverter-Zustand mit dem State übereinstimmt.
 
     Erkennt und korrigiert Inkonsistenzen, z.B.:
@@ -1137,8 +1137,13 @@ def _verify_consistency(cfg, state, inverter, current_hour):
       - SOC-Werte die nicht dem erwarteten Zustand entsprechen
       - State-File das nicht zur Inverter-Realität passt
 
+    ★ Respektiert das Morgen-Entladefenster: Wenn SOC_MIN=5% während
+      des Morgen-Fensters gesetzt ist, wird NICHT auf Komfort korrigiert.
+
     Wird bei JEDEM Scheduler-Lauf ausgeführt (Kosten: 1× Modbus-Read).
     """
+    if strategy is None:
+        strategy = {}
     zeit_cfg = cfg.get('zeitsteuerung', {})
     grenzen = cfg.get('soc_grenzen', {})
     nacht_bis = zeit_cfg.get('nacht_entladelimit_bis', 6)
@@ -1163,20 +1168,39 @@ def _verify_consistency(cfg, state, inverter, current_hour):
                                'Tag-Phase: Modbus-Limit war fälschlich aktiv')
 
     # --- SOC-Konsistenz: Morning nicht gelaufen → SOC_MIN = Komfort? ---
+    # ★ WICHTIG: Nur korrigieren wenn wir NICHT im Morgen-Entladefenster
+    #   sind!  Während des Fensters kann die Automation-Engine oder der
+    #   Benutzer SOC_MIN absichtlich auf 5% gesetzt haben.  Eine
+    #   "Korrektur" auf 25% würde die Morgen-Entladung verhindern!
+    morgen_cfg_kons = cfg.get('morgen_algorithmus', {})
+    sunrise_h_kons = strategy.get('sunrise_hour', 7.5)
+    # ★ Morgen-Fenster = Sonnenaufgang bis Sonnenaufgang + X Stunden
+    # Kein fester Startpunkt mehr (war 5:00) — Sunrise ist frühester Start.
+    morning_start_h = sunrise_h_kons
+    morning_end_h = sunrise_h_kons + morgen_cfg_kons.get('fenster_stunden_nach_sunrise', 3)
+    im_morgen_fenster = morning_start_h <= current_hour <= morning_end_h
+
     if not state.get('morning_done') and not state.get('balancing_active'):
         settings = inverter.get_current_settings()
         if settings:
             expected_min = grenzen.get('komfort_min', 25)
             actual_min = settings.get('soc_min')
             if actual_min is not None and actual_min != expected_min:
-                LOG.warning(f"⚠ Konsistenz: SOC_MIN={actual_min}% "
-                            f"erwartet {expected_min}% — korrigiere")
-                ok = inverter.set_soc_min(expected_min)
-                if ok:
-                    fixes += 1
-                    log_action('consistency_fix', 'soc_min',
-                               actual_min, expected_min,
-                               'SOC_MIN ≠ Komfort-Wert (morning noch nicht gelaufen)')
+                if im_morgen_fenster:
+                    # Im Morgen-Fenster: SOC_MIN=5% ist GEWOLLT (Entladung!)
+                    # Nicht korrigieren, sondern loggen und respektieren.
+                    LOG.info(f"ℹ Konsistenz: SOC_MIN={actual_min}% ≠ {expected_min}% "
+                             f"— aber im Morgen-Fenster ({morning_start_h:.0f}–"
+                             f"{morning_end_h:.1f}h), NICHT korrigiert (Entladung gewollt)")
+                else:
+                    LOG.warning(f"⚠ Konsistenz: SOC_MIN={actual_min}% "
+                                f"erwartet {expected_min}% — korrigiere")
+                    ok = inverter.set_soc_min(expected_min)
+                    if ok:
+                        fixes += 1
+                        log_action('consistency_fix', 'soc_min',
+                                   actual_min, expected_min,
+                                   'SOC_MIN ≠ Komfort-Wert (morning noch nicht gelaufen)')
 
     # --- SOC-Konsistenz: Afternoon nicht gelaufen → SOC_MAX = Komfort? ---
     if not state.get('afternoon_done') and not state.get('balancing_active'):
