@@ -515,25 +515,19 @@
                 <span class="bd-sep">|</span>
                 <span>Temp: <span class="bd-val" id="bd-temp">--</span> °C</span>
             </div>
-            <!-- Scheduler-Simulation Bar: nur sichtbar wenn simulation_mode aktiv -->
-            <div class="scheduler-sim" id="schedulerSim">
-                <span class="ss-label">&#9881; SIM</span>
+            <!-- Engine-Vorausschau: aktive Regeln mit Scores -->
+            <div class="scheduler-sim" id="engineVorausschau" style="display:none">
+                <span class="ss-label">&#9881; Engine</span>
                 <span class="ss-sep">|</span>
-                <span id="ss-morning">Morgen: --</span>
-                <span class="ss-sep">|</span>
-                <span id="ss-afternoon">Nachmittag: --</span>
-                <span class="ss-sep">|</span>
-                <span id="ss-evening">Abend: --</span>
-                <span class="ss-sep">|</span>
-                <span id="ss-ts" style="color:rgba(255,255,255,0.3);font-size:10px">--</span>
+                <span id="ev-rules">--</span>
             </div>
-            <!-- SOC-Umschaltung: letzte + nächste -->
+            <!-- Engine-Aktionen: letzte Batterie-Aktion + nächste geplante -->
             <div class="soc-switch-info" id="socSwitchInfo">
-                <span class="sw-label">Letzte Umschaltung</span>
+                <span class="sw-label">Letzte Aktion</span>
                 <span id="sw-last-ts" style="color:rgba(255,255,255,0.3)">--</span>
                 <span id="sw-last-desc">--</span>
                 <span class="sw-sep">│</span>
-                <span class="sw-label">Nächste (Sim)</span>
+                <span class="sw-label">Vorausschau</span>
                 <span id="sw-next-desc" class="sw-next-val">--</span>
             </div>
             <div class="inverter-temps" id="inverterTemps">
@@ -1050,93 +1044,76 @@
             document.getElementById('it-f2-intern').textContent = d.f2_temp_intern != null ? d.f2_temp_intern : '--';
             document.getElementById('it-f2-ac').textContent = d.f2_temp_ac != null ? d.f2_temp_ac : '--';
             document.getElementById('it-f2-dc').textContent = d.f2_temp_dc != null ? d.f2_temp_dc : '--';
-            // ── Scheduler Simulation Bar ──
-            const simBar = document.getElementById('schedulerSim');
-            const sc = d.scheduler || {};
-            if (sc.sim_mode && sc.sim_plan) {
-                simBar.classList.add('active');
-                const plan = sc.sim_plan;
-
-                function simPhaseHtml(phase, label) {
-                    if (!phase) return `<span class="ss-skip">${label}: ?</span>`;
-                    const s = phase.status;
-                    const r = (phase.reason || '').substring(0, 55);
-                    if (s === 'done')        return `<span class="ss-skip">${label}: &#10003;done</span>`;
-                    if (s === 'skip')        return `<span class="ss-skip">${label}: &#8213; ${r}</span>`;
-                    if (s === 'waiting')     return `<span class="ss-wait">${label}: &#9203; ${r}</span>`;
-                    if (s === 'would_open')  return `<span class="ss-ok">${label}: &#9654; ${phase.from_soc_min}%→${phase.to_soc_min}%</span>`;
-                    if (s === 'would_raise') return `<span class="ss-ok">${label}: &#9650; ${phase.from_soc_max}%→${phase.to_soc_max}%</span>`;
-                    if (s === 'would_limit') return `<span class="ss-val">${label}: ${phase.phase} ${phase.rate_pct}%</span>`;
-                    if (s === 'auto')        return `<span class="ss-skip">${label}: Tag-Auto</span>`;
-                    if (s === 'error')       return `<span style="color:#f87171">${label}: Fehler</span>`;
-                    return `<span>${label}: ${s}</span>`;
-                }
-
-                document.getElementById('ss-morning').innerHTML   = simPhaseHtml(plan.morning,   'Morgen');
-                document.getElementById('ss-afternoon').innerHTML = simPhaseHtml(plan.afternoon, 'Nachm');
-                document.getElementById('ss-evening').innerHTML   = simPhaseHtml(plan.evening,   'Abend');
-                const ts = sc.sim_last_run ? sc.sim_last_run.substring(11) : '';
-                const fcStr = plan.forecast_kwh != null ? ` | Prog: ${plan.forecast_kwh} kWh` : '';
-                document.getElementById('ss-ts').textContent = ts + fcStr;
+            // ── Engine-Vorausschau Bar ──
+            const evBar = document.getElementById('engineVorausschau');
+            const vorausschau = d.vorausschau || [];
+            if (vorausschau.length > 0) {
+                evBar.style.display = 'flex';
+                const rulesHtml = vorausschau.slice(0, 4).map(v => {
+                    const scoreColor = v.score >= 60 ? '#f87171' : v.score >= 40 ? '#fbbf24' : '#4ade80';
+                    const cmds = (v.aktionen || []).map(a => a.kommando).join(', ');
+                    return `<span style="color:${scoreColor}" title="${cmds}">[${v.score}] ${v.regel}</span>`;
+                }).join(' <span class="ss-sep">|</span> ');
+                document.getElementById('ev-rules').innerHTML = rulesHtml;
             } else {
-                simBar.classList.remove('active');
+                evBar.style.display = 'none';
             }
 
-            // ── SOC-Umschaltung: letzte + nächste ──────────────────────────
-            // Letzte echte Umschaltung (aus DB via API)
-            const sw = d.last_soc_switch;
-            if (sw) {
-                document.getElementById('sw-last-ts').textContent = sw.ts || '';
-                const actionLabels = {
-                    'morning_open':    'Morgen: SOC_MIN',
-                    'afternoon_raise': 'Nachm: SOC_MAX',
-                    'comfort_reset':   'Komfort-Reset',
-                    'comfort_defaults':'Komfort-Reset',
-                    'balancing_start': 'Zellausgleich',
-                    'evening_limit':   'Abend-Limit',
-                    'evening_auto':    'Tag-Freigabe',
-                    'manual_set':      'Manuell',
-                };
-                const lbl = actionLabels[sw.action] || sw.action;
+            // ── Engine-Aktionen: letzte + Vorausschau ──────────────
+            const kommandoLabels = {
+                'set_soc_min':         'SOC_MIN',
+                'set_soc_max':         'SOC_MAX',
+                'set_soc_mode':        'SOC-Modus',
+                'set_charge_rate':     'Laderate',
+                'set_discharge_rate':  'Entladerate',
+                'hold':                'Halten',
+                'force_grid_charge':   'Netzladung',
+                // Legacy-Kompatibilität
+                'morning_open':        'Morgen: SOC_MIN',
+                'afternoon_raise':     'Nachm: SOC_MAX',
+                'comfort_reset':       'Komfort-Reset',
+                'comfort_defaults':    'Komfort-Reset',
+                'balancing_start':     'Zellausgleich',
+                'evening_limit':       'Abend-Limit',
+                'evening_auto':        'Tag-Freigabe',
+                'manual_set':          'Manuell',
+            };
+
+            // Letzte Aktion (aus last_engine_action oder last_soc_switch)
+            const lea = d.last_engine_action || d.last_soc_switch;
+            if (lea) {
+                const ts = (lea.ts || '').substring(0, 16).replace('T', ' ');
+                document.getElementById('sw-last-ts').textContent = ts;
+                const cmd = lea.kommando || lea.action || '';
+                const lbl = kommandoLabels[cmd] || cmd;
                 let desc = lbl;
-                if (sw.old != null && sw.new != null && sw.param) {
-                    desc += ` ${sw.old}→${sw.new}%`;
-                } else if (sw.reason) {
-                    desc += ': ' + sw.reason.substring(0, 45);
+                if (lea.wert != null) {
+                    desc += ` → ${lea.wert}`;
+                    if (cmd.includes('rate')) desc += '%';
+                    if (cmd.includes('soc_m')) desc += '%';
+                }
+                if (lea.grund) {
+                    desc += ' (' + lea.grund.substring(0, 50) + ')';
+                } else if (lea.reason) {
+                    desc += ' (' + lea.reason.substring(0, 50) + ')';
                 }
                 document.getElementById('sw-last-desc').textContent = desc;
             } else {
-                document.getElementById('sw-last-ts').textContent = '(keine DB-Einträge)';
+                document.getElementById('sw-last-ts').textContent = '(keine)';
                 document.getElementById('sw-last-desc').textContent = '';
             }
 
-            // Nächste wahrscheinliche Umschaltung — aus sim_plan ableiten
-            function decimalHourToHHMM(h) {
-                if (h == null) return '?';
-                const hh = Math.floor(h);
-                const mm = Math.round((h - hh) * 60);
-                return String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0');
-            }
+            // Vorausschau: Gewinner-Regel mit höchstem Score
             let nextDesc = '—';
-            if (sc.sim_plan) {
-                const mp = sc.sim_plan.morning;
-                const ap = sc.sim_plan.afternoon;
-                const ep = sc.sim_plan.evening;
-                if (mp && mp.status === 'would_open') {
-                    nextDesc = `Morgen: SOC_MIN ${mp.from_soc_min}→${mp.to_soc_min}% (jetzt möglich)`;
-                } else if (mp && mp.status === 'waiting' && mp.open_time_h != null) {
-                    nextDesc = `Morgen: SOC_MIN öffnen ~${decimalHourToHHMM(mp.open_time_h)} Uhr`;
-                    if (mp.target_soc_min != null) nextDesc += ` → ${mp.target_soc_min}%`;
-                } else if (ap && ap.status === 'would_raise') {
-                    nextDesc = `Nachm: SOC_MAX ${ap.from_soc_max}→${ap.to_soc_max}%`;
-                } else if (ap && ap.status === 'waiting') {
-                    nextDesc = `Nachm: SOC_MAX wenn Überschuss (${ap.surplus_kwh != null ? ap.surplus_kwh + ' kWh' : '?'})`;
-                } else if (ep && ep.status === 'would_limit') {
-                    nextDesc = `${ep.phase}: Entladerate ${ep.rate_pct}%`;
-                } else if (mp && mp.status === 'done' && ap && ap.status === 'done') {
-                    nextDesc = 'Heute: alle Phasen abgeschlossen';
-                } else if (mp && mp.status === 'skip') {
-                    nextDesc = 'Heute kein Öffnen (' + (mp.reason || '').substring(0,40) + ')';
+            if (vorausschau.length > 0) {
+                const top = vorausschau[0];
+                const topCmds = (top.aktionen || []).map(a => {
+                    const cl = kommandoLabels[a.kommando] || a.kommando;
+                    return a.wert != null ? `${cl} → ${a.wert}` : cl;
+                }).join(', ');
+                nextDesc = `[${top.score}] ${top.regel}: ${topCmds}`;
+                if (top.aktionen.length > 0 && top.aktionen[0].grund) {
+                    nextDesc += ' (' + top.aktionen[0].grund.substring(0, 40) + ')';
                 }
             }
             document.getElementById('sw-next-desc').textContent = nextDesc;

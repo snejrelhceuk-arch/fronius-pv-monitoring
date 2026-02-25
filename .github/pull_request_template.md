@@ -4,7 +4,7 @@
 
 ## Compliance (verpflichtend)
 
-- [ ] Ich bestätige, dass die Veröffentlichungsregeln in `doc/ABC_TRENNUNGSPOLICY.md` Kapitel 9 geprüft und eingehalten wurden.
+- [ ] Ich bestätige, dass die Veröffentlichungsregeln in `doc/VEROEFFENTLICHUNGSRICHTLINIE.md` geprüft und eingehalten wurden.
 
 ## Checkliste
 

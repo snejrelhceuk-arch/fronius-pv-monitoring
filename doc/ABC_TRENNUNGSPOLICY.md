@@ -167,67 +167,21 @@ Nutzen jetzt:
 1. **Policy-Checkliste in PR-Reviews nutzen**
 2. **Write-Side-Effects aus B schrittweise nach C verlagern**
 3. **A/B/C-Kontrakt als kurzes Kapitel in `SYSTEM_ARCHITECTURE.md` pflegen**
+4. **Automation-Engine gemäß 4-Schichten-Architektur aufbauen**
+   → Siehe [AUTOMATION_ARCHITEKTUR.md](AUTOMATION_ARCHITEKTUR.md)
 
 Diese Folge-Schritte sind absichtlich **nicht Teil** dieser dokumentierenden Änderung.
 
 ---
 
-## 9. Hersteller-Schnittstellen & Veröffentlichung (Compliance)
+## 9. Abgrenzung zu Veröffentlichung/Compliance
 
-### Zweck
-Dieses Kapitel reduziert das Risiko bei Veröffentlichung von Doku/Code mit Bezug zu
-Hersteller-Schnittstellen (z. B. Fronius, Dimplex), ohne den legitimen Eigenbetrieb
-oder eigene Integrationsarbeit zu blockieren.
+Diese A/B/C-Policy ist **rein technisch-architektonisch**. Regeln zu
+Veröffentlichung, Urheberrecht, Nutzungsrechten, Kommunikation nach außen und
+Compliance-Prozessen stehen zentral in:
 
-### Grundsatz
-- **Eigene Beschreibung ja, fremde Originalinhalte nein.**
-- Funktionen, Endpunkte und technische Fakten dürfen beschrieben werden, aber keine
-   wörtliche oder strukturgetreue Übernahme aus proprietären Herstellerunterlagen.
-- Nicht-kommerzielle Veröffentlichung ist **kein** verlässlicher Schutz vor Ansprüchen.
+- `doc/VEROEFFENTLICHUNGSRICHTLINIE.md`
 
-### Was im Repo zulässig ist
-- Selbst formulierte technische Dokumentation in eigenen Worten.
-- Eigener Quellcode für legitime Abfrage/Monitoring-Anwendungsfälle.
-- Verweise auf öffentliche Herstellerdokumentation (Link statt Kopie).
-- Klare Hinweise auf Nutzung nur mit eigenen Berechtigungen und im Einklang mit
-   Nutzungsbedingungen.
-
-### Was vor Veröffentlichung zu entfernen/umschreiben ist
-- Copy/Paste aus Hersteller-PDFs, Portalen, Handbüchern oder geschützten Tabellen.
-- Screenshots/Abbildungen aus Herstellerportalen ohne ausdrückliche Freigabe.
-- Detaillierte „Umgehungsanleitungen“ zu Schutzmechanismen, Zugriffsbeschränkungen
-   oder internen Endpunkten.
-- Formulierungen, die das Projekt als vollständigen Ersatz eines Herstellerdienstes
-   positionieren.
-
-### Redaktionsregel für heikle Inhalte
-Wenn eine Passage auf Herstellerwissen basiert:
-1. in eigene Worte überführen,
-2. auf notwendiges Minimum kürzen,
-3. Quelle als öffentlicher Link nennen,
-4. keine proprietären Originaldarstellungen übernehmen.
-
-### Pre-Release-Checkliste (Pflicht vor Public Push)
-- [ ] Keine wörtlich übernommenen Herstellertexte in `README.md` und `doc/*`.
-- [ ] Keine fremden Tabellen/Screenshots/Grafiken ohne Nutzungsrecht.
-- [ ] Keine Secrets/Tokens/Kundendaten/Seriennummern in Repo oder Beispiel-Configs.
-- [ ] Keine Anleitung zur Umgehung von Hersteller-Schutzmaßnahmen.
-- [ ] Deutlicher Compliance-Hinweis in Hauptdoku vorhanden.
-- [ ] Kritische Passagen durch zweite Person gegengeprüft (4-Augen-Prinzip).
-
-### Kommunikationsprinzip (Goodwill)
-- Sachlicher Ton gegenüber Herstellern, keine konfrontative Sprache.
-- Projekt als Eigenmonitoring/Interoperabilität darstellen, nicht als
-   "Dienst-Abwerbung" oder Plattform-Ersatz bewerben.
-- Bei berechtigter Beanstandung: schnelle, dokumentierte Reaktion.
-
-### Takedown- und Eskalationsprozess (operativ)
-1. Eingang einer Beschwerde dokumentieren (Datum, Inhalt, betroffene Dateien).
-2. Betroffene Inhalte kurzfristig temporär depublizieren oder unpublishen.
-3. Juristische/vertragliche Prüfung durchführen (Urheberrecht + ToS/Vertragslage).
-4. Bereinigte Fassung veröffentlichen und Entscheidung intern dokumentieren.
-
-### Hinweis zur Rechtslage
-Dieses Kapitel ist eine technische Compliance-Leitlinie und ersetzt keine
-individuelle Rechtsberatung. Bei externer Veröffentlichung mit Reichweite ist eine
-kurze Prüfung durch IT-/Urheberrechtsberatung empfohlen.
+Damit bleibt die Trennung sauber:
+- **Technische Systemgrenzen** in dieser Datei
+- **Recht/Veröffentlichung/Compliance** in der separaten Richtlinie

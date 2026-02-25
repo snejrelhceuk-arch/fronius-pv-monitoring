@@ -532,8 +532,10 @@ erfordert eine **Neuinstallation** (kein In-Place-Upgrade empfohlen):
 | Dokument | Zweck |
 |----------|-------|
 | [ABC_TRENNUNGSPOLICY.md](ABC_TRENNUNGSPOLICY.md) | Trennung A Datenbank / B Web-API / C Automatisierung (dokumentierend, ohne Laufzeitwirkung) |
+| [VEROEFFENTLICHUNGSRICHTLINIE.md](VEROEFFENTLICHUNGSRICHTLINIE.md) | Regeln für externe Veröffentlichung, Urheberrecht/Nutzungsrechte und Compliance-Prozess |
 | [SCHUTZREGELN.md](SCHUTZREGELN.md) | Schutzregeln und Prioritäten für automatisierte Eingriffe |
 | [DUAL_HOST_ARCHITECTURE.md](DUAL_HOST_ARCHITECTURE.md) | Rollenmodell `primary`/`failover`, Betriebsgrenzen, Failover-Abläufe |
+| [AUTOMATION_ARCHITEKTUR.md](AUTOMATION_ARCHITEKTUR.md) | 4-Schichten-Architektur Schicht C (Observer → Engine → Actuator), Plugin-System, Migration |
 
 Hinweis: Die Verschattungsmaske kann als globale Lookup-Tabelle oder pro String
 in config/geometry_config.json gepflegt werden. Das erlaubt schrittweise

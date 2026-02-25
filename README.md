@@ -150,7 +150,7 @@ systemctl list-timers pv-backup-gfs.timer
 Dokumentation und Schnittstellenbeschreibungen im Repo sind als eigene technische
 Darstellung gedacht und dürfen keine kopierten Hersteller-Originalinhalte enthalten.
 Vor externer Veröffentlichung gilt die Checkliste in
-[doc/ABC_TRENNUNGSPOLICY.md](doc/ABC_TRENNUNGSPOLICY.md) (Kapitel 9).
+[doc/VEROEFFENTLICHUNGSRICHTLINIE.md](doc/VEROEFFENTLICHUNGSRICHTLINIE.md).
 
 ## Hardware
 
