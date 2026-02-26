@@ -182,20 +182,6 @@
 
 ---
 
-## 6. Simulation-Modus Schutz
-
-### SR-SIM-01: Keine Schreibzugriffe im Sim-Modus
-
-| Feld | Wert |
-|---|---|
-| **Auslöser** | `simulation_mode: true` in battery_control.json |
-| **Sicherung** | `_DRY_RUN = True` in battery_scheduler.py → `InverterControl` verwirft alle Schreib-Calls |
-| **Prüfung** | `log_action()` prüft `_DRY_RUN` vor jedem DB-Schreib-Versuch |
-| **Sicherheitsnetz** | Selbst wenn Code-Fehler dazu führt, dass Funktionen aufgerufen werden: `InverterControl.set_*()` Methoden sind im DryRun-Modus no-ops |
-| **Status** | ✅ Implementiert (2026-02-20) |
-
----
-
 ## Failover & Dual-Host Schutzregeln
 
 > Hintergrund: Das PV-System läuft auf zwei Pi4-Hosts (Primary: 181, Failover: failover-host 105).

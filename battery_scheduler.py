@@ -17,7 +17,7 @@ Doku:           doc/BATTERY_ALGORITHM.md
 Nutzung:
   python3 battery_scheduler.py              # Normaler Lauf (Cron)
   python3 battery_scheduler.py --status     # Nur Status anzeigen
-  python3 battery_scheduler.py --dry-run    # Simulation ohne Schreiben
+  python3 battery_scheduler.py --dry-run    # Testlauf ohne Schreiben
   python3 battery_scheduler.py --force-morning   # Morgen-Öffnung erzwingen
   python3 battery_scheduler.py --force-afternoon # Nachmittag-Erhöhung erzwingen
   python3 battery_scheduler.py --reset      # Auf Komfort-Defaults zurücksetzen
@@ -107,29 +107,12 @@ def save_state(state):
 
 _DRY_RUN = False  # Global flag, wird von main() gesetzt
 
-# ── Simulation-Modus ────────────────────────────────────────────
-# Wird auf True gesetzt wenn battery_control.json "simulation_mode": true
-# ODER wenn --dry-run übergeben wird.
-# Im Sim-Modus: Kein Schreibzugriff auf Inverter. Entscheidungen werden
-# in _SIM_PLAN gesammelt und in battery_scheduler_state.json persistiert,
-# so dass die Flow-Ansicht den geplanten Ablauf anzeigen kann.
-_SIM_DECISIONS = []  # Protokoll simulierter Aktionen (für UI)
-_SIM_PLAN = {}       # Planungsstand pro Phase (morning/afternoon/evening)
-
 def log_action(action, param=None, old_value=None, new_value=None,
                reason='', forecast_kwh=None, cloud_avg=None,
                soc=None, surplus_kwh=None, manual=False):
     """Schreibe Eintrag in battery_control_log."""
     if _DRY_RUN:
         LOG.debug(f"[DRY RUN] Log: {action} — {reason}")
-        _SIM_DECISIONS.append({
-            'action': action,
-            'param': param or '',
-            'old': old_value,
-            'new': new_value,
-            'reason': (reason or '')[:140],
-            'ts': time.strftime('%H:%M'),
-        })
         return
     try:
         with sqlite3.connect(DB_PATH) as db:
@@ -429,17 +412,6 @@ def run_scheduler(args):
         LOG.error("Konfiguration fehlt — Abbruch")
         return False
 
-    # ── Simulation-Modus aktivieren? ────────────────────────────
-    # Priorisierung: --dry-run Flag > simulation_mode in Config
-    global _DRY_RUN, _SIM_DECISIONS, _SIM_PLAN
-    _SIM_DECISIONS = []   # Reset pro Scheduler-Lauf
-    _SIM_PLAN = {}
-    if cfg.get('simulation_mode', False) and not _DRY_RUN:
-        _DRY_RUN = True
-        LOG.info("═══ SIMULATION-MODUS — kein Schreibzugriff auf Inverter ═══")
-    if _DRY_RUN:
-        LOG.info("    (Entscheidungen werden in sim_plan/battery_scheduler_state.json gespeichert)")
-
     state = load_state()
     now = datetime.now()
     today_str = now.strftime('%Y-%m-%d')
@@ -472,13 +444,6 @@ def run_scheduler(args):
     if args.status:
         _print_status(cfg, state, strategy, soc)
         return True
-
-    # ── Sim-Plan: Basisinfos ─────────────────────────────────────
-    _SIM_PLAN['forecast_kwh'] = round(forecast_kwh, 1)
-    _SIM_PLAN['cloud_avg'] = round(cloud_avg, 0) if cloud_avg else None
-    _SIM_PLAN['soc'] = round(soc, 1) if soc else None
-    _SIM_PLAN['sunrise'] = strategy.get('sunrise')
-    _SIM_PLAN['sunset'] = strategy.get('sunset')
 
     # --- Manual Override? ---
     if state.get('manual_override') and not args.force_morning and not args.force_afternoon:
@@ -571,19 +536,6 @@ def run_scheduler(args):
     finally:
         inverter.close()
 
-    # ── Simulation-Plan in State persistieren (für Flow-View-Anzeige) ──
-    if _DRY_RUN or cfg.get('simulation_mode', False):
-        state['sim_mode'] = True
-        state['sim_last_run'] = now.strftime('%Y-%m-%dT%H:%M')
-        state['sim_plan'] = _SIM_PLAN
-        state['sim_decisions'] = _SIM_DECISIONS
-    else:
-        # Echtbetrieb: Sim-Felder aus State entfernen
-        state.pop('sim_mode', None)
-        state.pop('sim_last_run', None)
-        state.pop('sim_plan', None)
-        state.pop('sim_decisions', None)
-
     save_state(state)
     return True
 
@@ -608,7 +560,6 @@ def _morning_algorithm(cfg, state, strategy, hourly, power_hourly,
     # Bereits erledigt?
     if state['morning_done'] and not force:
         LOG.debug("morning_done — übersprungen")
-        _SIM_PLAN['morning'] = {'status': 'done', 'reason': 'morning_done Flag gesetzt'}
         return
 
     # REGEL A: Schlechter Tag → nicht öffnen
@@ -616,8 +567,6 @@ def _morning_algorithm(cfg, state, strategy, hourly, power_hourly,
         state['morning_done'] = True
         reason = f"Nicht geöffnet: Prognose {forecast_kwh:.0f} kWh < {min_pv} kWh"
         LOG.info(f"  ✗ {reason}")
-        _SIM_PLAN['morning'] = {'status': 'skip', 'reason': reason,
-                                'forecast_kwh': forecast_kwh, 'min_pv': min_pv}
         log_action('morning_skip', 'soc_min', soc_min_default, soc_min_default,
                    reason, forecast_kwh, cloud_avg, soc)
         return
@@ -626,7 +575,6 @@ def _morning_algorithm(cfg, state, strategy, hourly, power_hourly,
     if soc is not None and soc < soc_min_default + 2 and not force:
         reason = f"SOC={soc:.1f}% bereits nah an Minimum {soc_min_default}% — nicht nötig"
         LOG.info(f"  ✗ {reason}")
-        _SIM_PLAN['morning'] = {'status': 'skip', 'reason': reason, 'soc': soc}
         # Nicht morning_done setzen — nächste Prüfung in 15 min
         return
 
@@ -651,11 +599,6 @@ def _morning_algorithm(cfg, state, strategy, hourly, power_hourly,
         if live_pv_w is not None and live_pv_w < live_threshold_w:
             LOG.info(f"  ⏳ Kein Takeover, Live-PV={live_pv_w:.0f}W "
                      f"< {live_threshold_w}W — warte")
-            _SIM_PLAN['morning'] = {
-                'status': 'waiting',
-                'reason': f'Kein Takeover, Live-PV {live_pv_w:.0f}W < {live_threshold_w}W',
-                'live_pv_w': round(live_pv_w),
-            }
             return
         elif live_pv_w is not None:
             LOG.info(f"  ✓ Kein Takeover aber Live-PV={live_pv_w:.0f}W "
@@ -684,14 +627,6 @@ def _morning_algorithm(cfg, state, strategy, hourly, power_hourly,
             LOG.info(f"  ⏳ Warte: open_time={open_time:.1f}h "
                      f"(Takeover={takeover_hour:.1f}h, Vorlauf={max_vorlauf:.1f}h, "
                      f"Drain theoretisch={drain_hours:.1f}h)")
-            _SIM_PLAN['morning'] = {
-                'status': 'waiting',
-                'reason': f'Öffnung geplant {open_time:.2f}h (jetzt {current_hour:.2f}h)',
-                'open_time_h': round(open_time, 2),
-                'takeover_h': round(takeover_hour, 2) if takeover_hour else None,
-                'drain_h': round(drain_hours, 2),
-                'target_soc_min': soc_min_open,
-            }
             return
     else:
         drain_hours = 0
@@ -704,7 +639,6 @@ def _morning_algorithm(cfg, state, strategy, hourly, power_hourly,
     if old_min <= soc_min_open:
         state['morning_done'] = True
         LOG.info(f"  ≡ SOC_MIN bereits auf {old_min}% — keine Änderung")
-        _SIM_PLAN['morning'] = {'status': 'skip', 'reason': f'SOC_MIN bereits {old_min}% ≤ Ziel {soc_min_open}%'}
         return
 
     ok = inverter.set_soc_min(soc_min_open)
@@ -716,19 +650,10 @@ def _morning_algorithm(cfg, state, strategy, hourly, power_hourly,
                   f"Prognose {forecast_kwh:.0f} kWh, Takeover {takeover_str}, "
                   f"Drain {drain_hours:.1f}h")
         LOG.info(f"  ✓ {reason}")
-        _SIM_PLAN['morning'] = {
-            'status': 'would_open',
-            'reason': reason,
-            'from_soc_min': old_min,
-            'to_soc_min': soc_min_open,
-            'forecast_kwh': round(forecast_kwh, 1),
-            'takeover_h': round(takeover_hour, 2) if takeover_hour else None,
-        }
         log_action('morning_open', 'soc_min', old_min, soc_min_open,
                    reason, forecast_kwh, cloud_avg, soc)
     else:
         LOG.error("  ✗ SOC_MIN setzen fehlgeschlagen!")
-        _SIM_PLAN['morning'] = {'status': 'error', 'reason': 'Schreibzugriff fehlgeschlagen'}
 
 
 def _find_takeover_hour(hourly, morgen_cfg, power_hourly=None):
@@ -836,7 +761,6 @@ def _afternoon_algorithm(cfg, state, strategy, hourly, power_hourly,
     if old_max >= soc_max_full:
         state['afternoon_done'] = True
         LOG.info(f"  ≡ SOC_MAX bereits auf {old_max}% — keine Änderung")
-        _SIM_PLAN['afternoon'] = {'status': 'skip', 'reason': f'SOC_MAX bereits {old_max}%'}
         return
 
     # Verbrauch + PV-Rest berechnen (echte AC-Prognose bevorzugt)
@@ -874,31 +798,15 @@ def _afternoon_algorithm(cfg, state, strategy, hourly, power_hourly,
         if ok:
             state['afternoon_done'] = True
             LOG.info(f"  ✓ SOC_MAX: {old_max}%→{soc_max_full}% — {reason}")
-            _SIM_PLAN['afternoon'] = {
-                'status': 'would_raise',
-                'reason': reason,
-                'from_soc_max': old_max,
-                'to_soc_max': soc_max_full,
-                'hours_to_sunset': round(hours_to_sunset, 2),
-                'surplus_kwh': round(surplus, 2) if surplus is not None else None,
-            }
             log_action('afternoon_raise', 'soc_max', old_max, soc_max_full,
                        reason, forecast_kwh, cloud_avg, soc,
                        surplus_kwh=surplus)
         else:
             LOG.error("  ✗ SOC_MAX setzen fehlgeschlagen!")
-            _SIM_PLAN['afternoon'] = {'status': 'error', 'reason': 'Schreibzugriff fehlgeschlagen'}
     else:
         surplus_str = f"{surplus:.1f}" if surplus else "?"
         LOG.info(f"  ⏳ Warte: Surplus={surplus_str} kWh > "
                  f"Fill={fill_needed:.1f}×{surplus_factor} kWh")
-        _SIM_PLAN['afternoon'] = {
-            'status': 'waiting',
-            'reason': f'Surplus {surplus_str} kWh > Fill {fill_needed:.1f}×{surplus_factor} kWh',
-            'surplus_kwh': round(surplus, 2) if surplus is not None else None,
-            'fill_needed_kwh': round(fill_needed * surplus_factor, 2),
-            'hours_to_sunset': round(hours_to_sunset, 2),
-        }
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -973,11 +881,6 @@ def _evening_algorithm(cfg, state, strategy, inverter, soc, current_hour):
                            f"Tag-Phase: Limits aufgehoben")
             else:
                 LOG.error("  ✗ Modbus Auto fehlgeschlagen!")
-        _SIM_PLAN['evening'] = {
-            'status': 'auto',
-            'phase': f'TAG ({nacht_bis}:00–{abend_ab}:00)',
-            'reason': 'Tag-Phase: keine Entladeraten-Begrenzung',
-        }
         return
 
     # Bereits auf korrekter Rate?
@@ -996,12 +899,6 @@ def _evening_algorithm(cfg, state, strategy, inverter, soc, current_hour):
 
     # → RATE SETZEN
     LOG.info(f"── Abend-Algo: {phase} — Entladerate auf {target_rate}% ──")
-    _SIM_PLAN['evening'] = {
-        'status': 'would_limit' if target_rate > 0 else 'hold',
-        'phase': phase,
-        'rate_pct': target_rate,
-        'reason': f'{phase} → Entladerate {target_rate}%',
-    }
 
     if target_rate == 0:
         # Komplette Entladesperre via Hold
@@ -1202,7 +1099,11 @@ def _verify_consistency(cfg, state, inverter, current_hour, strategy=None):
                                    actual_min, expected_min,
                                    'SOC_MIN ≠ Komfort-Wert (morning noch nicht gelaufen)')
 
-    # --- SOC-Konsistenz: Afternoon nicht gelaufen → SOC_MAX = Komfort? ---
+    # --- SOC-Konsistenz: Afternoon nicht gelaufen → SOC_MAX prüfen ---
+    # ★ RICHTUNGSLOGIK: SOC_MAX höher als Komfort = MEHR Ladekapazität
+    #   = immer sicher → NICHT abwärts korrigieren!
+    #   SOC_MAX tiefer als Komfort = Batterie eingeschränkt → korrigieren.
+    #   Komfort-Reset am Tagesanfang handhabt den Reset auf 75%.
     if not state.get('afternoon_done') and not state.get('balancing_active'):
         settings = inverter.get_current_settings() if fixes == 0 else settings
         if not settings:
@@ -1211,14 +1112,21 @@ def _verify_consistency(cfg, state, inverter, current_hour, strategy=None):
             expected_max = grenzen.get('komfort_max', 75)
             actual_max = settings.get('soc_max')
             if actual_max is not None and actual_max != expected_max:
-                LOG.warning(f"⚠ Konsistenz: SOC_MAX={actual_max}% "
-                            f"erwartet {expected_max}% — korrigiere")
-                ok = inverter.set_soc_max(expected_max)
-                if ok:
-                    fixes += 1
-                    log_action('consistency_fix', 'soc_max',
-                               actual_max, expected_max,
-                               'SOC_MAX ≠ Komfort-Wert (afternoon noch nicht gelaufen)')
+                if actual_max > expected_max:
+                    # Mehr Kapazität als Komfort → sicher, NICHT korrigieren
+                    LOG.info(f"ℹ Konsistenz: SOC_MAX={actual_max}% > Komfort "
+                             f"{expected_max}% — nicht korrigiert "
+                             f"(mehr Ladekapazität ist sicher)")
+                else:
+                    # Weniger Kapazität als Komfort → eingeschränkt, korrigieren
+                    LOG.warning(f"⚠ Konsistenz: SOC_MAX={actual_max}% "
+                                f"< Komfort {expected_max}% — korrigiere hoch")
+                    ok = inverter.set_soc_max(expected_max)
+                    if ok:
+                        fixes += 1
+                        log_action('consistency_fix', 'soc_max',
+                                   actual_max, expected_max,
+                                   'SOC_MAX unter Komfort-Wert — korrigiert hoch')
 
     if fixes > 0:
         LOG.info(f"Konsistenz-Prüfung: {fixes} Korrektur(en) durchgeführt")
@@ -1326,7 +1234,7 @@ def main():
     parser.add_argument('--status', action='store_true',
                         help='Nur Status anzeigen, keine Aktionen')
     parser.add_argument('--dry-run', action='store_true',
-                        help='Simulation ohne Schreibzugriffe')
+                        help='Testlauf ohne Schreibzugriffe')
     parser.add_argument('--force-morning', action='store_true',
                         help='Morgen-Öffnung erzwingen')
     parser.add_argument('--force-afternoon', action='store_true',
