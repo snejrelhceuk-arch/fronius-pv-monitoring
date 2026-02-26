@@ -141,8 +141,6 @@ SOC aktuell:      23.6 %
 
 > **Hinweis:** Der Scheduler überschreibt manuell gesetzte Werte beim nächsten
 > Cron-Run (alle 15 min) via `_verify_consistency()`.
-> Seit 2026-02-20 ist `simulation_mode: true` in `battery_control.json` aktiv —
-> der Scheduler schreibt gerade **nichts** auf den Inverter.
 
 ---
 

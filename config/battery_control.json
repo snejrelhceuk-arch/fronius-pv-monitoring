@@ -27,8 +27,8 @@
     "uebernahme_schwelle": 0.8,
     "live_pv_schwelle_w": 500,
     "_live_pv_doc": "Wenn kein Übernahme-Stunde berechnet werden kann (schwache Prognose), warten wir bis Live-PV diesen Schwellwert überschreitet bevor SOC_MIN geöffnet wird",
-    "max_vorlauf_h": 0.25,
-    "_vorlauf_doc": "Max. Stunden VOR PV-Takeover, in denen SOC_MIN geöffnet wird. 0.25 = 15 min. Verhindert Netzbezug-Risiko bei schwachem PV-Morgen (z.B. Wärmepumpe). Altes Verhalten (volle Rückwärtsrechnung) wäre z.B. 2.0",
+    "max_vorlauf_h": 1.5,
+    "_vorlauf_doc": "Max. Stunden VOR PV-Takeover, in denen SOC_MIN geöffnet wird. 1.5 = ausreichend für volle Entleerung (2 kWh bei 1.5 kW). Verhindert Netzbezug-Risiko, erlaubt aber reale Nutzung der Restladung",
     "fenster_start_stunde": 5,
     "fenster_stunden_nach_sunrise": 3,
     "drain_rate_fallback_kw": 1.5,
@@ -95,7 +95,5 @@
     "level": "INFO",
     "db_logging": true,
     "log_warten_meldungen": false
-  },
-  "simulation_mode": true,
-  "_simulation_mode_doc": "true = Scheduler läuft nur als Simulation (kein Schreibzugriff auf Inverter). Entscheidungen werden in battery_scheduler_state.json unter 'sim_plan' gespeichert und in der Flow-Ansicht (Batterie-InfoZeile) angezeigt. false = Normalbetrieb."
+  }
 }

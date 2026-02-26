@@ -157,65 +157,78 @@
         .battery-detail .bd-sep {
             color: rgba(255,255,255,0.15);
         }
-        /* ══════ Scheduler Simulation Bar ══════ */
-        .scheduler-sim {
-            display: none;   /* nur sichtbar wenn sim_mode aktiv */
-            justify-content: center;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 14px;
-            padding: 4px 12px;
-            margin: 2px 8px;
-            background: rgba(234,179,8,0.08);
-            border: 1px solid rgba(234,179,8,0.25);
-            border-radius: 6px;
-            color: rgba(255,255,255,0.5);
+        /* ══════ Batt-Automation Tabelle ══════ */
+        .batt-auto-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 4px 0 2px 0;
+            border-bottom: 1px solid rgba(16,185,129,0.2);
             font-size: 11px;
             font-weight: 500;
+            color: rgba(255,255,255,0.5);
         }
-        .scheduler-sim.active { display: flex; }
-        .scheduler-sim .ss-label {
-            color: #eab308;
+        .batt-auto-table .ba-header {
+            text-align: left;
+            padding: 3px 8px;
+            color: #10b981;
             font-weight: 700;
             font-size: 11.5px;
+            border-bottom: 1px solid rgba(16,185,129,0.2);
+            letter-spacing: 0.5px;
         }
-        .scheduler-sim .ss-val {
-            color: #fde68a;
+        .batt-auto-table td {
+            padding: 2px 6px;
+            vertical-align: top;
+            white-space: nowrap;
+        }
+        .batt-auto-table .ba-phase {
+            color: rgba(255,255,255,0.6);
             font-weight: 600;
+            width: 80px;
         }
-        .scheduler-sim .ss-sep {
-            color: rgba(255,255,255,0.15);
+        .batt-auto-table .ba-zeit {
+            color: rgba(255,255,255,0.4);
+            width: 42px;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
         }
-        .scheduler-sim .ss-ok  { color: #4ade80; }
-        .scheduler-sim .ss-wait{ color: #60a5fa; }
-        .scheduler-sim .ss-skip{ color: rgba(255,255,255,0.35); }
-        /* ══════ SOC-Umschaltung Infozeile ══════ */
-        .soc-switch-info {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 16px;
-            padding: 3px 12px;
-            color: rgba(255,255,255,0.38);
-            font-size: 11px;
-            font-weight: 500;
+        .batt-auto-table .ba-mode {
+            width: 36px;
+            text-align: center;
         }
-        .soc-switch-info .sw-label {
-            color: rgba(16,185,129,0.7);
-            font-weight: 700;
-        }
-        .soc-switch-info .sw-val {
-            color: rgba(16,185,129,0.9);
+        .batt-auto-table .ba-aktion {
+            color: #10b981;
             font-weight: 600;
+            white-space: normal;
+            word-break: break-word;
         }
-        .soc-switch-info .sw-next-val {
-            color: #fde68a;
-            font-weight: 600;
+        .batt-auto-table .ba-grund {
+            color: rgba(255,255,255,0.35);
+            font-weight: 400;
+            font-size: 10px;
+            white-space: normal;
+            word-break: break-word;
+            max-width: 280px;
         }
-        .soc-switch-info .sw-sep {
-            color: rgba(255,255,255,0.12);
+        /* Status-Farben */
+        .batt-auto-table .ba-done .ba-aktion { color: #10b981; }
+        .batt-auto-table .ba-active .ba-aktion { color: #10b981; }
+        .batt-auto-table .ba-pending .ba-phase { color: rgba(255,255,255,0.35); }
+        .batt-auto-table .ba-pending .ba-aktion { color: #fbbf24; font-weight: 500; }
+        .batt-auto-table .ba-skipped .ba-aktion { color: rgba(255,255,255,0.25); font-weight: 400; }
+        .batt-auto-table .ba-mode-auto { color: rgba(16,185,129,0.6); }
+        .batt-auto-table .ba-mode-man  { color: #fbbf24; }
+        /* Status-Icon */
+        .ba-status-icon {
+            display: inline-block;
+            width: 14px;
+            text-align: center;
+            font-size: 10px;
         }
+        .ba-done .ba-status-icon { color: #10b981; }
+        .ba-active .ba-status-icon { color: #10b981; }
+        .ba-pending .ba-status-icon { color: #fbbf24; }
+        .ba-skipped .ba-status-icon { color: rgba(255,255,255,0.25); }
         .inverter-temps {
             display: flex;
             justify-content: center;
@@ -297,6 +310,9 @@
                 font-size: 9px;
                 padding: 4px 0;
             }
+            .batt-auto-table { font-size: 10px; }
+            .batt-auto-table .ba-grund { max-width: 160px; font-size: 9px; }
+            .batt-auto-table .ba-phase { width: 62px; }
         }
 
         /* Querformat-Hinweis (nur Portrait + schmal) */
@@ -515,21 +531,35 @@
                 <span class="bd-sep">|</span>
                 <span>Temp: <span class="bd-val" id="bd-temp">--</span> °C</span>
             </div>
-            <!-- Engine-Vorausschau: aktive Regeln mit Scores -->
-            <div class="scheduler-sim" id="engineVorausschau" style="display:none">
-                <span class="ss-label">&#9881; Engine</span>
-                <span class="ss-sep">|</span>
-                <span id="ev-rules">--</span>
-            </div>
-            <!-- Engine-Aktionen: letzte Batterie-Aktion + nächste geplante -->
-            <div class="soc-switch-info" id="socSwitchInfo">
-                <span class="sw-label">Letzte Aktion</span>
-                <span id="sw-last-ts" style="color:rgba(255,255,255,0.3)">--</span>
-                <span id="sw-last-desc">--</span>
-                <span class="sw-sep">│</span>
-                <span class="sw-label">Vorausschau</span>
-                <span id="sw-next-desc" class="sw-next-val">--</span>
-            </div>
+            <!-- Batt-Automation: einheitliche Phasen-Tabelle -->
+            <table class="batt-auto-table" id="battAutoTable">
+                <thead>
+                    <tr><th class="ba-header" colspan="6">⚡ Batt-Automation</th></tr>
+                </thead>
+                <tbody id="battAutoBody">
+                    <tr class="ba-pending">
+                        <td class="ba-phase"><span class="ba-status-icon">○</span> Morgens</td>
+                        <td class="ba-zeit">—</td>
+                        <td class="ba-mode">—</td>
+                        <td class="ba-aktion">—</td>
+                        <td class="ba-grund"></td>
+                    </tr>
+                    <tr class="ba-pending">
+                        <td class="ba-phase"><span class="ba-status-icon">○</span> Nachmittag</td>
+                        <td class="ba-zeit">—</td>
+                        <td class="ba-mode">—</td>
+                        <td class="ba-aktion">—</td>
+                        <td class="ba-grund"></td>
+                    </tr>
+                    <tr class="ba-pending">
+                        <td class="ba-phase"><span class="ba-status-icon">○</span> Abend</td>
+                        <td class="ba-zeit">—</td>
+                        <td class="ba-mode">—</td>
+                        <td class="ba-aktion">—</td>
+                        <td class="ba-grund"></td>
+                    </tr>
+                </tbody>
+            </table>
             <div class="inverter-temps" id="inverterTemps">
                 <span class="it-label">F1</span>
                 <span>Gehäuse <span class="it-val" id="it-intern">--</span>°</span>
@@ -1044,79 +1074,82 @@
             document.getElementById('it-f2-intern').textContent = d.f2_temp_intern != null ? d.f2_temp_intern : '--';
             document.getElementById('it-f2-ac').textContent = d.f2_temp_ac != null ? d.f2_temp_ac : '--';
             document.getElementById('it-f2-dc').textContent = d.f2_temp_dc != null ? d.f2_temp_dc : '--';
-            // ── Engine-Vorausschau Bar ──
-            const evBar = document.getElementById('engineVorausschau');
-            const vorausschau = d.vorausschau || [];
-            if (vorausschau.length > 0) {
-                evBar.style.display = 'flex';
-                const rulesHtml = vorausschau.slice(0, 4).map(v => {
-                    const scoreColor = v.score >= 60 ? '#f87171' : v.score >= 40 ? '#fbbf24' : '#4ade80';
-                    const cmds = (v.aktionen || []).map(a => a.kommando).join(', ');
-                    return `<span style="color:${scoreColor}" title="${cmds}">[${v.score}] ${v.regel}</span>`;
-                }).join(' <span class="ss-sep">|</span> ');
-                document.getElementById('ev-rules').innerHTML = rulesHtml;
-            } else {
-                evBar.style.display = 'none';
-            }
+            // ── Batt-Automation Phasen-Tabelle ──────────────────────
+            const phasen = d.automation_phasen || {};
+            const sched = d.scheduler || {};
+            const tbody = document.getElementById('battAutoBody');
 
-            // ── Engine-Aktionen: letzte + Vorausschau ──────────────
-            const kommandoLabels = {
-                'set_soc_min':         'SOC_MIN',
-                'set_soc_max':         'SOC_MAX',
-                'set_soc_mode':        'SOC-Modus',
-                'set_charge_rate':     'Laderate',
-                'set_discharge_rate':  'Entladerate',
-                'hold':                'Halten',
-                'force_grid_charge':   'Netzladung',
-                // Legacy-Kompatibilität
-                'morning_open':        'Morgen: SOC_MIN',
-                'afternoon_raise':     'Nachm: SOC_MAX',
-                'comfort_reset':       'Komfort-Reset',
-                'comfort_defaults':    'Komfort-Reset',
-                'balancing_start':     'Zellausgleich',
-                'evening_limit':       'Abend-Limit',
-                'evening_auto':        'Tag-Freigabe',
-                'manual_set':          'Manuell',
+            // Phase-Definitionen: Key, Label, Pending-Text
+            const phaseDefs = [
+                {key: 'morgen',      label: 'Morgens',     pendingText: 'SOC_MIN → 5%',      doneFlag: 'morning_done'},
+                {key: 'nachmittag',  label: 'Nachmittag',  pendingText: 'SOC_MAX → 100%',    doneFlag: 'afternoon_done'},
+                {key: 'abend',       label: 'Abend',       pendingText: 'Entladerate-Limit', doneFlag: null},
+                {key: 'reset',       label: 'Reset',       pendingText: 'SOC → Komfort',     doneFlag: null},
+            ];
+
+            const statusIcons = {
+                done:    '✓', active: '●', pending: '⏳',
+                skipped: '—', waiting: '⏳',
             };
 
-            // Letzte Aktion (aus last_engine_action oder last_soc_switch)
-            const lea = d.last_engine_action || d.last_soc_switch;
-            if (lea) {
-                const ts = (lea.ts || '').substring(0, 16).replace('T', ' ');
-                document.getElementById('sw-last-ts').textContent = ts;
-                const cmd = lea.kommando || lea.action || '';
-                const lbl = kommandoLabels[cmd] || cmd;
-                let desc = lbl;
-                if (lea.wert != null) {
-                    desc += ` → ${lea.wert}`;
-                    if (cmd.includes('rate')) desc += '%';
-                    if (cmd.includes('soc_m')) desc += '%';
+            let rows = '';
+            for (const pd of phaseDefs) {
+                const p = phasen[pd.key];
+                let status, zeit, mode, aktion, grund;
+
+                if (p) {
+                    status = p.status || 'pending';
+                    zeit = p.zeit || '—';
+                    mode = p.manuell ? 'man.' : 'auto';
+                    aktion = p.aktion || '—';
+                    grund = p.grund || '';
+                } else {
+                    // Keine Log-Daten: aus Scheduler-Flags ableiten
+                    const isDone = pd.doneFlag ? sched[pd.doneFlag] : false;
+                    status = isDone ? 'done' : 'pending';
+                    zeit = '—';
+                    mode = '—';
+                    aktion = isDone ? '(erledigt)' : pd.pendingText;
+                    grund = '';
                 }
-                if (lea.grund) {
-                    desc += ' (' + lea.grund.substring(0, 50) + ')';
-                } else if (lea.reason) {
-                    desc += ' (' + lea.reason.substring(0, 50) + ')';
-                }
-                document.getElementById('sw-last-desc').textContent = desc;
-            } else {
-                document.getElementById('sw-last-ts').textContent = '(keine)';
-                document.getElementById('sw-last-desc').textContent = '';
+
+                const cssClass = 'ba-' + status;
+                const icon = statusIcons[status] || '○';
+                const modeClass = mode === 'man.' ? 'ba-mode-man' : (mode === 'auto' ? 'ba-mode-auto' : '');
+                const grundHtml = grund ? `<span class="ba-grund">${grund.substring(0, 70)}</span>` : '';
+
+                rows += `<tr class="${cssClass}">
+                    <td class="ba-phase"><span class="ba-status-icon">${icon}</span> ${pd.label}</td>
+                    <td class="ba-zeit">${zeit}</td>
+                    <td class="ba-mode ${modeClass}">${mode}</td>
+                    <td class="ba-aktion">${aktion}</td>
+                    <td>${grundHtml}</td>
+                </tr>`;
             }
 
-            // Vorausschau: Gewinner-Regel mit höchstem Score
-            let nextDesc = '—';
+            // Engine-Vorausschau als Zusatzzeile (wenn verfügbar)
+            const vorausschau = d.vorausschau || [];
             if (vorausschau.length > 0) {
                 const top = vorausschau[0];
-                const topCmds = (top.aktionen || []).map(a => {
-                    const cl = kommandoLabels[a.kommando] || a.kommando;
-                    return a.wert != null ? `${cl} → ${a.wert}` : cl;
+                const scoreColor = top.score >= 60 ? '#f87171' : top.score >= 40 ? '#fbbf24' : '#4ade80';
+                const cmds = (top.aktionen || []).map(a => {
+                    const labels = {'set_soc_min':'SOC_MIN','set_soc_max':'SOC_MAX',
+                                    'set_discharge_rate':'Entladerate','hold':'Halten'};
+                    const cl = labels[a.kommando] || a.kommando;
+                    return a.wert != null ? `${cl}→${a.wert}` : cl;
                 }).join(', ');
-                nextDesc = `[${top.score}] ${top.regel}: ${topCmds}`;
-                if (top.aktionen.length > 0 && top.aktionen[0].grund) {
-                    nextDesc += ' (' + top.aktionen[0].grund.substring(0, 40) + ')';
-                }
+                const grundText = (top.aktionen && top.aktionen[0] && top.aktionen[0].grund)
+                    ? top.aktionen[0].grund.substring(0, 50) : '';
+                rows += `<tr class="ba-pending">
+                    <td class="ba-phase" style="color:rgba(255,255,255,0.35)"><span class="ba-status-icon" style="color:${scoreColor}">⚙</span> Engine</td>
+                    <td class="ba-zeit" style="color:${scoreColor}">[${top.score}]</td>
+                    <td class="ba-mode"></td>
+                    <td class="ba-aktion" style="color:${scoreColor}">${top.regel}: ${cmds}</td>
+                    <td><span class="ba-grund">${grundText}</span></td>
+                </tr>`;
             }
-            document.getElementById('sw-next-desc').textContent = nextDesc;
+
+            tbody.innerHTML = rows;
 
         } catch(e) { console.warn('BatteryDetail:', e); }
     }

@@ -538,7 +538,7 @@ aus der DB liest:
 | `/api/battery_status` → `last_soc_switch` | `automation_log` / Fallback `battery_control_log` | Letzte SOC_MIN/MAX-Änderung |
 | `/api/battery_status` → `scheduler` | `battery_scheduler_state.json` | Phasen-Flags (Legacy-Kompatibilität) |
 
-**Kein Simulation-Modus mehr.** Alle angezeigten Umschaltungen sind **echte
+Alle angezeigten Umschaltungen sind **echte
 Aktionen** aus dem `automation_log` mit Zeitstempel, Kommando, Wert und
 menschenlesbarer Begründung.
 
@@ -804,12 +804,12 @@ danach migriert nach `automation_log`.
 | Schutzregeln | implizit im Code | explizit in S2 Tier 1 (Observer) |
 | Konfiguration | 1 JSON + Code-Konstanten | `soc_param_matrix.json` — 6 Regelkreise, 36 Parameter |
 | Entscheidung | monolithisch in `run_scheduler()` | Score-basiert, 6 Matrix-Regeln, Highest-Score-Wins |
-| SOC-Umschaltungen | `sim_mode` / `sim_plan` (simuliert) | **echte Daten** aus `automation_log` |
-| API-Anzeige | `sim_decisions[]` im Scheduler-State | `soc_switches[]` + `last_engine_action` via DB-Query |
+| SOC-Umschaltungen | `battery_control_log` | **echte Daten** aus `automation_log` |
+| API-Anzeige | `battery_control_log` via DB-Query | `soc_switches[]` + `last_engine_action` via DB-Query |
 | Verifikation | `_verify_consistency()` (Batterie) | Actuator Read-Back (alle, inkl. Dry-Run) |
 | Protokoll | `battery_control_log` | `automation_log` (alle Aktoren, Persist-DB) |
 | Zustandsdaten | In-Memory Dict | RAM-DB (`/dev/shm/automation_obs.db`) |
-| Dashboard | teilweise, Sim-Daten | B liest `automation_log` (read-only, echte Daten) |
+| Dashboard | `battery_control_log`, Scheduler-State | B liest `automation_log` (read-only, echte Daten) |
 | Bedienung | JSON-Editor / CLI-Args | SSH Config-Tool + CLI (`param_matrix.py`) |
 | B→C Steuerung | nicht vorgesehen | **strikt verboten** (E6) |
 | Test | manuell | 17 Dry-Run-Tests (`test_skeleton.py`) |
