@@ -110,6 +110,9 @@ PV-Anlage Erlau — Konfiguration
 - Validierung: Wertebereich, Typprüfung, Plausibilität **beim Schreiben**
 - Jede Änderung wird mit Timestamp und Bediener-Info im JSON gespeichert
 - Auch über VPN/App nutzbar (SSH-Tunnel), aber immer dasselbe Config-Tool
+- **Windows-Zugang:** Fertige Scripts in `scripts/windows/` — Setup-Script richtet
+  SSH-Key, SSH-Config (`pv-pi4`) und Windows Terminal Profil automatisch ein.
+  Siehe `scripts/windows/README.md` für Details.
 
 ### Technologie-Entscheidung (E3 — entschieden)
 
