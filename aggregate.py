@@ -19,6 +19,11 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 
 DB_PATH = config.DB_PATH
 
+# Physikalisches Maximum pro 15-min-Slot (Wh)
+# Begrenzt durch WR-Kapazität: 26.5 kW × 0.25h = 6625 Wh
+# Jeder höhere Wert ist ein Zähler-Artefakt (z.B. Fronius-Gateway-Init nach F1-Neustart)
+MAX_PV_DELTA_15MIN_WH = 6625
+
 def get_db():
     return get_db_connection()
 
@@ -142,17 +147,18 @@ def aggregate_15min():
                     AVG(P_F2), MIN(P_F2), MAX(P_F2),
                     AVG(P_F3), MIN(P_F3), MAX(P_F3),
                     AVG(P_WP), MIN(P_WP), MAX(P_WP),
-                    ((MAX(W_DC1) + MAX(W_DC2)) - (MIN(W_DC1) + MIN(W_DC2))) + (MAX(W_Exp_F2) - MIN(W_Exp_F2)) + (MAX(W_Exp_F3) - MIN(W_Exp_F3)),
+                    -- W_PV_total_delta: NULLIF(x,0) schützt vor Fronius-Gateway-Init (0.0 bei SM-Registern nach F1-Neustart)
+                    ((MAX(W_DC1) + MAX(W_DC2)) - (MIN(W_DC1) + MIN(W_DC2))) + (MAX(NULLIF(W_Exp_F2,0)) - MIN(NULLIF(W_Exp_F2,0))) + (MAX(NULLIF(W_Exp_F3,0)) - MIN(NULLIF(W_Exp_F3,0))),
                     MAX(W_DC1) - MIN(W_DC1),
                     MAX(W_DC2) - MIN(W_DC2),
                     MAX(W_Exp_Netz) - MIN(W_Exp_Netz),
                     MAX(W_Imp_Netz) - MIN(W_Imp_Netz),
-                    MAX(W_Exp_F2) - MIN(W_Exp_F2),
-                    MAX(W_Imp_F2) - MIN(W_Imp_F2),
-                    MAX(W_Exp_F3) - MIN(W_Exp_F3),
-                    MAX(W_Imp_F3) - MIN(W_Imp_F3),
+                    MAX(NULLIF(W_Exp_F2,0)) - MIN(NULLIF(W_Exp_F2,0)),
+                    MAX(NULLIF(W_Imp_F2,0)) - MIN(NULLIF(W_Imp_F2,0)),
+                    MAX(NULLIF(W_Exp_F3,0)) - MIN(NULLIF(W_Exp_F3,0)),
+                    MAX(NULLIF(W_Imp_F3,0)) - MIN(NULLIF(W_Imp_F3,0)),
                     0,  -- W_Exp_WP (keine Einspeisung)
-                    MAX(W_Imp_WP) - MIN(W_Imp_WP),
+                    MAX(NULLIF(W_Imp_WP,0)) - MIN(NULLIF(W_Imp_WP,0)),
                     MIN(W_AC_Inv),
                     MAX(W_AC_Inv),
                     MIN(W_DC1),
@@ -163,15 +169,15 @@ def aggregate_15min():
                     MAX(W_Exp_Netz),
                     MIN(W_Imp_Netz),
                     MAX(W_Imp_Netz),
-                    MIN(W_Exp_F2),
+                    MIN(NULLIF(W_Exp_F2,0)),
                     MAX(W_Exp_F2),
-                    MIN(W_Imp_F2),
+                    MIN(NULLIF(W_Imp_F2,0)),
                     MAX(W_Imp_F2),
-                    MIN(W_Exp_F3),
+                    MIN(NULLIF(W_Exp_F3,0)),
                     MAX(W_Exp_F3),
-                    MIN(W_Imp_F3),
+                    MIN(NULLIF(W_Imp_F3,0)),
                     MAX(W_Imp_F3),
-                    MIN(W_Imp_WP),
+                    MIN(NULLIF(W_Imp_WP,0)),
                     MAX(W_Imp_WP)
                 FROM raw_data
                 WHERE ts >= ? AND ts < ?
@@ -180,6 +186,21 @@ def aggregate_15min():
             
             if c.rowcount > 0:
                 count += 1
+                # Plausibilitätsprüfung: Delta > physikalisches Maximum?
+                row = c.execute(
+                    "SELECT W_PV_total_delta FROM data_15min WHERE ts = ?",
+                    (ts_15min,)
+                ).fetchone()
+                if row and row[0] is not None and row[0] > MAX_PV_DELTA_15MIN_WH:
+                    logging.warning(
+                        f"⚠ Plausibilität: data_15min ts={ts_15min} "
+                        f"W_PV_total_delta={row[0]:.0f} Wh > {MAX_PV_DELTA_15MIN_WH} Wh Maximum! "
+                        f"Vermutlich Zähler-Init nach WR-Neustart. Setze auf NULL."
+                    )
+                    c.execute(
+                        "UPDATE data_15min SET W_PV_total_delta = NULL WHERE ts = ?",
+                        (ts_15min,)
+                    )
         
         conn.commit()
         

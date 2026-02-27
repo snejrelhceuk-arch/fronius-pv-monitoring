@@ -9,6 +9,7 @@ import logging
 import os
 import time
 from pathlib import Path
+from datetime import date
 from flask import Blueprint, jsonify, request
 from routes.helpers import get_db_connection, ram_db_lock, DB_FILE
 
@@ -727,7 +728,7 @@ def api_polling_data():
     """Raw Polling-Daten für einen bestimmten Zeitraum"""
     try:
         # Parameter: date (YYYY-MM-DD), start_hour (0-23), end_hour (1-24)
-        date_str = request.args.get('date', '2026-01-01')
+        date_str = request.args.get('date', date.today().isoformat())
         start_hour = request.args.get('start_hour', 10, type=int)
         end_hour = request.args.get('end_hour', 11, type=int)
 

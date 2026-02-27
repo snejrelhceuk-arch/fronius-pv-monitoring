@@ -712,6 +712,19 @@ class RegelZellausgleich(Regel):
         if obs.forecast_kwh is None:
             return 0
 
+        # ── Zyklustracking: Prüfe ob diesen Monat schon erledigt ──
+        # Kanonische Quellen: battery_scheduler_state.json (last_balancing)
+        # und battery_control.json (letzter_ausgleich) als Fallback.
+        letzter = self._letzter_ausgleich()
+        if letzter:
+            try:
+                last_date = datetime.strptime(letzter, '%Y-%m-%d').date()
+                heute = date.today()
+                if last_date.year == heute.year and last_date.month == heute.month:
+                    return 0  # Diesen Monat schon erledigt
+            except (ValueError, TypeError):
+                pass
+
         min_pv = get_param(matrix, self.regelkreis, 'min_prognose_kwh', 50.0)
         frueh = get_param(matrix, self.regelkreis, 'fruehester_tag', 1)
         spaet = get_param(matrix, self.regelkreis, 'spaetester_tag', 28)
@@ -725,12 +738,34 @@ class RegelZellausgleich(Regel):
             return get_score_gewicht(matrix, self.regelkreis)
 
         # Notfall-Schwelle prüfen
-        # (vereinfacht; vollständige Kalender-Logik kommt in Phase 2)
         notfall = get_param(matrix, self.regelkreis, 'notfall_min_prognose_kwh', 25.0)
         if tag > spaet - 5 and obs.forecast_kwh >= notfall:
             return int(get_score_gewicht(matrix, self.regelkreis) * 0.8)
 
         return 0
+
+    @staticmethod
+    def _letzter_ausgleich() -> Optional[str]:
+        """Lese letzten Zellausgleich aus State/Config (analog battery_scheduler.py)."""
+        # Primär: Scheduler-State (wird nach jedem Ausgleich geschrieben)
+        state_path = os.path.join(_PROJECT_ROOT, 'config', 'battery_scheduler_state.json')
+        try:
+            with open(state_path) as f:
+                state = json.load(f)
+            val = state.get('last_balancing')
+            if val:
+                return val
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            pass
+
+        # Fallback: battery_control.json
+        cfg_path = os.path.join(_PROJECT_ROOT, 'config', 'battery_control.json')
+        try:
+            with open(cfg_path) as f:
+                cfg = json.load(f)
+            return cfg.get('zellausgleich', {}).get('letzter_ausgleich')
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return None
 
     def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
         soc_min = get_param(matrix, self.regelkreis, 'soc_min_waehrend_pct', 5)
