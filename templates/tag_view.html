@@ -116,7 +116,7 @@
             <div class="nav-left">
                 <a href="/" class="nav-main">Flow</a>
                 <a href="/monitoring" class="nav-main active">Monitoring</a>
-                <a href="/analyse/pv" class="nav-main">Analyse</a>
+                <a href="/analyse" class="nav-main">Analyse</a>
                 <div class="nav-separator"></div>
                 <button class="active" id="btnViewTag" onclick="navigateToView('tag')">Tag</button>
                 <button id="btnViewMonat" onclick="navigateToView('monat')">Monat</button>
@@ -521,7 +521,7 @@
                 loadGesamtData();
             } else if (view === 'analyse') {
                 // Weiterleitung zur Analyse
-                window.location.href = '/analyse/pv';
+                window.location.href = '/analyse';
             }
         }
         

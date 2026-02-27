@@ -1,6 +1,68 @@
 # Offene Aufgaben & Roadmap — Fronius PV-Monitoring
 
-> Letzte Aktualisierung: 2026-02-13
+> Letzte Aktualisierung: 2026-02-27
+
+---
+
+## System-Audit 2026-02-27 — Befunde & Fixes
+
+### Umfang
+Tiefgreifende Prüfung aller Schichten: Datensammlung (Collector/Modbus), Aggregations-Pipeline
+(5 Stufen), Web-API (52 Endpoints), Automations-Engine (9 Regeln, 4-Schichten-Architektur),
+Code-Struktur (23.321 Zeilen Python, 58 Module). Gesamtbewertung: **7/10**.
+
+### P0 — Sofort behoben (2026-02-27)
+- [x] **Actuator.close() fehlte** — `AutomationDaemon.stop()` crashte mit `AttributeError`.
+      Fix: `close()` war bereits in `actuator.py` vorhanden (Analyse-Irrtum verifiziert).
+- [x] **`_retry()` None-Handling** — `aktor_batterie.py` gab `True` für `None` zurück,
+      maskierte Hardware-Fehler. Fix: Explizite Prüfung `result is True or (result is not None and result)`.
+- [x] **DB-Connection-Leaks** — `pages.py analyse()` und `visualization.py tag_visualization()`
+      schlossen `conn` nie. Fix: try/finally mit `conn.close()` überall.
+- [x] **`aggregate.py` ohne Error-Handling** — kein try/except, DB-Fehler crashten ohne Rollback.
+      Fix: try/except/rollback um `aggregate_15min()`, `aggregate_hourly()`, `cleanup_old_data()`.
+- [x] **RAM-Buffer Flush-Reihenfolge** — `modbus_v3.py` leerte Buffer vor DB-Write-Erfolg,
+      Datenverlust bei Flush-Fehler möglich. Fix: Buffer erst nach erfolgreichem Write leeren.
+
+### P1 — Kurzfristig behoben (2026-02-27)
+- [x] **`W_PV_Direct_total` Inkonsistenz** — `aggregate_monthly.py` subtrahierte keine
+      Batterieladung (hourly tat es). Fix: Formel angeglichen an hourly-Berechnung.
+- [x] **Unbegrenzte API-Queries** — `/api/bulk_load`, `/api/15min?days=99999` etc. ohne Limit.
+      Fix: MAX_DAYS/MAX_HOURS/MAX_DURATION Caps in `realtime.py` und `data.py`.
+- [x] **WattPilot-Aktor fehlt** — Tier-1 Grid-Overload-Actions scheiterten still.
+      Fix: `AktorWattpilot` Stub mit Leistungsbegrenzung implementiert in
+      `aktoren/aktor_wattpilot.py`, registriert in `actuator.py`. Phase 2: echte Steuerung.
+- [x] **`aggregate_1min.py` nicht idempotent** — nutzte `INSERT` statt `INSERT OR REPLACE`.
+      Fix: Umstellung auf `INSERT OR REPLACE`.
+- [x] **Winner-takes-all P1-Safety** — SOC_Schutz (Score 90) blockierte TempSchutz (Score 70).
+      Fix: Alle Schutz-Regeln (Name enthält `schutz`) werden parallel ausgeführt,
+      Optimierungs-Regeln weiterhin Winner-takes-all. Änderung in `engine.py zyklus()`.
+- [x] **`get_db_connection` dupliziert** — 3× identisch in `modbus_v3.py`, `db_utils.py`,
+      `routes/helpers.py`. Fix: `modbus_v3.py` und `routes/helpers.py` importieren aus `db_utils.py`.
+
+### Offen — Für spätere Diskussion
+- [ ] **API-Authentifizierung** — Kein Auth im privaten 192.x-Netz. Akzeptables Risiko
+      für LAN-only, aber bei Remote-Zugriff (VPN/Port-Forwarding) nachrüsten.
+      Optionen: API-Key Middleware, Basic Auth, Token-basiert.
+- [ ] **Rate Limiting** — Noch kein DoS-Schutz. `flask-limiter` (60 req/min/IP) evaluieren.
+- [ ] **CORS auf Frontend einschränken** — Default `*` für LAN akzeptabel, bei Öffnung anpassen.
+- [ ] **TLS** — Unverschlüsselt auf Port 8000; bei Bedarf nginx-Proxy mit Let's Encrypt.
+- [ ] **Fehlermeldungen entschärfen** — `str(e)` exponiert Python-Interna; generische Antworten.
+
+### Erkenntnisse aus dem Audit (Dokumentation)
+| Bereich | Befund | Schwere |
+|---------|--------|---------|
+| Collector | `bitfield32` nicht in `parse_sunspec_value` → Events verloren | Mittel |
+| Collector | WR-Effizienz 0,97 hardcodiert statt aus config | Niedrig |
+| Aggregation | Drei verschiedene Batterie-Berechnungen (P×t / I×U×0.25 / BMS) | Info |
+| Aggregation | Dual-Pipeline (P×t für Charts, Zähler für Abrechnung) gut begründet | Info |
+| Web-API | 3 Response-Formate (Array / {data,stats} / {datapoints,totals}) | Niedrig |
+| Web-API | Mix Deutsch/Englisch Endpoints | Niedrig |
+| Web-API | Hardcodierte Default-Daten veralten (`2026-01-01`) | Niedrig |
+| Automation | `RegelZellausgleich` trackt nicht ob Zyklus bereits durchgeführt | Niedrig |
+| Automation | Observer vs. AutomationDaemon: redundante Implementierung | Info |
+| Struktur | 6 Dateien >1.000 Zeilen, 15 >500 Zeilen | Mittel |
+| Struktur | 0% automatisierte Testabdeckung | Mittel |
+| Struktur | Flask 1.1.2 (6+ Jahre alt), NumPy 1.19.5 stark veraltet | Mittel |
 
 ---
 
