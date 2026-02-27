@@ -1,6 +1,6 @@
 
-  PV-System Erlau — SSH-Zugang vom USB-Stick
-  ═══════════════════════════════════════════
+  PV-System Erlau - SSH-Zugang vom USB-Stick
+  ===========================================
 
   Voraussetzung: Windows 10 oder 11 mit OpenSSH-Client
   (ist standardmäßig installiert)
@@ -8,7 +8,7 @@
 
   ERSTER START (einmalig pro PC):
   ───────────────────────────────
-  1. "01 — SSH einrichten (einmalig).bat" doppelklicken
+  1. "01 - SSH einrichten (einmalig).bat" doppelklicken
      → Erstellt SSH-Key und kopiert ihn auf den Pi4
      → Pi4-Passwort wird dabei EINMALIG abgefragt
 
@@ -18,17 +18,17 @@
 
   TÄGLICHE NUTZUNG:
   ──────────────────
-  "02 — PV-Config starten.bat" doppelklicken
+  "02 - PV-Config starten.bat" doppelklicken
      → Verbindet zum Pi4 und öffnet das Konfigurations-Menü
      → Nach Beenden des Menüs: Shell bleibt offen
 
 
   DATEIEN:
   ────────
-  01 — SSH einrichten (einmalig).bat ... SSH-Key generieren & auf Pi kopieren
-  02 — PV-Config starten.bat .......... Konfigurations-Menü per SSH
-  03 — Shell öffnen.bat ............... Kommandozeile auf dem Pi4
-  04 — Verbindung testen.bat .......... Ping + SSH + Status prüfen
+  01 - SSH einrichten (einmalig).bat ... SSH-Key generieren & auf Pi kopieren
+  02 - PV-Config starten.bat ............ Konfigurations-Menue per SSH
+  03 - Shell oeffnen.bat ................ Kommandozeile auf dem Pi4
+  04 - Verbindung testen.bat ............ Ping + SSH + Status pruefen
 
 
   FEHLERBEHEBUNG:

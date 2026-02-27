@@ -157,7 +157,7 @@ Stack: Raspbian Bullseye 11, Python 3.9.2, Flask 1.1.2, gunicorn 23.0.0,
 
 
 ═════════════════════════════════════════════════════════════════
-DYNAMISCHE UPDATES (Stand: 2026-02-27 20:10)
+DYNAMISCHE UPDATES (Stand: 2026-02-27 20:17)
 ═════════════════════════════════════════════════════════════════
 
 --- Aktuelle Config-Werte ---
@@ -208,6 +208,7 @@ HEIZKOSTEN_ERSPARNIS = {
 HEIZPERIODE_MONATE = {10, 11, 12, 1, 2, 3}  # Okt–Mär (6 Monate)
 
 --- Letzte Git-Commits ---
+d31c4b7 refactor: Windows-Zugang auf portable BAT-Dateien umgestellt
 7a2d0bc fix: Windows Terminal Icon — Emoji durch gültigen Pfad ersetzt
 a9c62a9 chore: diverse Verbesserungen (Aggregation, Engine, Modbus, Routes)
 93ef251 feat: pv-config.py + Windows-Terminal Zugang
@@ -217,9 +218,13 @@ d677a6d feat: Automation-Engine mit sunrise-basierter Morgen-Regel + Nachmittag-
 d21913e fix: Aggregations-Pipeline und Verlustanalyse
 67705bc flow: add backup status badge (Back up/down) via 10min API check
 6b6805a backup: Sohn-Intervall auf 3 Tage + Pi5-Spiegel für GFS
-0526c5f docs: add governance references in system architecture
 
 --- Kürzlich geänderte Module (5) ---
+
+modbus_v3.py:
+modbus_v3.py — Modbus-Collector für Fronius Gen24 / SmartMeter
+Version 2.0 - 30.12.2025
+Version 2.1 - 31.12.2024 - RAM-Buffer + Batch-Writes
 
 battery_scheduler.py:
   def load_config():  # Lade battery_control.json.
@@ -230,11 +235,6 @@ aggregate.py:
   def get_db():
     return get_db_connection()
 
-
-modbus_v3.py:
-modbus_v3.py — Modbus-Collector für Fronius Gen24 / SmartMeter
-Version 2.0 - 30.12.2025
-Version 2.1 - 31.12.2024 - RAM-Buffer + Batch-Writes
 
 automation/engine/engine.py:
 engine.py — Entscheidungs-Engine (Schicht S3)
