@@ -4,6 +4,7 @@ Blueprint: Roh- und aggregierte Daten-APIs.
 Enthält: /api/15min, /api/hourly, /api/daily, /api/monthly, /api/yearly,
          /api/data_15min, /api/data_hourly, /api/data_daily, /api/data_monthly
 """
+from datetime import date, timedelta
 from flask import Blueprint, jsonify, request
 from routes.helpers import get_db_connection
 
@@ -209,7 +210,7 @@ def api_data_15min():
     """15-Minuten aggregierte Daten für einen bestimmten Zeitraum"""
     try:
         # Parameter: date (YYYY-MM-DD), optional start_hour/end_hour
-        date_str = request.args.get('date', '2026-01-01')
+        date_str = request.args.get('date', date.today().isoformat())
         start_hour = request.args.get('start_hour', type=int)
         end_hour = request.args.get('end_hour', type=int)
 
@@ -312,7 +313,7 @@ def api_data_hourly():
     """Stündliche aggregierte Daten für einen bestimmten Zeitraum"""
     try:
         # Parameter: date (YYYY-MM-DD), optional start_hour/end_hour
-        date_str = request.args.get('date', '2026-01-01')
+        date_str = request.args.get('date', date.today().isoformat())
         start_hour = request.args.get('start_hour', type=int)
         end_hour = request.args.get('end_hour', type=int)
 
@@ -397,8 +398,8 @@ def api_data_hourly():
 def api_data_daily():
     """Tägliche aggregierte Daten"""
     try:
-        start_date = request.args.get('start_date', '2025-12-01')
-        end_date = request.args.get('end_date', '2026-01-31')
+        start_date = request.args.get('start_date', (date.today() - timedelta(days=30)).isoformat())
+        end_date = request.args.get('end_date', date.today().isoformat())
 
         conn = get_db_connection()
         if not conn:
@@ -439,8 +440,8 @@ def api_data_daily():
 def api_data_monthly():
     """Monatliche aggregierte Daten"""
     try:
-        start_date = request.args.get('start_date', '2025-01-01')
-        end_date = request.args.get('end_date', '2026-12-31')
+        start_date = request.args.get('start_date', date(date.today().year, 1, 1).isoformat())
+        end_date = request.args.get('end_date', date(date.today().year, 12, 31).isoformat())
 
         conn = get_db_connection()
         if not conn:
