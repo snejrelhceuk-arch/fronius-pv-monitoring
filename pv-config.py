@@ -1,0 +1,1220 @@
+#!/usr/bin/env python3
+"""
+pv-config.py — Interaktives SSH-Konfigurationstool für PV-Automation
+
+Whiptail-basiertes Terminal-Menü für:
+  - Regelkreise ein/ausschalten
+  - Parameter-Matrix anzeigen & bearbeiten
+  - Batterie-Scheduler-Status
+  - System-Status (Collector, DB, Failover, Warnungen)
+  - Forecast-Genauigkeit
+
+Zugang: SSH → `python3 pv-config.py` oder `./pv-config.py`
+Auth:   SSH-Login (Passwort/Key)
+Sicher: Kein Netzwerk-Port, keine zusätzliche Angriffsfläche
+
+Siehe: doc/AUTOMATION_ARCHITEKTUR.md §3 (S1 Config-Schicht)
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sqlite3
+import sys
+import time
+from datetime import datetime, date, timedelta
+from pathlib import Path
+from typing import Optional, Tuple
+
+# ── Projekt-Root ermitteln ─────────────────────────────────────
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, PROJECT_ROOT)
+
+import config
+from automation.engine.param_matrix import (
+    lade_matrix, validiere_matrix, alle_regelkreise,
+    get_param, ist_aktiv, get_score_gewicht,
+    DEFAULT_MATRIX_PATH,
+)
+
+# ── Konstanten ─────────────────────────────────────────────────
+VERSION = '1.0.0'
+TITLE = 'PV-System Konfiguration'
+BATTERY_CONFIG_PATH = os.path.join(PROJECT_ROOT, 'config', 'battery_control.json')
+SCHEDULER_STATE_PATH = os.path.join(PROJECT_ROOT, 'config', 'battery_scheduler_state.json')
+
+# Whiptail-Dimensionen (Zeilen, Spalten)
+WT_H = 24
+WT_W = 78
+WT_LIST_H = 16  # Listenhöhe innerhalb Dialog
+
+# ANSI-Farben für Status-Anzeige VOR dem Menü
+C_RESET = '\033[0m'
+C_BOLD = '\033[1m'
+C_DIM = '\033[2m'
+C_RED = '\033[91m'
+C_GREEN = '\033[92m'
+C_YELLOW = '\033[93m'
+C_BLUE = '\033[94m'
+C_CYAN = '\033[96m'
+
+# Prioritäts-Labels
+PRIO_LABELS = {1: 'SICHERHEIT', 2: 'STEUERUNG', 3: 'WARTUNG'}
+
+
+# ═══════════════════════════════════════════════════════════════
+# Whiptail-Wrapper
+# ═══════════════════════════════════════════════════════════════
+
+def _wt(args: list[str], input_text: str = '') -> Tuple[int, str]:
+    """Whiptail aufrufen. Rückgabe: (returncode, stderr-Output)."""
+    cmd = ['whiptail', '--title', TITLE, '--backtitle',
+           f'PV-System v{VERSION} | {config.PV_KWP_TOTAL} kWp | BYD {config.PV_BATTERY_KWH} kWh'] + args
+    proc = subprocess.run(
+        cmd,
+        input=input_text.encode() if input_text else None,
+        capture_output=True,
+    )
+    # whiptail gibt Auswahl auf stderr aus
+    return proc.returncode, proc.stderr.decode().strip()
+
+
+def wt_menu(text: str, items: list[tuple[str, str]]) -> Optional[str]:
+    """Menü anzeigen. items = [(tag, description), ...]. Rückgabe: gewählter Tag oder None."""
+    args = ['--menu', text, str(WT_H), str(WT_W), str(WT_LIST_H)]
+    for tag, desc in items:
+        args.extend([tag, desc])
+    rc, choice = _wt(args)
+    return choice if rc == 0 else None
+
+
+def wt_checklist(text: str, items: list[tuple[str, str, bool]]) -> Optional[list[str]]:
+    """Checklist. items = [(tag, desc, checked), ...]. Rückgabe: Liste gewählter Tags."""
+    args = ['--checklist', text, str(WT_H), str(WT_W), str(WT_LIST_H)]
+    for tag, desc, checked in items:
+        args.extend([tag, desc, 'ON' if checked else 'OFF'])
+    rc, output = _wt(args)
+    if rc != 0:
+        return None
+    # Whiptail gibt "tag1" "tag2" zurück
+    return [t.strip('"') for t in output.split()] if output else []
+
+
+def wt_inputbox(text: str, default: str = '') -> Optional[str]:
+    """Eingabefeld. Rückgabe: eingegebener Text oder None."""
+    rc, output = _wt(['--inputbox', text, str(10), str(WT_W), default])
+    return output if rc == 0 else None
+
+
+def wt_yesno(text: str) -> bool:
+    """Ja/Nein Dialog. Rückgabe: True = Ja."""
+    rc, _ = _wt(['--yesno', text, str(10), str(WT_W)])
+    return rc == 0
+
+
+def wt_msgbox(text: str):
+    """Info-Dialog."""
+    _wt(['--msgbox', text, str(WT_H), str(WT_W)])
+
+
+def wt_textbox(filepath: str):
+    """Datei anzeigen (scrollbar)."""
+    _wt(['--textbox', filepath, str(WT_H), str(WT_W), '--scrolltext'])
+
+
+# ═══════════════════════════════════════════════════════════════
+# DB-Zugriff
+# ═══════════════════════════════════════════════════════════════
+
+def _get_db() -> sqlite3.Connection:
+    """DB-Verbindung (read-only für Status)."""
+    conn = sqlite3.connect(f'file:{config.DB_PATH}?mode=ro', uri=True, timeout=5)
+    conn.execute('PRAGMA journal_mode=WAL')
+    return conn
+
+
+def _query_one(sql: str, params: tuple = ()) -> Optional[tuple]:
+    """Einzelne Zeile abfragen."""
+    try:
+        conn = _get_db()
+        row = conn.execute(sql, params).fetchone()
+        conn.close()
+        return row
+    except Exception:
+        return None
+
+
+def _query_all(sql: str, params: tuple = ()) -> list:
+    """Alle Zeilen abfragen."""
+    try:
+        conn = _get_db()
+        rows = conn.execute(sql, params).fetchall()
+        conn.close()
+        return rows
+    except Exception:
+        return []
+
+
+# ═══════════════════════════════════════════════════════════════
+# Status-Dashboard (vor dem Menü)
+# ═══════════════════════════════════════════════════════════════
+
+def _collector_status() -> tuple[str, str]:
+    """Collector-Status. Rückgabe: (status_text, farbe)."""
+    pid_file = os.path.join(PROJECT_ROOT, 'collector.pid')
+    if not os.path.exists(pid_file):
+        return 'GESTOPPT', C_RED
+
+    try:
+        with open(pid_file) as f:
+            pid = int(f.read().strip())
+        # Prüfe ob Prozess lebt
+        os.kill(pid, 0)
+    except (ValueError, ProcessLookupError, PermissionError):
+        return 'PID-STALE', C_RED
+
+    # Letzter Datensatz in raw_data (ts = Unix epoch float)
+    row = _query_one("SELECT MAX(ts) FROM raw_data")
+    if row and row[0]:
+        try:
+            age_s = time.time() - float(row[0])
+            if age_s < 30:
+                return f'AKTIV (PID {pid})', C_GREEN
+            elif age_s < 120:
+                return f'VERZÖGERT ({int(age_s)}s)', C_YELLOW
+            else:
+                return f'STALE ({int(age_s/60)}min)', C_RED
+        except Exception:
+            pass
+
+    return f'LÄUFT (PID {pid})', C_GREEN
+
+
+def _battery_status() -> dict:
+    """Aktueller Batterie-Status aus DB."""
+    row = _query_one("""
+        SELECT SOC_Batt, U_Batt_API, I_Batt_API, ChaSt_Batt
+        FROM raw_data ORDER BY ts DESC LIMIT 1
+    """)
+    if not row:
+        return {}
+    # Batterie-Leistung = U × I (positiv=Laden, negativ=Entladen)
+    u = row[1] or 0
+    i = row[2] or 0
+    return {
+        'soc': row[0],
+        'power_w': u * i,
+        'cha_state': row[3],
+    }
+
+
+def _pv_status() -> dict:
+    """Aktuelle PV-Daten."""
+    row = _query_one("""
+        SELECT P_DC_Inv, P_Netz, P_AC_Inv
+        FROM raw_data ORDER BY ts DESC LIMIT 1
+    """)
+    if not row:
+        return {}
+    p_dc = row[0] or 0       # DC-Leistung (PV gesamt)
+    p_netz = row[1] or 0     # Netz: negativ = Einspeisung, positiv = Bezug
+    p_ac = row[2] or 0       # AC-Leistung Inverter
+    return {
+        'pv_w': p_dc,
+        'bezug_w': max(0, p_netz),
+        'einsp_w': max(0, -p_netz),
+        'haus_w': p_ac - min(0, p_netz),  # AC + Bezug (≈ Hausverbrauch)
+    }
+
+
+def _tagesertrag() -> Optional[float]:
+    """Heutiger PV-Ertrag in kWh (Summe der Stunden-Deltas)."""
+    # hourly_data.ts = Unix epoch float, W_PV_total_delta = Wh pro Stunde
+    today_start = datetime.combine(date.today(), datetime.min.time()).timestamp()
+    row = _query_one("""
+        SELECT SUM(W_PV_total_delta) FROM hourly_data
+        WHERE ts >= ?
+    """, (today_start,))
+    return round(row[0] / 1000, 2) if row and row[0] else None
+
+
+def _automation_phase() -> str:
+    """Letzte Automation-Aktion."""
+    row = _query_one("""
+        SELECT ts, kommando, wert, grund
+        FROM automation_log
+        WHERE aktor = 'batterie'
+        ORDER BY ts DESC LIMIT 1
+    """)
+    if not row:
+        return 'Keine Aktionen'
+    ts, cmd, wert, grund = row
+    return f'{ts[11:16]} {cmd}={wert} ({(grund or "")[:40]})'
+
+
+def _db_size() -> str:
+    """DB-Größe."""
+    try:
+        size = os.path.getsize(config.DB_PATH)
+        return f'{size / 1024 / 1024:.1f} MB'
+    except OSError:
+        return '?'
+
+
+def _scheduler_state() -> dict:
+    """Batterie-Scheduler-Status."""
+    if os.path.exists(SCHEDULER_STATE_PATH):
+        try:
+            with open(SCHEDULER_STATE_PATH) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def zeige_status_dashboard():
+    """ANSI-Status-Dashboard auf Terminal vor Menü."""
+    now = datetime.now()
+    coll_text, coll_color = _collector_status()
+    batt = _battery_status()
+    pv = _pv_status()
+    ertrag = _tagesertrag()
+    phase = _automation_phase()
+    sched = _scheduler_state()
+    db_sz = _db_size()
+
+    # SOC-Balken
+    soc = batt.get('soc', 0) or 0
+    soc_bar_len = 20
+    filled = int(soc / 100 * soc_bar_len)
+    soc_bar = '█' * filled + '░' * (soc_bar_len - filled)
+    soc_color = C_GREEN if soc > 25 else (C_YELLOW if soc > 10 else C_RED)
+
+    # Batterie-Richtung
+    batt_p = batt.get('power_w', 0) or 0
+    if batt_p > 50:
+        batt_dir = f'{C_GREEN}▲ Laden {batt_p:.0f}W{C_RESET}'
+    elif batt_p < -50:
+        batt_dir = f'{C_YELLOW}▼ Entladen {abs(batt_p):.0f}W{C_RESET}'
+    else:
+        batt_dir = f'{C_DIM}— Idle{C_RESET}'
+
+    print(f'\033[2J\033[H')  # Clear screen
+    print(f'{C_BOLD}{"═" * 70}')
+    print(f'  PV-SYSTEM STATUS — {now.strftime("%d.%m.%Y %H:%M:%S")}')
+    print(f'{"═" * 70}{C_RESET}')
+    print()
+
+    # Zeile 1: PV + Netz
+    pv_w = pv.get('pv_w', 0) or 0
+    bezug = pv.get('bezug_w', 0) or 0
+    einsp = pv.get('einsp_w', 0) or 0
+    haus = pv.get('haus_w', 0) or 0
+    pv_color = C_GREEN if pv_w > 100 else C_DIM
+    print(f'  {pv_color}☀ PV: {pv_w:.0f}W{C_RESET}    '
+          f'🏠 Haus: {haus:.0f}W    '
+          f'⚡ Netz: {C_RED if bezug > 100 else C_GREEN}'
+          f'{"↓" + str(int(bezug)) + "W Bezug" if bezug > 50 else "↑" + str(int(einsp)) + "W Einsp."}'
+          f'{C_RESET}')
+
+    # Zeile 2: Batterie
+    print(f'  {soc_color}🔋 SOC: {soc:.0f}% {soc_bar}{C_RESET}  {batt_dir}')
+
+    # Zeile 3: Tagesertrag + Prognose
+    ertrag_str = f'{ertrag:.1f} kWh' if ertrag else '—'
+    print(f'  📊 Tagesertrag: {ertrag_str}    DB: {db_sz}')
+
+    # Zeile 4: Collector + Automation
+    print(f'  {coll_color}⚙ Collector: {coll_text}{C_RESET}')
+    print(f'  {C_CYAN}🤖 Letzte Aktion: {phase}{C_RESET}')
+
+    # Zeile 5: Scheduler
+    if sched:
+        morgen = sched.get('morgen_status', '—')
+        nachm = sched.get('nachmittag_status', '—')
+        print(f'  {C_BLUE}📋 Scheduler: Morgen={morgen}  Nachm={nachm}{C_RESET}')
+
+    print()
+    print(f'{C_DIM}{"─" * 70}{C_RESET}')
+    print()
+
+
+# ═══════════════════════════════════════════════════════════════
+# Menü 1: Regelkreise ein/ausschalten
+# ═══════════════════════════════════════════════════════════════
+
+def menu_regelkreise():
+    """Regelkreise per Checklist aktivieren/deaktivieren."""
+    matrix = lade_matrix()
+    items = []
+
+    for rk_name, rk in alle_regelkreise(matrix):
+        prio = rk.get('prioritaet', 0)
+        aktiv = rk.get('aktiv', False)
+        gewicht = rk.get('score_gewicht', 0)
+        label = PRIO_LABELS.get(prio, f'P{prio}')
+        desc = f'[{label}] Score={gewicht}  {rk.get("beschreibung", "")[:35]}'
+        items.append((rk_name, desc, aktiv))
+
+    result = wt_checklist(
+        'Regelkreise aktivieren/deaktivieren.\n'
+        'Leertaste = Umschalten, Enter = Bestätigen, Esc = Abbrechen.\n\n'
+        'SICHERHEIT-Regeln (P1) sollten immer aktiv bleiben!',
+        items,
+    )
+
+    if result is None:
+        return  # Abbruch
+
+    # Änderungen ermitteln
+    aenderungen = []
+    for rk_name, rk in alle_regelkreise(matrix):
+        war_aktiv = rk.get('aktiv', False)
+        soll_aktiv = rk_name in result
+        if war_aktiv != soll_aktiv:
+            aenderungen.append((rk_name, soll_aktiv))
+
+    if not aenderungen:
+        wt_msgbox('Keine Änderungen.')
+        return
+
+    # Sicherheitscheck: P1-Regeln deaktivieren?
+    p1_deaktiviert = [
+        name for name, aktiv in aenderungen
+        if not aktiv and matrix['regelkreise'][name].get('prioritaet') == 1
+    ]
+    if p1_deaktiviert:
+        if not wt_yesno(
+            f'⚠ WARNUNG: Sicherheitsregeln werden deaktiviert:\n\n'
+            f'{", ".join(p1_deaktiviert)}\n\n'
+            f'Dies kann zu Batterieschäden führen!\n'
+            f'Wirklich fortfahren?'
+        ):
+            return
+
+    # Zusammenfassung
+    summary = 'Folgende Änderungen:\n\n'
+    for name, aktiv in aenderungen:
+        summary += f'  {"✓ AN" if aktiv else "✗ AUS"}: {name}\n'
+    summary += '\nÄnderungen speichern?'
+
+    if not wt_yesno(summary):
+        return
+
+    # Speichern
+    for name, aktiv in aenderungen:
+        matrix['regelkreise'][name]['aktiv'] = aktiv
+
+    _speichere_matrix(matrix)
+    wt_msgbox(f'{len(aenderungen)} Regelkreis(e) geändert.\n'
+              f'Wirksam ab nächstem Engine-Zyklus (≤1 Min).')
+
+
+# ═══════════════════════════════════════════════════════════════
+# Menü 2: Parameter-Matrix anzeigen & bearbeiten
+# ═══════════════════════════════════════════════════════════════
+
+def menu_parameter():
+    """Parameter-Matrix: Regelkreis wählen → Parameter bearbeiten."""
+    while True:
+        matrix = lade_matrix()
+        items = []
+        for rk_name, rk in alle_regelkreise(matrix):
+            prio = rk.get('prioritaet', 0)
+            aktiv = '●' if rk.get('aktiv') else '○'
+            n_params = len([k for k in rk.get('parameter', {}) if not k.startswith('_')])
+            desc = f'{aktiv} P{prio} Score={rk.get("score_gewicht", 0):>3}  {n_params} Param'
+            items.append((rk_name, desc))
+
+        choice = wt_menu(
+            'Regelkreis wählen zum Anzeigen/Bearbeiten der Parameter.\n'
+            '● = aktiv, ○ = inaktiv',
+            items,
+        )
+
+        if not choice:
+            return
+
+        _menu_regelkreis_detail(choice)
+
+
+def _menu_regelkreis_detail(rk_name: str):
+    """Detail-Ansicht eines Regelkreises mit Parameter-Bearbeitung."""
+    while True:
+        matrix = lade_matrix()
+        rk = matrix.get('regelkreise', {}).get(rk_name, {})
+        if not rk:
+            wt_msgbox(f'Regelkreis "{rk_name}" nicht gefunden.')
+            return
+
+        params = rk.get('parameter', {})
+        items = []
+        for p_name, p in params.items():
+            if p_name.startswith('_'):
+                continue
+            wert = p.get('wert', '?')
+            einheit = p.get('einheit', '')
+            bereich = p.get('bereich', [])
+            bereich_str = f'[{bereich[0]}..{bereich[1]}]' if len(bereich) == 2 else ''
+            desc = f'{wert}{einheit} {bereich_str}'
+            items.append((p_name, desc))
+
+        # Header
+        prio = rk.get('prioritaet', 0)
+        aktiv = 'AKTIV' if rk.get('aktiv') else 'INAKTIV'
+        header = (
+            f'{rk_name.upper()} — {PRIO_LABELS.get(prio, f"P{prio}")} — {aktiv}\n'
+            f'{rk.get("beschreibung", "")}\n'
+            f'Score: {rk.get("score_gewicht", 0)}  Zyklus: {rk.get("engine_zyklus", "?")}\n\n'
+            f'Parameter wählen zum Bearbeiten:'
+        )
+
+        choice = wt_menu(header, items)
+        if not choice:
+            return
+
+        _edit_parameter(rk_name, choice)
+
+
+def _edit_parameter(rk_name: str, p_name: str):
+    """Einzelnen Parameter bearbeiten."""
+    matrix = lade_matrix()
+    rk = matrix['regelkreise'][rk_name]
+    p = rk['parameter'][p_name]
+
+    wert = p.get('wert', 0)
+    einheit = p.get('einheit', '')
+    bereich = p.get('bereich', [])
+    beschreibung = p.get('beschreibung', '')
+    obs_feld = p.get('obs_feld', '')
+    aktor = p.get('aktor_kommando', '')
+
+    info = (
+        f'Parameter: {p_name}\n'
+        f'Beschreibung: {beschreibung}\n\n'
+        f'Aktueller Wert: {wert}{einheit}\n'
+    )
+    if bereich and len(bereich) == 2:
+        info += f'Gültiger Bereich: {bereich[0]} .. {bereich[1]}{einheit}\n'
+    if obs_feld:
+        info += f'ObsState-Feld: {obs_feld}\n'
+    if aktor:
+        info += f'Aktor-Kommando: {aktor}\n'
+    info += f'\nNeuen Wert eingeben:'
+
+    neuer_wert_str = wt_inputbox(info, str(wert))
+    if neuer_wert_str is None:
+        return
+
+    # Typ beibehalten (int oder float)
+    try:
+        if isinstance(wert, int) and '.' not in neuer_wert_str:
+            neuer_wert = int(neuer_wert_str)
+        else:
+            neuer_wert = float(neuer_wert_str)
+    except ValueError:
+        wt_msgbox(f'Ungültiger Wert: "{neuer_wert_str}"\n\nBitte eine Zahl eingeben.')
+        return
+
+    # Bereichsprüfung
+    if bereich and len(bereich) == 2:
+        lo, hi = bereich
+        if not (lo <= neuer_wert <= hi):
+            wt_msgbox(
+                f'Wert {neuer_wert}{einheit} liegt außerhalb des '
+                f'gültigen Bereichs [{lo}..{hi}]{einheit}.\n\n'
+                f'Änderung abgelehnt.'
+            )
+            return
+
+    if neuer_wert == wert:
+        wt_msgbox('Wert unverändert.')
+        return
+
+    # Bestätigung
+    if not wt_yesno(
+        f'Parameter: {rk_name} → {p_name}\n\n'
+        f'Alt: {wert}{einheit}\n'
+        f'Neu: {neuer_wert}{einheit}\n\n'
+        f'Speichern?'
+    ):
+        return
+
+    # Speichern
+    matrix = lade_matrix()  # Frisch laden (Concurrent-Safety)
+    matrix['regelkreise'][rk_name]['parameter'][p_name]['wert'] = neuer_wert
+    _speichere_matrix(matrix)
+    wt_msgbox(f'✓ {p_name} = {neuer_wert}{einheit} gespeichert.\n'
+              f'Wirksam ab nächstem Engine-Zyklus.')
+
+
+# ═══════════════════════════════════════════════════════════════
+# Menü 3: Batterie-Scheduler
+# ═══════════════════════════════════════════════════════════════
+
+def menu_scheduler():
+    """Batterie-Scheduler Status und Override."""
+    while True:
+        choice = wt_menu(
+            'Batterie-Scheduler — Status & Steuerung',
+            [
+                ('status', 'Aktuellen Status anzeigen'),
+                ('log', 'Letzte Aktionen (24h)'),
+                ('soc_min', 'SOC_MIN Override → 5%'),
+                ('soc_max', 'SOC_MAX Override → 100%'),
+                ('reset', 'SOC auf Komfortwerte zurücksetzen'),
+            ],
+        )
+
+        if not choice:
+            return
+
+        if choice == 'status':
+            _zeige_scheduler_status()
+        elif choice == 'log':
+            _zeige_scheduler_log()
+        elif choice == 'soc_min':
+            _soc_override('soc_min', 5)
+        elif choice == 'soc_max':
+            _soc_override('soc_max', 100)
+        elif choice == 'reset':
+            _soc_reset()
+
+
+def _zeige_scheduler_status():
+    """Scheduler-Status als Textbox."""
+    sched = _scheduler_state()
+    batt = _battery_status()
+
+    # battery_control.json lesen
+    bc = {}
+    if os.path.exists(BATTERY_CONFIG_PATH):
+        try:
+            with open(BATTERY_CONFIG_PATH) as f:
+                bc = json.load(f)
+        except Exception:
+            pass
+
+    soc = batt.get('soc', '?')
+    power = batt.get('power_w', 0) or 0
+    cha_state = batt.get('cha_state', '?')
+
+    grenzen = bc.get('soc_grenzen', {})
+    zellausg = bc.get('zellausgleich', {})
+
+    text = (
+        f'BATTERIE-SCHEDULER STATUS\n'
+        f'{"─" * 50}\n\n'
+        f'SOC aktuell:     {soc}%\n'
+        f'Leistung:        {power:.0f}W {"(Laden)" if power > 0 else "(Entladen)" if power < 0 else "(Idle)"}\n'
+        f'Ladestatus:      {cha_state}\n\n'
+        f'SOC-Grenzen (Config):\n'
+        f'  Komfort:       {grenzen.get("komfort_min", "?")}% – {grenzen.get("komfort_max", "?")}%\n'
+        f'  Stress:        {grenzen.get("stress_min", "?")}% – {grenzen.get("stress_max", "?")}%\n'
+        f'  Absolut Min:   {grenzen.get("absolutes_minimum", "?")}%\n\n'
+        f'Zellausgleich:\n'
+        f'  Modus:         {zellausg.get("modus", "?")}\n'
+        f'  Letzter:       {zellausg.get("letzter_ausgleich", "nie")}\n'
+        f'  Max. Tage:     {zellausg.get("max_tage_ohne_ausgleich", "?")}\n'
+    )
+
+    if sched:
+        text += f'\nScheduler-State:\n'
+        for k, v in sorted(sched.items()):
+            text += f'  {k}: {v}\n'
+
+    wt_msgbox(text)
+
+
+def _zeige_scheduler_log():
+    """Letzte 20 Scheduler-Aktionen."""
+    rows = _query_all("""
+        SELECT ts, kommando, wert, grund, ergebnis
+        FROM automation_log
+        WHERE aktor = 'batterie'
+        ORDER BY ts DESC
+        LIMIT 20
+    """)
+
+    if not rows:
+        # Fallback: battery_control_log
+        rows = _query_all("""
+            SELECT ts, aktion, wert, grund, ergebnis
+            FROM battery_control_log
+            ORDER BY ts DESC
+            LIMIT 20
+        """)
+
+    if not rows:
+        wt_msgbox('Keine Scheduler-Aktionen in der DB.')
+        return
+
+    # Temporäre Datei für Textbox
+    tmp = '/tmp/pv_scheduler_log.txt'
+    with open(tmp, 'w') as f:
+        f.write(f'BATTERIE-SCHEDULER LOG — Letzte {len(rows)} Aktionen\n')
+        f.write(f'{"═" * 70}\n\n')
+        for row in rows:
+            ts, cmd, wert, grund, erg = row
+            ts_short = ts[5:16] if ts and len(ts) > 16 else ts or '?'
+            f.write(f'{ts_short}  {cmd}={wert}  {erg or ""}\n')
+            if grund:
+                f.write(f'  └ {grund[:65]}\n')
+        f.write(f'\n{"─" * 70}\n')
+
+    wt_textbox(tmp)
+    os.unlink(tmp)
+
+
+def _soc_override(param: str, wert: int):
+    """SOC_MIN oder SOC_MAX sofort per Fronius-API setzen."""
+    label = 'SOC_MIN' if param == 'soc_min' else 'SOC_MAX'
+    if not wt_yesno(
+        f'{label} sofort auf {wert}% setzen?\n\n'
+        f'Dies wirkt direkt auf den Wechselrichter.\n'
+        f'Der Scheduler kann den Wert im nächsten Zyklus\n'
+        f'wieder überschreiben (≤15 Min).'
+    ):
+        return
+
+    try:
+        # Nutze fronius_api direkt
+        sys.path.insert(0, PROJECT_ROOT)
+        from fronius_api import FroniusAPI
+        api = FroniusAPI(config.INVERTER_IP)
+
+        if param == 'soc_min':
+            api.set_soc_min(wert)
+        else:
+            api.set_soc_max(wert)
+
+        wt_msgbox(f'✓ {label} = {wert}% gesetzt.')
+    except Exception as e:
+        wt_msgbox(f'✗ Fehler beim Setzen von {label}:\n\n{str(e)[:200]}')
+
+
+def _soc_reset():
+    """SOC auf Komfortwerte zurücksetzen."""
+    matrix = lade_matrix()
+    komfort_min = get_param(matrix, 'morgen_soc_min', 'komfort_min_pct', 25)
+    komfort_max = get_param(matrix, 'nachmittag_soc_max', 'komfort_max_pct', 75)
+
+    if not wt_yesno(
+        f'SOC auf Komfortwerte zurücksetzen?\n\n'
+        f'SOC_MIN → {komfort_min}%\n'
+        f'SOC_MAX → {komfort_max}%\n\n'
+        f'Der Scheduler kann die Werte im nächsten\n'
+        f'Zyklus wieder überschreiben (≤15 Min).'
+    ):
+        return
+
+    try:
+        from fronius_api import FroniusAPI
+        api = FroniusAPI(config.INVERTER_IP)
+        api.set_soc_min(komfort_min)
+        api.set_soc_max(komfort_max)
+        wt_msgbox(f'✓ SOC_MIN={komfort_min}%, SOC_MAX={komfort_max}% gesetzt.')
+    except Exception as e:
+        wt_msgbox(f'✗ Fehler:\n\n{str(e)[:200]}')
+
+
+# ═══════════════════════════════════════════════════════════════
+# Menü 4: System-Status
+# ═══════════════════════════════════════════════════════════════
+
+def menu_system():
+    """System-Übersicht und Warnungen."""
+    while True:
+        choice = wt_menu(
+            'System-Status & Warnungen',
+            [
+                ('uebersicht', 'System-Übersicht'),
+                ('warnungen', 'Aktive Warnungen prüfen'),
+                ('db', 'Datenbank-Status'),
+                ('services', 'Service-Status'),
+                ('validierung', 'Parametermatrix validieren'),
+            ],
+        )
+
+        if not choice:
+            return
+
+        if choice == 'uebersicht':
+            _system_uebersicht()
+        elif choice == 'warnungen':
+            _pruefe_warnungen()
+        elif choice == 'db':
+            _db_status()
+        elif choice == 'services':
+            _service_status()
+        elif choice == 'validierung':
+            _validiere_param_matrix()
+
+
+def _system_uebersicht():
+    """Kompakte System-Übersicht."""
+    coll_text, _ = _collector_status()
+    batt = _battery_status()
+    pv = _pv_status()
+    db_sz = _db_size()
+
+    # Regelkreise zählen
+    matrix = lade_matrix()
+    rks = alle_regelkreise(matrix)
+    aktiv = sum(1 for _, rk in rks if rk.get('aktiv'))
+
+    # DB-Tabellengrößen
+    tables = {}
+    for tbl in ['raw_data', 'data_1min', 'data_15min', 'hourly_data',
+                'daily_data', 'monthly_statistics', 'automation_log']:
+        row = _query_one(f'SELECT COUNT(*) FROM {tbl}')
+        tables[tbl] = row[0] if row else 0
+
+    text = (
+        f'SYSTEM-ÜBERSICHT\n'
+        f'{"═" * 50}\n\n'
+        f'Anlage:        {config.PV_KWP_TOTAL} kWp, BYD {config.PV_BATTERY_KWH} kWh\n'
+        f'Standort:      {config.LATITUDE}°N, {config.LONGITUDE}°E, {config.ELEVATION}m\n'
+        f'Collector:     {coll_text}\n'
+        f'Web-API:       Port {config.WEB_API_PORT}\n'
+        f'DB (tmpfs):    {db_sz}\n'
+        f'Automation:    {aktiv}/{len(rks)} Regelkreise aktiv\n\n'
+        f'DATENBANK-TABELLEN:\n'
+        f'{"─" * 50}\n'
+    )
+    for tbl, count in tables.items():
+        text += f'  {tbl:<25} {count:>8} Zeilen\n'
+
+    wt_msgbox(text)
+
+
+def _pruefe_warnungen():
+    """Aktive Warnungen prüfen und anzeigen."""
+    warnungen = []
+
+    # 1. Collector-Status
+    coll_text, coll_color = _collector_status()
+    if coll_color == C_RED:
+        warnungen.append(f'🔴 Collector: {coll_text}')
+
+    # 2. Letzte Daten-Alter (ts = Unix epoch float)
+    row = _query_one("SELECT MAX(ts) FROM raw_data")
+    if row and row[0]:
+        try:
+            age_min = (time.time() - float(row[0])) / 60
+            if age_min > 10:
+                warnungen.append(f'🔴 Keine neuen Daten seit {int(age_min)} Minuten')
+        except Exception:
+            pass
+
+    # 3. SOC-Anomalie
+    batt = _battery_status()
+    soc = batt.get('soc')
+    if soc is not None:
+        if soc < 5:
+            warnungen.append(f'🔴 SOC kritisch niedrig: {soc}%')
+        elif soc < 10:
+            warnungen.append(f'🟡 SOC niedrig: {soc}%')
+
+    # 4. DB-Größe
+    try:
+        size_mb = os.path.getsize(config.DB_PATH) / 1024 / 1024
+        if size_mb > 300:
+            warnungen.append(f'🟡 DB-Größe: {size_mb:.0f} MB (>300 MB)')
+    except OSError:
+        warnungen.append('🔴 DB nicht erreichbar')
+
+    # 5. Parametermatrix validieren
+    try:
+        matrix = lade_matrix()
+        fehler = validiere_matrix(matrix)
+        if fehler:
+            warnungen.append(f'🟡 {len(fehler)} Parameter außerhalb Bereich')
+    except Exception as e:
+        warnungen.append(f'🔴 Matrix nicht lesbar: {str(e)[:50]}')
+
+    # 6. Zellausgleich überfällig?
+    try:
+        with open(BATTERY_CONFIG_PATH) as f:
+            bc = json.load(f)
+        letzter = bc.get('zellausgleich', {}).get('letzter_ausgleich', '')
+        max_tage = bc.get('zellausgleich', {}).get('max_tage_ohne_ausgleich', 45)
+        if letzter:
+            letzte_date = date.fromisoformat(letzter)
+            tage_seit = (date.today() - letzte_date).days
+            if tage_seit > max_tage:
+                warnungen.append(f'🟡 Zellausgleich überfällig: {tage_seit} Tage (Max: {max_tage})')
+    except Exception:
+        pass
+
+    # 7. Backup-Alter prüfen
+    backup_dir = os.path.join(PROJECT_ROOT, 'backup', 'db')
+    if os.path.isdir(backup_dir):
+        newest = 0
+        for f in os.listdir(backup_dir):
+            fp = os.path.join(backup_dir, f)
+            if os.path.isfile(fp):
+                newest = max(newest, os.path.getmtime(fp))
+        if newest > 0:
+            age_h = (time.time() - newest) / 3600
+            if age_h > 48:
+                warnungen.append(f'🟡 Backup älter als {int(age_h)}h')
+
+    if not warnungen:
+        wt_msgbox('✓ Keine aktiven Warnungen.\n\nAlle Systeme im Normalzustand.')
+    else:
+        text = f'AKTIVE WARNUNGEN ({len(warnungen)})\n{"═" * 50}\n\n'
+        for w in warnungen:
+            text += f'{w}\n\n'
+        wt_msgbox(text)
+
+
+def _db_status():
+    """Detaillierter DB-Status."""
+    # DB-Dateiinfo
+    db_path = config.DB_PATH
+    persist_path = config.DB_PERSIST_PATH
+    db_sz = _db_size()
+
+    text = f'DATENBANK-STATUS\n{"═" * 50}\n\n'
+    text += f'RAM-DB:     {db_path}\n'
+    text += f'Größe:      {db_sz}\n'
+    text += f'Persist:    {persist_path}\n'
+
+    # Persist-Alter
+    if os.path.exists(persist_path):
+        age_h = (time.time() - os.path.getmtime(persist_path)) / 3600
+        text += f'Persist-Alter: {age_h:.1f}h\n'
+    else:
+        text += f'Persist: NICHT VORHANDEN\n'
+
+    # WAL-Modus prüfen
+    row = _query_one("PRAGMA journal_mode")
+    text += f'Journal:    {row[0] if row else "?"}\n\n'
+
+    # Zeitbereiche pro Tabelle (ts = Unix epoch float)
+    text += f'ZEITBEREICHE:\n{"─" * 50}\n'
+    for tbl in ['raw_data', 'data_1min', 'data_15min', 'hourly_data', 'daily_data']:
+        row = _query_one(f'SELECT MIN(ts), MAX(ts), COUNT(*) FROM {tbl}')
+        if row and row[0]:
+            min_dt = datetime.fromtimestamp(float(row[0])).strftime('%Y-%m-%d')
+            max_dt = datetime.fromtimestamp(float(row[1])).strftime('%Y-%m-%d')
+            text += f'  {tbl:<18} {min_dt}..{max_dt}  ({row[2]} Zeilen)\n'
+
+    wt_msgbox(text)
+
+
+def _service_status():
+    """systemd-Services prüfen."""
+    services = [
+        'pv-collector.service',
+        'pv-web.service',
+        'pv-wattpilot.service',
+        'pv-backup-gfs.timer',
+        'pv-backup-2d.timer',
+        'pv-mirror-sync.timer',
+    ]
+
+    text = f'SERVICE-STATUS\n{"═" * 50}\n\n'
+
+    for svc in services:
+        try:
+            result = subprocess.run(
+                ['systemctl', 'is-active', svc],
+                capture_output=True, text=True, timeout=3,
+            )
+            status = result.stdout.strip()
+            marker = '✓' if status == 'active' else ('⏱' if status == 'activating' else '✗')
+            text += f'  {marker} {svc:<35} {status}\n'
+        except Exception:
+            text += f'  ? {svc:<35} unbekannt\n'
+
+    # Cron-Jobs
+    text += f'\nCRON-CHECKS:\n{"─" * 50}\n'
+    try:
+        result = subprocess.run(
+            ['crontab', '-l'], capture_output=True, text=True, timeout=3,
+        )
+        crons = [l.strip() for l in result.stdout.splitlines()
+                 if l.strip() and not l.startswith('#')]
+        text += f'  {len(crons)} aktive Cron-Jobs\n'
+        for c in crons[:8]:
+            text += f'  {c[:68]}\n'
+        if len(crons) > 8:
+            text += f'  ... +{len(crons) - 8} weitere\n'
+    except Exception:
+        text += '  Crontab nicht lesbar\n'
+
+    wt_msgbox(text)
+
+
+def _validiere_param_matrix():
+    """Parametermatrix vollständig validieren."""
+    try:
+        matrix = lade_matrix()
+        fehler = validiere_matrix(matrix)
+
+        rks = alle_regelkreise(matrix)
+        aktiv = sum(1 for _, rk in rks if rk.get('aktiv'))
+        total_params = sum(
+            len([k for k in rk.get('parameter', {}) if not k.startswith('_')])
+            for _, rk in rks
+        )
+
+        text = f'PARAMETERMATRIX-VALIDIERUNG\n{"═" * 50}\n\n'
+        text += f'Regelkreise: {aktiv}/{len(rks)} aktiv\n'
+        text += f'Parameter:   {total_params} gesamt\n'
+        text += f'Version:     {matrix.get("_version", "?")}\n'
+        text += f'Stand:       {matrix.get("_updated", "?")}\n\n'
+
+        if fehler:
+            text += f'⚠ {len(fehler)} FEHLER:\n{"─" * 50}\n'
+            for f in fehler:
+                text += f'  ✗ {f}\n'
+        else:
+            text += f'✓ Alle {total_params} Parameter im gültigen Bereich.\n'
+
+        wt_msgbox(text)
+    except Exception as e:
+        wt_msgbox(f'Fehler beim Laden der Matrix:\n\n{str(e)[:200]}')
+
+
+# ═══════════════════════════════════════════════════════════════
+# Menü 5: Forecast
+# ═══════════════════════════════════════════════════════════════
+
+def menu_forecast():
+    """Forecast-Status und Genauigkeit."""
+    while True:
+        choice = wt_menu(
+            'Solar-Prognose',
+            [
+                ('heute', 'Tagesprognose heute'),
+                ('genauigkeit', 'Forecast-Genauigkeit (letzte 7 Tage)'),
+                ('kalibrierung', 'Letzte Kalibrierung'),
+            ],
+        )
+
+        if not choice:
+            return
+
+        if choice == 'heute':
+            _forecast_heute()
+        elif choice == 'genauigkeit':
+            _forecast_genauigkeit()
+        elif choice == 'kalibrierung':
+            _forecast_kalibrierung()
+
+
+def _forecast_heute():
+    """Tagesprognose aus DB."""
+    today = date.today().isoformat()
+    row = _query_one("""
+        SELECT forecast_kwh, forecast_quality, updated
+        FROM forecast_daily
+        WHERE date = ?
+    """, (today,))
+
+    if not row:
+        wt_msgbox('Keine Tagesprognose in der DB.\n\n'
+                   '(Tabelle forecast_daily nicht vorhanden oder leer)')
+        return
+
+    # Stundenweise Prognose
+    hours = _query_all("""
+        SELECT hour, power_w, energy_wh
+        FROM forecast_hourly
+        WHERE date = ?
+        ORDER BY hour
+    """, (today,))
+
+    text = f'TAGESPROGNOSE — {today}\n{"═" * 50}\n\n'
+    text += f'Prognose:  {row[0]:.1f} kWh\n'
+    text += f'Qualität:  {row[1] or "?"}\n'
+    text += f'Stand:     {row[2] or "?"}\n'
+
+    ertrag = _tagesertrag()
+    if ertrag:
+        pct = ertrag / row[0] * 100 if row[0] else 0
+        text += f'IST bisher: {ertrag:.1f} kWh ({pct:.0f}%)\n'
+
+    if hours:
+        text += f'\nSTUNDENWEISE:\n{"─" * 50}\n'
+        for h in hours:
+            bar_len = int((h[1] or 0) / 500)
+            bar = '█' * min(bar_len, 30)
+            text += f'  {h[0]:02d}:00  {h[1] or 0:>6.0f}W  {h[2] or 0:>5.0f}Wh  {bar}\n'
+
+    wt_msgbox(text)
+
+
+def _forecast_genauigkeit():
+    """Forecast-Genauigkeit der letzten 7 Tage."""
+    seven_days_ago = (datetime.now() - timedelta(days=7)).timestamp()
+    rows = _query_all("""
+        SELECT d.ts, d.W_PV_Gesamt_total,
+               f.forecast_kwh
+        FROM daily_data d
+        LEFT JOIN forecast_daily f ON date(d.ts, 'unixepoch', 'localtime') = f.date
+        WHERE d.ts >= ?
+        ORDER BY d.ts
+    """, (seven_days_ago,))
+
+    if not rows:
+        wt_msgbox('Keine Vergleichsdaten vorhanden.\n'
+                   '(daily_data oder forecast_daily leer)')
+        return
+
+    text = f'FORECAST-GENAUIGKEIT — Letzte 7 Tage\n{"═" * 50}\n\n'
+    text += f'{"Datum":<12} {"IST kWh":>9} {"Prognose":>9} {"Abw.":>7}\n'
+    text += f'{"─" * 12} {"─" * 9} {"─" * 9} {"─" * 7}\n'
+
+    for row in rows:
+        ist = (row[1] or 0) / 1000
+        prog = row[2] or 0
+        datum = datetime.fromtimestamp(float(row[0])).strftime('%Y-%m-%d') if row[0] else '?'
+        if prog > 0:
+            abw = (ist - prog) / prog * 100
+            abw_str = f'{abw:+.1f}%'
+        else:
+            abw_str = '—'
+        text += f'{datum:<12} {ist:>8.1f} {prog:>9.1f} {abw_str:>7}\n'
+
+    wt_msgbox(text)
+
+
+def _forecast_kalibrierung():
+    """Kalibrierungs-Status."""
+    cal_path = os.path.join(PROJECT_ROOT, 'config', 'solar_calibration.json')
+    if not os.path.exists(cal_path):
+        wt_msgbox('Keine Kalibrierungsdatei gefunden.\n\n'
+                   f'Erwartet: {cal_path}')
+        return
+
+    try:
+        with open(cal_path) as f:
+            cal = json.load(f)
+
+        text = f'SOLAR-KALIBRIERUNG\n{"═" * 50}\n\n'
+        if isinstance(cal, dict):
+            for k, v in sorted(cal.items()):
+                if isinstance(v, dict):
+                    text += f'\n{k}:\n'
+                    for kk, vv in sorted(v.items()):
+                        text += f'  {kk}: {vv}\n'
+                else:
+                    text += f'{k}: {v}\n'
+        else:
+            text += json.dumps(cal, indent=2, ensure_ascii=False)[:800]
+
+        wt_msgbox(text)
+    except Exception as e:
+        wt_msgbox(f'Fehler beim Lesen:\n\n{str(e)[:200]}')
+
+
+# ═══════════════════════════════════════════════════════════════
+# Matrix speichern (atomar)
+# ═══════════════════════════════════════════════════════════════
+
+def _speichere_matrix(matrix: dict):
+    """Matrix atomar speichern (write-to-temp + rename)."""
+    # Zeitstempel aktualisieren
+    matrix['_updated'] = date.today().isoformat()
+
+    # Validieren vor Speichern
+    fehler = validiere_matrix(matrix)
+    if fehler:
+        wt_msgbox(
+            f'⚠ VALIDIERUNGSFEHLER — Speichern abgebrochen!\n\n'
+            + '\n'.join(f'• {f}' for f in fehler[:5])
+        )
+        return
+
+    tmp_path = DEFAULT_MATRIX_PATH + '.tmp'
+    try:
+        with open(tmp_path, 'w') as f:
+            json.dump(matrix, f, indent=2, ensure_ascii=False)
+            f.write('\n')
+        os.replace(tmp_path, DEFAULT_MATRIX_PATH)
+    except Exception as e:
+        wt_msgbox(f'Fehler beim Speichern:\n\n{str(e)[:200]}')
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+# ═══════════════════════════════════════════════════════════════
+# Hauptmenü
+# ═══════════════════════════════════════════════════════════════
+
+def hauptmenu():
+    """Hauptmenü-Loop."""
+    while True:
+        # Status-Dashboard auf Terminal anzeigen
+        zeige_status_dashboard()
+
+        choice = wt_menu(
+            'Hauptmenü — Funktion wählen:',
+            [
+                ('1', 'Regelkreise ein/ausschalten'),
+                ('2', 'Parameter-Matrix bearbeiten'),
+                ('3', 'Batterie-Scheduler'),
+                ('4', 'System-Status & Warnungen'),
+                ('5', 'Solar-Prognose'),
+                ('q', 'Beenden'),
+            ],
+        )
+
+        if choice is None or choice == 'q':
+            print(f'\n{C_DIM}pv-config beendet.{C_RESET}\n')
+            break
+
+        if choice == '1':
+            menu_regelkreise()
+        elif choice == '2':
+            menu_parameter()
+        elif choice == '3':
+            menu_scheduler()
+        elif choice == '4':
+            menu_system()
+        elif choice == '5':
+            menu_forecast()
+
+
+# ═══════════════════════════════════════════════════════════════
+# Entry Point
+# ═══════════════════════════════════════════════════════════════
+
+def main():
+    """Einstiegspunkt mit Vorprüfungen."""
+    # Whiptail vorhanden?
+    if not os.path.exists('/usr/bin/whiptail'):
+        print('Fehler: whiptail nicht installiert.')
+        print('  sudo apt install whiptail')
+        sys.exit(1)
+
+    # Terminal-Check
+    if not sys.stdout.isatty():
+        print('Fehler: pv-config benötigt ein interaktives Terminal.')
+        print('  ssh user@host → python3 pv-config.py')
+        sys.exit(1)
+
+    # DB erreichbar?
+    if not os.path.exists(config.DB_PATH):
+        print(f'Warnung: DB nicht gefunden ({config.DB_PATH})')
+        print('Status-Anzeige eingeschränkt.\n')
+
+    # Matrix lesbar?
+    try:
+        lade_matrix()
+    except FileNotFoundError:
+        print(f'Fehler: Parametermatrix nicht gefunden.')
+        print(f'  Erwartet: {DEFAULT_MATRIX_PATH}')
+        sys.exit(1)
+
+    hauptmenu()
+
+
+if __name__ == '__main__':
+    main()
