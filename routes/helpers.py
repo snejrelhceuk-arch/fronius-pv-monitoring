@@ -28,16 +28,12 @@ ram_db_lock = threading.Lock()
 def get_db_connection():
     """Verbindung zur tmpfs-DB (RAM-Dateisystem).
 
-    Direkte Verbindung — kein Cache, kein Wrapper, keine Kopie.
-    tmpfs liefert RAM-Geschwindigkeit mit Dateisystem-Semantik.
-    WAL-Modus erlaubt parallele Reads während Collector schreibt.
+    Delegiert an db_utils.get_db_connection() — einzige kanonische Implementierung.
+    Gibt None zurück bei Fehler (Kompatibilität mit bestehenden if-not-conn Checks).
     """
     try:
-        conn = sqlite3.connect(DB_FILE, timeout=10.0)
-        conn.execute('PRAGMA journal_mode=WAL')
-        conn.execute('PRAGMA synchronous=NORMAL')
-        conn.execute('PRAGMA cache_size=-64000')
-        return conn
+        from db_utils import get_db_connection as _canonical
+        return _canonical()
     except Exception as e:
         logging.error(f"DB-Verbindungsfehler: {e}")
         return None

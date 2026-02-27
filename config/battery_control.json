@@ -17,8 +17,9 @@
     "stress_min": 5,
     "stress_max": 100,
     "absolutes_minimum": 5,
-    "kritisch_soc": 10,
-    "_komfort_doc": "Komfort-Bereich 25–75%: Optimiert für LFP-Lebensdauer (BatteryUniversity: 75-25% SOC = ~3.000 Zyklen bis 90% Kapazität). Unterhalb 25% oder oberhalb 75% = Stress, nur wenn Prognose es rechtfertigt. Im Winter wird 25→5%/100% häufiger nötig, im Sommer 5%/75→100%."
+    "kritisch_soc": 7,
+    "_komfort_doc": "Komfort-Bereich 25–75%: Optimiert für LFP-Lebensdauer (BatteryUniversity: 75-25% SOC = ~3.000 Zyklen bis 90% Kapazität). Unterhalb 25% oder oberhalb 75% = Stress, nur wenn Prognose es rechtfertigt. Im Winter wird 25→5%/100% häufiger nötig, im Sommer 5%/75→100%.",
+    "_kritisch_doc": "Software-Notbremse: Entladesperre unterhalb 7%. Fängt Hysterese bei schneller Entladung ab (SOC sinkt nach 5%-Stopp noch weiter). Laden bleibt immer erlaubt (Fix 2026-02-27)."
   },
   "morgen_algorithmus": {
     "_doc": "SOC_MIN-Öffnung: Batterie entleeren bevor PV übernimmt",

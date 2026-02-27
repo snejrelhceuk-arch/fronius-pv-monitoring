@@ -14,7 +14,7 @@ bp = Blueprint('data', __name__)
 def api_15min():
     """15-Minuten-Daten"""
     try:
-        days = request.args.get('days', 7, type=int)
+        days = min(request.args.get('days', 7, type=int), 365)
         conn = get_db_connection()
         if not conn:
             return jsonify({"error": "DB Error"}), 500
@@ -39,11 +39,11 @@ def api_15min():
 def api_hourly():
     """Stunden-Daten"""
     try:
-        hours = request.args.get('hours', 168, type=int)
+        hours = min(request.args.get('hours', 168, type=int), 8760)
         weeks = request.args.get('weeks', 0, type=int)
 
         if weeks > 0:
-            hours = weeks * 168
+            hours = min(weeks * 168, 8760)
 
         conn = get_db_connection()
         if not conn:

@@ -131,7 +131,7 @@ def aggregate_monthly():
                     MIN(P_WP_min), MAX(P_WP_max), AVG(P_WP_avg),
                     SUM(CASE WHEN I_Batt_API_avg >= 0 THEN (I_Batt_API_avg * U_Batt_API_avg) * 0.25 ELSE 0 END),
                     SUM(CASE WHEN I_Batt_API_avg < 0 THEN (ABS(I_Batt_API_avg) * U_Batt_API_avg) * 0.25 ELSE 0 END),
-                    SUM(W_PV_total_delta - W_Exp_Netz_delta),
+                    MAX(0, SUM(W_PV_total_delta - W_Exp_Netz_delta) - SUM(CASE WHEN I_Batt_API_avg >= 0 THEN (I_Batt_API_avg * U_Batt_API_avg) * 0.25 ELSE 0 END)),
                     MIN(NULLIF(W_AC_Inv_start, 0)), MAX(NULLIF(W_AC_Inv_end, 0)),
                     MIN(NULLIF(W_DC1_start, 0)), MAX(NULLIF(W_DC1_end, 0)),
                     MIN(NULLIF(W_DC2_start, 0)), MAX(NULLIF(W_DC2_end, 0)),

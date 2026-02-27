@@ -50,8 +50,8 @@ def erzeuger_page():
 @bp.route('/analyse')
 @bp.route('/amortisation')  # Redirect-Kompatibilität
 def analyse_redirect():
-    """Redirect zur PV-Übersicht (Standard-Analyseseite)"""
-    return redirect('/analyse/pv')
+    """Redirect zur Erzeuger-Tagesansicht (Standard-Analyseseite)"""
+    return redirect('/erzeuger')
 
 
 @bp.route('/analyse/pv')
@@ -379,6 +379,8 @@ def analyse():
         '/analyse/amortisation': 'analyse_amortisation_view.html',
     }
     template = template_map.get(request.path, 'analyse_pv_view.html')
+
+    conn.close()
 
     return render_template(template,
                          invest_pv_2022=invest_pv_2022,

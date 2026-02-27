@@ -287,6 +287,12 @@ def api_tag_visualization():
     except Exception as e:
         logging.error(f"Tag-Visualisierung Fehler: {e}")
         return jsonify({"error": str(e)}), 500
+    finally:
+        if 'conn' in locals() and conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 @bp.route('/api/monat_visualization')
