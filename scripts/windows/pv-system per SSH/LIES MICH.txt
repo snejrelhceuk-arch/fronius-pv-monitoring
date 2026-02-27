@@ -1,0 +1,55 @@
+
+  PV-System Erlau — SSH-Zugang vom USB-Stick
+  ═══════════════════════════════════════════
+
+  Voraussetzung: Windows 10 oder 11 mit OpenSSH-Client
+  (ist standardmäßig installiert)
+
+
+  ERSTER START (einmalig pro PC):
+  ───────────────────────────────
+  1. "01 — SSH einrichten (einmalig).bat" doppelklicken
+     → Erstellt SSH-Key und kopiert ihn auf den Pi4
+     → Pi4-Passwort wird dabei EINMALIG abgefragt
+
+  2. "04 — Verbindung testen.bat" doppelklicken
+     → Prüft ob alles funktioniert
+
+
+  TÄGLICHE NUTZUNG:
+  ──────────────────
+  "02 — PV-Config starten.bat" doppelklicken
+     → Verbindet zum Pi4 und öffnet das Konfigurations-Menü
+     → Nach Beenden des Menüs: Shell bleibt offen
+
+
+  DATEIEN:
+  ────────
+  01 — SSH einrichten (einmalig).bat ... SSH-Key generieren & auf Pi kopieren
+  02 — PV-Config starten.bat .......... Konfigurations-Menü per SSH
+  03 — Shell öffnen.bat ............... Kommandozeile auf dem Pi4
+  04 — Verbindung testen.bat .......... Ping + SSH + Status prüfen
+
+
+  FEHLERBEHEBUNG:
+  ───────────────
+  • "ssh nicht gefunden"
+    → Einstellungen → System → Optionale Features → OpenSSH-Client
+
+  • "Verbindung abgelehnt"
+    → Richtiges Netzwerk? (192.168.2.x)
+    → Pi4 eingeschaltet?
+
+  • "Passwort wird gefragt"
+    → "01 — SSH einrichten" nochmal starten
+
+  • Menü sieht komisch aus
+    → Fenster vergrößern (mind. 80 Zeichen breit, 24 Zeilen hoch)
+
+
+  NETZWERK:
+  ─────────
+  Pi4 Primary:  192.168.2.181  (admin)
+  Pi4 Failover: 192.168.2.105  (jk)
+  Pi5 Backup:   192.168.2.195  (admin)
+

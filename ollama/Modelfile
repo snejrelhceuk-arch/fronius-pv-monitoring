@@ -157,7 +157,7 @@ Stack: Raspbian Bullseye 11, Python 3.9.2, Flask 1.1.2, gunicorn 23.0.0,
 
 
 ═════════════════════════════════════════════════════════════════
-DYNAMISCHE UPDATES (Stand: 2026-02-27 19:52)
+DYNAMISCHE UPDATES (Stand: 2026-02-27 20:10)
 ═════════════════════════════════════════════════════════════════
 
 --- Aktuelle Config-Werte ---
@@ -208,6 +208,8 @@ HEIZKOSTEN_ERSPARNIS = {
 HEIZPERIODE_MONATE = {10, 11, 12, 1, 2, 3}  # Okt–Mär (6 Monate)
 
 --- Letzte Git-Commits ---
+7a2d0bc fix: Windows Terminal Icon — Emoji durch gültigen Pfad ersetzt
+a9c62a9 chore: diverse Verbesserungen (Aggregation, Engine, Modbus, Routes)
 93ef251 feat: pv-config.py + Windows-Terminal Zugang
 7665d66 fix: SOC-Schutz blockierte Laden — hold_battery() durch set_discharge_rate(0) ersetzt
 2b18f46 fix: Simulation entfernt, Konsistenz-Check Richtungslogik, Batt-Automation UI
@@ -216,20 +218,8 @@ d21913e fix: Aggregations-Pipeline und Verlustanalyse
 67705bc flow: add backup status badge (Back up/down) via 10min API check
 6b6805a backup: Sohn-Intervall auf 3 Tage + Pi5-Spiegel für GFS
 0526c5f docs: add governance references in system architecture
-21abd73 ci: enforce mandatory compliance checklist in PRs
-9276a0c docs: tighten compliance for vendor interfaces and publication
 
 --- Kürzlich geänderte Module (5) ---
-
-automation/engine/engine.py:
-engine.py — Entscheidungs-Engine (Schicht S3)
-
-Liest ObsState aus RAM-DB und SOC-Parametermatrix aus
-
-modbus_v3.py:
-modbus_v3.py — Modbus-Collector für Fronius Gen24 / SmartMeter
-Version 2.0 - 30.12.2025
-Version 2.1 - 31.12.2024 - RAM-Buffer + Batch-Writes
 
 battery_scheduler.py:
   def load_config():  # Lade battery_control.json.
@@ -240,6 +230,16 @@ aggregate.py:
   def get_db():
     return get_db_connection()
 
+
+modbus_v3.py:
+modbus_v3.py — Modbus-Collector für Fronius Gen24 / SmartMeter
+Version 2.0 - 30.12.2025
+Version 2.1 - 31.12.2024 - RAM-Buffer + Batch-Writes
+
+automation/engine/engine.py:
+engine.py — Entscheidungs-Engine (Schicht S3)
+
+Liest ObsState aus RAM-DB und SOC-Parametermatrix aus
 
 --- API-Endpunkte ---
   /                              → index  # Startseite: Redirect zu Flow-Chart
