@@ -81,7 +81,7 @@ Windows Terminal → Einstellungen → JSON öffnen → in `profiles.list` einf�
     "name": "PV-Config",
     "guid": "{e7a1b3c4-5d6f-4a8b-9c0e-1f2a3b4c5d6e}",
     "commandline": "ssh -t pv-pi4 \"cd '/home/admin/Dokumente/PVAnlage/pv-system' && python3 pv-config.py; exec bash --login\"",
-    "icon": "⚡",
+    "icon": "ms-appx:///ProfileIcons/{9acb9455-ca41-5af7-950f-6bca1bc9722f}.png",
     "colorScheme": "One Half Dark",
     "startingDirectory": "%USERPROFILE%",
     "hidden": false,
@@ -116,7 +116,7 @@ ssh -t pv-pi4 "cd '/home/admin/Dokumente/PVAnlage/pv-system' && exec bash --logi
     "name": "PV-Config (Failover)",
     "guid": "{f8b2c4d5-6e7f-5b9c-0d1e-2f3a4b5c6d7f}",
     "commandline": "ssh -t jk@192.168.2.105 \"cd '/home/jk/Dokumente/PVAnlage/pv-system' && python3 pv-config.py; exec bash --login\"",
-    "icon": "🔄",
+    "icon": "ms-appx:///ProfileIcons/{9acb9455-ca41-5af7-950f-6bca1bc9722f}.png",
     "colorScheme": "One Half Dark",
     "hidden": false,
     "tabTitle": "PV-Config (Failover)"

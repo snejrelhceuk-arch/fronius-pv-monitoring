@@ -122,7 +122,7 @@ if (-not $wtSettingsPath) {
                 name             = "PV-Config"
                 guid             = "{e7a1b3c4-5d6f-4a8b-9c0e-1f2a3b4c5d6e}"
                 commandline      = "ssh -t pv-pi4 `"cd '$pvDir' && python3 pv-config.py; exec bash --login`""
-                icon             = "⚡"
+                icon             = "ms-appx:///ProfileIcons/{9acb9455-ca41-5af7-950f-6bca1bc9722f}.png"
                 colorScheme      = "One Half Dark"
                 startingDirectory = "%USERPROFILE%"
                 hidden           = $false
