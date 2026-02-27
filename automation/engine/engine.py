@@ -1137,25 +1137,47 @@ class Engine:
             LOG.debug(f"Zyklus '{zyklus_typ}': Keine Regel aktiv")
             return []
 
-        # 4. Höchster Score gewinnt
-        scores.sort(key=lambda x: x[0], reverse=True)
-        winner_score, winner = scores[0]
-        LOG.info(f"Zyklus '{zyklus_typ}': Gewinner '{winner.name}' (Score {winner_score})")
+        # 4. Schutz-Regeln und Optimierungs-Regeln trennen
+        #    Schutz-Regeln (name enthält 'schutz') werden ALLE ausgeführt,
+        #    Optimierung: nur der Gewinner (höchster Score).
+        schutz_scores = [(s, r) for s, r in scores if 'schutz' in r.name]
+        optim_scores  = [(s, r) for s, r in scores if 'schutz' not in r.name]
 
-        # 5. Aktionen erzeugen
-        try:
-            aktionen = winner.erzeuge_aktionen(obs, self._matrix)
-        except Exception as e:
-            LOG.error(f"Aktionen erzeugen fehlgeschlagen '{winner.name}': {e}")
-            return []
+        ergebnisse = []
 
-        if not aktionen:
-            return []
+        # 4a. Alle aktiven Schutz-Regeln ausführen (absteigend nach Score)
+        schutz_scores.sort(key=lambda x: x[0], reverse=True)
+        for score, regel in schutz_scores:
+            LOG.info(f"Zyklus '{zyklus_typ}': Schutz-Regel '{regel.name}' (Score {score})")
+            try:
+                aktionen = regel.erzeuge_aktionen(obs, self._matrix)
+                if aktionen:
+                    teil_ergebnisse = self.actuator.ausfuehren_plan(aktionen)
+                    for e in teil_ergebnisse:
+                        LOG.info(f"  → {e.get('kommando')} = {'OK' if e.get('ok') else 'FEHLER'}")
+                    ergebnisse.extend(teil_ergebnisse)
+            except Exception as e:
+                LOG.error(f"Aktionen erzeugen fehlgeschlagen '{regel.name}': {e}")
 
-        # 6. An Actuator dispatchen (Plan = mehrere Aktionen möglich)
-        ergebnisse = self.actuator.ausfuehren_plan(aktionen)
-        for e in ergebnisse:
-            LOG.info(f"  → {e.get('kommando')} = {'OK' if e.get('ok') else 'FEHLER'}")
+        # 4b. Optimierungs-Gewinner (höchster Score)
+        if optim_scores:
+            optim_scores.sort(key=lambda x: x[0], reverse=True)
+            winner_score, winner = optim_scores[0]
+            LOG.info(f"Zyklus '{zyklus_typ}': Gewinner '{winner.name}' (Score {winner_score})")
+
+            # 5. Aktionen erzeugen
+            try:
+                aktionen = winner.erzeuge_aktionen(obs, self._matrix)
+            except Exception as e:
+                LOG.error(f"Aktionen erzeugen fehlgeschlagen '{winner.name}': {e}")
+                return ergebnisse
+
+            if aktionen:
+                # 6. An Actuator dispatchen
+                teil_ergebnisse = self.actuator.ausfuehren_plan(aktionen)
+                for e in teil_ergebnisse:
+                    LOG.info(f"  → {e.get('kommando')} = {'OK' if e.get('ok') else 'FEHLER'}")
+                ergebnisse.extend(teil_ergebnisse)
 
         return ergebnisse
 

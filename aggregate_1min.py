@@ -276,7 +276,7 @@ def _aggregate_1min_impl(conn, cur, bucket_ts):
     # === SPEICHERE IN DATENBANK ===
     
     cur.execute("""
-        INSERT INTO data_1min (
+        INSERT OR REPLACE INTO data_1min (
             ts,
             P_AC_Inv_avg, P_AC_Inv_min, P_AC_Inv_max,
             I_L1_Inv_avg, I_L1_Inv_min, I_L1_Inv_max,

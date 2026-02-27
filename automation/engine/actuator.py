@@ -24,6 +24,7 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
 from automation.engine.aktoren.aktor_batterie import AktorBatterie, AktorBase
+from automation.engine.aktoren.aktor_wattpilot import AktorWattpilot
 
 LOG = logging.getLogger('actuator')
 
@@ -88,6 +89,7 @@ class Actuator:
     def _register_default_aktoren(self):
         """Standard-Aktoren registrieren."""
         self._aktoren['batterie'] = AktorBatterie(dry_run=self.dry_run)
+        self._aktoren['wattpilot'] = AktorWattpilot(dry_run=self.dry_run)
         LOG.info(f"Aktoren registriert: {list(self._aktoren.keys())}")
 
     def registriere_aktor(self, name: str, aktor: AktorBase):

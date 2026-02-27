@@ -61,3 +61,6 @@ backup/db/
 # Private Daten / Solarweb-Arbeitsverzeichnisse
 E/
 imports/
+
+# Ollama Sync-State (wird lokal generiert)
+ollama/.sync_state.json

@@ -169,8 +169,8 @@ def api_realtime_smart():
     """
     try:
         # Parameter
-        hours = request.args.get('hours', type=int, default=24)
-        resolution = request.args.get('resolution', type=int, default=300)
+        hours = min(request.args.get('hours', type=int, default=24), 168)
+        resolution = max(request.args.get('resolution', type=int, default=300), 3)
         end_ts = request.args.get('end', type=int)
 
         # Zeitfenster berechnen

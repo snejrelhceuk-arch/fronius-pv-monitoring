@@ -353,17 +353,8 @@ def parse_model(model_id, data):
     return parsed
 
 # --- DATENBANK ---
-def get_db_connection():
-    """Erstellt DB-Verbindung mit WAL-Modus"""
-    try:
-        conn = sqlite3.connect(DB_FILE, timeout=10.0)
-        conn.execute('PRAGMA journal_mode=WAL')
-        conn.execute('PRAGMA synchronous=NORMAL')
-        conn.execute('PRAGMA cache_size=-64000')
-        return conn
-    except Exception as e:
-        logging.error(f"DB Error: {e}")
-        return None
+# Kanonische DB-Verbindung aus db_utils
+from db_utils import get_db_connection
 
 def restore_energy_state():
     """Lade Energie-Akkumulatoren aus DB"""
@@ -509,7 +500,7 @@ def flush_buffer_to_db():
             
             # Kopiere Buffer-Inhalt für DB-Schreibvorgang
             records_to_write = list(ram_buffer)
-            ram_buffer.clear()
+            # Buffer wird ERST nach erfolgreichem Write geleert (s.u.)
         
         # Jetzt außerhalb des Locks in DB schreiben
         # Kurzer Timeout (1s statt 10s): Bei Lock durch Cron-Jobs schnell abbrechen
@@ -582,13 +573,19 @@ def flush_buffer_to_db():
         conn.commit()
         conn.close()
         
+        # Erst NACH erfolgreichem Write den Buffer leeren
+        # (Audit 2026-02-27: vorher wurde vor dem Write geleert → Datenverlust)
+        with ram_buffer_lock:
+            # Entferne nur die geschriebenen Records (neue könnten hinzugekommen sein)
+            for _ in range(len(records_to_write)):
+                if ram_buffer:
+                    ram_buffer.popleft()
+        
         logging.info(f"[FLUSH] {len(records_to_write)} Datensätze in DB geschrieben")
         
     except Exception as e:
         logging.error(f"Buffer Flush Error: {e}")
-        # Bei Fehler Daten wieder zurück in Buffer
-        with ram_buffer_lock:
-            ram_buffer.extend(records_to_write)
+        # Daten bleiben im Buffer (nicht geleert bei Fehler)
 
 def _extract_device_data(models):
     """Extrahiert geparste Daten aus SunSpec-Modellen."""

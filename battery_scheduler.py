@@ -900,11 +900,11 @@ def _evening_algorithm(cfg, state, strategy, inverter, soc, current_hour):
     # → RATE SETZEN
     LOG.info(f"── Abend-Algo: {phase} — Entladerate auf {target_rate}% ──")
 
-    if target_rate == 0:
-        # Komplette Entladesperre via Hold
-        ok = inverter.hold_battery()
-    else:
-        ok = inverter.set_discharge_rate(target_rate)
+    # NUR Entladerate begrenzen — Laden bleibt IMMER erlaubt!
+    # Bug-Fix 2026-02-27: hold_battery() blockierte auch Laden → SOC-Deadlock
+    # bei SOC < kritisch_soc (Batterie konnte nie über 10% laden).
+    # BYD BMS schafft nur ~500W Not-Ladung im Hold-Modus.
+    ok = inverter.set_discharge_rate(target_rate)
 
     if ok:
         old_rate = current_rate if state.get('evening_rate_active') else 'auto'

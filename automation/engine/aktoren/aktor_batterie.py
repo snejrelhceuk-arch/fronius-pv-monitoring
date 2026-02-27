@@ -117,8 +117,11 @@ class AktorBatterie(AktorBase):
                 return False
             try:
                 result = exec_fn(resource)
-                if result is None or result is True or result:
+                # Explizite Prüfung: True oder truthy (aber nicht None)
+                if result is True or (result is not None and result):
                     return True
+                if result is None:
+                    LOG.warning(f"  {op_name}: Ergebnis None — als Fehler gewertet")
                 if attempt < self.MAX_RETRIES:
                     LOG.warning(f"  {op_name}: fehlgeschlagen — Retry {attempt+1}")
                     setattr(self, reset_attr, None)
