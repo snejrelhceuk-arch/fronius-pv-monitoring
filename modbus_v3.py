@@ -221,6 +221,10 @@ def parse_sunspec_value(regs, dtype, sf=0):
             # Bitfield: uint16 ohne Invalid-Check
             val = regs[0]
             return val  # Kein Scaling
+        elif dtype == 'bitfield32':
+            # Bitfield 32-bit: 2 Register, kein Invalid-Check
+            val = (regs[0] << 16) | regs[1]
+            return val  # Kein Scaling
         elif dtype == 'uint32' or dtype == 'acc32':
             val = (regs[0] << 16) | regs[1]
             if val == 0xFFFFFFFF: return None
@@ -337,7 +341,7 @@ def parse_model(model_id, data):
                 parsed[fname] = {'value': val, 'unit': ''}
         # Numerisch
         else:
-            length = 4 if ftype in ('uint32', 'int32', 'acc32') else (8 if ftype == 'acc64' else 1)
+            length = 4 if ftype in ('uint32', 'int32', 'acc32') else (2 if ftype == 'bitfield32' else (8 if ftype == 'acc64' else 1))
             if length == 8:
                 length = 4  # acc64 braucht 4 Register
             
