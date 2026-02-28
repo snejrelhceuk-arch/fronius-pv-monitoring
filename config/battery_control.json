@@ -29,7 +29,7 @@
     "live_pv_schwelle_w": 500,
     "_live_pv_doc": "Wenn kein Übernahme-Stunde berechnet werden kann (schwache Prognose), warten wir bis Live-PV diesen Schwellwert überschreitet bevor SOC_MIN geöffnet wird",
     "max_vorlauf_h": 1.5,
-    "_vorlauf_doc": "Max. Stunden VOR PV-Takeover, in denen SOC_MIN geöffnet wird. 1.5 = ausreichend für volle Entleerung (2 kWh bei 1.5 kW). Verhindert Netzbezug-Risiko, erlaubt aber reale Nutzung der Restladung",
+    "_vorlauf_doc": "★ HAUPTSTELLSCHRAUBE: Max. Stunden VOR PV-Takeover, in denen SOC_MIN geöffnet wird. Größer = früher öffnen = mehr Zeit zum Entleeren, aber höheres Netzbezug-Risiko. 1.5h = ~2 kWh bei 1.5 kW Grundlast. Bei starkem Morgenverbrauch (WP, Wattpilot) auf 2.0-2.5 erhöhen.",
     "fenster_start_stunde": 5,
     "fenster_stunden_nach_sunrise": 3,
     "drain_rate_fallback_kw": 1.5,
