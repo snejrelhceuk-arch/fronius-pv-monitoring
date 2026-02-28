@@ -77,7 +77,7 @@ crontab -e
 ## Nach Stromausfall
 
 **Automatischer Recovery**:
-1. System bootet → systemd startet modbus-collector.service
+1. System bootet → systemd startet pv-collector.service
 2. Python prüft PID-File (nicht vorhanden nach Reboot)
 3. Neues PID-File wird erstellt
 4. Cron-Monitoring prüft nach 0-5min
@@ -86,7 +86,7 @@ crontab -e
 **Manueller Check**:
 ```bash
 # Status prüfen
-systemctl status modbus-collector
+systemctl status pv-collector
 ./check_single_instance.sh
 
 # Falls Duplikate
@@ -95,12 +95,12 @@ systemctl status modbus-collector
 
 ## Systemd-Integration (Optional)
 
-**Könnte hinzugefügt werden** in `/etc/systemd/system/modbus-collector.service`:
+**Könnte hinzugefügt werden** in `/etc/systemd/system/pv-collector.service`:
 ```ini
 [Service]
-ExecStartPre=/home/admin/Documents/PVAnlage/pv-system/check_single_instance.sh --kill-duplicates
+ExecStartPre=/home/admin/Dokumente/PVAnlage/pv-system/check_single_instance.sh --kill-duplicates
 RuntimeDirectory=pv-system
-PIDFile=/home/admin/Documents/PVAnlage/pv-system/collector.pid
+PIDFile=/home/admin/Dokumente/PVAnlage/pv-system/collector.pid
 ```
 
 **Aktuell NICHT aktiviert** - Python-seitiger Schutz ist ausreichend!

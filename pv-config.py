@@ -45,10 +45,19 @@ TITLE = 'PV-System Konfiguration'
 BATTERY_CONFIG_PATH = os.path.join(PROJECT_ROOT, 'config', 'battery_control.json')
 SCHEDULER_STATE_PATH = os.path.join(PROJECT_ROOT, 'config', 'battery_scheduler_state.json')
 
-# Whiptail-Dimensionen (Zeilen, Spalten)
-WT_H = 24
-WT_W = 78
-WT_LIST_H = 16  # Listenhöhe innerhalb Dialog
+# Whiptail-Dimensionen — dynamisch ans Terminal angepasst
+def _terminal_size():
+    """Terminalgröße ermitteln, Fallback 24x80."""
+    try:
+        cols, rows = os.get_terminal_size()
+    except OSError:
+        rows, cols = 24, 80
+    return rows, cols
+
+_rows, _cols = _terminal_size()
+WT_H = max(20, _rows - 2)       # 2 Zeilen Rand
+WT_W = max(60, _cols - 4)       # 4 Spalten Rand (≈ so breit wie blauer Hintergrund)
+WT_LIST_H = max(10, WT_H - 8)   # Listenhöhe innerhalb Dialog
 
 # ANSI-Farben für Status-Anzeige VOR dem Menü
 C_RESET = '\033[0m'
@@ -68,14 +77,14 @@ PRIO_LABELS = {1: 'SICHERHEIT', 2: 'STEUERUNG', 3: 'WARTUNG'}
 # Whiptail-Wrapper
 # ═══════════════════════════════════════════════════════════════
 
-def _wt(args: list[str], input_text: str = '') -> Tuple[int, str]:
+def _wt(args: list[str], input_text: str = '', backtitle: str = '') -> Tuple[int, str]:
     """Whiptail aufrufen. Rückgabe: (returncode, stderr-Output)."""
-    cmd = ['whiptail', '--title', TITLE, '--backtitle',
-           f'PV-System v{VERSION} | {config.PV_KWP_TOTAL} kWp | BYD {config.PV_BATTERY_KWH} kWh'] + args
+    bt = backtitle or f'PV-System v{VERSION} | {config.PV_KWP_TOTAL} kWp | BYD {config.PV_BATTERY_KWH} kWh'
+    cmd = ['whiptail', '--title', TITLE, '--backtitle', bt] + args
     proc = subprocess.run(
         cmd,
         input=input_text.encode() if input_text else None,
-        capture_output=True,
+        stderr=subprocess.PIPE,
     )
     # whiptail gibt Auswahl auf stderr aus
     return proc.returncode, proc.stderr.decode().strip()
@@ -242,6 +251,17 @@ def _tagesertrag() -> Optional[float]:
 
 def _automation_phase() -> str:
     """Letzte Automation-Aktion."""
+    # Primaer: battery_control_log (echte Scheduler-Aktionen)
+    row = _query_one("""
+        SELECT datetime(ts, 'unixepoch', 'localtime'), action, param, new_value, reason
+        FROM battery_control_log
+        ORDER BY ts DESC LIMIT 1
+    """)
+    if row:
+        ts, action, param, new_val, reason = row
+        ts_short = ts[11:16] if ts and len(ts) > 16 else ts or '?'
+        return f'{ts_short} {action}:{param}={new_val} ({(reason or "")[:40]})'
+    # Fallback: automation_log
     row = _query_one("""
         SELECT ts, kommando, wert, grund
         FROM automation_log
@@ -274,71 +294,55 @@ def _scheduler_state() -> dict:
     return {}
 
 
-def zeige_status_dashboard():
-    """ANSI-Status-Dashboard auf Terminal vor Menü."""
-    now = datetime.now()
-    coll_text, coll_color = _collector_status()
-    batt = _battery_status()
+def _status_backtitle() -> str:
+    """Einzeilige Status-Zusammenfassung für whiptail backtitle."""
     pv = _pv_status()
+    batt = _battery_status()
+    soc = batt.get('soc', 0) or 0
+    pv_w = pv.get('pv_w', 0) or 0
+    haus_w = pv.get('haus_w', 0) or 0
+    bezug = pv.get('bezug_w', 0) or 0
+    einsp = pv.get('einsp_w', 0) or 0
+    netz_str = f'Bezug {bezug:.0f}W' if bezug > 50 else f'Einsp. {einsp:.0f}W'
+    batt_p = batt.get('power_w', 0) or 0
+    if batt_p > 50:
+        batt_str = f'Laden {batt_p:.0f}W'
+    elif batt_p < -50:
+        batt_str = f'Entl. {abs(batt_p):.0f}W'
+    else:
+        batt_str = 'Idle'
+    return (f'PV: {pv_w:.0f}W | Haus: {haus_w:.0f}W | '
+            f'Netz: {netz_str} | SOC: {soc:.0f}% {batt_str}')
+
+
+def _status_menu_body() -> str:
+    """Mehrzeiliger Status-Block als whiptail-Menü-Text."""
+    now = datetime.now()
+    coll_text, _ = _collector_status()
     ertrag = _tagesertrag()
     phase = _automation_phase()
     sched = _scheduler_state()
     db_sz = _db_size()
 
-    # SOC-Balken
-    soc = batt.get('soc', 0) or 0
-    soc_bar_len = 20
-    filled = int(soc / 100 * soc_bar_len)
-    soc_bar = '█' * filled + '░' * (soc_bar_len - filled)
-    soc_color = C_GREEN if soc > 25 else (C_YELLOW if soc > 10 else C_RED)
+    ertrag_str = f'{ertrag:.1f} kWh' if ertrag else '--'
 
-    # Batterie-Richtung
-    batt_p = batt.get('power_w', 0) or 0
-    if batt_p > 50:
-        batt_dir = f'{C_GREEN}▲ Laden {batt_p:.0f}W{C_RESET}'
-    elif batt_p < -50:
-        batt_dir = f'{C_YELLOW}▼ Entladen {abs(batt_p):.0f}W{C_RESET}'
-    else:
-        batt_dir = f'{C_DIM}— Idle{C_RESET}'
+    lines = []
+    lines.append(f'{now.strftime("%d.%m.%Y %H:%M:%S")}')
+    lines.append(f'Tagesertrag: {ertrag_str}   DB: {db_sz}   Collector: {coll_text}')
+    lines.append(f'Letzte Aktion: {phase}')
 
-    print(f'\033[2J\033[H')  # Clear screen
-    print(f'{C_BOLD}{"═" * 70}')
-    print(f'  PV-SYSTEM STATUS — {now.strftime("%d.%m.%Y %H:%M:%S")}')
-    print(f'{"═" * 70}{C_RESET}')
-    print()
-
-    # Zeile 1: PV + Netz
-    pv_w = pv.get('pv_w', 0) or 0
-    bezug = pv.get('bezug_w', 0) or 0
-    einsp = pv.get('einsp_w', 0) or 0
-    haus = pv.get('haus_w', 0) or 0
-    pv_color = C_GREEN if pv_w > 100 else C_DIM
-    print(f'  {pv_color}☀ PV: {pv_w:.0f}W{C_RESET}    '
-          f'🏠 Haus: {haus:.0f}W    '
-          f'⚡ Netz: {C_RED if bezug > 100 else C_GREEN}'
-          f'{"↓" + str(int(bezug)) + "W Bezug" if bezug > 50 else "↑" + str(int(einsp)) + "W Einsp."}'
-          f'{C_RESET}')
-
-    # Zeile 2: Batterie
-    print(f'  {soc_color}🔋 SOC: {soc:.0f}% {soc_bar}{C_RESET}  {batt_dir}')
-
-    # Zeile 3: Tagesertrag + Prognose
-    ertrag_str = f'{ertrag:.1f} kWh' if ertrag else '—'
-    print(f'  📊 Tagesertrag: {ertrag_str}    DB: {db_sz}')
-
-    # Zeile 4: Collector + Automation
-    print(f'  {coll_color}⚙ Collector: {coll_text}{C_RESET}')
-    print(f'  {C_CYAN}🤖 Letzte Aktion: {phase}{C_RESET}')
-
-    # Zeile 5: Scheduler
     if sched:
-        morgen = sched.get('morgen_status', '—')
-        nachm = sched.get('nachmittag_status', '—')
-        print(f'  {C_BLUE}📋 Scheduler: Morgen={morgen}  Nachm={nachm}{C_RESET}')
+        morgen = sched.get('morgen_status', '--')
+        nachm = sched.get('nachmittag_status', '--')
+        lines.append(f'Scheduler: Morgen={morgen}  Nachm={nachm}')
 
-    print()
-    print(f'{C_DIM}{"─" * 70}{C_RESET}')
-    print()
+    # Platzhalter fuer kuenftige Meldungen
+    # lines.append(f'Forecast: ...')
+    # lines.append(f'Meldungen: ...')
+
+    lines.append('')
+    lines.append('Funktion waehlen:')
+    return '\n'.join(lines)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -355,7 +359,9 @@ def menu_regelkreise():
         aktiv = rk.get('aktiv', False)
         gewicht = rk.get('score_gewicht', 0)
         label = PRIO_LABELS.get(prio, f'P{prio}')
-        desc = f'[{label}] Score={gewicht}  {rk.get("beschreibung", "")[:35]}'
+        # Beschreibung dynamisch an Fensterbreite anpassen
+        desc_max = max(20, WT_W - 40)
+        desc = f'[{label}] Score={gewicht}  {rk.get("beschreibung", "")[:desc_max]}'
         items.append((rk_name, desc, aktiv))
 
     result = wt_checklist(
@@ -425,7 +431,9 @@ def menu_parameter():
             prio = rk.get('prioritaet', 0)
             aktiv = '●' if rk.get('aktiv') else '○'
             n_params = len([k for k in rk.get('parameter', {}) if not k.startswith('_')])
-            desc = f'{aktiv} P{prio} Score={rk.get("score_gewicht", 0):>3}  {n_params} Param'
+            desc_max = max(20, WT_W - 30)
+            beschr = rk.get('beschreibung', '')[:desc_max]
+            desc = f'{aktiv} P{prio} S={rk.get("score_gewicht", 0):>3} {n_params}P  {beschr}'
             items.append((rk_name, desc))
 
         choice = wt_menu(
@@ -451,15 +459,24 @@ def _menu_regelkreis_detail(rk_name: str):
 
         params = rk.get('parameter', {})
         items = []
+        anzeige_zu_key = {}  # Mapping: Anzeigename → JSON-Key
         for p_name, p in params.items():
             if p_name.startswith('_'):
                 continue
             wert = p.get('wert', '?')
             einheit = p.get('einheit', '')
-            bereich = p.get('bereich', [])
-            bereich_str = f'[{bereich[0]}..{bereich[1]}]' if len(bereich) == 2 else ''
-            desc = f'{wert}{einheit} {bereich_str}'
-            items.append((p_name, desc))
+            beschr = p.get('beschreibung', '')
+            # Einheitssuffixe aus dem Namen entfernen (_pct, _kwh, _w)
+            anzeige = p_name
+            for suffix in ('_pct', '_kwh', '_w'):
+                if anzeige.endswith(suffix):
+                    anzeige = anzeige[:-len(suffix)]
+                    break
+            anzeige_zu_key[anzeige] = p_name
+            # Beschreibung dynamisch an Fensterbreite anpassen
+            desc_max = max(20, WT_W - len(anzeige) - 15)
+            desc = f'{wert}{einheit}  {beschr[:desc_max]}'
+            items.append((anzeige, desc))
 
         # Header
         prio = rk.get('prioritaet', 0)
@@ -475,7 +492,9 @@ def _menu_regelkreis_detail(rk_name: str):
         if not choice:
             return
 
-        _edit_parameter(rk_name, choice)
+        # Anzeigename zurück auf echten JSON-Key mappen
+        real_key = anzeige_zu_key.get(choice, choice)
+        _edit_parameter(rk_name, real_key)
 
 
 def _edit_parameter(rk_name: str, p_name: str):
@@ -565,6 +584,7 @@ def menu_scheduler():
                 ('soc_min', 'SOC_MIN Override → 5%'),
                 ('soc_max', 'SOC_MAX Override → 100%'),
                 ('reset', 'SOC auf Komfortwerte zurücksetzen'),
+                ('auto', 'SOC auf auto zurücksetzen (5-100%)'),
             ],
         )
 
@@ -581,6 +601,8 @@ def menu_scheduler():
             _soc_override('soc_max', 100)
         elif choice == 'reset':
             _soc_reset()
+        elif choice == 'auto':
+            _soc_auto()
 
 
 def _zeige_scheduler_status():
@@ -630,38 +652,47 @@ def _zeige_scheduler_status():
 
 def _zeige_scheduler_log():
     """Letzte 20 Scheduler-Aktionen."""
+    # Primaer: battery_control_log (echte Scheduler-Aktionen)
     rows = _query_all("""
-        SELECT ts, kommando, wert, grund, ergebnis
-        FROM automation_log
-        WHERE aktor = 'batterie'
+        SELECT datetime(ts, 'unixepoch', 'localtime'), action, param, new_value, reason
+        FROM battery_control_log
         ORDER BY ts DESC
         LIMIT 20
     """)
+    source = 'battery_control_log'
 
     if not rows:
-        # Fallback: battery_control_log
+        # Fallback: automation_log
         rows = _query_all("""
-            SELECT ts, aktion, wert, grund, ergebnis
-            FROM battery_control_log
+            SELECT ts, kommando, wert, grund, ergebnis
+            FROM automation_log
+            WHERE aktor = 'batterie'
             ORDER BY ts DESC
             LIMIT 20
         """)
+        source = 'automation_log'
 
     if not rows:
         wt_msgbox('Keine Scheduler-Aktionen in der DB.')
         return
 
-    # Temporäre Datei für Textbox
     tmp = '/tmp/pv_scheduler_log.txt'
     with open(tmp, 'w') as f:
-        f.write(f'BATTERIE-SCHEDULER LOG — Letzte {len(rows)} Aktionen\n')
+        f.write(f'BATTERIE-SCHEDULER LOG ({source})\n')
         f.write(f'{"═" * 70}\n\n')
         for row in rows:
-            ts, cmd, wert, grund, erg = row
-            ts_short = ts[5:16] if ts and len(ts) > 16 else ts or '?'
-            f.write(f'{ts_short}  {cmd}={wert}  {erg or ""}\n')
-            if grund:
-                f.write(f'  └ {grund[:65]}\n')
+            if source == 'battery_control_log':
+                ts, action, param, new_val, reason = row
+                ts_short = ts[5:16] if ts and len(ts) > 16 else ts or '?'
+                f.write(f'{ts_short}  {action}:{param}={new_val}\n')
+                if reason:
+                    f.write(f'  {reason[:65]}\n')
+            else:
+                ts, cmd, wert, grund, erg = row
+                ts_short = ts[5:16] if ts and len(ts) > 16 else ts or '?'
+                f.write(f'{ts_short}  {cmd}={wert}  {erg or ""}\n')
+                if grund:
+                    f.write(f'  {grund[:65]}\n')
         f.write(f'\n{"─" * 70}\n')
 
     wt_textbox(tmp)
@@ -680,19 +711,20 @@ def _soc_override(param: str, wert: int):
         return
 
     try:
-        # Nutze fronius_api direkt
-        sys.path.insert(0, PROJECT_ROOT)
-        from fronius_api import FroniusAPI
-        api = FroniusAPI(config.INVERTER_IP)
+        from fronius_api import BatteryConfig
+        api = BatteryConfig()
+
+        # Modus auf 'manual' stellen, sonst ignoriert F1 die Werte
+        api.set_soc_mode('manual')
 
         if param == 'soc_min':
             api.set_soc_min(wert)
         else:
             api.set_soc_max(wert)
 
-        wt_msgbox(f'✓ {label} = {wert}% gesetzt.')
+        wt_msgbox(f'SOC {label} = {wert}% gesetzt (Modus: manual).')
     except Exception as e:
-        wt_msgbox(f'✗ Fehler beim Setzen von {label}:\n\n{str(e)[:200]}')
+        wt_msgbox(f'Fehler beim Setzen von {label}:\n\n{str(e)[:200]}')
 
 
 def _soc_reset():
@@ -711,13 +743,43 @@ def _soc_reset():
         return
 
     try:
-        from fronius_api import FroniusAPI
-        api = FroniusAPI(config.INVERTER_IP)
+        from fronius_api import BatteryConfig
+        api = BatteryConfig()
+
+        # Modus auf 'manual' stellen, sonst ignoriert F1 die Werte
+        api.set_soc_mode('manual')
+
         api.set_soc_min(komfort_min)
         api.set_soc_max(komfort_max)
-        wt_msgbox(f'✓ SOC_MIN={komfort_min}%, SOC_MAX={komfort_max}% gesetzt.')
+        wt_msgbox(f'SOC_MIN={komfort_min}%, SOC_MAX={komfort_max}% gesetzt\n(Modus: manual).')
     except Exception as e:
-        wt_msgbox(f'✗ Fehler:\n\n{str(e)[:200]}')
+        wt_msgbox(f'Fehler:\n\n{str(e)[:200]}')
+
+
+def _soc_auto():
+    """SOC auf auto zuruecksetzen: Modus auto, 5-100%."""
+    if not wt_yesno(
+        'SOC auf Werkseinstellung zuruecksetzen?\n\n'
+        'Modus  → auto\n'
+        'SOC_MIN → 5%\n'
+        'SOC_MAX → 100%\n\n'
+        'Der Wechselrichter steuert die Batterie\n'
+        'dann wieder selbstaendig.'
+    ):
+        return
+
+    try:
+        from fronius_api import BatteryConfig
+        api = BatteryConfig()
+
+        # Erst Werte setzen (im manual-Modus), dann auf auto
+        api.set_soc_mode('manual')
+        api.set_soc_min(5)
+        api.set_soc_max(100)
+        api.set_soc_mode('auto')
+        wt_msgbox('SOC_MIN=5%, SOC_MAX=100%, Modus=auto gesetzt.')
+    except Exception as e:
+        wt_msgbox(f'Fehler:\n\n{str(e)[:200]}')
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1012,40 +1074,48 @@ def _forecast_heute():
     """Tagesprognose aus DB."""
     today = date.today().isoformat()
     row = _query_one("""
-        SELECT forecast_kwh, forecast_quality, updated
+        SELECT expected_kwh, quality, created_at, hourly_profile,
+               weather_text, cloud_cover_avg, sunrise, sunset
         FROM forecast_daily
         WHERE date = ?
     """, (today,))
 
     if not row:
         wt_msgbox('Keine Tagesprognose in der DB.\n\n'
-                   '(Tabelle forecast_daily nicht vorhanden oder leer)')
+                   '(forecast_daily leer fuer heute)')
         return
 
-    # Stundenweise Prognose
-    hours = _query_all("""
-        SELECT hour, power_w, energy_wh
-        FROM forecast_hourly
-        WHERE date = ?
-        ORDER BY hour
-    """, (today,))
+    expected, quality, created, hourly_json, weather, cloud, sunrise, sunset = row
+    created_str = datetime.fromtimestamp(created).strftime('%H:%M') if created else '?'
 
-    text = f'TAGESPROGNOSE — {today}\n{"═" * 50}\n\n'
-    text += f'Prognose:  {row[0]:.1f} kWh\n'
-    text += f'Qualität:  {row[1] or "?"}\n'
-    text += f'Stand:     {row[2] or "?"}\n'
+    text = f'TAGESPROGNOSE {today}\n{"═" * 50}\n\n'
+    text += f'Prognose:   {expected:.1f} kWh\n'
+    text += f'Qualitaet:  {quality or "?"}\n'
+    text += f'Erstellt:   {created_str}\n'
+    if weather:
+        text += f'Wetter:     {weather}\n'
+    if cloud is not None:
+        text += f'Bewoelkung: {cloud:.0f}%\n'
+    if sunrise and sunset:
+        text += f'Sonne:      {sunrise} - {sunset}\n'
 
     ertrag = _tagesertrag()
-    if ertrag:
-        pct = ertrag / row[0] * 100 if row[0] else 0
-        text += f'IST bisher: {ertrag:.1f} kWh ({pct:.0f}%)\n'
+    if ertrag and expected:
+        pct = ertrag / expected * 100
+        text += f'\nIST bisher: {ertrag:.1f} kWh ({pct:.0f}%)\n'
 
-    if hours:
-        text += f'\nSTUNDENWEISE:\n{"─" * 50}\n'
-        for h in hours:
-            bar_len = int((h[1] or 0) / 500)
-            bar = '█' * min(bar_len, 30)
-            text += f'  {h[0]:02d}:00  {h[1] or 0:>6.0f}W  {h[2] or 0:>5.0f}Wh  {bar}\n'
+    # Stundenweise Prognose aus JSON-Feld
+    if hourly_json:
+        try:
+            profile = json.loads(hourly_json) if isinstance(hourly_json, str) else hourly_json
+            if isinstance(profile, list) and profile:
+                text += f'\nSTUNDENWEISE:\n{"─" * 50}\n'
+                for entry in profile:
+                    h = entry.get('hour', 0)
+                    wh = entry.get('wh', 0) or entry.get('energy_wh', 0)
+                    text += f'  {h:02d}:00  {wh:>5.0f} Wh\n'
+        except (json.JSONDecodeError, TypeError):
+            pass
 
     wt_msgbox(text)
 
@@ -1054,8 +1124,8 @@ def _forecast_genauigkeit():
     """Forecast-Genauigkeit der letzten 7 Tage."""
     seven_days_ago = (datetime.now() - timedelta(days=7)).timestamp()
     rows = _query_all("""
-        SELECT d.ts, d.W_PV_Gesamt_total,
-               f.forecast_kwh
+        SELECT d.ts, d.W_PV_total,
+               f.expected_kwh
         FROM daily_data d
         LEFT JOIN forecast_daily f ON date(d.ts, 'unixepoch', 'localtime') = f.date
         WHERE d.ts >= ?
@@ -1151,23 +1221,23 @@ def _speichere_matrix(matrix: dict):
 def hauptmenu():
     """Hauptmenü-Loop."""
     while True:
-        # Status-Dashboard auf Terminal anzeigen
-        zeige_status_dashboard()
+        backtitle = _status_backtitle()
+        body = _status_menu_body()
 
-        choice = wt_menu(
-            'Hauptmenü — Funktion wählen:',
-            [
-                ('1', 'Regelkreise ein/ausschalten'),
-                ('2', 'Parameter-Matrix bearbeiten'),
-                ('3', 'Batterie-Scheduler'),
-                ('4', 'System-Status & Warnungen'),
-                ('5', 'Solar-Prognose'),
-                ('q', 'Beenden'),
-            ],
-        )
+        args = ['--menu', body, str(WT_H), str(WT_W), str(WT_LIST_H)]
+        for tag, desc in [
+            ('1', 'Regelkreise ein/ausschalten'),
+            ('2', 'Parameter-Matrix bearbeiten'),
+            ('3', 'Batterie-Scheduler'),
+            ('4', 'System-Status & Warnungen'),
+            ('5', 'Solar-Prognose'),
+            ('q', 'Beenden'),
+        ]:
+            args.extend([tag, desc])
+        rc, choice = _wt(args, backtitle=backtitle)
 
-        if choice is None or choice == 'q':
-            print(f'\n{C_DIM}pv-config beendet.{C_RESET}\n')
+        if rc != 0 or choice == 'q':
+            print(f'\npv-config beendet.\n')
             break
 
         if choice == '1':

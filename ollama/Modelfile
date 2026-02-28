@@ -157,7 +157,7 @@ Stack: Raspbian Bullseye 11, Python 3.9.2, Flask 1.1.2, gunicorn 23.0.0,
 
 
 ═════════════════════════════════════════════════════════════════
-DYNAMISCHE UPDATES (Stand: 2026-02-27 20:19)
+DYNAMISCHE UPDATES (Stand: 2026-02-28 11:36)
 ═════════════════════════════════════════════════════════════════
 
 --- Aktuelle Config-Werte ---
@@ -208,16 +208,16 @@ HEIZKOSTEN_ERSPARNIS = {
 HEIZPERIODE_MONATE = {10, 11, 12, 1, 2, 3}  # Okt–Mär (6 Monate)
 
 --- Letzte Git-Commits ---
+0ce4f72 Observer: systemd-Service + SQLite check_same_thread Fix
+0ebb751 ForecastCollector: Sunrise-Fallback auf Vortageswerte aus DB
+0414f74 Observer: ForecastCollector (Tier-3) — Trigger-basierte Prognose
+fd4031b Morgen-Schwelle 500→1500W: Haushaltslast (~1kW) + Lade-Überschuss berücksichtigen
+172bf00 refactor: Morgen-Algo nutzt PV-Rampe statt Tagesprognose als Kriterium
+6610328 refactor: Morgen-Fenster startet ab Sunrise statt fixem 05:00
+f9c07e9 refactor: Morgen-Algo radikal vereinfacht — sofort öffnen bei guter Prognose
+10afa9a fix: Morgen-Algo Regel B verglich gegen falsche Untergrenze (25% statt 5%)
+4d64e75 fix: BAT-Dateien rein ASCII (keine Unicode-Zeichen)
 3e4140d fix: Dateinamen FAT32-kompatibel (keine Unicode-Zeichen)
-d31c4b7 refactor: Windows-Zugang auf portable BAT-Dateien umgestellt
-7a2d0bc fix: Windows Terminal Icon — Emoji durch gültigen Pfad ersetzt
-a9c62a9 chore: diverse Verbesserungen (Aggregation, Engine, Modbus, Routes)
-93ef251 feat: pv-config.py + Windows-Terminal Zugang
-7665d66 fix: SOC-Schutz blockierte Laden — hold_battery() durch set_discharge_rate(0) ersetzt
-2b18f46 fix: Simulation entfernt, Konsistenz-Check Richtungslogik, Batt-Automation UI
-d677a6d feat: Automation-Engine mit sunrise-basierter Morgen-Regel + Nachmittag-Dynamik
-d21913e fix: Aggregations-Pipeline und Verlustanalyse
-67705bc flow: add backup status badge (Back up/down) via 10min API check
 
 --- Kürzlich geänderte Module (5) ---
 
@@ -225,11 +225,6 @@ aggregate.py:
   def get_db():
     return get_db_connection()
 
-
-modbus_v3.py:
-modbus_v3.py — Modbus-Collector für Fronius Gen24 / SmartMeter
-Version 2.0 - 30.12.2025
-Version 2.1 - 31.12.2024 - RAM-Buffer + Batch-Writes
 
 battery_scheduler.py:
   def load_config():  # Lade battery_control.json.
@@ -240,6 +235,11 @@ automation/engine/engine.py:
 engine.py — Entscheidungs-Engine (Schicht S3)
 
 Liest ObsState aus RAM-DB und SOC-Parametermatrix aus
+
+modbus_v3.py:
+modbus_v3.py — Modbus-Collector für Fronius Gen24 / SmartMeter
+Version 2.0 - 30.12.2025
+Version 2.1 - 31.12.2024 - RAM-Buffer + Batch-Writes
 
 --- API-Endpunkte ---
   /                              → index  # Startseite: Redirect zu Flow-Chart

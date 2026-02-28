@@ -178,7 +178,7 @@ curl -s http://192.168.2.122/solar_api/v1/GetInverterRealtimeData.cgi
 # Cron-Job prüfen
 crontab -l
 # Manuell ausführen
-cd /home/admin/Documents/PVAnlage/pv-system && python3 aggregate.py
+cd /home/admin/Dokumente/PVAnlage/pv-system && python3 aggregate.py
 ```
 
 ## Version

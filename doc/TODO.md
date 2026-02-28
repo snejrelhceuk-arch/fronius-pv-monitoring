@@ -1,6 +1,6 @@
 # Offene Aufgaben & Roadmap — Fronius PV-Monitoring
 
-> Letzte Aktualisierung: 2026-02-27
+> Letzte Aktualisierung: 2026-02-28
 
 ---
 
@@ -108,7 +108,7 @@ Davor war P×t-Integration im Einsatz, die ~50% systematisch zu niedrig lag.
 - [x] `battery_scheduler.py` implementiert (Morgen + Nachmittag + Zellausgleich)
 - [x] `config/battery_control.json` parametrisiert
 - [x] `battery_control_log` DB-Tabelle angelegt + aktiv beschrieben
-- [x] Cron-Job alle 15 Min aktiv (seit 2026-02-10)
+- [x] Cron-Job alle 15 Min aktiv (seit 2026-02-10) — **abgelöst durch `pv-automation.service` (systemd, seit 2026-02-28)**
 - [x] `battery_control.py` + `battery_scheduler.py` importieren `config.py`
       (IP, DB-Pfad); Laufzeit-Parameter weiterhin aus `battery_control.json` (bewusst)
 - [ ] Log-Analyse: Schwellen kalibrieren (Daten da, Auswertung fehlt)
@@ -125,9 +125,6 @@ Davor war P×t-Integration im Einsatz, die ~50% systematisch zu niedrig lag.
 *Automation (→ battery_scheduler.py):*
 - [x] **Geometry-Prognose statt GHI-Skalierung:** `get_remaining_pv_surplus_kwh()`
       bevorzugt bereits `power_hourly` aus `get_hourly_power_forecast()`. GHI nur Fallback.
-- [ ] **Vorausschauende Nachtladung:** "Morgen schlecht + SOC niedrig" → Netz-Ladung nachts.
-      Primitive (`set_grid_charge`) existiert in `fronius_api.py` + `aktor_batterie.py`,
-      Entscheidungslogik im Scheduler fehlt noch.
 - [ ] **Mehrtages-Strategie:** `get_week_forecast()` existiert, wird nur im CLI genutzt →
       z.B. 2-Tages-Vorausschau für Batterie-Management
 
@@ -138,10 +135,8 @@ Davor war P×t-Integration im Einsatz, die ~50% systematisch zu niedrig lag.
 - [ ] **Hitze-Warnung:** Temperaturkoeffizient ist modelliert → "35°C morgen = 8% weniger"
 
 *Selbst-Optimierung:*
-- [ ] **Auto-Kalibrierung:** `calibrate(days=90)` existiert + CLI `--calibrate` →
-      wöchentlicher Cron einrichten (letzte manuelle Kalibrierung: 2026-02-09)
-- [ ] **Forecast-Accuracy-Dashboard:** `get_accuracy_stats()` existiert (Backend) →
-      API-Endpunkt + Template-Anzeige fehlen
+- [x] **Auto-Kalibrierung:** `calibrate(days=90)` — wöchentlicher Cron eingerichtet
+      (Sonntag 05:00, `--calibrate-days 90`, Log: `/tmp/solar_calibrate.log`) (2026-02-28)
 
 ### B1: Redundantes System (Failover-Pi) — Weitgehend implementiert
 3-Host-Architektur dokumentiert in `doc/DUAL_HOST_ARCHITECTURE.md` (2026-02-20).
@@ -178,14 +173,17 @@ Die Prognose-Engine liefert die Daten — jetzt fehlt die Auswertung.
 - [ ] Tageszusammenfassung abends: Ertrag, Autarkie, Auffälligkeiten
 
 **Stufe 3 — Forecast-getriebene Empfehlungen:**
-- [ ] "Morgen erwartet: X kWh (schlecht) → Batterie wird vorgeladen"
+- [ ] "Morgen erwartet: X kWh (schlecht) → Eigenverbrauch priorisieren"
 - [ ] "Guter Tag morgen → EV-Ladung auf Mittagszeit verschieben"
 - [ ] Wochenvorschau in der Web-Ansicht
 
 ### B4: Mirror/Service-Aufräumen
-- [ ] `scripts/monitor_health.sh:58`: Service-Check noch auf `modbus-collector.service`
-      (inaktiv) statt `pv-collector.service` → False-Kritisch bei jeder Prüfung
-- [ ] `README.md:181`: Pfad `Documents` → `Dokumente` in Troubleshooting aktualisieren
+- [x] `scripts/monitor_health.sh:58`: Service-Check auf `pv-collector.service` korrigiert (2026-02-28)
+- [x] `doc/SINGLE_INSTANCE_PROTECTION.md`: `modbus-collector` → `pv-collector` + Pfad `Documents` → `Dokumente` korrigiert (2026-02-28)
+- [x] `README.md:181`: Pfad `Documents` → `Dokumente` in Troubleshooting korrigiert (2026-02-28)
+- [x] `doc/SYSTEM_ARCHITECTURE.md`: `battery_scheduler.py | Cron` → `pv-automation | systemd` korrigiert (2026-02-28)
+- [x] `doc/AUTOMATION_ARCHITEKTUR.md`: Phase-0-Text aktualisiert (2026-02-28)
+- [x] `doc/BATTERY_ALGORITHM.md`: Implementierungsplan-Status aktualisiert (2026-02-28)
 
 ---
 
@@ -217,12 +215,15 @@ Die Prognose-Engine liefert die Daten — jetzt fehlt die Auswertung.
       Restliche Module (Aggregation, Routes, Collector) noch ohne Tests.
 - [x] **Type-Hints**: Guter Abdeckungsgrad in neueren Modulen (host_role, automation/,
       ollama/). Fehlend in Kern-Modulen: routes/helpers, aggregate_*, modbus_v3, db_utils
-- [ ] **K9:** Dual-Modbus-Clients eliminieren (`RawModbusClient` in modbus_v3 +
-      `ModbusClient` in battery_control — zwei unabhängige Socket-Implementierungen)
-- [ ] `modbus_v3.py` umbenennen → `collector.py` existiert als Wrapper,
-      Hauptlogik noch in modbus_v3.py
+- [ ] **Modul-Rename/Split**: Soll-Mapping dokumentiert in `SYSTEM_ARCHITECTURE.md` §9.
+      Voraussetzung: CI-Import-Check. Wichtigste Kandidaten:
+      `modbus_v3.py` → `collector_modbus.py`, `battery_control.py` → Split (3 Rollen).
+      Nicht vor CI-Einführung!
 - [ ] Collector als systemd-Service (aktuell nohup + monitor_collector.sh cron)
 - [ ] CI: Syntax-Check vor Deployment (aktuell nur Compliance-Checkbox in PR)
+- [ ] **Dateigrößen-Audit**: Richtlinie in `SYSTEM_ARCHITECTURE.md` §10.
+      Prüfen: `find . -name "*.py" | xargs wc -l | sort -rn | head -15`
+      Schwelle: >800 prüfen, >1.200 aktiv splitten.
 - [ ] data_15min/hourly_data Lücke vor 04.02. untersuchen
 
 ---
@@ -233,6 +234,7 @@ Komprimierte Übersicht — Details in Git-History.
 
 | Datum | Thema | Highlights |
 |-------|-------|------------|
+| 2026-02-28 | Doc-Bereinigung + Auto-Kalibrierung | `modbus-collector`→`pv-collector` (3 Dateien), `Documents`→`Dokumente` (2 Dateien), SYSTEM_ARCHITECTURE/BATTERY_ALGORITHM/AUTOMATION_ARCHITEKTUR auf pv-automation.service aktualisiert, Solar-Kalibrierung Cron (So 05:00), Forecast-Accuracy-Dashboard verworfen (self-healing), Nachtladung verworfen (Festvertrag 30,3ct), **K9 Dual-Modbus verworfen** (ABC-Policy: Collector=A darf nur lesen, Automation=C darf schreiben — getrennte Clients sind bewusste Schichtentrennung, Code-Duplikation hier erforderlich) |
 | 2026-02-13 | Flow-View Enhancements + Bugfixes | Gauge-Arcs 360° (PV/Netz/SOC), Responsive Mobile, Aktivitätslevel-Farben, **WP-Vorzeichen-Bug** (`P_WP` negiert), Strompreise korrigiert, Heizkosten-Logik, SOH-Fix, Code-Bereinigung (10 Dateien), pgrep-Pattern-Fix |
 | 2026-02-12 | tmpfs-Architektur + Energieflow | DB→`/dev/shm` (RAM), 3→1 Schicht, `db_init.py`, 8 Dateien migriert, 0.04 GB/d I/O, SVG-Energieflow-Chart mit Partikeln |
 | 2026-02-11 | Wattpilot + Bugfixes | Wattpilot WebSocket-API, f_Netz Chart-Bug (`category`→`time`) |
