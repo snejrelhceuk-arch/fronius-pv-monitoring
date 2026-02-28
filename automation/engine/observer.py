@@ -385,7 +385,11 @@ class ForecastCollector:
             LOG.error(f"Forecast-Fetch fehlgeschlagen: {e}", exc_info=True)
 
     def _fetch_sunrise_sunset(self, obs: ObsState):
-        """Sunrise/Sunset aus SolarForecast holen und in ObsState setzen."""
+        """Sunrise/Sunset aus SolarForecast holen und in ObsState setzen.
+
+        Fallback: Vortageswerte aus forecast_daily DB, wenn API nicht erreichbar.
+        Sunrise verschiebt sich max. ±2 Min pro Tag — Vortag ist gut genug.
+        """
         try:
             sf = self._ensure_sf()
             strategy = sf.get_strategy_inputs()
@@ -398,8 +402,54 @@ class ForecastCollector:
                 obs.is_day = self._sunrise_h <= now_h <= self._sunset_h
                 LOG.info(f"  Sunrise={self._sunrise_h:.2f}h, "
                          f"Sunset={self._sunset_h:.2f}h")
+                return
         except Exception as e:
-            LOG.warning(f"Sunrise/Sunset nicht ermittelbar: {e}")
+            LOG.warning(f"Sunrise/Sunset via API nicht ermittelbar: {e}")
+
+        # ── Fallback: Vortageswerte aus forecast_daily ──────
+        try:
+            import sqlite3 as _sql
+            import config as app_config
+            from datetime import timedelta
+
+            yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+            conn = _sql.connect(app_config.DB_PATH, timeout=3.0)
+            row = conn.execute(
+                "SELECT sunrise, sunset FROM forecast_daily WHERE date = ?",
+                (yesterday,)
+            ).fetchone()
+            conn.close()
+
+            if row and row[0] and row[1]:
+                # Sunrise/Sunset sind ISO-Strings wie "2026-02-27T06:54"
+                def _parse_h(iso_str):
+                    try:
+                        t = datetime.fromisoformat(iso_str)
+                        return t.hour + t.minute / 60.0
+                    except (ValueError, TypeError):
+                        return None
+
+                sr = _parse_h(row[0])
+                ss = _parse_h(row[1])
+                if sr is not None and ss is not None:
+                    self._sunrise_h = sr
+                    self._sunset_h = ss
+                    obs.sunrise = sr
+                    obs.sunset = ss
+                    now_h = datetime.now().hour + datetime.now().minute / 60.0
+                    obs.is_day = sr <= now_h <= ss
+                    LOG.warning(f"  Sunrise/Sunset Fallback (Vortag {yesterday}): "
+                                f"{sr:.2f}h / {ss:.2f}h")
+                    return
+        except Exception as e2:
+            LOG.warning(f"Vortages-Fallback fehlgeschlagen: {e2}")
+
+        # ── Letzter Fallback: Jahresmittel ──────────────────
+        self._sunrise_h = 7.0
+        self._sunset_h = 17.0
+        obs.sunrise = 7.0
+        obs.sunset = 17.0
+        LOG.warning("  Sunrise/Sunset Fallback auf Defaults: 07:00 / 17:00")
 
     def _do_fetch(self, obs: ObsState):
         """Vollständiger Forecast-Fetch → ObsState + forecast_daily DB."""
