@@ -86,7 +86,10 @@ class ObsState:
     wp_today_kwh: Optional[float] = None  # WP-Verbrauch heute [kWh]
     ww_temp_c: Optional[float] = None     # Warmwasserspeicher [°C] — geplant
     heizpatrone_aktiv: bool = False        # Heizstab-Status (vorerst immer False)
-
+    # ── Prognose (Tier-3 Forecast) ────────────────────────
+    pv_at_sunrise_1h_w: Optional[float] = None  # Progn. PV-Leistung 1h nach Sunrise [W]
+    forecast_quality: Optional[str] = None       # 'gut' | 'mittel' | 'schlecht'
+    forecast_ts: Optional[str] = None            # ISO-8601 wann Forecast zuletzt geholt
     # ── Zeit / Geometrie ─────────────────────────────────────
     sunrise: Optional[float] = None       # Dezimalstunde
     sunset: Optional[float] = None
