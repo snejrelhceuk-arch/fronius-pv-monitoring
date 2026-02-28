@@ -81,6 +81,7 @@ class Tier1Checker:
         else:
             obs.alarm_batt_kritisch = False
 
+
         # ── Netz-Überlast ────────────────────────────────────
         if obs.grid_power_w is not None:
             if obs.grid_power_w > self._netz_ueberlast_alarm_w:

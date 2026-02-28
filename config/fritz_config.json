@@ -1,0 +1,10 @@
+{
+  "_doc": "Fritz!Box AHA-HTTP-API Konfiguration für Heizpatrone (Fritz!DECT-Steckdose)",
+  "_updated": "2026-02-28",
+  "fritz_ip": "192.168.2.1",
+  "ain": "11657 0535198",
+  "ain_doc": "AIN der Fritz!DECT-Steckdose — SDHeizPatrone, siehe Fritz!Box → Smart Home → Geräte",
+  "hp_leistung_w": 2000,
+  "hp_leistung_doc": "Nennleistung der Heizpatrone in Watt",
+  "_secrets_doc": "Zugangsdaten NICHT hier! In .secrets eintragen: FRITZ_USER=... und FRITZ_PASSWORD=..."
+}

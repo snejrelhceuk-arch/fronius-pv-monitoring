@@ -1,6 +1,6 @@
 # Betriebsstrategien — PV-Eigenverbrauchsmaximierung
 
-> Stand: 2026-02-14
+> Stand: 2026-02-28
 
 ---
 
@@ -175,6 +175,193 @@ ABENDS:
 
 ÜBERSTEUERUNG: Speicher_oben > 78°C → Heizpatrone SOFORT AUS
 ```
+
+### 2.6 Heizpatrone (HP) — Prognosegesteuerte Burst-Strategie (via Fritz!DECT)
+
+> Stand: 2026-03-01 — **Produktiv** seit 2026-02-28 (`RegelHeizpatrone` + `AktorFritzDECT`)
+
+**Abkürzungen:** HP = Heizpatrone (2 kW, Fritz!DECT-Steckdose), WP = Wärmepumpe
+(Dimplex SIK 11 TES), Wattpilot = EV-Ladestation (go-eCharger).
+
+**Hardware:** Fritz!DECT-Steckdose → 24V-Relais → Heizpatrone 2 kW.
+Steuerung via Fritz!Box AHA-HTTP-API (`setswitchon`/`setswitchoff`).
+
+**Kernproblem:** Die HP verbraucht 2 kW. Nachmittags/abends darf sie auf
+keinen Fall die Batterie entladen. Gleichzeitig soll PV-Überschuss nicht
+verworfen werden, wenn kein anderer Verbraucher aktiv ist.
+
+**Warum P_PV kein guter Indikator ist:**
+Die Nulleinspeiser-Anlage (37,59 kWp, max. 26,5 kW AC) regelt ab, sobald
+kein Verbraucher den Strom abnimmt. Die gemessene PV-Leistung zeigt daher
+**nicht** die verfügbare Kapazität, sondern nur den aktuellen Verbrauch.
+Ein "geringer Überschuss" kann bedeuten, dass die Anlage massiv abgeregelt
+oder dass tatsächlich kaum Sonne scheint — ununterscheidbar am P_PV allein.
+
+**Warum SOC kein guter Trigger ist:**
+Der SOC_MAX liegt aus Batterieschonung oft bei 75% (nicht 100%). Der SOC
+pendelt typischerweise um 75% ± einige Prozent. Ein starrer Schwellwert
+"SOC ≥ 90%" würde nie erreicht oder wäre mit der Schonstrategie inkompatibel.
+
+**Die richtigen Indikatoren:**
+1. **Batterie-Ladeleistung P_Batt** — Wenn die Batterie mit >5 kW lädt,
+   ist offensichtlich genug PV-Kapazität für zusätzliche 2 kW HP vorhanden
+2. **Prognose (rest_kwh, rest_h)** — Die Forecast-Engine weiß, wieviel
+   Ertrag noch kommt. Das ist der einzige zuverlässige Voraus-Indikator
+3. **Wattpilot-Status** — Ob EVs laden und wann sie voraussichtlich voll sind
+
+**Leitprinzip: Forecast-gesteuerter Burst**
+
+Die HP läuft nicht kontinuierlich, sondern in kurzen Bursts (15–30 Min),
+gesteuert durch die Prognose-Engine. Die Laufzeit richtet sich nach dem
+verbleibenden PV-Ertrag — genug Energie muss übrig bleiben, um die
+Batterie bis Sonnenuntergang auf SOC_MAX zu füllen.
+
+#### Entscheidungslogik `RegelHeizpatrone.bewerte()`
+
+```
+# ── Eingangsdaten ──────────────────────────────────────────
+P_Batt        = Batterie-Ladeleistung (W, >0 = Ladung, <0 = Entladung)
+P_Wattpilot   = aktuelle Wattpilot-Ladeleistung (W)
+P_Netz        = Netzbezug/-einspeisung (W, >0 = Bezug)
+SOC           = Batterie-SOC (%)
+SOC_MAX       = aktueller SOC_MAX aus battery_control (z.B. 75% oder 100%)
+HP_aktiv      = Fritz!DECT-Status (ein/aus, via getswitchstate)
+HP_letzte_aus = Zeitpunkt letztes Ausschalten
+rest_kwh      = get_remaining_pv_surplus_kwh()  # Prognose Restertrag
+rest_h        = Stunden bis Sonnenuntergang (aus solar_geometry)
+batt_rest_kwh = (SOC_MAX - SOC) * 10.24 / 100  # kWh bis Batterie voll
+
+# ── Phase 1: Vormittags (gute Prognose → HP darf EV+Batt verzögern) ──
+# Bei guter Prognose kann die HP morgens laufen, auch wenn
+# Batterie und EV noch nicht voll sind — die werden später gefüllt.
+WENN rest_kwh > 20:                              # sehr guter Tag erwartet
+    UND P_Batt > 3000:                           # Batterie lädt mit >3 kW
+    UND rest_h > 5:                              # noch >5h Sonne
+    → HP EIN (Burst: 30 Min)
+    → Begründung: genug Ertrag erwartet, EV+Batt werden bis Abend voll
+
+WENN rest_kwh > 12:                              # guter Tag
+    UND P_Batt > 5000:                           # Batterie lädt kräftig (>5 kW)
+    → HP EIN (Burst: 15–30 Min, je nach rest_kwh)
+    → Begründung: hohe Ladeleistung = Anlage hat Kapazität für 2 kW extra
+
+# ── Phase 2: Mittags/Nachmittags (HP wenn Batterie "satt") ──────────
+# Batterie lädt stark → Anlage hat offensichtlich Kapazität übrig
+WENN P_Batt > 5000:                              # Batt lädt mit >5 kW
+    UND rest_kwh > batt_rest_kwh + 2:            # Prognose deckt Batt + HP-Burst
+    UND P_Wattpilot < 500:                       # EV lädt nicht (oder fast fertig)
+    → HP EIN (Burst: 15–30 Min)
+    → Timer starten: nach Ablauf → HP AUS
+    → Danach: Batterie holt die 1 kWh wieder auf
+
+# ── Phase 3: Nachmittags spät (nur bei deutlichem Überschuss) ────
+# Nach dem Clear-Sky-Peak: Batterie für die Nacht füllen = oberste Prio
+WENN rest_h > 2.0:                               # noch >2h PV erwartet
+    UND rest_kwh > batt_rest_kwh + 3:            # genug für Batt-voll + HP
+    UND P_Batt > 5000:                           # Batt LÄDT stark
+    UND HP_aktiv == False:                       # HP ist aus
+    → HP EIN (Burst: max 15 Min, konservativ)
+    → Begründung: Batterie schafft es trotzdem noch auf SOC_MAX
+
+# ── Phase 4: Abend/Nacht (HARD BLOCK) ────────────────────────────
+# Oberste Priorität: volle Batterie für die Nacht
+WENN rest_h < 2.0 ODER P_Batt < 1000:
+    → HP AUS (kein Burst, keine Ausnahme)
+    → Begründung: jedes Watt geht in die Batterie
+
+# ── Sicherheitsregeln (immer aktiv, auch bei aktiv=False) ────────
+HYSTERESE:       Mindestpause 5 Min zwischen Ein/Aus
+ÜBERTEMPERATUR:  Speicher_oben ≥ 78°C → HP SOFORT AUS
+NETZBEZUG:       P_Netz > 200 W (Bezug statt Einspeisung) → HP SOFORT AUS
+ENTLADESCHUTZ:   SOC-abhängig (siehe unten)
+```
+
+#### SOC-abhängiger Entladeschutz (Notaus)
+
+Der HP-Notaus ist **immer aktiv**, auch wenn der Regelkreis `heizpatrone`
+auf `aktiv: false` steht. Dies schützt vor manuell eingeschalteter HP,
+die unbemerkt die Batterie entlädt.
+
+**Architektur-Entscheidung:** Der Notaus läuft im **Engine fast-cycle (60 s)**
+(Tier-2), nicht im Observer (Tier-1). Begründung: 1–5 Minuten Reaktionszeit
+sind für HP akzeptabel, Tier-1 (10 s) wäre übertrieben für einen thermischen
+Verbraucher.
+
+```
+# ── SOC-abhängige Schwellen ──────────────────────────────────────
+notaus_soc_schwelle_pct  = 90   # konfigurierbar (50–100%)
+notaus_entladung_hochsoc_w = -1000  # konfigurierbar (-2000–0 W)
+
+WENN HP_aktiv == True UND P_Batt < 0 (Batterie entlädt):
+  WENN SOC >= notaus_soc_schwelle_pct:
+    # Hochladen-Phase: toleriere bis zu -1000 W Entladung
+    WENN P_Batt < notaus_entladung_hochsoc_w:
+      → HP SOFORT AUS ("HP-Notaus: Batterie entlädt {P_Batt}W < {Schwelle}W")
+  SONST:
+    # SOC < 90%: Jede Entladung → sofort AUS
+    → HP SOFORT AUS ("HP-Notaus: SOC {soc}% < {Schwelle}%, Entladung {P_Batt}W")
+```
+
+**Warum SOC-abhängig?**
+Bei SOC ≥ 90% (z.B. nach manueller SOC_MAX-Anhebung auf 100%) kann die
+Anlage kurzzeitig in die Entladung rutschen, obwohl genug PV vorhanden ist —
+die Regelung des Nulleinspeisers braucht bis zu 30 s zum Nachregeln.
+-1000 W Toleranz bei hohem SOC vermeidet unnötige Abschaltungen.
+
+> **Warum P_Batt > 5 kW als Schwelle?**
+> Die Batterie (BYD HVS 10.24 kWh) kann mit max. ~5 kW laden.
+> Wenn sie bereits mit >5 kW lädt, bedeutet das: Die PV-Anlage produziert
+> deutlich mehr als Haus + Batterie brauchen. Die 2 kW HP passen problemlos
+> dazu. Die Abregelung des Nulleinspeisers wird sogar reduziert.
+
+#### Rechenbeispiel (28. Feb, wolkenlos, SOC_MAX=75%)
+
+```
+09:00 — P_Batt=4kW, rest_kwh=25, rest_h=8, SOC=35%, EV lädt mit 11kW
+         Phase 1: rest_kwh>20 ✓, P_Batt>3kW ✓, rest_h>5 ✓
+         → HP EIN 30 Min (HP verbraucht 1 kWh, Batt verzögert sich um ~12 Min)
+         Begründung: genug Tag, EV bis 12 Uhr voll, Batt bis 15 Uhr voll
+
+09:30 — Timer → HP AUS
+         Batt weiter bei ~4 kW, SOC steigt
+
+12:30 — P_Batt=6kW, rest_kwh=12, SOC=68%, EV fertig, kein Wattpilot
+         Phase 2: P_Batt>5kW ✓, rest_kwh(12) > batt_rest_kwh(0.7)+2 ✓
+         → HP EIN 30 Min
+
+13:00 — Timer → HP AUS
+         SOC ca. 70%, Batt lädt weiter mit ~5 kW
+
+14:30 — P_Batt=5,5kW, rest_kwh=6, rest_h=2.5, SOC=74%
+         Phase 3: rest_h>2 ✓, rest_kwh(6) > batt_rest_kwh(0.1)+3 ✓, P_Batt>5kW ✓
+         → HP EIN 15 Min (konservativ)
+
+14:45 — Timer → HP AUS
+
+16:00 — rest_h=1.5, P_Batt=2kW, SOC=75% (=SOC_MAX)
+         Phase 4: rest_h<2 → HARD BLOCK
+         Batterie voll, Restproduktion deckt Hausverbrauch
+```
+
+#### Implementierungsplan
+
+| Komponente | Datei | Status |
+|---|---|---|
+| `AktorFritzDECT` | `automation/engine/aktoren/aktor_fritzdect.py` (~365 Z.) | ✅ Produktiv |
+| Fritz-Auth (SID-Cache 15 Min) | in `aktor_fritzdect.py` | ✅ Produktiv |
+| `RegelHeizpatrone` | `automation/engine/engine.py` (~80 Z.) | ✅ Produktiv |
+| SOC-abhängiger Notaus | in `engine.py` (immer aktiv) | ✅ Produktiv |
+| Parametermatrix (17 Param.) | `config/soc_param_matrix.json` | ✅ Produktiv |
+| Registrierung in `actuator.py` | 3 Aktoren: batterie, wattpilot, fritzdect | ✅ Produktiv |
+| pv-config.py Menü 6 | HP-Status, Config, Test, manuell Ein/Aus | ✅ Produktiv |
+| Config | `config/fritz_config.json` (IP, AIN), `.secrets` (Creds) | ✅ Produktiv |
+| Fritz!Box-Optimierung | Bulk-Query (`getdevicelistinfos`), 60 s Poll | ✅ Produktiv |
+| flow_view HP-Zeile | Live-Status (EIN/AUS + Leistung), 120 s Cache | ✅ Produktiv |
+
+**ABC-Schichten-Zuordnung:**
+- Schicht A (Collector): nicht betroffen (HP hat kein Modbus)
+- Schicht B (Web-API): Status-Anzeige in flow_view (Fritz-Schaltzustand)
+- Schicht C (Automation): `RegelHeizpatrone` + `AktorFritzDECT`
 
 ---
 

@@ -185,6 +185,39 @@ Die Prognose-Engine liefert die Daten — jetzt fehlt die Auswertung.
 - [x] `doc/AUTOMATION_ARCHITEKTUR.md`: Phase-0-Text aktualisiert (2026-02-28)
 - [x] `doc/BATTERY_ALGORITHM.md`: Implementierungsplan-Status aktualisiert (2026-02-28)
 
+### B5: Heizpatrone (HP) — Prognosegesteuerte Automation via Fritz!DECT
+HP (2 kW) wird über Fritz!DECT-Steckdose geschaltet. Ziel: Überschuss-Verwertung
+ohne Batterie-Entladung. Forecast-gesteuerte Burst-Strategie (15–30 Min Laufzeit).
+→ Detailstrategie dokumentiert in `automation/STRATEGIEN.md` §2.6 (2026-02-28)
+
+- [x] **AktorFritzDECT**: `automation/engine/aktoren/aktor_fritzdect.py` (~365 Z.) —
+      Fritz!Box AHA-HTTP-API (SID-Cache 15 Min, Bulk-Query `getdevicelistinfos`,
+      setswitchon/off, getswitchstate, get_status, Retry-Logik, Credentials aus .secrets)
+- [x] **RegelHeizpatrone**: `automation/engine/engine.py` —
+      4-Phasen-Logik (Morgen-Burst, Mittag-Überschuss, Nachmittag-Burst, Abend-Block),
+      Trigger=P_Batt (nicht P_PV), nutzt forecast_rest_kwh + rest_h, Burst-Timer,
+      Notaus bei Netzbezug/Entladung/Übertemperatur
+- [x] **Parametermatrix**: Regelkreis `heizpatrone` in `config/soc_param_matrix.json` —
+      17 Parameter (min_ladeleistung, burst_dauer, min_rest_kwh/h, notaus,
+      notaus_entladung_hochsoc_w, notaus_soc_schwelle_pct)
+- [x] **Registrierung**: `AktorFritzDECT` in `actuator.py` registriert (3 Aktoren:
+      batterie, wattpilot, fritzdect)
+- [x] **Config**: `config/fritz_config.json` (Fritz!Box-IP, AIN=11657 0535198/SDHeizPatrone),
+      Credentials via .secrets (FRITZ_USER/FRITZ_PASSWORD, nicht im JSON)
+- [x] **pv-config.py**: Menüpunkt 6 "Heizpatrone (Fritz!DECT)" — Status, Config, Verbindungstest,
+      manuell Ein/Aus, Schwellwerte, .secrets-Editor für Credentials
+- [x] **SOC-abhängiger Notaus**: Immer aktiv (auch bei aktiv=False), SOC ≥90% toleriert
+      bis −1000 W Entladung (konfigurierbar), SOC <90% sofort AUS bei jeder Entladung
+- [x] **Fritz!Box-Optimierung**: Bulk-Query (`getdevicelistinfos`) statt Einzelabfragen,
+      SID-Cache (15 Min), 60 s Poll-Intervall im Daemon
+- [x] **flow_view HP-Zeile**: Live-Status (EIN/AUS + Leistung), 120 s Cache,
+      Fritz!Box-XML `present` als Child-Element (nicht Attribut) korrekt geparst
+- [x] **Schutzregel-Klassifikation**: Engine `_ist_schutz()` erkennt FritzDECT-Regeln
+      mit erhöhtem Score als Schutzregeln (können nicht von Batterie-Regeln blockiert werden)
+- [ ] **Status-Anzeige**: HP-Schaltzustand in flow_view (Fritz-API-Abfrage)
+      → **Teilweise implementiert**: flow_view zeigt HP EIN/AUS + Leistung (120 s Cache),
+      live Fritz!Box-Query in `/api/battery_status`. Noch offen: tag_view Integration.
+
 ---
 
 ## Priorität C — Langfristig / Nice-to-have

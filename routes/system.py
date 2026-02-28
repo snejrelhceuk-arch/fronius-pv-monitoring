@@ -23,6 +23,10 @@ _FAILOVER_CACHE_TTL = 60  # Sekunden (max. 1 SSH-Aufruf pro Minute)
 _backup_cache = {'ts': 0, 'result': None}
 _BACKUP_CACHE_TTL = 600  # Sekunden (10 Minuten)
 
+# Fritz!DECT Live-Status Cache (eigener, längerer TTL als battery_cache)
+_fritzdect_cache = {'ts': 0, 'data': None}
+_FRITZDECT_CACHE_TTL = 120  # 2 Minuten (Fritz!Box ist langsam, 1 Bulk-Request ~2s)
+
 
 @bp.route('/api/battery_status')
 def api_battery_status():
@@ -512,6 +516,95 @@ def api_battery_status():
                     result['f2_temp_dc2'] = round(_t, 1)
         except Exception as e:
             logging.debug(f"F2 temperatures fetch: {e}")
+
+        # ── HP-Automation (Fritz!DECT Heizpatrone) ─────────────
+        # Log-Daten aus automation_log (Schalthistorie)
+        try:
+            with sqlite3.connect(config.DB_PATH) as _hdb:
+                _24h_ago_hp = int(now) - 86400
+                hp_rows = _hdb.execute("""
+                    SELECT ts, kommando, wert, grund, ergebnis
+                    FROM automation_log
+                    WHERE aktor = 'fritzdect'
+                      AND ts >= datetime(?, 'unixepoch')
+                    ORDER BY ts DESC
+                    LIMIT 10
+                """, (_24h_ago_hp,)).fetchall()
+
+                hp_aktionen = [{
+                    'ts': r[0][:16].replace('T', ' ') if r[0] else '?',
+                    'kommando': r[1],
+                    'wert': r[2],
+                    'grund': (r[3] or '')[:120],
+                    'ergebnis': r[4],
+                } for r in hp_rows]
+
+                result['hp_aktionen'] = hp_aktionen
+                hp_ein_count = sum(1 for a in hp_aktionen if a['kommando'] == 'hp_ein' and a['ergebnis'] == 'OK')
+                result['hp_bursts_heute'] = hp_ein_count
+        except Exception as _he:
+            logging.debug(f"HP-Log: {_he}")
+            result['hp_aktionen'] = []
+            result['hp_bursts_heute'] = 0
+
+        # Live-Status von der Fritz!Box (getdevicelistinfos, 1 Bulk-Request)
+        # Eigener Cache (120s) — überlebt battery_cache-Invalidierung
+        try:
+            global _fritzdect_cache
+            if _fritzdect_cache['data'] and (now - _fritzdect_cache['ts']) < _FRITZDECT_CACHE_TTL:
+                fritz_live = _fritzdect_cache['data']
+            else:
+                fritz_live = None
+                try:
+                    from automation.engine.aktoren.aktor_fritzdect import (
+                        _load_fritz_config, _get_session_id, _aha_device_info
+                    )
+                    _fcfg = _load_fritz_config()
+                    _fhost = _fcfg.get('fritz_ip', '192.168.178.1')
+                    _fain = _fcfg.get('ain', '')
+                    _fuser = _fcfg.get('fritz_user', '')
+                    _fpass = _fcfg.get('fritz_password', '')
+
+                    if _fain and _fuser and _fpass:
+                        _fsid = _get_session_id(_fhost, _fuser, _fpass)
+                        if _fsid:
+                            fritz_live = _aha_device_info(_fhost, _fain, _fsid)
+                except Exception as _fe:
+                    logging.debug(f"Fritz!DECT Live-Query: {_fe}")
+
+                _fritzdect_cache = {'ts': now, 'data': fritz_live}
+
+            if fritz_live and fritz_live.get('state') is not None:
+                state_raw = str(fritz_live.get('state')).strip()
+                zustand = 'EIN' if state_raw == '1' else 'AUS' if state_raw == '0' else '?'
+                power_w = (fritz_live.get('power_mw') or 0) / 1000
+                result['hp_status'] = {
+                    'zustand': zustand,
+                    'live': True,
+                    'power_w': round(power_w, 1),
+                    'energy_wh': fritz_live.get('energy_wh'),
+                    'name': fritz_live.get('name'),
+                    'seit': result.get('hp_aktionen', [{}])[0].get('ts') if result.get('hp_aktionen') else None,
+                    'grund': result.get('hp_aktionen', [{}])[0].get('grund', '') if result.get('hp_aktionen') else '',
+                    'kommando': result.get('hp_aktionen', [{}])[0].get('kommando') if result.get('hp_aktionen') else None,
+                }
+            else:
+                # Fritz!Box nicht erreichbar → Fallback auf Log
+                hp_aktionen = result.get('hp_aktionen', [])
+                if hp_aktionen:
+                    last = hp_aktionen[0]
+                    result['hp_status'] = {
+                        'zustand': 'EIN' if last['kommando'] == 'hp_ein' and last['ergebnis'] == 'OK' else 'AUS',
+                        'live': False,
+                        'seit': last['ts'],
+                        'grund': last['grund'],
+                        'kommando': last['kommando'],
+                    }
+                else:
+                    result['hp_status'] = {'zustand': '?', 'live': False, 'seit': None, 'grund': '', 'kommando': None}
+        except Exception as _hle:
+            logging.debug(f"HP-Live-Status: {_hle}")
+            result['hp_status'] = {'zustand': '?', 'live': False, 'seit': None, 'grund': '', 'kommando': None}
 
         # SOH aus config
         try:

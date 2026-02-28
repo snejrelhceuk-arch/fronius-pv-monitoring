@@ -1,7 +1,7 @@
 # PV-CONFIG Handbuch
 
 **Konfigurationsprogramm für die PV-Batterie-Automation**
-Version 1.1 — Stand: 28. Februar 2026
+Version 1.3 — Stand: 1. März 2026
 
 ---
 
@@ -20,10 +20,12 @@ Version 1.1 — Stand: 28. Februar 2026
    - [4.7 forecast_plausibilisierung — Prognosekorrektur](#47-forecast_plausibilisierung--prognosekorrektur-priorität-2)
    - [4.8 laderate_dynamisch — Dynamische Laderate](#48-laderate_dynamisch--dynamische-laderate-priorität-2)
    - [4.9 wattpilot_battschutz — EV-Ladeschutz](#49-wattpilot_battschutz--ev-ladeschutz-priorität-1)
-5. [Menü 3: Batterie-Scheduler](#5-menü-3-batterie-scheduler)
+   - [4.10 heizpatrone — HP-Burst-Steuerung](#410-heizpatrone--hp-burst-steuerung-priorität-2)
+5. [Menü 3: Batterie-Automation](#5-menü-3-batterie-automation)
 6. [Menü 4: System-Status](#6-menü-4-system-status)
 7. [Menü 5: Solar-Prognose](#7-menü-5-solar-prognose)
-8. [Grundlagenwissen](#8-grundlagenwissen)
+8. [Menü 6: Heizpatrone (Fritz!DECT)](#8-menü-6-heizpatrone-fritzdect)
+9. [Grundlagenwissen](#9-grundlagenwissen)
 
 ---
 
@@ -56,6 +58,7 @@ Zeigt Live-Werte: PV-Leistung, Hausverbrauch, Netzfluss und Batterie-SOC.
 | Scheduler | Batterie-Aktionen: Status, Log, manuelle Übersteuerung |
 | System | Systemzustand, Warnungen, Prozess-Status |
 | Forecast | Solar-Prognose, Genauigkeit, Kalibrierung |
+| Heizpatrone | Fritz!DECT-Steckdose: Status, Konfiguration, Test, manuell EIN/AUS |
 | Beenden | Programm schließen |
 
 ---
@@ -323,6 +326,78 @@ Score um 16:30h:     55  (Deadline, voller Score)
 
 ---
 
+### 4.10 heizpatrone — HP-Burst-Steuerung (Priorität 2)
+
+**Zweck:** Heizpatrone (2 kW) im Warmwasserspeicher über eine Fritz!DECT-Steckdose einschalten, wenn die PV-Anlage deutlich mehr erzeugt als Batterie und Haus benötigen — gesteuert über Batterie-Ladeleistung und Solar-Prognose.
+
+**Score:** 40
+**Zyklus:** fast
+**Aktor:** `fritzdect` (Fritz!Box AHA-HTTP-API)
+
+**Warum nicht P_PV oder SOC als Trigger?**
+- **Nulleinspeiser:** Der Fronius-Wechselrichter drosselt PV, sobald Batterie+Haus gesättigt sind. `P_PV` zeigt dann nicht die wahre Sonnenleistung.
+- **SOC_MAX ≈ 75%:** Die Batterie wird aus Langlebigkeitsgründen selten über 75% geladen. SOC ≥ 90% ist praktisch unerreichbar.
+- **Batterie-Ladeleistung (`batt_power_w`)** ist der zuverlässige Indikator: Wenn die Batterie mit >5 kW lädt, hat die Anlage echten Überschuss.
+
+**4-Phasen-Logik:**
+
+| Phase | Bedingung | Burst-Dauer | Zweck |
+|-------|-----------|-------------|-------|
+| **1 — Morgens** | rest_h > 5, rest_kwh > 20, P_Batt > 3 kW | 30 Min. | Langer Tag, großzügig Warmwasser machen |
+| **2 — Mittags** | P_Batt > 5 kW, rest_kwh deckt Batt + Reserve | 30 Min. | Hauptphase bei Batterie-Sättigung |
+| **3 — Nachmittags** | rest_h < 3, konservativ | 15 Min. | Kurze Restzeit → nur kurze Bursts |
+| **4 — HARD BLOCK** | rest_h < 2 | — | Batterie-Volladung hat Vorrang |
+
+**Notaus-Bedingungen (sofort AUS, immer aktiv — auch bei `aktiv: false`):**
+- Netzbezug > 200 W → PV reicht nicht
+- Batterie entlädt → SOC-abhängig:
+  - SOC ≥ 90%: toleriert bis −1000 W (konfigurierbar), darüber → AUS
+  - SOC < 90%: jede Entladung → sofort AUS
+- Speicher-Temperatur ≥ 78 °C → Übertemperatur
+- WattPilot > 500 W → EV lädt, kein Platz für HP
+
+> **Hinweis:** Der Notaus läuft im Engine fast-cycle (60 s) und ist
+> **immer aktiv**, auch wenn der Regelkreis auf `aktiv: false` steht.
+> Dies schützt vor manuell eingeschalteter HP, die unbemerkt die
+> Batterie entlädt.
+
+| Parameter | Standard | Bereich | Wirkung |
+|-----------|----------|---------|--------|
+| min_ladeleistung | 5000 W | 2000–10000 W | **Mindest-Batterie-Ladeleistung.** HP schaltet erst ein, wenn die Batterie mit mindestens dieser Leistung lädt. 5 kW bedeutet: Die Anlage hat echten Überschuss. Niedriger = aggressiver (früher EIN), höher = konservativer. |
+| min_ladeleistung_morgens | 3000 W | 1000–8000 W | **Vormittags-Schwelle.** Bei guter Tagesprognose (>20 kWh) reichen 3 kW Ladeleistung, weil genug Sonne für Batterie+HP erwartet wird. |
+| min_rest_kwh | 12.0 kWh | 5–30 kWh | **Mindest-Restprognose.** HP-Burst nur wenn die Rest-Tagesprognose genug kWh zeigt, um Batterie voll zu laden UND HP zu versorgen. |
+| min_rest_kwh_morgens | 20.0 kWh | 10–40 kWh | **Vormittags-Mindestprognose.** Lang genug Sonne erwartet für HP + Batterie + eventuelle EV-Ladung. |
+| min_rest_h | 2.0 h | 1–4 h | **Hard Block unter diese Reststunden.** Wenn weniger als 2 h PV bis Sonnenuntergang → keine HP, damit die Batterie voll wird. |
+| min_rest_h_morgens | 5.0 h | 3–8 h | **Vormittag-Minimum.** Nur bei >5 h Restsonne wird die lockere Morgenschwelle angewendet. |
+| burst_dauer_lang | 1800 s | 600–3600 s | **Burst-Dauer bei guter Prognose (30 Min).** HP läuft maximal diese Zeit, dann aus und Pause. |
+| burst_dauer_kurz | 900 s | 300–1800 s | **Burst-Dauer bei mäßiger Prognose (15 Min).** Kürzere Einschaltzeit bei weniger Reserven. |
+| min_pause | 300 s | 60–600 s | **Mindestpause zwischen Bursts.** Verhindert Flip-Flop (z.B. Wolke durchzieht → AUS → sofort wieder EIN). |
+| max_wattpilot | 500 W | 0–5000 W | **Obergrenze EV-Ladung.** HP nur wenn WattPilot unter diesem Wert — EV-Ladung und HP gleichzeitig überlasten die Anlage. |
+| batt_reserve | 2.0 kWh | 0.5–5.0 kWh | **Prognose-Reserve.** Restprognose muss Batterie-Volladung + diese Reserve decken, damit HP erlaubt wird. |
+| batt_reserve_nachmittag | 3.0 kWh | 1–8 kWh | **Größere Reserve nachmittags.** Weniger Restzeit → mehr Puffer für sichere Volladung. |
+| notaus_netzbezug | 200 W | 0–500 W | **Netzbezug-Schwelle.** Wenn das Haus aus dem Netz bezieht (>200 W), wird HP sofort ausgeschaltet. |
+| notaus_entladung | −500 W | −2000–0 W | **Batterie-Entladung-Schwelle (SOC < 90%).** Negativer Wert = Batterie gibt ab. HP sofort AUS. Bei SOC < `notaus_soc_schwelle_pct` wird jede Entladung über diesen Wert gestoppt. |
+| notaus_entladung_hochsoc_w | −1000 W | −2000–0 W | **Tolerierte Entladung bei hohem SOC.** Bei SOC ≥ `notaus_soc_schwelle_pct` darf die Batterie bis zu diesem Wert entladen, bevor HP abgeschaltet wird. −1000 W = 1 kW Entladung toleriert (Nulleinspeiser-Nachregelung). |
+| notaus_soc_schwelle_pct | 90 % | 50–100 % | **SOC-Schwelle für Entladeschutz.** Oberhalb: tolerantere Abschaltung (`notaus_entladung_hochsoc_w`). Unterhalb: sofortige Abschaltung bei jeder Entladung. |
+| speicher_temp_max | 78 °C | 60–85 °C | **Warmwasser-Übertemperatur.** HP sofort AUS bei ≥78 °C. Schutz vor Verbrühung/Überdruck. |
+
+**Rechenbeispiel (sonniger Märztag):**
+```
+12:00 — SOC = 73% (≈ SOC_MAX), P_Batt = +6.2 kW, Forecast_rest = 18 kWh
+  Check: P_Batt > 5 kW ✓, rest_kwh > 12 ✓, rest_h = 5.5 > 2 ✓
+  rest_fill = (100% − 73%) × 10.24 kWh = 2.8 kWh  (was Batterie noch braucht)
+  rest_kwh (18) > rest_fill (2.8) + reserve (2.0) = 4.8 kWh ✓
+  → HP EIN (Burst 30 Min.)
+12:30 — Burst-Ende → HP AUS, Pause ≥ 5 Min.
+12:36 — Engine prüft erneut: P_Batt = 5.8 kW, rest_kwh = 15 → neuer Burst
+...
+15:30 — rest_h = 1.8 < 2.0 → Phase 4 HARD BLOCK, kein neuer Burst
+```
+
+> **Erstinbetriebnahme:** Der Regelkreis wird mit `aktiv: false` ausgeliefert. Vor dem Einschalten: `.secrets` mit `FRITZ_USER`/`FRITZ_PASSWORD` füllen, AIN prüfen (Menü 6 → Verbindungstest), dann im Menü 1 (Regelkreise) aktivieren. Die Schwellwerte sollten an echten Sonnentagen kalibriert werden.
+
+---
+
 ## 5. Menü 3: Batterie-Automation
 
 Direkter Zugriff auf die Batterie-Automation und manuelle Übersteuerung.
@@ -368,7 +443,31 @@ Zeigt den Gesamtzustand des PV-Systems:
 
 ---
 
-## 8. Grundlagenwissen
+## 8. Menü 6: Heizpatrone (Fritz!DECT)
+
+Steuert die 2-kW-Heizpatrone im Warmwasserspeicher über eine Fritz!DECT-Steckdose (AHA-HTTP-API).
+
+**Zugangsdaten:** Werden in `.secrets` gespeichert (nicht in JSON), genau wie `FRONIUS_PASS` und `WATTPILOT_PASSWORD`.
+
+| Eintrag | Funktion |
+|---------|----------|
+| **HP-Status** | Gerätename, Schaltzustand (EIN/AUS), aktuelle Leistung (W), Energiezähler (Wh) |
+| **Konfiguration** | Fritz!Box-IP, AIN, Zugangsdaten (.secrets bearbeiten) |
+| **Verbindungstest** | Ping → Login → AHA-API → Gerätename auslesen (3-Stufen-Test) |
+| **HP manuell EIN** | Sofortiges Einschalten (mit Sicherheitsabfrage). Umgeht die Automation! |
+| **HP manuell AUS** | Sofortiges Ausschalten |
+| **Schwellwerte** | Öffnet den Regelkreis `heizpatrone` in der Parametermatrix (→ §4.10) |
+
+> **Ersteinrichtung:**
+> 1. Fritz!Box-IP prüfen (Standard: 192.168.178.1)
+> 2. `.secrets` → `FRITZ_USER` und `FRITZ_PASSWORD` eintragen
+> 3. AIN der Steckdose eingeben (Fritz!Box → Smart Home → Geräte)
+> 4. Verbindungstest durchführen
+> 5. Menü 1 → Regelkreis `heizpatrone` aktivieren
+
+---
+
+## 9. Grundlagenwissen
 
 ### SOC-Bereiche der BYD HVS 10.24 (LFP)
 
@@ -398,6 +497,7 @@ Bei gleichzeitig aktiven Regeln entscheidet der Score:
 | nachmittag_soc_max | 55 | P2 Steuerung |
 | forecast_plausibilisierung | 50 | P2 Steuerung |
 | laderate_dynamisch | 45 | P2 Steuerung |
+| heizpatrone | 40 | P2 Steuerung |
 | zellausgleich | 30 | P3 Wartung |
 
 **Beispiel:** Wenn `morgen_soc_min` (72) SOC_MIN auf 5% setzen will und `wattpilot_battschutz` (60) SOC_MIN auf 25% anheben will, gewinnt die Morgenöffnung — es sei denn, die EV-Ladung bringt den SOC unter die Schutzschwelle (Score 90).
@@ -426,3 +526,6 @@ Bei gleichzeitig aktiven Regeln entscheidet der Score:
 | PV-Anlage | 37.59 kWp (3 Strings) |
 | WR-Limit | 26.5 kW (3× Fronius Gen24) |
 | Chemie | LiFePO₄ (LFP) |
+| Heizpatrone | 2 kW (Warmwasserspeicher) |
+| Schaltaktor | Fritz!DECT 200/210 (AIN 11657 0535198) |
+| Fritz!Box | AHA-HTTP-API via login_sid.lua |

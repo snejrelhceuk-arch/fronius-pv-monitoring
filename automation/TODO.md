@@ -27,6 +27,11 @@
 
 ## Phase 2: Heizpatrone (2 kW, 1-phasig)
 
+> **Hinweis (2026-03-01):** Die HP-Steuerung wurde über **Fritz!DECT** realisiert
+> (Software-Lösung, kein MEGA-BAS TRIAC erforderlich). Siehe `doc/TODO.md` §B5
+> und `automation/STRATEGIEN.md` §2.6. Die Hardware-Phase (Schütz, TRIAC, Thermistoren)
+> ist für spätere Erweiterungen (3-Phasen, Temperatur-Sensorik) weiterhin relevant.
+
 - [ ] **Installationsschütz beschaffen** (24VAC-Spule, mind. 10A/250V für 2kW)
 - [ ] 24VAC-Netzteil (bereits vorhanden durch MEGA-BAS Versorgung?)
 - [ ] Optional: RC-Snubber über Schützspule (100Ω + 100nF für TRIAC-Langlebigkeit)
@@ -105,7 +110,7 @@
 | 3 | WPM-Version der SIK 11 TES | **Am Gerät prüfen!** LCD=L/H, Touch=M | **🚨 DRINGEND** |
 | 4 | Brandschutzklappen-Antriebe | Spannung? Strom? Typ? | Offen |
 | 5 | Lüftungsgerät-Steuerung | 0-10V? Relais? Modbus? | Offen |
-| 6 | Fritz!DECT in Übergangsphase? | Sofort nutzbar, aber Einschränkungen | Offen |
+| 6 | Fritz!DECT in Übergangsphase? | Sofort nutzbar, aber Einschränkungen | ✅ **Produktiv seit 2026-03-01** |
 | 7 | 24V**AC**-Versorgung für TRIACs | Trafo nötig, oder besser Eight Relays HAT? | **Eight Relays HAT!** |
 | 8 | LWPM 410 vs. NWPM | ✅ **LWPM 410 bestellt!** RS485 via MEGA-BAS |
 | 9 | TRIACs nutzbar? | 24VDC-Bus → TRIACs funktionieren NICHT ohne AC-Quelle | **Eight Relays HAT bevorzugt** |
