@@ -149,8 +149,13 @@ CREATE TABLE IF NOT EXISTS heartbeat (
 
 
 def init_ram_db(db_path: str = RAM_DB_PATH) -> sqlite3.Connection:
-    """Erstelle/öffne RAM-DB mit WAL-Modus und Schema."""
-    conn = sqlite3.connect(db_path, timeout=5.0)
+    """Erstelle/öffne RAM-DB mit WAL-Modus und Schema.
+
+    check_same_thread=False: Observer nutzt Threads für Tier-2/3 Collectors,
+    die alle auf dieselbe Connection schreiben. Zugriff wird vom Observer
+    per Lock serialisiert (_obs_lock).
+    """
+    conn = sqlite3.connect(db_path, timeout=5.0, check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.executescript(_SCHEMA)
