@@ -178,7 +178,7 @@ class DataCollector:
         essenziell.
         """
         try:
-            from battery_control import (
+            from automation.battery_control import (
                 ModbusClient, REG,
                 read_raw, read_int16_scaled as read_scaled,
             )
