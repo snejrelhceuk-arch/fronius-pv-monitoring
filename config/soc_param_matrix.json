@@ -248,6 +248,39 @@
       "score_gewicht": 55,
       "engine_zyklus": "strategic"
     },
+    "komfort_reset": {
+      "_doc": "Täglicher Reset auf Komfort-SOC-Bereich (25–75%) am Abend/Nacht — recycelt aus battery_scheduler._apply_comfort_defaults",
+      "aktiv": true,
+      "prioritaet": 2,
+      "beschreibung": "Nach Sunset Stress-SOC (5/100%) zurück auf Komfort (25/75%), SOC_MODE=manual, Modbus=auto",
+      "parameter": {
+        "komfort_min_pct": {
+          "wert": 25,
+          "bereich": [10, 40],
+          "einheit": "%",
+          "obs_feld": "soc_min",
+          "aktor_kommando": "set_soc_min",
+          "beschreibung": "Komfort-SOC_MIN (LFP-Schonung, Normalzustand)"
+        },
+        "komfort_max_pct": {
+          "wert": 75,
+          "bereich": [60, 90],
+          "einheit": "%",
+          "obs_feld": "soc_max",
+          "aktor_kommando": "set_soc_max",
+          "beschreibung": "Komfort-SOC_MAX (LFP-Schonung, Normalzustand)"
+        },
+        "reset_nach_sunset_h": {
+          "wert": 1.0,
+          "bereich": [0, 3],
+          "einheit": "h",
+          "obs_feld": "sunset",
+          "beschreibung": "Stunden nach Sunset bis Reset-Fenster beginnt"
+        }
+      },
+      "score_gewicht": 70,
+      "engine_zyklus": "fast"
+    },
     "abend_entladerate": {
       "_doc": "Entladerate nach Tageszeit begrenzen — Spitzenlasten ans Netz",
       "aktiv": true,

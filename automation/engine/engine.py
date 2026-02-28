@@ -572,6 +572,11 @@ class RegelNachmittagSocMax(Regel):
 
         score_max = get_score_gewicht(matrix, self.regelkreis)  # 55
         sunset = obs.sunset or 17.0
+
+        # Nach Sunset: Fenster geschlossen → komfort_reset übernimmt
+        if hr > sunset:
+            return 0
+
         hours_left = max(0, sunset - hr)
         max_h = get_param(matrix, self.regelkreis, 'max_stunden_vor_sunset', 1.5)
 
@@ -629,6 +634,142 @@ class RegelNachmittagSocMax(Regel):
                       f'{sunset - now_h:.1f}h bis Sunset, '
                       f'{peak_str}, Öffnung ab {dyn_start:.1f}h'),
         })
+        return aktionen
+
+
+# ═════════════════════════════════════════════════════════════
+# KOMFORT-RESET (P2 — Steuerung, fast)
+# ═════════════════════════════════════════════════════════════
+
+class RegelKomfortReset(Regel):
+    """Täglicher Reset auf Komfort-SOC-Bereich (25–75%).
+
+    *** FEHLENDE REGEL DER NEUEN ENGINE (recycelt aus battery_scheduler) ***
+
+    Die Morgen-Regel öffnet SOC_MIN → 5% (Stress), die Nachmittag-Regel
+    öffnet SOC_MAX → 100% (Stress).  DIESE Regel schließt beides zurück
+    auf Komfort-Defaults (SOC_MIN=25%, SOC_MAX=75%, SOC_MODE=manual,
+    StorCtl_Mod=0/auto).
+
+    Timing:
+      - Reset-Fenster: sunset + offset_h  bis  sunrise (nächster Tag)
+      - Außerhalb dieses Fensters: Score 0 → Morgen/Nachmittag arbeiten
+      - Im Fenster, SOC bereits bei Komfort: Score 0 → kein Spam
+
+    Kein Konflikt mit abend_entladerate:
+      - abend_entladerate steuert Modbus-Entladerate (set_discharge_rate)
+      - komfort_reset steuert HTTP-API (set_soc_min/max/mode) + Modbus auto
+      - Cascade: Beim ersten Zyklus gewinnt komfort_reset (höherer Score),
+        im nächsten Zyklus ist SOC schon korrekt → Score 0 → abend gewinnt
+
+    Richtungslogik SOC_MAX (recycelt aus battery_scheduler._verify_consistency):
+      - SOC_MAX > komfort_max (z.B. 100%) = mehr Ladekapazität = Nutzer/Nachmittag
+        wollte das → NICHT korrigieren (bis Reset-Fenster)
+      - SOC_MAX < komfort_max = eingeschränkt = IMMER korrigieren
+
+    Parametermatrix: regelkreise.komfort_reset
+    """
+
+    name = 'komfort_reset'
+    regelkreis = 'komfort_reset'
+    engine_zyklus = 'fast'
+
+    def _im_reset_fenster(self, obs: ObsState, matrix: dict) -> bool:
+        """Prüfe ob aktuelle Uhrzeit im Reset-Fenster liegt.
+
+        Reset-Fenster: sunset + offset_h  →  sunrise  (über Mitternacht).
+        """
+        now = datetime.now()
+        hr = now.hour + now.minute / 60.0
+        sunset = obs.sunset or 17.0
+        sunrise = obs.sunrise or 7.0
+        offset = get_param(matrix, self.regelkreis, 'reset_nach_sunset_h', 1.0)
+        start = sunset + offset
+
+        # Fenster liegt über Mitternacht: start (z.B. 18:30) → sunrise (z.B. 7:00)
+        if start >= 24:
+            start -= 24
+            return hr >= start or hr < sunrise
+        if hr >= start:
+            return True  # Abend-Teil (z.B. 18:30–24:00)
+        if hr < sunrise:
+            return True  # Nacht-Teil (0:00–sunrise)
+        return False
+
+    def _soc_weicht_ab(self, obs: ObsState, matrix: dict) -> bool:
+        """Prüfe ob SOC-Werte vom Komfort-Bereich abweichen."""
+        komfort_min = get_param(matrix, self.regelkreis, 'komfort_min_pct', 25)
+        komfort_max = get_param(matrix, self.regelkreis, 'komfort_max_pct', 75)
+
+        if obs.soc_min is not None and obs.soc_min != komfort_min:
+            return True
+        if obs.soc_max is not None and obs.soc_max != komfort_max:
+            return True
+        if obs.soc_mode is not None and obs.soc_mode != 'manual':
+            return True
+        return False
+
+    def bewerte(self, obs: ObsState, matrix: dict) -> int:
+        if not ist_aktiv(matrix, self.regelkreis):
+            return 0
+
+        if not self._im_reset_fenster(obs, matrix):
+            return 0
+
+        if not self._soc_weicht_ab(obs, matrix):
+            return 0  # SOC schon bei Komfort → kein Handlungsbedarf
+
+        return get_score_gewicht(matrix, self.regelkreis)  # 70
+
+    def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
+        komfort_min = get_param(matrix, self.regelkreis, 'komfort_min_pct', 25)
+        komfort_max = get_param(matrix, self.regelkreis, 'komfort_max_pct', 75)
+        aktionen = []
+
+        now_str = f"{datetime.now().hour}:{datetime.now().minute:02d}"
+
+        # SOC_MODE → manual (wenn nicht schon)
+        if obs.soc_mode != 'manual':
+            aktionen.append({
+                'tier': 2, 'aktor': 'batterie',
+                'kommando': 'set_soc_mode', 'wert': 'manual',
+                'grund': f'Komfort-Reset {now_str}: SOC_MODE auto→manual',
+            })
+
+        # SOC_MIN → komfort (wenn abweicht)
+        if obs.soc_min is not None and obs.soc_min != komfort_min:
+            aktionen.append({
+                'tier': 2, 'aktor': 'batterie',
+                'kommando': 'set_soc_min', 'wert': komfort_min,
+                'grund': (f'Komfort-Reset {now_str}: SOC_MIN {obs.soc_min}%→{komfort_min}% '
+                          f'(Tagesende, LFP-Schonung)'),
+            })
+
+        # SOC_MAX → komfort (wenn abweicht)
+        if obs.soc_max is not None and obs.soc_max != komfort_max:
+            aktionen.append({
+                'tier': 2, 'aktor': 'batterie',
+                'kommando': 'set_soc_max', 'wert': komfort_max,
+                'grund': (f'Komfort-Reset {now_str}: SOC_MAX {obs.soc_max}%→{komfort_max}% '
+                          f'(Tagesende, LFP-Schonung)'),
+            })
+
+        # Modbus → auto (Limits aufheben, kein StorCtl_Mod bitfield)
+        # Wird NUR gesetzt wenn aktuell Modbus-Limits aktiv sind
+        if obs.storctl_mod is not None and obs.storctl_mod != 0:
+            aktionen.append({
+                'tier': 2, 'aktor': 'batterie',
+                'kommando': 'auto',
+                'grund': (f'Komfort-Reset {now_str}: Modbus StorCtl_Mod '
+                          f'{obs.storctl_mod}→0 (Limits aufheben)'),
+            })
+
+        if aktionen:
+            LOG.info(f"Komfort-Reset: {len(aktionen)} Aktion(en) — "
+                     f"SOC_MIN={obs.soc_min}→{komfort_min}, "
+                     f"SOC_MAX={obs.soc_max}→{komfort_max}, "
+                     f"Mode={obs.soc_mode}→manual")
+
         return aktionen
 
 
@@ -701,6 +842,9 @@ class RegelAbendEntladerate(Regel):
 
         phase, rate = self._get_phase(matrix)
         if phase is not None:
+            # Dedup: Bereits auf Zielrate → keine Aktion (vermeidet 500+ Log-Spam/Tag)
+            if obs.discharge_rate_pct is not None and abs(obs.discharge_rate_pct - rate) < 3:
+                return []
             return [{
                 'tier': 2, 'aktor': 'batterie',
                 'kommando': 'set_discharge_rate',
@@ -708,7 +852,9 @@ class RegelAbendEntladerate(Regel):
                 'grund': f'{phase.upper()}-Phase: Entladerate auf {rate}%',
             }]
 
-        # Tag → Automatik
+        # Tag → Automatik (dedup: nur wenn StorCtl_Mod != 0)
+        if obs.storctl_mod is not None and obs.storctl_mod == 0:
+            return []  # Bereits im Auto-Modus
         return [{
             'tier': 2, 'aktor': 'batterie',
             'kommando': 'auto',
@@ -1376,6 +1522,7 @@ class Engine:
         self._regeln = [
             RegelSocSchutz(),
             RegelTempSchutz(),
+            RegelKomfortReset(),
             RegelAbendEntladerate(),
             RegelMorgenSocMin(),
             RegelNachmittagSocMax(),
