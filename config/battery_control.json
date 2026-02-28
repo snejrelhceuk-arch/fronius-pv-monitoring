@@ -24,7 +24,8 @@
   "morgen_algorithmus": {
     "_doc": "SOC_MIN-Öffnung: Batterie entleeren bevor PV übernimmt",
     "aktiv": true,
-    "min_pv_prognose_kwh": 5.0,
+    "pv_ramp_schwelle_w": 500,
+    "_pv_ramp_doc": "★ HAUPTSTELLSCHRAUBE: Prognostizierte PV-Leistung 1h nach Sunrise muss diesen Wert [W] überschreiten, damit geöffnet wird. 500W ≈ Grundlast Haushalt. An trüben Tagen mit <500W wird NICHT geöffnet.",
     "uebernahme_schwelle": 0.8,
     "live_pv_schwelle_w": 500,
     "_live_pv_doc": "Wenn kein Übernahme-Stunde berechnet werden kann (schwache Prognose), warten wir bis Live-PV diesen Schwellwert überschreitet bevor SOC_MIN geöffnet wird",
