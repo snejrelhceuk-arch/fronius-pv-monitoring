@@ -550,20 +550,22 @@ def _morning_algorithm(cfg, state, strategy, hourly, power_hourly,
     """SOC_MIN Öffnung: Batterie entleeren bevor PV übernimmt.
 
     Wird ab Sonnenaufgang aufgerufen (caller prüft sunrise_hour).
-    Nur zwei Regeln:
-      A) Prognose < min_pv → NICHT öffnen (schlechter Tag)
-      B) SOC bereits < soc_min_open + 2 → nicht nötig
-    Sonst: sofort öffnen. Batterie entlädt nur durch realen Verbrauch,
-    PV-Anstieg kommt innerhalb ~30 Min nach Sunrise sicher.
+    Entscheidungskriterium: PV-Leistungs-Gradient nach Sunrise.
+    Wenn die prognostizierte PV-Leistung 1h nach Sunrise den Haushalt
+    versorgen kann (> Schwelle), wird sofort geöffnet.
     """
 
     morgen = cfg['morgen_algorithmus']
     grenzen = cfg['soc_grenzen']
     soc_min_default = grenzen['komfort_min']       # Komfort-Untergrenze (default 25%)
     soc_min_open = grenzen['stress_min']            # Stress-Untergrenze (default 5%)
-    min_pv = morgen.get('min_pv_prognose_kwh', 5.0)
 
-    LOG.info(f"── Morgen-Check: SOC={soc}%, Prognose={forecast_kwh:.0f} kWh, "
+    sunrise_h = strategy.get('sunrise_hour', 7.5)
+    # Schwelle: PV-Leistung 1h nach Sunrise muss Grundlast übernehmen können.
+    # Konfigurierbarer Wert, Default 500W ≈ typische Grundlast ohne Großverbraucher.
+    pv_ramp_schwelle_w = morgen.get('pv_ramp_schwelle_w', 500)
+
+    LOG.info(f"── Morgen-Check: SOC={soc}%, Sunrise={sunrise_h:.1f}h, "
              f"Komfort-Min={soc_min_default}% ──")
 
     # Bereits erledigt?
@@ -571,14 +573,25 @@ def _morning_algorithm(cfg, state, strategy, hourly, power_hourly,
         LOG.debug("morning_done — übersprungen")
         return
 
-    # REGEL A: Schlechter Tag → nicht öffnen
-    if forecast_kwh < min_pv and not force:
-        state['morning_done'] = True
-        reason = f"Nicht geöffnet: Prognose {forecast_kwh:.0f} kWh < {min_pv} kWh"
-        LOG.info(f"  ✗ {reason}")
-        log_action('morning_skip', 'soc_min', soc_min_default, soc_min_default,
-                   reason, forecast_kwh, cloud_avg, soc)
-        return
+    # REGEL A: PV-Rampe nach Sunrise prüfen
+    # Prognostizierte PV-Leistung 1h nach Sunrise aus hourly_profile (5-Min)
+    # oder power_hourly (stündlich) extrahieren.
+    pv_at_sunrise_plus1 = _get_pv_at_hour(hourly, power_hourly,
+                                           sunrise_h + 1.0)
+
+    if pv_at_sunrise_plus1 is not None:
+        if pv_at_sunrise_plus1 < pv_ramp_schwelle_w and not force:
+            state['morning_done'] = True
+            reason = (f"Nicht geöffnet: PV@Sunrise+1h = {pv_at_sunrise_plus1:.0f}W "
+                      f"< {pv_ramp_schwelle_w}W Schwelle")
+            LOG.info(f"  ✗ {reason}")
+            log_action('morning_skip', 'soc_min', soc_min_default, soc_min_default,
+                       reason, forecast_kwh, cloud_avg, soc)
+            return
+        LOG.info(f"  ✓ PV@Sunrise+1h = {pv_at_sunrise_plus1:.0f}W "
+                 f"≥ {pv_ramp_schwelle_w}W — Rampe OK")
+    else:
+        LOG.warning("  ⚠ PV-Rampe nicht berechenbar — öffne trotzdem")
 
     # REGEL B: Batterie schon nahe am Ziel → nicht nötig
     if soc is not None and soc < soc_min_open + 2 and not force:
@@ -586,7 +599,7 @@ def _morning_algorithm(cfg, state, strategy, hourly, power_hourly,
         LOG.info(f"  ✗ {reason}")
         return
 
-    # → ÖFFNEN (sofort, kein Timing-Gate)
+    # → ÖFFNEN
     settings = inverter.get_current_settings()
     old_min = settings['soc_min'] if settings else soc_min_default
 
@@ -599,13 +612,63 @@ def _morning_algorithm(cfg, state, strategy, hourly, power_hourly,
 
     if ok:
         state['morning_done'] = True
+        pv_str = f"{pv_at_sunrise_plus1:.0f}W" if pv_at_sunrise_plus1 else "?"
         reason = (f"Geöffnet: {old_min}%→{soc_min_open}%, "
-                  f"Prognose {forecast_kwh:.0f} kWh, SOC={soc:.0f}%")
+                  f"PV@SR+1h={pv_str}, SOC={soc:.0f}%")
         LOG.info(f"  ✓ {reason}")
         log_action('morning_open', 'soc_min', old_min, soc_min_open,
                    reason, forecast_kwh, cloud_avg, soc)
     else:
         LOG.error("  ✗ SOC_MIN setzen fehlgeschlagen!")
+
+
+def _get_pv_at_hour(hourly, power_hourly, target_hour):
+    """Prognostizierte PV-Leistung [W] zu einer bestimmten Stunde.
+
+    Sucht zuerst im feingranularen hourly_profile (5-Min, Feld 'p'),
+    dann Fallback auf power_hourly (stündlich, Feld 'total_ac').
+    Nimmt den nächsten verfügbaren Zeitpunkt (±15 Min Toleranz).
+    """
+    from datetime import datetime
+
+    # ★ Bevorzugt: hourly_profile (5-Min-Auflösung, Feld 'p')
+    if hourly:
+        best_p = None
+        best_diff = 999
+        for h in hourly:
+            ts = h.get('ts')
+            p = h.get('p')
+            if ts is None or p is None:
+                continue
+            t = datetime.fromtimestamp(ts)
+            h_dec = t.hour + t.minute / 60.0
+            diff = abs(h_dec - target_hour)
+            if diff < best_diff:
+                best_diff = diff
+                best_p = p
+        if best_p is not None and best_diff < 0.25:  # ±15 Min
+            return best_p
+
+    # Fallback: power_hourly (stündlich, Feld 'total_ac')
+    if power_hourly:
+        best_ac = None
+        best_diff = 999
+        for h in power_hourly:
+            hr = h.get('hour')
+            if hr is None:
+                t = h.get('time', '')
+                try:
+                    hr = int(t[11:13]) + int(t[14:16]) / 60.0
+                except (ValueError, IndexError):
+                    continue
+            diff = abs(float(hr) - target_hour)
+            if diff < best_diff:
+                best_diff = diff
+                best_ac = h.get('total_ac', 0) or 0
+        if best_ac is not None and best_diff < 0.75:  # ±45 Min (stündlich)
+            return best_ac
+
+    return None
 
 
 def _find_takeover_hour(hourly, morgen_cfg, power_hourly=None):
