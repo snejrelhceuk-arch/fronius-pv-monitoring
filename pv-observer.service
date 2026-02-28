@@ -2,6 +2,7 @@
 Description=PV-System Automation Observer (3-Tier Beobachtungsservice)
 After=network-online.target pv-collector.service
 Wants=network-online.target
+Conflicts=pv-automation.service
 StartLimitIntervalSec=600
 StartLimitBurst=10
 

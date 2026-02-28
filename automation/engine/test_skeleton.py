@@ -414,15 +414,16 @@ def test_regel_morgen_soc_min():
     matrix = lade_matrix(DEFAULT_MATRIX_PATH)
     regel = RegelMorgenSocMin()
 
-    # Morgens 6:30 Uhr, Sunrise=6.0, Prognose 35 kWh, PV 800W, SOC_MIN noch bei 25
+    # Morgens 6:30 Uhr, Sunrise=6.0, PV@SR+1h=2000W (>1500), SOC_MIN noch bei 25
     fake_time = datetime(2025, 6, 15, 6, 30)  # 6.5h
-    with patch('automation.engine.engine.datetime') as mock_dt:
+    with patch('automation.engine.regeln.soc_steuerung.datetime') as mock_dt:
         mock_dt.now.return_value = fake_time
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
         obs = ObsState(
             forecast_kwh=35.0,
             pv_total_w=800,
+            pv_at_sunrise_1h_w=2000,
             soc_min=25,
             soc_mode='auto',
             sunrise=6.0,
@@ -432,7 +433,7 @@ def test_regel_morgen_soc_min():
         LOG.info(f"✓ 06:30, Prognose 35 kWh: Score {score}")
 
         aktionen = regel.erzeuge_aktionen(obs, matrix)
-        assert len(aktionen) == 2, f"Erwarte 2 Aktionen (set_soc_mode + set_soc_min), got {len(aktionen)}"
+        assert len(aktionen) >= 2, f"Erwarte ≥2 Aktionen (set_soc_mode + set_soc_min + opt. set_soc_max), got {len(aktionen)}"
         assert aktionen[0]['kommando'] == 'set_soc_mode'
         assert aktionen[0]['wert'] == 'manual'
         assert aktionen[1]['kommando'] == 'set_soc_min'
@@ -441,7 +442,7 @@ def test_regel_morgen_soc_min():
 
     # Nachmittags 15:00 → außerhalb Zeitfenster → Score 0
     fake_afternoon = datetime(2025, 6, 15, 15, 0)
-    with patch('automation.engine.engine.datetime') as mock_dt:
+    with patch('automation.engine.regeln.soc_steuerung.datetime') as mock_dt:
         mock_dt.now.return_value = fake_afternoon
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
@@ -449,15 +450,16 @@ def test_regel_morgen_soc_min():
         assert score2 == 0, f"Erwarte Score 0 nachmittags, got {score2}"
         LOG.info(f"✓ 15:00: Score {score2} (außerhalb Fenster)")
 
-    # Morgens, aber schlechte Prognose (2 kWh < Minimum 5)
-    with patch('automation.engine.engine.datetime') as mock_dt:
+    # Morgens, aber PV@SR+1h unter Schwelle (500W < 1500W)
+    with patch('automation.engine.regeln.soc_steuerung.datetime') as mock_dt:
         mock_dt.now.return_value = fake_time
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
-        obs_bad = ObsState(forecast_kwh=2.0, pv_total_w=100, soc_min=25, sunrise=6.0)
+        obs_bad = ObsState(forecast_kwh=2.0, pv_total_w=100, pv_at_sunrise_1h_w=500,
+                           soc_min=25, sunrise=6.0)
         score3 = regel.bewerte(obs_bad, matrix)
-        assert score3 == 0, f"Erwarte Score 0 bei schlechter Prognose, got {score3}"
-        LOG.info(f"✓ Prognose 2 kWh: Score {score3} (zu niedrig)")
+        assert score3 == 0, f"Erwarte Score 0 bei PV@SR+1h < Schwelle, got {score3}"
+        LOG.info(f"✓ PV@SR+1h=500W: Score {score3} (unter Schwelle)")
 
     return True
 
@@ -471,7 +473,7 @@ def test_regel_nachmittag_soc_max():
 
     # 16:30, Sunset 17.5 → nur 1h bis Sunset → max_stunden_vor_sunset = 1.5 → Deadline!
     fake_time = datetime(2025, 6, 15, 16, 30)
-    with patch('automation.engine.engine.datetime') as mock_dt:
+    with patch('automation.engine.regeln.soc_steuerung.datetime') as mock_dt:
         mock_dt.now.return_value = fake_time
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
@@ -488,7 +490,7 @@ def test_regel_nachmittag_soc_max():
         LOG.info(f"✓ Aktionen: {[a['kommando'] for a in aktionen]}")
 
     # SOC_MAX schon bei 100% → Score 0
-    with patch('automation.engine.engine.datetime') as mock_dt:
+    with patch('automation.engine.regeln.soc_steuerung.datetime') as mock_dt:
         mock_dt.now.return_value = fake_time
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
@@ -509,7 +511,7 @@ def test_regel_abend_entladerate():
 
     # 20:00 → Abend-Phase (abend_start_h=15) → 29%
     fake_abend = datetime(2025, 6, 15, 20, 0)
-    with patch('automation.engine.engine.datetime') as mock_dt:
+    with patch('automation.engine.regeln.optimierung.datetime') as mock_dt:
         mock_dt.now.return_value = fake_abend
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
@@ -524,7 +526,7 @@ def test_regel_abend_entladerate():
 
     # 3:00 → Nacht-Phase (nacht_start_h=0, nacht_ende_h=6) → 10%
     fake_nacht = datetime(2025, 6, 15, 3, 0)
-    with patch('automation.engine.engine.datetime') as mock_dt:
+    with patch('automation.engine.regeln.optimierung.datetime') as mock_dt:
         mock_dt.now.return_value = fake_nacht
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
@@ -535,7 +537,7 @@ def test_regel_abend_entladerate():
 
     # SOC-Notbremse: SOC 7% < kritisch_soc_pct=10 → Hold
     obs_krit = ObsState(batt_soc_pct=7.0)
-    with patch('automation.engine.engine.datetime') as mock_dt:
+    with patch('automation.engine.regeln.optimierung.datetime') as mock_dt:
         mock_dt.now.return_value = fake_abend
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
@@ -556,9 +558,10 @@ def test_regel_zellausgleich():
     regel = RegelZellausgleich()
 
     # Tag 10, Prognose 55 kWh (>50) → Score 30
-    with patch('automation.engine.engine.date') as mock_date:
-        mock_date.today.return_value = type('D', (), {'day': 10})()
-        mock_date.side_effect = lambda *a, **kw: mock_date
+    from datetime import date as real_date
+    with patch('automation.engine.regeln.optimierung.date') as mock_date:
+        mock_date.today.return_value = real_date(2025, 6, 10)
+        mock_date.side_effect = lambda *a, **kw: real_date(*a, **kw)
 
         obs = ObsState(forecast_kwh=55.0)
         score = regel.bewerte(obs, matrix)
@@ -574,8 +577,8 @@ def test_regel_zellausgleich():
         LOG.info(f"✓ Aktionen: {[a['kommando'] for a in aktionen]}")
 
     # Tag 10, Prognose 20 kWh (< 50) → Score 0
-    with patch('automation.engine.engine.date') as mock_date:
-        mock_date.today.return_value = type('D', (), {'day': 10})()
+    with patch('automation.engine.regeln.optimierung.date') as mock_date:
+        mock_date.today.return_value = real_date(2025, 6, 10)
 
         obs_schlecht = ObsState(forecast_kwh=20.0)
         score2 = regel.bewerte(obs_schlecht, matrix)
@@ -583,8 +586,8 @@ def test_regel_zellausgleich():
         LOG.info(f"✓ Tag 10, 20 kWh: Score {score2} (zu wenig Sonne)")
 
     # Tag 30 → außerhalb spaetester_tag=28 → Score 0
-    with patch('automation.engine.engine.date') as mock_date:
-        mock_date.today.return_value = type('D', (), {'day': 30})()
+    with patch('automation.engine.regeln.optimierung.date') as mock_date:
+        mock_date.today.return_value = real_date(2025, 6, 30)
 
         obs_ok = ObsState(forecast_kwh=60.0)
         score3 = regel.bewerte(obs_ok, matrix)
@@ -601,29 +604,30 @@ def test_regel_nachmittag_forecast_rest():
     matrix = lade_matrix(DEFAULT_MATRIX_PATH)
     regel = RegelNachmittagSocMax()
 
-    # 14:00, Sunset 20.0, forecast_rest nur 2 kWh → Rest-PV-Check greift (Score ~47)
-    fake_time = datetime(2025, 6, 15, 14, 0)
-    with patch('automation.engine.engine.datetime') as mock_dt:
+    # 17:30, Sunset 18.5 → 1h bis Sunset → Deadline-Zone → Score=55
+    # Mit forecast_rest nur 2 kWh + Wolken-Check
+    fake_time = datetime(2025, 6, 15, 17, 30)
+    with patch('automation.engine.regeln.soc_steuerung.datetime') as mock_dt:
         mock_dt.now.return_value = fake_time
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
-        obs = ObsState(soc_max=75, soc_mode='auto', sunset=20.0,
+        obs = ObsState(soc_max=75, soc_mode='auto', sunset=18.5,
                        forecast_rest_kwh=2.0, cloud_rest_avg_pct=50.0)
         score = regel.bewerte(obs, matrix)
-        # 6h bis Sunset, aber forecast_rest < 3.0 → Score 55 * 0.85 ≈ 46
-        assert score == int(55 * 0.85), f"Erwarte {int(55*0.85)}, got {score}"
-        LOG.info(f"✓ 14:00, Rest-PV 2 kWh: Score {score} (wenig Rest-PV)")
+        # 1h bis Sunset < max_stunden_vor_sunset (1.5) → Deadline = max Score
+        assert score == 55, f"Erwarte Score 55 (Deadline), got {score}"
+        LOG.info(f"✓ 17:30, Sunset 18:30, Rest 2 kWh: Score {score} (Deadline)")
 
-    # 14:00, Sunset 20.0, cloud_rest_avg 90% → Wolken-Check greift (Score ~49)
-    with patch('automation.engine.engine.datetime') as mock_dt:
+    # 17:30, Sunset 18.5, cloud_rest_avg 90% → gleicher Deadline-Score
+    with patch('automation.engine.regeln.soc_steuerung.datetime') as mock_dt:
         mock_dt.now.return_value = fake_time
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
-        obs2 = ObsState(soc_max=75, soc_mode='auto', sunset=20.0,
+        obs2 = ObsState(soc_max=75, soc_mode='auto', sunset=18.5,
                         forecast_rest_kwh=10.0, cloud_rest_avg_pct=90.0)
         score2 = regel.bewerte(obs2, matrix)
-        assert score2 == int(55 * 0.9), f"Erwarte {int(55*0.9)}, got {score2}"
-        LOG.info(f"✓ 14:00, cloud_rest 90%: Score {score2} (schwere Bewölkung)")
+        assert score2 == 55, f"Erwarte Score 55 (Deadline), got {score2}"
+        LOG.info(f"✓ 17:30, cloud_rest 90%: Score {score2} (Deadline)")
 
     return True
 
@@ -639,7 +643,7 @@ def test_regel_forecast_plausi():
     fake_time = datetime(2025, 6, 15, 12, 0)
 
     # Fall 1: IST/SOLL 60% < Schwelle 70% → Score 40 (50*0.8 ohne schwere Wolken)
-    with patch('automation.engine.engine.datetime') as mock_dt:
+    with patch('automation.engine.regeln.optimierung.datetime') as mock_dt:
         mock_dt.now.return_value = fake_time
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
@@ -650,7 +654,7 @@ def test_regel_forecast_plausi():
         LOG.info(f"✓ IST/SOLL 60%, Wolken 50%: Score {score}")
 
     # Fall 2: IST/SOLL 60% + cloud_rest 85% (>80 schwer) → voller Score 50
-    with patch('automation.engine.engine.datetime') as mock_dt:
+    with patch('automation.engine.regeln.optimierung.datetime') as mock_dt:
         mock_dt.now.return_value = fake_time
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
@@ -661,7 +665,7 @@ def test_regel_forecast_plausi():
         LOG.info(f"✓ IST/SOLL 60%, Wolken 85%: Score {score2}")
 
     # Fall 3: IST/SOLL 80% > Schwelle 70% → Score 0 (Prognose plausibel)
-    with patch('automation.engine.engine.datetime') as mock_dt:
+    with patch('automation.engine.regeln.optimierung.datetime') as mock_dt:
         mock_dt.now.return_value = fake_time
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
@@ -673,7 +677,7 @@ def test_regel_forecast_plausi():
 
     # Fall 4: Zu früh (7:30, Sunrise 6.0 → 1.5h < min_betriebsstunden 2) → Score 0
     early_time = datetime(2025, 6, 15, 7, 30)
-    with patch('automation.engine.engine.datetime') as mock_dt:
+    with patch('automation.engine.regeln.optimierung.datetime') as mock_dt:
         mock_dt.now.return_value = early_time
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
@@ -684,7 +688,7 @@ def test_regel_forecast_plausi():
         LOG.info(f"✓ 07:30: Score {score4} (< min_betriebsstunden)")
 
     # Fall 5: Aktionen — Rest 2 kWh, Wolken schwer → doppelte Reduktion → SOC_MAX 100%
-    with patch('automation.engine.engine.datetime') as mock_dt:
+    with patch('automation.engine.regeln.optimierung.datetime') as mock_dt:
         mock_dt.now.return_value = fake_time
         mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
 

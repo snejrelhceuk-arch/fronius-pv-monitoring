@@ -158,12 +158,32 @@ def init_ram_db(db_path: str = RAM_DB_PATH) -> sqlite3.Connection:
     check_same_thread=False: Observer nutzt Threads für Tier-2/3 Collectors,
     die alle auf dieselbe Connection schreiben. Zugriff wird vom Observer
     per Lock serialisiert (_obs_lock).
+
+    Bei korrupter DB (z.B. nach OOM-Kill): Datei löschen und neu anlegen.
+    Da /dev/shm tmpfs ist, ist das immer sicher.
     """
-    conn = sqlite3.connect(db_path, timeout=5.0, check_same_thread=False)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    conn.executescript(_SCHEMA)
-    conn.commit()
+    try:
+        conn = sqlite3.connect(db_path, timeout=5.0, check_same_thread=False)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        conn.executescript(_SCHEMA)
+        conn.commit()
+    except sqlite3.DatabaseError as e:
+        LOG.warning(f"RAM-DB korrupt ({e}) — lösche und erstelle neu: {db_path}")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        # Datei(en) löschen (Haupt-DB + WAL + SHM)
+        for suffix in ('', '-wal', '-shm'):
+            p = db_path + suffix
+            if os.path.exists(p):
+                os.remove(p)
+        conn = sqlite3.connect(db_path, timeout=5.0, check_same_thread=False)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        conn.executescript(_SCHEMA)
+        conn.commit()
     LOG.info(f"RAM-DB initialisiert: {db_path}")
     return conn
 
