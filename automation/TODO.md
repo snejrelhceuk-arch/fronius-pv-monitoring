@@ -1,6 +1,6 @@
 # TODO — Automation Projekt
 
-> Stand: 2026-02-14
+> Stand: 2026-03-01
 
 ---
 
@@ -110,7 +110,7 @@
 | 3 | WPM-Version der SIK 11 TES | **Am Gerät prüfen!** LCD=L/H, Touch=M | **🚨 DRINGEND** |
 | 4 | Brandschutzklappen-Antriebe | Spannung? Strom? Typ? | Offen |
 | 5 | Lüftungsgerät-Steuerung | 0-10V? Relais? Modbus? | Offen |
-| 6 | Fritz!DECT in Übergangsphase? | Sofort nutzbar, aber Einschränkungen | ✅ **Produktiv seit 2026-03-01** |
-| 7 | 24V**AC**-Versorgung für TRIACs | Trafo nötig, oder besser Eight Relays HAT? | **Eight Relays HAT!** |
-| 8 | LWPM 410 vs. NWPM | ✅ **LWPM 410 bestellt!** RS485 via MEGA-BAS |
-| 9 | TRIACs nutzbar? | 24VDC-Bus → TRIACs funktionieren NICHT ohne AC-Quelle | **Eight Relays HAT bevorzugt** |
+| 6 | ~~Fritz!DECT in Übergangsphase?~~ | ~~Sofort nutzbar~~ | ✅ Entschieden — Produktiv seit 2026-03-01 |
+| 7 | ~~24VAC-Versorgung für TRIACs~~ | ~~Trafo nötig, oder Eight Relays HAT?~~ | ✅ Entschieden — Eight Relays HAT |
+| 8 | ~~LWPM 410 vs. NWPM~~ | ~~RS485 via MEGA-BAS~~ | ✅ Entschieden — LWPM 410 bestellt |
+| 9 | ~~TRIACs nutzbar?~~ | ~~24VDC-Bus → funktionieren NICHT ohne AC~~ | ✅ Entschieden — Eight Relays HAT bevorzugt |
