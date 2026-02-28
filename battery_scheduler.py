@@ -546,11 +546,19 @@ def run_scheduler(args):
 
 def _morning_algorithm(cfg, state, strategy, hourly, power_hourly,
                        inverter, soc, forecast_kwh, cloud_avg, force=False):
-    """SOC_MIN Öffnung: Batterie entleeren bevor PV übernimmt."""
+    """SOC_MIN Öffnung: Batterie entleeren bevor PV übernimmt.
+
+    Vereinfacht 2026-02-28: Nur zwei Regeln entscheiden.
+      A) Prognose < min_pv → NICHT öffnen (schlechter Tag)
+      B) SOC bereits < soc_min_open + 2 → nicht nötig
+    Alles andere (Takeover-Timing, Live-PV-Check, max_vorlauf) entfernt:
+    Bei guter Prognose wird sofort geöffnet. Die Batterie entlädt sich
+    nur durch realen Verbrauch, PV-Anstieg kommt sicher.
+    """
 
     morgen = cfg['morgen_algorithmus']
     grenzen = cfg['soc_grenzen']
-    soc_min_default = grenzen['komfort_min']       # Komfort-Untergrenze (default 20%)
+    soc_min_default = grenzen['komfort_min']       # Komfort-Untergrenze (default 25%)
     soc_min_open = grenzen['stress_min']            # Stress-Untergrenze (default 5%)
     min_pv = morgen.get('min_pv_prognose_kwh', 5.0)
 
@@ -571,72 +579,13 @@ def _morning_algorithm(cfg, state, strategy, hourly, power_hourly,
                    reason, forecast_kwh, cloud_avg, soc)
         return
 
-    # REGEL B: Batterie schon tief genug → Öffnung nicht nötig
-    # Vergleich gegen soc_min_open (5%), nicht soc_min_default (25%)!
-    # Bug-Fix 2026-02-28: Vorher wurde gegen soc_min_default + 2 (= 27%)
-    # geprüft → SOC 24% wurde als "nah genug" angesehen und das Öffnen
-    # auf 5% wurde NIE ausgelöst.
+    # REGEL B: Batterie schon nahe am Ziel → nicht nötig
     if soc is not None and soc < soc_min_open + 2 and not force:
         reason = f"SOC={soc:.1f}% bereits nah an Ziel-Minimum {soc_min_open}% — nicht nötig"
         LOG.info(f"  ✗ {reason}")
-        # Nicht morning_done setzen — nächste Prüfung in 15 min
         return
 
-    # Takeover-Zeitpunkt berechnen (echte AC-Prognose bevorzugt)
-    takeover_hour = _find_takeover_hour(hourly, morgen, power_hourly)
-
-    if takeover_hour is None and not force:
-        # PV wird laut Prognose nie den vollen Verbrauch decken.
-        # Wenn Komfort-Min bereits gleich Stress-Min, keine Änderung nötig
-        if soc_min_default <= soc_min_open:
-            state['morning_done'] = True
-            reason = f"Komfort-Min bereits auf {soc_min_default}% — keine Änderung nötig"
-            LOG.info(f"  ≡ {reason}")
-            return
-
-        # ★ Statt sofort zu öffnen: Prüfe ob LIVE-PV bereits nennenswert ist.
-        # An schwachen Tagen erst öffnen wenn tatsächlich ~500W+ PV-Leistung
-        # anliegt — dann lohnt sich das Öffnen für Spitzenlasten.
-        live_pv_w = _get_live_pv_power()
-        live_threshold_w = morgen.get('live_pv_schwelle_w', 500)
-
-        if live_pv_w is not None and live_pv_w < live_threshold_w:
-            LOG.info(f"  ⏳ Kein Takeover, Live-PV={live_pv_w:.0f}W "
-                     f"< {live_threshold_w}W — warte")
-            return
-        elif live_pv_w is not None:
-            LOG.info(f"  ✓ Kein Takeover aber Live-PV={live_pv_w:.0f}W "
-                     f"≥ {live_threshold_w}W — öffne jetzt")
-        else:
-            LOG.info(f"  ⚠ Kein Takeover, Live-PV unbekannt — öffne trotzdem")
-
-    # Open-Time berechnen (Rückwärtsrechnung)
-    now = datetime.now()
-    current_hour = now.hour + now.minute / 60.0
-
-    if takeover_hour is not None:
-        drain_kwh = (soc_min_default - soc_min_open) / 100.0 * cfg['batterie']['kapazitaet_kwh']
-        drain_rate = _get_drain_rate(cfg, morgen)
-        drain_hours = drain_kwh / drain_rate if drain_rate > 0 else 2.0
-
-        # ★ Konservativ: max_vorlauf_h begrenzt, wie früh vor Takeover
-        # wir öffnen.  Verhindert Netzbezug bei schwachem PV-Morgen
-        # (z.B. Wärmepumpe startet bevor PV einspringt).
-        max_vorlauf = morgen.get('max_vorlauf_h', 0.5)
-        open_time_ideal = takeover_hour - drain_hours   # volle Entleerung
-        open_time_capped = takeover_hour - max_vorlauf   # konservativ
-        open_time = max(open_time_ideal, open_time_capped)
-
-        if current_hour < open_time and not force:
-            LOG.info(f"  ⏳ Warte: open_time={open_time:.1f}h "
-                     f"(Takeover={takeover_hour:.1f}h, Vorlauf={max_vorlauf:.1f}h, "
-                     f"Drain theoretisch={drain_hours:.1f}h)")
-            return
-    else:
-        drain_hours = 0
-        open_time = current_hour
-
-    # → ÖFFNEN
+    # → ÖFFNEN (sofort, kein Timing-Gate)
     settings = inverter.get_current_settings()
     old_min = settings['soc_min'] if settings else soc_min_default
 
@@ -649,10 +598,8 @@ def _morning_algorithm(cfg, state, strategy, hourly, power_hourly,
 
     if ok:
         state['morning_done'] = True
-        takeover_str = f"{takeover_hour:.1f}h" if takeover_hour else "N/A"
         reason = (f"Geöffnet: {old_min}%→{soc_min_open}%, "
-                  f"Prognose {forecast_kwh:.0f} kWh, Takeover {takeover_str}, "
-                  f"Drain {drain_hours:.1f}h")
+                  f"Prognose {forecast_kwh:.0f} kWh, SOC={soc:.0f}%")
         LOG.info(f"  ✓ {reason}")
         log_action('morning_open', 'soc_min', old_min, soc_min_open,
                    reason, forecast_kwh, cloud_avg, soc)
