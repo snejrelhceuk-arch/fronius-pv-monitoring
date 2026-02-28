@@ -508,12 +508,13 @@ def run_scheduler(args):
         nachmittag_cfg = cfg.get('nachmittag_algorithmus', {})
 
         # --- Morgen-Algorithmus ---
-        morning_start = morgen_cfg.get('fenster_start_stunde', 5)
+        # Öffnung ab Sonnenaufgang (verschiebt sich jahreszeitlich automatisch).
+        # Vorher (fenster_start_stunde=5) war viel zu früh → Entladung im Dunkeln.
         sunrise_h = strategy.get('sunrise_hour', 7.5)
         morning_end = sunrise_h + morgen_cfg.get('fenster_stunden_nach_sunrise', 3)
 
         if (morgen_cfg.get('aktiv', True)
-                and morning_start <= current_hour <= morning_end
+                and sunrise_h <= current_hour <= morning_end
                 and (not state['morning_done'] or args.force_morning)):
             _morning_algorithm(cfg, state, strategy, hourly, power_hourly,
                                inverter, soc, forecast_kwh, cloud_avg,
@@ -548,12 +549,12 @@ def _morning_algorithm(cfg, state, strategy, hourly, power_hourly,
                        inverter, soc, forecast_kwh, cloud_avg, force=False):
     """SOC_MIN Öffnung: Batterie entleeren bevor PV übernimmt.
 
-    Vereinfacht 2026-02-28: Nur zwei Regeln entscheiden.
+    Wird ab Sonnenaufgang aufgerufen (caller prüft sunrise_hour).
+    Nur zwei Regeln:
       A) Prognose < min_pv → NICHT öffnen (schlechter Tag)
       B) SOC bereits < soc_min_open + 2 → nicht nötig
-    Alles andere (Takeover-Timing, Live-PV-Check, max_vorlauf) entfernt:
-    Bei guter Prognose wird sofort geöffnet. Die Batterie entlädt sich
-    nur durch realen Verbrauch, PV-Anstieg kommt sicher.
+    Sonst: sofort öffnen. Batterie entlädt nur durch realen Verbrauch,
+    PV-Anstieg kommt innerhalb ~30 Min nach Sunrise sicher.
     """
 
     morgen = cfg['morgen_algorithmus']
