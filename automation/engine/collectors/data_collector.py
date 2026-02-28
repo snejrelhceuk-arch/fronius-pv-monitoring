@@ -139,6 +139,9 @@ class DataCollector:
 
     # ── Batterie Modbus (StorCtl_Mod, Lade-/Entladerate) ────
 
+    _modbus_fail_count: int = 0
+    _MODBUS_MAX_FAIL_LOG = 5  # Log-Flood-Schutz: nur alle 5 Fehler loggen
+
     def _collect_battery_modbus(self, obs: ObsState):
         """StorCtl_Mod, OutWRte, InWRte direkt per Modbus M124 lesen."""
         try:
@@ -152,10 +155,14 @@ class DataCollector:
                     app_config.INVERTER_IP, app_config.MODBUS_PORT
                 )
                 if not self._modbus_client.connect():
-                    LOG.warning("Modbus-Verbindung für StorCtl fehlgeschlagen")
+                    self._modbus_fail_count += 1
+                    if self._modbus_fail_count <= 1 or self._modbus_fail_count % self._MODBUS_MAX_FAIL_LOG == 0:
+                        LOG.warning(f"Modbus-Verbindung für StorCtl fehlgeschlagen "
+                                    f"(Versuch #{self._modbus_fail_count})")
                     self._modbus_client = None
                     return
                 time.sleep(0.1)
+                self._modbus_fail_count = 0  # Reset nach erfolgreicher Verbindung
 
             client = self._modbus_client
 
@@ -174,7 +181,15 @@ class DataCollector:
                 obs.charge_rate_pct = inwrte
 
         except Exception as e:
-            LOG.warning(f"Modbus StorCtl collect: {e}")
+            self._modbus_fail_count += 1
+            if self._modbus_fail_count <= 1 or self._modbus_fail_count % self._MODBUS_MAX_FAIL_LOG == 0:
+                LOG.warning(f"Modbus StorCtl collect: {e} (Fehler #{self._modbus_fail_count})")
+            # Socket sauber schließen vor Reset
+            if self._modbus_client:
+                try:
+                    self._modbus_client.close()
+                except Exception:
+                    pass
             self._modbus_client = None
 
     # ── SOC_MIN/MAX/MODE aus Fronius HTTP API ────────────────

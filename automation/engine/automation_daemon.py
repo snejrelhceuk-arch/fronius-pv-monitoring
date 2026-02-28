@@ -29,6 +29,7 @@ import sqlite3
 import sys
 import threading
 import time
+import atexit
 from datetime import datetime, date
 from pathlib import Path
 from typing import Optional
@@ -171,12 +172,11 @@ class AutomationDaemon:
                 with self._obs_lock:
                     self._forecast_collector.collect(self._obs)
 
-                # ObsState in RAM-DB schreiben wenn sich Forecast geändert hat
-                with self._obs_lock:
+                    # ObsState in RAM-DB schreiben wenn sich Forecast geändert hat
                     if self._obs.forecast_ts:
                         write_obs_state(self._db_conn, self._obs)
 
-                write_heartbeat(self._db_conn, 'daemon.forecast')
+                    write_heartbeat(self._db_conn, 'daemon.forecast')
 
             except Exception as e:
                 LOG.error(f"Tier-3 'forecast' Fehler: {e}", exc_info=True)
@@ -233,7 +233,7 @@ class AutomationDaemon:
         try:
             with self._obs_lock:
                 write_obs_state(self._db_conn, self._obs)
-            write_heartbeat(self._db_conn, 'automation_daemon')
+                write_heartbeat(self._db_conn, 'automation_daemon')
         except Exception as e:
             LOG.error(f"RAM-DB Schreibfehler: {e}")
             # Verbindung neu aufbauen
@@ -304,6 +304,11 @@ class AutomationDaemon:
         """Sauberes Shutdown."""
         LOG.info("Daemon wird gestoppt...")
         self._running = False
+        # Forecast-Thread sauber beenden (max 5s warten)
+        if self._forecast_thread and self._forecast_thread.is_alive():
+            self._forecast_thread.join(timeout=5)
+            if self._forecast_thread.is_alive():
+                LOG.warning("Forecast-Thread reagiert nicht — wird beim Exit beendet")
         if self._engine:
             self._engine.close()
         if self._actuator:
@@ -375,7 +380,7 @@ def engine_vorausschau() -> list[dict]:
         from automation.engine.param_matrix import lade_matrix
         matrix = lade_matrix(DEFAULT_MATRIX_PATH)
 
-        from automation.engine.engine import (
+        from automation.engine.regeln import (
             RegelSocSchutz, RegelTempSchutz, RegelKomfortReset,
             RegelAbendEntladerate,
             RegelMorgenSocMin, RegelNachmittagSocMax, RegelZellausgleich,
@@ -461,8 +466,22 @@ def main():
                     print(f"          {a['grund'][:80]}")
         return
 
-    # PID-File schreiben
+    # PID-File Stale-Check und Schreiben
+    if PID_FILE.exists():
+        try:
+            old_pid = int(PID_FILE.read_text().strip())
+            os.kill(old_pid, 0)  # Prüfe ob Prozess lebt
+            print(f"FEHLER: Automation-Daemon läuft bereits (PID {old_pid})")
+            sys.exit(1)
+        except (ProcessLookupError, ValueError):
+            LOG.warning(f"Stale PID-File entfernt (PID {PID_FILE.read_text().strip()})")
+            PID_FILE.unlink(missing_ok=True)
+        except PermissionError:
+            print(f"FEHLER: Prozess PID {old_pid} existiert, aber keine Berechtigung")
+            sys.exit(1)
+
     PID_FILE.write_text(str(os.getpid()))
+    atexit.register(lambda: PID_FILE.unlink(missing_ok=True))
 
     # Signal-Handler
     daemon = AutomationDaemon(dry_run=args.dry_run, once=args.once)
