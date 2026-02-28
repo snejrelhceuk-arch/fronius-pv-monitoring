@@ -20,17 +20,12 @@ import hashlib
 import json
 import logging
 import os
-import sys
 import time
 import urllib.request
 import xml.etree.ElementTree as ET
 from typing import Optional
 
-# Projekt-Root in sys.path
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
-if _PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, _PROJECT_ROOT)
-
 import config
 from automation.engine.aktoren.aktor_batterie import AktorBase
 

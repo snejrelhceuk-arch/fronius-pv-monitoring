@@ -14,15 +14,11 @@ import json
 import logging
 import os
 import sqlite3
-import sys
 import time
 from datetime import datetime
 from typing import Optional
 
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-if _PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, _PROJECT_ROOT)
-
 from automation.engine.aktoren.aktor_batterie import AktorBatterie, AktorBase
 from automation.engine.aktoren.aktor_wattpilot import AktorWattpilot
 from automation.engine.aktoren.aktor_fritzdect import AktorFritzDECT
