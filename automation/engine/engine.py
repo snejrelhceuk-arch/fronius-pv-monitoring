@@ -41,6 +41,14 @@ from automation.engine.param_matrix import (
 LOG = logging.getLogger('engine')
 
 
+def _first_not_none(*values, default=None):
+    """Erstes Element das nicht None ist (0 und 0.0 sind gültig!)."""
+    for v in values:
+        if v is not None:
+            return v
+    return default
+
+
 # ═════════════════════════════════════════════════════════════
 # Regel-Interface
 # ═════════════════════════════════════════════════════════════
@@ -98,11 +106,15 @@ class RegelSocSchutz(Regel):
         drossel_wert = get_regelkreis(matrix, self.regelkreis).get(
             'parameter', {}).get('drosselung_unter_pct', {}).get('aktor_wert', 50)
 
-        if obs.batt_soc_pct < stop:
+        soc = obs.batt_soc_pct
+        if soc is None:
+            return []  # Kein SOC verfügbar → keine Aktion
+
+        if soc < stop:
             return [{
                 'tier': 2, 'aktor': 'batterie',
                 'kommando': 'stop_discharge',
-                'grund': f'SOC-Schutz: {obs.batt_soc_pct:.1f}% < {stop}% → Entladung STOP',
+                'grund': f'SOC-Schutz: {soc:.1f}% < {stop}% → Entladung STOP',
             }]
         return [{
             'tier': 2, 'aktor': 'batterie',
@@ -142,6 +154,8 @@ class RegelTempSchutz(Regel):
         return 0
 
     def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
+        if obs.batt_temp_max_c is None:
+            return []  # Keine Temperatur verfügbar → keine Aktion
         for temp, key in self.STUFEN:
             if obs.batt_temp_max_c >= temp:
                 pct = get_param(matrix, self.regelkreis, key, 100)
@@ -238,7 +252,7 @@ class RegelMorgenSocMin(Regel):
         Bewölkt → auto (Fronius entscheidet, weniger Eingriff sinnvoll)
         """
         wolken_schwer = get_param(matrix, self.regelkreis, 'wolken_schwer_pct', 70)
-        cloud = obs.cloud_rest_avg_pct or obs.cloud_now_pct or obs.cloud_avg_pct or 50
+        cloud = _first_not_none(obs.cloud_rest_avg_pct, obs.cloud_now_pct, obs.cloud_avg_pct, default=50)
         if cloud > wolken_schwer:
             return 'auto'
         return 'manual'
@@ -345,13 +359,14 @@ class RegelMorgenSocMin(Regel):
 
         # ── HALTE-MODUS: SOC_MIN schon offen → nur Score halten ──
         if obs.soc_min is not None and obs.soc_min <= stress:
+            soc_str = f"{obs.batt_soc_pct:.1f}" if obs.batt_soc_pct is not None else "?"
             LOG.info(f"morgen_soc_min: HALTE SOC_MIN={obs.soc_min}% "
-                     f"(SOC={obs.batt_soc_pct:.1f}% → weiter entladen)")
+                     f"(SOC={soc_str}% → weiter entladen)")
             return []
 
         # ── ÖFFNUNGS-MODUS ──
         # Wolkenabhängig: manual (5–75%) oder auto
-        cloud = obs.cloud_rest_avg_pct or obs.cloud_now_pct or obs.cloud_avg_pct or 50
+        cloud = _first_not_none(obs.cloud_rest_avg_pct, obs.cloud_now_pct, obs.cloud_avg_pct, default=50)
         wolken_schwer = get_param(matrix, self.regelkreis, 'wolken_schwer_pct', 70)
         modus = self._bestimme_modus(obs, matrix)
         offset = self._berechne_offset_min(obs, matrix)
@@ -1016,8 +1031,8 @@ class RegelWattpilotBattSchutz(Regel):
 
         drosselung = get_param(matrix, self.regelkreis, 'soc_drosselung_ab_pct', 50)
         puffer = get_param(matrix, self.regelkreis, 'soc_min_puffer_pct', 5)
-        soc_min_eff = obs.soc_min or 10
-        soc = obs.batt_soc_pct or 50
+        soc_min_eff = obs.soc_min if obs.soc_min is not None else 10
+        soc = obs.batt_soc_pct if obs.batt_soc_pct is not None else 50
         rate_red = get_param(matrix, self.regelkreis, 'entladerate_reduziert_pct', 30)
         soc_min_netz = get_param(matrix, self.regelkreis, 'soc_min_netz_pct', 25)
 
@@ -1219,8 +1234,8 @@ class RegelHeizpatrone(Regel):
         rest_h = max(0, sunset - now_h)
         rest_kwh = obs.forecast_rest_kwh or 0
         p_batt = obs.batt_power_w or 0
-        soc = obs.batt_soc_pct or 50
-        soc_max_eff = obs.soc_max or 75
+        soc = obs.batt_soc_pct if obs.batt_soc_pct is not None else 50
+        soc_max_eff = obs.soc_max if obs.soc_max is not None else 75
 
         # ── HP ist EIN → Notaus prüfen (IMMER, auch aktiv=False) ──
         if obs.heizpatrone_aktiv:

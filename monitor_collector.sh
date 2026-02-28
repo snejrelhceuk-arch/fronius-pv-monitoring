@@ -7,7 +7,8 @@ source /home/admin/Dokumente/PVAnlage/pv-system/scripts/role_guard.sh 2>/dev/nul
 
 LOG_FILE="/home/admin/Dokumente/PVAnlage/pv-system/collector_monitor.log"
 # Nur collector.py zählen, NICHT wattpilot_collector.py
-PROCESS_COUNT=$(pgrep -afc "python3 collector.py|python3 .*/collector.py")
+# Pattern: 'python3 ' gefolgt von optionalem Pfad + 'collector.py' (kein _ davor)
+PROCESS_COUNT=$(pgrep -fc "python3 (./)?collector\.py" || true)
 
 timestamp() {
     date '+%Y-%m-%d %H:%M:%S'
@@ -20,11 +21,11 @@ if [ "$PROCESS_COUNT" -gt 1 ]; then
     
     # Stoppe nur collector.py (nicht wattpilot_collector.py) und lasse systemd neu starten
     echo "$(timestamp) → Stoppe collector.py Prozesse, systemd startet neu..." >> "$LOG_FILE"
-    pkill -9 -f "python3 collector.py|python3 .*/collector.py"
+    pkill -9 -f "python3 (./)?collector\.py" || true
     sleep 2
     
     # Prüfe ob systemd automatisch neugestartet hat
-    NEW_COUNT=$(pgrep -fc "python3 collector.py|python3 .*/collector.py")
+    NEW_COUNT=$(pgrep -fc "python3 (./)?collector\.py" || true)
     if [ "$NEW_COUNT" -eq 1 ]; then
         echo "$(timestamp) ✓ Einzelner Prozess wiederhergestellt" >> "$LOG_FILE"
     else

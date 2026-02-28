@@ -48,7 +48,9 @@ class AktorWattpilot(AktorBase):
 
     _KOMMANDOS = {
         'set_max_current': '_cmd_set_max_current',
-        'pause_charging': '_cmd_pause_charging',
+        'set_power':       '_cmd_set_power',
+        'reduce_power':    '_cmd_reduce_power',
+        'pause_charging':  '_cmd_pause_charging',
         'resume_charging': '_cmd_resume_charging',
     }
 
@@ -58,13 +60,17 @@ class AktorWattpilot(AktorBase):
         methode = self._KOMMANDOS.get(kommando)
         if not methode:
             return {'ok': False, 'kommando': kommando,
-                    'fehler': f"Unbekanntes Kommando: {kommando}"}
+                    'detail': f"Unbekanntes Kommando: {kommando}"}
 
+        # Interface-Kompatibilität: 'wert' (Engine) → 'parameter' (intern)
         params = aktion.get('parameter', {})
+        if not params and 'wert' in aktion:
+            params = {'wert': aktion['wert']}
         LOG.info(f"WattPilot {kommando}: {params} (dry_run={self.dry_run})")
 
         if self.dry_run:
-            return {'ok': True, 'kommando': kommando, 'dry_run': True}
+            return {'ok': True, 'kommando': kommando, 'dry_run': True,
+                    'detail': '[DRY-RUN]'}
 
         return getattr(self, methode)(params)
 
@@ -95,3 +101,26 @@ class AktorWattpilot(AktorBase):
         # TODO Phase 2: wattpilot_api.resume()
         LOG.warning("WattPilot resume_charging — STUB, nicht ausgeführt")
         return {'ok': True, 'kommando': 'resume_charging', 'stub': True}
+
+    def _cmd_set_power(self, params: dict) -> dict:
+        """Leistungslimit setzen (Tier-1 Netzüberlast ALARM).
+
+        Konvertiert Watt in Ampere (3-phasig 230V) und begrenzt auf 6–16A.
+        """
+        watt = params.get('wert', 1400)
+        # 3-phasig: A = W / (3 × 230V)
+        ampere = max(MIN_CURRENT_A, min(MAX_CURRENT_A, int(watt / 690)))
+        LOG.warning(f"WattPilot set_power({watt}W → {ampere}A) — STUB")
+        # TODO Phase 2: wattpilot_api.set_max_current(ampere)
+        return {'ok': True, 'kommando': 'set_power', 'stub': True,
+                'ampere': ampere, 'detail': f'{watt}W → {ampere}A (Tier-1)'}
+
+    def _cmd_reduce_power(self, params: dict) -> dict:
+        """Leistung reduzieren (Tier-1 Netzüberlast WARNUNG).
+
+        Reduziert auf Standard-Minimum (6A).
+        """
+        LOG.warning("WattPilot reduce_power — STUB, nicht ausgeführt")
+        # TODO Phase 2: wattpilot_api.set_max_current(MIN_CURRENT_A)
+        return {'ok': True, 'kommando': 'reduce_power', 'stub': True,
+                'ampere': MIN_CURRENT_A, 'detail': f'Reduziert auf {MIN_CURRENT_A}A (Tier-1)'}

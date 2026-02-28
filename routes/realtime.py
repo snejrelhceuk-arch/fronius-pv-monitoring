@@ -8,7 +8,6 @@ import sqlite3
 import logging
 import os
 import time
-from pathlib import Path
 from datetime import date
 from flask import Blueprint, jsonify, request
 from routes.helpers import get_db_connection, ram_db_lock, DB_FILE

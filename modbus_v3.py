@@ -15,12 +15,9 @@ import time
 import socket
 import threading
 import struct
-import math
 import sqlite3
-import json
 import sys
 import os
-import datetime
 import requests
 from collections import deque
 import logging

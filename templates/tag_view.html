@@ -841,7 +841,6 @@
             // Prognose: Spezial-Chart, kein Frequenz-Chart
             if (chartData.forecast) {
                 createForecastChart();
-                window.addEventListener('resize', function() { chart.resize(); });
                 return;
             }
             
@@ -860,12 +859,6 @@
             }
             
             console.log('Haupt-Chart erstellt');
-            
-            // Responsive resize
-            window.addEventListener('resize', function() {
-                chart.resize();
-                frequencyChart.resize();
-            });
         }
         
         // ═══════════════════════════════════════════════════════
@@ -1344,7 +1337,7 @@
                     data: td('p_direct_ertrag')
                 },
                 {
-                    name: 'Batterieladung PV',
+                    name: 'Batterieladung (PV)',
                     type: 'line',
                     stack: 'total',
                     smooth: true,
