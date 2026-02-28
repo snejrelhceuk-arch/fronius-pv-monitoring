@@ -81,7 +81,7 @@ class AktorBatterie(AktorBase):
         """Modbus-Client mit Lazy-Init."""
         if self._modbus_client is None:
             try:
-                from battery_control import ModbusClient, IP_ADDRESS, PORT
+                from automation.battery_control import ModbusClient, IP_ADDRESS, PORT
                 client = ModbusClient(IP_ADDRESS, PORT)
                 if client.connect():
                     self._modbus_client = client
@@ -183,7 +183,7 @@ class AktorBatterie(AktorBase):
 
     def _cmd_set_charge_rate(self, percent) -> bool:
         """Laderate setzen [0-100%]."""
-        from battery_control import set_charge_rate
+        from automation.battery_control import set_charge_rate
         return self._retry(
             f'Laderate={percent}%', self._get_modbus, '_modbus_client',
             lambda c: set_charge_rate(c, percent)
@@ -191,7 +191,7 @@ class AktorBatterie(AktorBase):
 
     def _cmd_set_discharge_rate(self, percent) -> bool:
         """Entladerate setzen [0-100%]."""
-        from battery_control import set_discharge_rate
+        from automation.battery_control import set_discharge_rate
         return self._retry(
             f'Entladerate={percent}%', self._get_modbus, '_modbus_client',
             lambda c: set_discharge_rate(c, percent)
@@ -199,7 +199,7 @@ class AktorBatterie(AktorBase):
 
     def _cmd_hold(self, _=None) -> bool:
         """Batterie halten."""
-        from battery_control import hold_battery
+        from automation.battery_control import hold_battery
         return self._retry(
             'Hold', self._get_modbus, '_modbus_client',
             lambda c: hold_battery(c)
@@ -207,7 +207,7 @@ class AktorBatterie(AktorBase):
 
     def _cmd_auto(self, _=None) -> bool:
         """Automatik (StorCtl_Mod=0)."""
-        from battery_control import auto_battery
+        from automation.battery_control import auto_battery
         return self._retry(
             'Auto', self._get_modbus, '_modbus_client',
             lambda c: auto_battery(c)
@@ -215,7 +215,7 @@ class AktorBatterie(AktorBase):
 
     def _cmd_stop_discharge(self, _=None) -> bool:
         """Tier-1 Sofort-Aktion: Entladerate=0%."""
-        from battery_control import set_discharge_rate
+        from automation.battery_control import set_discharge_rate
         return self._retry(
             'STOP-Entladung', self._get_modbus, '_modbus_client',
             lambda c: set_discharge_rate(c, 0)
@@ -223,7 +223,7 @@ class AktorBatterie(AktorBase):
 
     def _cmd_stop_charge(self, _=None) -> bool:
         """Tier-1 Sofort-Aktion: Laderate=0%."""
-        from battery_control import set_charge_rate
+        from automation.battery_control import set_charge_rate
         return self._retry(
             'STOP-Ladung', self._get_modbus, '_modbus_client',
             lambda c: set_charge_rate(c, 0)
@@ -254,7 +254,7 @@ class AktorBatterie(AktorBase):
 
     def _cmd_grid_charge(self, enabled) -> bool:
         """Netzladung via Modbus."""
-        from battery_control import set_grid_charge
+        from automation.battery_control import set_grid_charge
         val = bool(enabled) if not isinstance(enabled, bool) else enabled
         return self._retry(
             f'Netzladung={"EIN" if val else "AUS"}',
@@ -278,7 +278,7 @@ class AktorBatterie(AktorBase):
             return {'ok': False, 'grund': 'Modbus nicht verbunden'}
 
         try:
-            from battery_control import read_raw, read_int16_scaled, REG
+            from automation.battery_control import read_raw, read_int16_scaled, REG
 
             if kommando in ('set_charge_rate', 'stop_charge'):
                 soll = wert if wert is not None else 0

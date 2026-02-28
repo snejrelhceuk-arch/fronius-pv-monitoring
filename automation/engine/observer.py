@@ -190,7 +190,7 @@ class BatteryCollector:
     def collect_modbus(self, obs: ObsState):
         """Modbus M124 Register lesen → ObsState aktualisieren."""
         try:
-            from battery_control import (
+            from automation.battery_control import (
                 ModbusClient, REG,
                 read_raw, read_int16_scaled as read_scaled,
             )
