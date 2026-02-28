@@ -4,7 +4,6 @@ Blueprint: Erzeuger-APIs (DC-Strings F1, SmartMeter F2/F3).
 Enthält: /api/erzeuger/tag, /api/erzeuger/monat, /api/erzeuger/jahr, /api/erzeuger/gesamt
 """
 import re
-import sqlite3
 import logging
 from datetime import datetime
 from flask import Blueprint, jsonify, request
@@ -21,6 +20,7 @@ def api_erzeuger_tag():
     F2 = P_F2 (SmartMeter)
     F3 = P_F3 (SmartMeter)
     """
+    conn = None
     try:
         date_param = request.args.get('date')  # Format: YYYY-MM-DD
         if date_param and not re.match(r'^\d{4}-\d{2}-\d{2}$', date_param):
@@ -149,6 +149,9 @@ def api_erzeuger_tag():
     except Exception as e:
         logging.error(f"Erzeuger-Tag Fehler: {e}")
         return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
 
 
 @bp.route('/api/erzeuger/monat')

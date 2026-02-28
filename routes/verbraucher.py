@@ -5,7 +5,6 @@ Enthält: /api/verbraucher, /api/verbraucher/tag, /api/verbraucher/monat,
          /api/verbraucher/jahr, /api/verbraucher/gesamt
 """
 import re
-import sqlite3
 import logging
 from datetime import datetime
 from flask import Blueprint, jsonify, request

@@ -3,7 +3,8 @@
 # Für systemd ExecStartPre und Monitoring
 
 # Nur collector.py zählen, NICHT wattpilot_collector.py
-PROCESS_COUNT=$(pgrep -fc "python3 collector.py|python3 .*/collector.py")
+# Pattern: 'python3 ' gefolgt von optionalem Pfad + 'collector.py' (kein _ davor)
+PROCESS_COUNT=$(pgrep -fc "python3 (./)?collector\.py" || true)
 
 if [ "$PROCESS_COUNT" -gt 1 ]; then
     echo "⚠️  WARNUNG: $PROCESS_COUNT collector.py Prozesse gefunden!"
@@ -13,7 +14,7 @@ if [ "$PROCESS_COUNT" -gt 1 ]; then
     if [ "$1" == "--kill-duplicates" ]; then
         echo ""
         echo "Stoppe alle und lasse systemd neu starten..."
-        pkill -9 -f "python3 collector.py|python3 .*/collector.py"
+        pkill -9 -f "python3 (./)?collector\.py" || true
         sleep 1
         exit 0
     fi
