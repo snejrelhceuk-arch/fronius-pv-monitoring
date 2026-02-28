@@ -561,9 +561,9 @@ def _morning_algorithm(cfg, state, strategy, hourly, power_hourly,
     soc_min_open = grenzen['stress_min']            # Stress-Untergrenze (default 5%)
 
     sunrise_h = strategy.get('sunrise_hour', 7.5)
-    # Schwelle: PV-Leistung 1h nach Sunrise muss Grundlast übernehmen können.
-    # Konfigurierbarer Wert, Default 500W ≈ typische Grundlast ohne Großverbraucher.
-    pv_ramp_schwelle_w = morgen.get('pv_ramp_schwelle_w', 500)
+    # Schwelle: PV-Leistung 1h nach Sunrise muss Grundlast + Batterie-Überschuss liefern.
+    # Konfigurierbarer Wert, Default 1500W ≈ ~1kW Haushalt + 500W Lade-Überschuss.
+    pv_ramp_schwelle_w = morgen.get('pv_ramp_schwelle_w', 1500)
 
     LOG.info(f"── Morgen-Check: SOC={soc}%, Sunrise={sunrise_h:.1f}h, "
              f"Komfort-Min={soc_min_default}% ──")
