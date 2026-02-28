@@ -11,8 +11,8 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
             background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-            height: 100vh;
-            overflow: hidden;
+            min-height: 100vh;
+            overflow-y: auto;
             display: flex;
             flex-direction: column;
         }
@@ -229,6 +229,46 @@
         .ba-active .ba-status-icon { color: #10b981; }
         .ba-pending .ba-status-icon { color: #fbbf24; }
         .ba-skipped .ba-status-icon { color: rgba(255,255,255,0.25); }
+        /* ══════ HP-Automation Zeile ══════ */
+        .hp-auto-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 3px 8px;
+            font-size: 11px;
+            font-weight: 500;
+            color: rgba(255,255,255,0.5);
+            border-bottom: 1px solid rgba(251,146,60,0.15);
+        }
+        .hp-auto-row .hp-header {
+            color: #fb923c;
+            font-weight: 700;
+            font-size: 11.5px;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+        .hp-auto-row .hp-state {
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .hp-auto-row .hp-state-ein { color: #fb923c; }
+        .hp-auto-row .hp-state-aus { color: rgba(255,255,255,0.35); }
+        .hp-auto-row .hp-detail {
+            color: rgba(255,255,255,0.40);
+            font-size: 10px;
+            white-space: normal;
+            word-break: break-word;
+            flex: 1;
+        }
+        .hp-auto-row .hp-bursts {
+            color: rgba(251,146,60,0.6);
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+        .hp-auto-row .hp-engine {
+            font-size: 10px;
+            white-space: nowrap;
+        }
         .inverter-temps {
             display: flex;
             justify-content: center;
@@ -313,6 +353,8 @@
             .batt-auto-table { font-size: 10px; }
             .batt-auto-table .ba-grund { max-width: 160px; font-size: 9px; }
             .batt-auto-table .ba-phase { width: 62px; }
+            .hp-auto-row { font-size: 10px; gap: 6px; padding: 3px 4px; flex-wrap: wrap; }
+            .hp-auto-row .hp-detail { font-size: 9px; max-width: 200px; }
         }
 
         /* Querformat-Hinweis (nur Portrait + schmal) */
@@ -560,6 +602,14 @@
                     </tr>
                 </tbody>
             </table>
+            <!-- HP-Automation: Heizpatrone Status -->
+            <div class="hp-auto-row" id="hpAutoRow">
+                <span class="hp-header">🔥 HP</span>
+                <span class="hp-state hp-state-aus" id="hpState">AUS</span>
+                <span class="hp-detail" id="hpDetail">—</span>
+                <span class="hp-bursts" id="hpBursts"></span>
+                <span class="hp-engine" id="hpEngine"></span>
+            </div>
             <div class="inverter-temps" id="inverterTemps">
                 <span class="it-label">F1</span>
                 <span>Gehäuse <span class="it-val" id="it-intern">--</span>°</span>
@@ -1150,6 +1200,58 @@
             }
 
             tbody.innerHTML = rows;
+
+            // ── HP-Automation (Heizpatrone via Fritz!DECT) ───────
+            const hpStatus = d.hp_status || {};
+            const hpAktionen = d.hp_aktionen || [];
+            const hpBursts = d.hp_bursts_heute || 0;
+            const hpState = document.getElementById('hpState');
+            const hpDetail = document.getElementById('hpDetail');
+            const hpBurstsEl = document.getElementById('hpBursts');
+            const hpEngine = document.getElementById('hpEngine');
+
+            if (hpStatus.zustand === 'EIN') {
+                const pw = hpStatus.power_w != null ? ` ${hpStatus.power_w} W` : '';
+                hpState.textContent = `EIN${pw}`;
+                hpState.className = 'hp-state hp-state-ein';
+            } else if (hpStatus.zustand === 'AUS') {
+                hpState.textContent = 'AUS';
+                hpState.className = 'hp-state hp-state-aus';
+            } else {
+                hpState.textContent = hpStatus.zustand || '?';
+                hpState.className = 'hp-state hp-state-aus';
+            }
+
+            // Detail: letzter Schaltvorgang + Grund
+            if (hpAktionen.length > 0) {
+                const last = hpAktionen[0];
+                const cmdLabel = last.kommando === 'hp_ein' ? 'EIN' : 'AUS';
+                const grundShort = (last.grund || '').substring(0, 80);
+                hpDetail.textContent = `${last.ts} → ${cmdLabel}${grundShort ? ' · ' + grundShort : ''}`;
+            } else {
+                hpDetail.textContent = 'Keine Schaltvorgänge (24h)';
+            }
+
+            // Burst-Counter
+            hpBurstsEl.textContent = hpBursts > 0 ? `${hpBursts}× Burst` : '';
+
+            // Engine-Vorausschau: nächste HP-Aktion
+            const hpVorschau = (vorausschau || []).find(v => v.regel === 'heizpatrone');
+            if (hpVorschau) {
+                const hpCmds = (hpVorschau.aktionen || []).map(a => {
+                    const cl = a.kommando === 'hp_ein' ? 'EIN' : a.kommando === 'hp_aus' ? 'AUS' : a.kommando;
+                    return cl;
+                }).join(', ');
+                const hpGrund = (hpVorschau.aktionen && hpVorschau.aktionen[0])
+                    ? (hpVorschau.aktionen[0].grund || '').substring(0, 50) : '';
+                const scoreColor = hpVorschau.score >= 50 ? '#fb923c' : '#fbbf24';
+                hpEngine.innerHTML = `<span style="color:${scoreColor}">[${hpVorschau.score}] ${hpCmds}</span>`;
+                if (hpGrund && !hpDetail.textContent.includes(hpGrund.substring(0, 20))) {
+                    hpDetail.textContent += ` ⏭ ${hpGrund}`;
+                }
+            } else {
+                hpEngine.textContent = '';
+            }
 
         } catch(e) { console.warn('BatteryDetail:', e); }
     }

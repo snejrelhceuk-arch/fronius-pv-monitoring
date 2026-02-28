@@ -1,8 +1,8 @@
 # Automation-Architektur — Schicht C
 
 **Erstellt:** 2026-02-22  
-**Letzte Überarbeitung:** 2026-02-28 (Engine produktiv: Cascade, Fuzzy-Scoring, Verbraucher-Kontext)  
-**Status:** Produktiv (Phase 2 abgeschlossen — Batterie läuft über pv-automation.service)  
+**Letzte Überarbeitung:** 2026-03-01 (HP-Automation produktiv: Fritz!DECT, SOC-Notaus, flow_view)  
+**Status:** Produktiv (Phase 2 abgeschlossen — Batterie + HP laufen über pv-automation.service)  
 **Vorgänger:** `battery_scheduler.py` (monolithisch, nur Batterie — deaktiviert 2026-02-28)  
 **ABC-Referenz:** [ABC_TRENNUNGSPOLICY.md](ABC_TRENNUNGSPOLICY.md)
 
@@ -148,10 +148,12 @@ def whiptail_menu(title, items):
 | Datei | Inhalt | Existiert |
 |-------|--------|-----------|
 | `config/battery_control.json` | Batterie SOC-Grenzen, Algorithmen | ✅ ja |
+| `config/fritz_config.json` | Fritz!Box-IP, AIN, HP-Leistung | ✅ ja |
+| `config/soc_param_matrix.json` | Regelkreis-Parameter (10 Kreise, 17 HP-Param.) | ✅ ja |
+| `.secrets` | Credentials (FRITZ_USER/PASS, FRONIUS_PASS, etc.) | ✅ ja |
 | `config/automation_global.json` | Prioritäten, Saisonprofil, Modus | ❌ neu |
 | `config/device_ev.json` | E-Auto-Parameter, Urgency-Tabelle | ❌ neu |
 | `config/device_wp.json` | WP SG-Ready, Modbus-Register, Temps | ❌ neu |
-| `config/device_heizpatrone.json` | Schwellwerte, Hysterese, Pausenzeit | ❌ neu |
 | `config/device_klima.json` | Außentemp-Schwellen, Leistung | ❌ neu |
 | `config/device_lueftung.json` | Frostgrenzen, Stufenlogik | ❌ neu |
 | `config/schutzregeln.json` | Determinierende Schwellen (Übertemp, Überlast) | ❌ neu |
@@ -349,8 +351,17 @@ Konkret:
   Engine beim nächsten Durchlauf ob Score-Anpassungen nötig sind
   (z.B. EV-Score → 0 bei Überlast).
 
-Die Tier-1-Sofort-Aktionen (Heizpatrone AUS, EV drosseln) laufen
+Die Tier-1-Sofort-Aktionen (EV drosseln) laufen
 **unabhängig** von der Engine direkt im Observer → Actuator Bypass.
+
+> **HP-Notaus — Architekturentscheidung (2026-03-01):**
+> Der HP-Entladeschutz läuft bewusst im **Engine fast-cycle (60 s)**,
+> nicht im Observer (Tier-1, 10 s). Begründung: Die HP ist ein thermischer
+> Verbraucher — 1–5 Minuten Reaktionszeit sind akzeptabel. Der Notaus ist
+> **immer aktiv** (auch bei `aktiv: false`) und nutzt SOC-abhängige
+> Schwellen: SOC ≥ 90% toleriert bis −1000 W, SOC < 90% → sofort AUS.
+> Konfigurierbar via `notaus_soc_schwelle_pct` und `notaus_entladung_hochsoc_w`
+> in `config/soc_param_matrix.json`.
 
 ### Entscheidungsablauf pro Zyklus
 

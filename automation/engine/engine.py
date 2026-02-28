@@ -1060,6 +1060,259 @@ class RegelWattpilotBattSchutz(Regel):
 
 
 # ═════════════════════════════════════════════════════════════
+# HEIZPATRONE (P2 — Steuerung, fast)
+# ═════════════════════════════════════════════════════════════
+
+class RegelHeizpatrone(Regel):
+    """Heizpatrone (2 kW) via Fritz!DECT — prognosegesteuerte Burst-Strategie.
+
+    Trigger: Batterie-Ladeleistung (nicht P_PV, da Nulleinspeiser abregelt).
+    Planung: Forecast rest_kwh + rest_h.
+    Schutz:  Netzbezug → AUS, Batterie-Entladung → AUS.
+
+    4 Phasen:
+      Phase 1: Vormittags — gute Prognose → HP darf EV+Batt verzögern
+      Phase 2: Mittags    — Batterie lädt kräftig → Burst wenn Prognose reicht
+      Phase 3: Nachmittag — nur bei deutlichem Überschuss, konservativ
+      Phase 4: Abend      — HARD BLOCK (Batterie für Nacht füllen)
+
+    Parametermatrix: regelkreise.heizpatrone
+    Siehe: automation/STRATEGIEN.md §2.6
+    """
+
+    name = 'heizpatrone'
+    regelkreis = 'heizpatrone'
+    aktor = 'fritzdect'
+    engine_zyklus = 'fast'
+
+    def __init__(self):
+        super().__init__()
+        self._burst_start: float = 0    # Zeitpunkt letztes Einschalten
+        self._burst_ende: float = 0     # geplantes Burst-Ende (Epoch)
+        self._letzte_aus: float = 0     # Zeitpunkt letztes Ausschalten
+
+    def bewerte(self, obs: ObsState, matrix: dict) -> int:
+        """Score für HP-Steuerung.
+
+        Zwei Pfade:
+          1. Notaus (HP AUS) — IMMER aktiv, auch bei aktiv=False
+             Schützt gegen Batterie-Entladung/Netzbezug/Phase 4.
+             Läuft im Engine fast-cycle (60s) — kein Tier-1 nötig.
+          2. Burst-EIN — nur bei aktiv=True (Strategie).
+        """
+        now_h = datetime.now().hour + datetime.now().minute / 60
+        sunset = obs.sunset or 17.0
+        rest_h = max(0, sunset - now_h)
+        p_batt = obs.batt_power_w
+        score = get_score_gewicht(matrix, self.regelkreis)  # 40
+
+        # ── Notaus-Pfad: IMMER aktiv (unabhängig von aktiv-Flag) ──
+        if obs.heizpatrone_aktiv:
+            notaus_netz = get_param(matrix, self.regelkreis, 'notaus_netzbezug_w', 200)
+            notaus_soc_schwelle = get_param(matrix, self.regelkreis, 'notaus_soc_schwelle_pct', 90)
+            notaus_entlade_hochsoc = get_param(matrix, self.regelkreis, 'notaus_entladung_hochsoc_w', -1000)
+            min_rest_h = get_param(matrix, self.regelkreis, 'min_rest_h', 2.0)
+            temp_max = get_param(matrix, self.regelkreis, 'speicher_temp_max_c', 78)
+
+            # Harte Abschalt-Bedingungen
+            if rest_h < min_rest_h:
+                return int(score * 1.5)  # 60 — Phase 4 HARD BLOCK
+
+            # SOC-abhängige Entlade-Schwelle:
+            #   SOC >= 90%: toleriere bis -1000W (konfigurierbar)
+            #   SOC <  90%: jede Entladung → AUS
+            if p_batt is not None and p_batt < 0:
+                soc_now = obs.batt_soc_pct or 0
+                if soc_now >= notaus_soc_schwelle:
+                    # Hoch-SOC: toleranter Schwellwert
+                    if p_batt < notaus_entlade_hochsoc:
+                        return int(score * 1.5)
+                else:
+                    # Unter Schwelle: jede Entladung → AUS
+                    return int(score * 1.5)
+            if obs.grid_power_w is not None and obs.grid_power_w > notaus_netz:
+                return int(score * 1.5)  # Netzbezug
+            if obs.ww_temp_c is not None and obs.ww_temp_c >= temp_max:
+                return int(score * 1.5)  # Übertemperatur
+
+            # Burst-Timer abgelaufen → ausschalten
+            if self._burst_ende > 0 and time.time() >= self._burst_ende:
+                return int(score * 1.2)
+
+            # Burst läuft noch → weiter (auch ohne aktiv=True)
+            if self._burst_ende > 0 and time.time() < self._burst_ende:
+                return score
+
+        # ── Burst-EIN-Pfad: nur bei aktiv=True ────────────────
+        if not ist_aktiv(matrix, self.regelkreis):
+            return 0
+
+        rest_kwh = obs.forecast_rest_kwh
+        soc = obs.batt_soc_pct
+        soc_max_eff = obs.soc_max or 75
+
+        # Kein Scoring ohne Basisdaten
+        if p_batt is None or rest_kwh is None or soc is None:
+            return 0
+
+        min_rest_h = get_param(matrix, self.regelkreis, 'min_rest_h', 2.0)
+
+        # Phase 4: HARD BLOCK — kein Burst starten
+        if rest_h < min_rest_h:
+            return 0
+
+        # WP-Speicher Übertemperatur — kein Burst
+        temp_max = get_param(matrix, self.regelkreis, 'speicher_temp_max_c', 78)
+        if obs.ww_temp_c is not None and obs.ww_temp_c >= temp_max:
+            return 0
+
+        # ── Hysterese: Mindestpause nach letztem Ausschalten ──
+        min_pause = get_param(matrix, self.regelkreis, 'min_pause_s', 300)
+        if (not obs.heizpatrone_aktiv and self._letzte_aus > 0
+                and (time.time() - self._letzte_aus) < min_pause):
+            return 0
+
+        # ── batt_rest_kwh: wieviel fehlt bis Batterie voll? ──
+        batt_rest_kwh = max(0, (soc_max_eff - soc) * 10.24 / 100)
+
+        # EV-Ladung prüfen
+        max_wp = get_param(matrix, self.regelkreis, 'max_wattpilot_w', 500)
+        ev_aktiv = (obs.ev_power_w or 0) > max_wp
+
+        # ── Phase 1: Vormittags (rest_h>5, gute Prognose) ────
+        min_lade_morgens = get_param(matrix, self.regelkreis, 'min_ladeleistung_morgens_w', 3000)
+        min_rest_kwh_morgens = get_param(matrix, self.regelkreis, 'min_rest_kwh_morgens', 20.0)
+        min_rest_h_morgens = get_param(matrix, self.regelkreis, 'min_rest_h_morgens', 5.0)
+
+        if rest_h > min_rest_h_morgens and rest_kwh > min_rest_kwh_morgens:
+            if p_batt > min_lade_morgens:
+                return score  # 40 — Burst erlaubt
+
+        # ── Phase 2+3: Mittags/Nachmittags ────────────────────
+        min_lade = get_param(matrix, self.regelkreis, 'min_ladeleistung_w', 5000)
+        min_rest = get_param(matrix, self.regelkreis, 'min_rest_kwh', 12.0)
+        reserve = get_param(matrix, self.regelkreis, 'batt_reserve_kwh', 2.0)
+
+        # Nachmittags spät: strengere Reserve
+        if rest_h < 3.0:
+            reserve = get_param(matrix, self.regelkreis, 'batt_reserve_nachmittag_kwh', 3.0)
+
+        if p_batt > min_lade and not ev_aktiv:
+            if rest_kwh > batt_rest_kwh + reserve:
+                return score
+
+        # Guter Tag (>min_rest_kwh) aber Batt lädt erst moderat (>min_lade)
+        if rest_kwh > min_rest and p_batt > min_lade:
+            return score
+
+        return 0
+
+    def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
+        """HP ein-/ausschalten: Notaus + Burst-Strategie.
+
+        Notaus (AUS) läuft IMMER — schützt Batterie/Netz.
+        Burst (EIN) nur bei aktiv=True.
+        Beides im Engine fast-cycle (60s).
+        """
+        now_h = datetime.now().hour + datetime.now().minute / 60
+        sunset = obs.sunset or 17.0
+        rest_h = max(0, sunset - now_h)
+        rest_kwh = obs.forecast_rest_kwh or 0
+        p_batt = obs.batt_power_w or 0
+        soc = obs.batt_soc_pct or 50
+        soc_max_eff = obs.soc_max or 75
+
+        # ── HP ist EIN → Notaus prüfen (IMMER, auch aktiv=False) ──
+        if obs.heizpatrone_aktiv:
+            notaus_grund = None
+            notaus_netz = get_param(matrix, self.regelkreis, 'notaus_netzbezug_w', 200)
+            notaus_soc_schwelle = get_param(matrix, self.regelkreis, 'notaus_soc_schwelle_pct', 90)
+            notaus_entlade_hochsoc = get_param(matrix, self.regelkreis, 'notaus_entladung_hochsoc_w', -1000)
+            min_rest_h = get_param(matrix, self.regelkreis, 'min_rest_h', 2.0)
+            temp_max = get_param(matrix, self.regelkreis, 'speicher_temp_max_c', 78)
+
+            if rest_h < min_rest_h:
+                notaus_grund = f'Phase 4: rest_h={rest_h:.1f} < {min_rest_h} → HARD BLOCK'
+            elif p_batt < 0:
+                soc_now = soc
+                if soc_now >= notaus_soc_schwelle:
+                    if p_batt < notaus_entlade_hochsoc:
+                        notaus_grund = (f'Batterie entlädt ({p_batt:.0f}W < {notaus_entlade_hochsoc}W) '
+                                        f'trotz SOC {soc_now:.0f}% ≥ {notaus_soc_schwelle}%')
+                else:
+                    notaus_grund = (f'Batterie entlädt ({p_batt:.0f}W) bei SOC '
+                                    f'{soc_now:.0f}% < {notaus_soc_schwelle}%')
+            elif obs.grid_power_w is not None and obs.grid_power_w > notaus_netz:
+                notaus_grund = f'Netzbezug ({obs.grid_power_w:.0f}W > {notaus_netz}W)'
+            elif obs.ww_temp_c is not None and obs.ww_temp_c >= temp_max:
+                notaus_grund = f'Übertemperatur ({obs.ww_temp_c:.0f}°C ≥ {temp_max}°C)'
+            elif self._burst_ende > 0 and time.time() >= self._burst_ende:
+                notaus_grund = f'Burst-Timer abgelaufen ({int((time.time() - self._burst_start) / 60)} Min)'
+
+            if notaus_grund:
+                self._letzte_aus = time.time()
+                self._burst_start = 0
+                self._burst_ende = 0
+                return [{
+                    'tier': 2, 'aktor': 'fritzdect',
+                    'kommando': 'hp_aus',
+                    'grund': f'HP AUS: {notaus_grund}',
+                }]
+
+            # HP läuft ohne Notaus-Grund → keine Aktion
+            return []
+
+        # ── HP ist AUS → prüfe ob Burst gestartet werden soll ─
+        batt_rest_kwh = max(0, (soc_max_eff - soc) * 10.24 / 100)
+        min_rest_h_morgens = get_param(matrix, self.regelkreis, 'min_rest_h_morgens', 5.0)
+        min_rest_kwh_morgens = get_param(matrix, self.regelkreis, 'min_rest_kwh_morgens', 20.0)
+        min_lade_morgens = get_param(matrix, self.regelkreis, 'min_ladeleistung_morgens_w', 3000)
+        min_lade = get_param(matrix, self.regelkreis, 'min_ladeleistung_w', 5000)
+        burst_lang = get_param(matrix, self.regelkreis, 'burst_dauer_lang_s', 1800)
+        burst_kurz = get_param(matrix, self.regelkreis, 'burst_dauer_kurz_s', 900)
+
+        burst_dauer = 0
+        grund = ''
+
+        # Phase 1: Vormittags mit guter Prognose
+        if rest_h > min_rest_h_morgens and rest_kwh > min_rest_kwh_morgens:
+            if p_batt > min_lade_morgens:
+                burst_dauer = burst_lang
+                grund = (f'Phase 1 (Vormittag): P_Batt={p_batt:.0f}W, '
+                         f'rest_kwh={rest_kwh:.1f}, rest_h={rest_h:.1f}')
+
+        # Phase 2: Mittags — Batterie lädt kräftig
+        if not burst_dauer and p_batt > min_lade:
+            reserve = get_param(matrix, self.regelkreis, 'batt_reserve_kwh', 2.0)
+            max_wp = get_param(matrix, self.regelkreis, 'max_wattpilot_w', 500)
+            ev_aktiv = (obs.ev_power_w or 0) > max_wp
+
+            if rest_kwh > batt_rest_kwh + reserve and not ev_aktiv:
+                burst_dauer = burst_lang if rest_kwh > min_rest_kwh_morgens else burst_kurz
+                grund = (f'Phase 2 (Mittag): P_Batt={p_batt:.0f}W, '
+                         f'rest_kwh={rest_kwh:.1f}, batt_rest={batt_rest_kwh:.1f}')
+
+        # Phase 3: Nachmittags spät — konservativ
+        if not burst_dauer and rest_h < 3.0 and rest_h >= min_rest_h:
+            reserve_nm = get_param(matrix, self.regelkreis, 'batt_reserve_nachmittag_kwh', 3.0)
+            if p_batt > min_lade and rest_kwh > batt_rest_kwh + reserve_nm:
+                burst_dauer = burst_kurz
+                grund = (f'Phase 3 (Nachmittag): P_Batt={p_batt:.0f}W, '
+                         f'rest_kwh={rest_kwh:.1f}, reserve={reserve_nm:.1f}')
+
+        if burst_dauer > 0:
+            self._burst_start = time.time()
+            self._burst_ende = time.time() + burst_dauer
+            return [{
+                'tier': 2, 'aktor': 'fritzdect',
+                'kommando': 'hp_ein',
+                'grund': f'HP EIN (Burst {burst_dauer // 60:.0f} Min): {grund}',
+            }]
+
+        return []
+
+
+# ═════════════════════════════════════════════════════════════
 # Engine
 # ═════════════════════════════════════════════════════════════
 
@@ -1115,6 +1368,7 @@ class Engine:
             RegelForecastPlausi(),
             RegelLaderateDynamisch(),
             RegelWattpilotBattSchutz(),
+            RegelHeizpatrone(),
         ]
         LOG.info(f"Regeln registriert: {[r.name for r in self._regeln]}")
 
@@ -1182,10 +1436,20 @@ class Engine:
             return []
 
         # 4. Schutz-Regeln und Optimierungs-Regeln trennen
-        #    Schutz-Regeln (name enthält 'schutz') werden ALLE ausgeführt,
-        #    Optimierung: nur der Gewinner (höchster Score).
-        schutz_scores = [(s, r) for s, r in scores if 'schutz' in r.name]
-        optim_scores  = [(s, r) for s, r in scores if 'schutz' not in r.name]
+        #    Schutz-Regeln werden ALLE ausgeführt (parallel-safe: versch. Aktoren),
+        #    Optimierung: nur der Gewinner pro Aktor-Cascade.
+        #    Schutz = Name enthält 'schutz' ODER Regel nutzt fremden Aktor
+        #    mit erhöhtem Score (= Notaus, z.B. heizpatrone→fritzdect).
+        def _ist_schutz(score, regel):
+            if 'schutz' in regel.name:
+                return True
+            # HP-Notaus: fritzdect-Aktor mit erhöhtem Score (>score_gewicht)
+            if regel.aktor == 'fritzdect' and score > get_score_gewicht(self._matrix, regel.regelkreis):
+                return True
+            return False
+
+        schutz_scores = [(s, r) for s, r in scores if _ist_schutz(s, r)]
+        optim_scores  = [(s, r) for s, r in scores if not _ist_schutz(s, r)]
 
         ergebnisse = []
 

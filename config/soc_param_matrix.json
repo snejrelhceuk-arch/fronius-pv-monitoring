@@ -1,7 +1,7 @@
 {
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
-  "_updated": "2026-02-27",
+  "_updated": "2026-02-28",
   "regelkreise": {
     "soc_schutz": {
       "_doc": "Sicherheitshalber: SOC-Grenzen nie verletzen",
@@ -635,6 +635,124 @@
       },
       "score_gewicht": 60,
       "engine_zyklus": "fast"
+    },
+    "heizpatrone": {
+      "_doc": "Heizpatrone (HP, 2kW) via Fritz!DECT-Steckdose — prognosegesteuerte Burst-Strategie. Trigger: Batterie-Ladeleistung + Forecast. Siehe STRATEGIEN.md §2.6",
+      "aktiv": false,
+      "prioritaet": 2,
+      "beschreibung": "HP-Burst wenn Batterie kräftig lädt und Prognose genug Restertrag zeigt",
+      "parameter": {
+        "min_ladeleistung_w": {
+          "wert": 5000,
+          "bereich": [2000, 10000],
+          "einheit": "W",
+          "obs_feld": "batt_power_w",
+          "beschreibung": "Mindest-Batterie-Ladeleistung damit HP einschaltet (>5kW = Anlage hat Kapazität)"
+        },
+        "min_ladeleistung_morgens_w": {
+          "wert": 3000,
+          "bereich": [1000, 8000],
+          "einheit": "W",
+          "obs_feld": "batt_power_w",
+          "beschreibung": "Vormittags-Schwelle (lockerer bei guter Prognose, rest_kwh>20)"
+        },
+        "min_rest_kwh": {
+          "wert": 12.0,
+          "bereich": [5.0, 30.0],
+          "einheit": "kWh",
+          "obs_feld": "forecast_rest_kwh",
+          "beschreibung": "Mindest-Restprognose kWh damit HP-Burst erlaubt"
+        },
+        "min_rest_kwh_morgens": {
+          "wert": 20.0,
+          "bereich": [10.0, 40.0],
+          "einheit": "kWh",
+          "obs_feld": "forecast_rest_kwh",
+          "beschreibung": "Vormittags: lockerer Burst nur bei sehr guter Tagesprognose"
+        },
+        "min_rest_h": {
+          "wert": 2.0,
+          "bereich": [1.0, 4.0],
+          "einheit": "h",
+          "obs_feld": "rest_h",
+          "beschreibung": "Mindest-Reststunden PV bis Sonnenuntergang (Phase-4: HARD BLOCK)"
+        },
+        "min_rest_h_morgens": {
+          "wert": 5.0,
+          "bereich": [3.0, 8.0],
+          "einheit": "h",
+          "obs_feld": "rest_h",
+          "beschreibung": "Vormittags: lang genug Sonne für EV+Batt nach HP-Burst"
+        },
+        "burst_dauer_lang_s": {
+          "wert": 1800,
+          "bereich": [600, 3600],
+          "einheit": "s",
+          "beschreibung": "Burst-Dauer bei guter Prognose (30 Min)"
+        },
+        "burst_dauer_kurz_s": {
+          "wert": 900,
+          "bereich": [300, 1800],
+          "einheit": "s",
+          "beschreibung": "Burst-Dauer bei mäßiger Prognose oder nachmittags spät (15 Min)"
+        },
+        "min_pause_s": {
+          "wert": 300,
+          "bereich": [60, 600],
+          "einheit": "s",
+          "beschreibung": "Mindestpause zwischen Aus- und Wiedereinschalten (Hysterese)"
+        },
+        "max_wattpilot_w": {
+          "wert": 500,
+          "bereich": [0, 5000],
+          "einheit": "W",
+          "obs_feld": "ev_power_w",
+          "beschreibung": "HP nur wenn WattPilot unter diesem Wert (kein konkurrierendes EV-Laden)"
+        },
+        "batt_reserve_kwh": {
+          "wert": 2.0,
+          "bereich": [0.5, 5.0],
+          "einheit": "kWh",
+          "beschreibung": "Reserve über Batterie-Vollladung hinaus die Prognose abdecken muss"
+        },
+        "batt_reserve_nachmittag_kwh": {
+          "wert": 3.0,
+          "bereich": [1.0, 8.0],
+          "einheit": "kWh",
+          "beschreibung": "Nachmittags spät: größere Reserve für sichere Batterie-Volladung"
+        },
+        "notaus_netzbezug_w": {
+          "wert": 200,
+          "bereich": [0, 500],
+          "einheit": "W",
+          "obs_feld": "grid_power_w",
+          "aktor_kommando": "hp_aus",
+          "beschreibung": "Netzbezug > dieser Wert → HP sofort AUS"
+        },
+        "notaus_entladung_hochsoc_w": {
+          "wert": -1000,
+          "bereich": [-2000, 0],
+          "einheit": "W",
+          "obs_feld": "batt_power_w",
+          "aktor_kommando": "hp_aus",
+          "beschreibung": "SOC ≥ 90%: Batterie-Entladung bis zu diesem Wert tolerieren (neg. = Entladung). Standard -1000W, einstellbar 0..−2000W"
+        },
+        "notaus_soc_schwelle_pct": {
+          "wert": 90,
+          "bereich": [50, 100],
+          "einheit": "%",
+          "obs_feld": "batt_soc_pct",
+          "beschreibung": "Unter diesem SOC: HP AUS bei JEDER Batterie-Entladung (egal wie gering)"
+        },
+        "speicher_temp_max_c": {
+          "wert": 78,
+          "bereich": [60, 85],
+          "einheit": "°C",
+          "beschreibung": "Warmwasserspeicher Übertemperatur → HP sofort AUS"
+        }
+      },
+      "score_gewicht": 40,
+      "engine_zyklus": "fast"
     }
   },
   "beobachtungsfelder": {
@@ -669,7 +787,7 @@
       "ev_charging": "WattPilot lädt (car==2) — wattpilot_battschutz",
       "ev_eco_mode": "WattPilot Eco-Modus (lmo==4) — wattpilot_battschutz",
       "house_load_w": "Hausverbrauch [W] — Kapazitätsverteilung",
-      "heizpatrone_aktiv": "Heizstab läuft (vorerst immer false) — geplant"
+      "heizpatrone_aktiv": "Heizstab läuft (Fritz!DECT-Status) — heizpatrone"
     },
     "zeit": {
       "sunrise": "Sonnenaufgang [Dezimalstunde] — morgen_soc_min",

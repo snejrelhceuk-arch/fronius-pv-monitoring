@@ -302,12 +302,15 @@
                     type: 'category',
                     data: allTimes,
                     boundaryGap: false,
-                    axisLabel: {
-                        interval: function(idx) {
-                            return idx % 12 === 0;
-                        },
-                        fontSize: 11
-                    }
+                    axisLabel: (function() {
+                        const w = window.innerWidth;
+                        // Dynamisch: bei schmalen Fenstern weniger Labels
+                        const step = w < 500 ? 36 : w < 800 ? 24 : 12;
+                        return {
+                            interval: function(idx) { return idx % step === 0; },
+                            fontSize: w < 500 ? 9 : 11
+                        };
+                    })()
                 },
                 yAxis: {
                     type: 'value',
@@ -369,7 +372,21 @@
             };
 
             chart.setOption(option);
-            window.addEventListener('resize', () => { if (chart) chart.resize(); });
+            window.addEventListener('resize', () => {
+                if (!chart) return;
+                chart.resize();
+                // X-Achsen-Labels dynamisch an neue Breite anpassen
+                const w = window.innerWidth;
+                const step = w < 500 ? 36 : w < 800 ? 24 : 12;
+                chart.setOption({
+                    xAxis: {
+                        axisLabel: {
+                            interval: function(idx) { return idx % step === 0; },
+                            fontSize: w < 500 ? 9 : 11
+                        }
+                    }
+                });
+            });
         }
 
         // ═══════════════════════════════════════
