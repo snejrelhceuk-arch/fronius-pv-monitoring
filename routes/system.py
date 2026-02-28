@@ -159,76 +159,83 @@ def api_battery_status():
                     _time.localtime(now)[:3] + (0, 0, 0, 0, 0, -1)))
 
                 with sqlite3.connect(config.DB_PATH) as _pdb:
-                    _log_rows = _pdb.execute("""
-                        SELECT action, param, old_value, new_value, reason,
-                               datetime(ts, 'unixepoch', 'localtime') as ts_local,
-                               manual, forecast_kwh, cloud_avg
-                        FROM battery_control_log
-                        WHERE ts >= ?
-                        ORDER BY ts ASC
-                    """, (_local_midnight,)).fetchall()
+                    # ── Primär: automation_log (neue Engine) ──────────
+                    # automation_log liegt in data.db (Disk), NICHT in der RAM-DB
+                    _persist_db = str(Path(__file__).resolve().parent.parent / 'data.db')
+                    _auto_rows = []
+                    try:
+                        with sqlite3.connect(_persist_db) as _alog_db:
+                            _auto_rows = _alog_db.execute("""
+                                SELECT kommando, wert, grund, ts, ergebnis
+                                FROM automation_log
+                                WHERE aktor = 'batterie'
+                                  AND ts >= ?
+                                  AND ergebnis = 'OK'
+                                ORDER BY ts ASC
+                            """, (_time.strftime('%Y-%m-%d', _time.localtime(now)),)).fetchall()
+                    except Exception:
+                        pass
 
                 _phase_log = {}
-                for _r in _log_rows:
-                    _action = _r[0]
-                    _entry = {
-                        'zeit': _r[5][11:16] if _r[5] and len(_r[5]) > 15 else None,
-                        'aktion': '',
-                        'grund': (_r[4] or '')[:80],
-                        'manuell': bool(_r[6]),
-                        'prognose_kwh': _r[7],
-                        'wolken': _r[8],
-                    }
-                    if _action == 'morning_open':
-                        _entry['aktion'] = f"SOC_MIN {_r[2]}→{_r[3]}%"
-                        _entry['status'] = 'done'
-                        _phase_log['morgen'] = _entry
-                    elif _action == 'morning_skip':
-                        _entry['aktion'] = 'Übersprungen'
-                        _entry['status'] = 'skipped'
-                        _phase_log['morgen'] = _entry
-                    elif _action == 'afternoon_raise':
-                        _entry['aktion'] = f"SOC_MAX {_r[2]}→{_r[3]}%"
-                        _entry['status'] = 'done'
-                        _phase_log['nachmittag'] = _entry
-                    elif _action == 'evening_limit':
-                        _entry['aktion'] = f"Entladerate {_r[2]}→{_r[3]}%"
-                        _entry['status'] = 'active'
-                        _phase_log['abend'] = _entry
-                    elif _action == 'evening_auto':
-                        _entry['aktion'] = 'Limit aufgehoben'
-                        _entry['status'] = 'done'
-                        _phase_log['abend'] = _entry
-                    elif _action == 'comfort_reset':
-                        _entry['aktion'] = 'Komfort-Reset'
-                        _entry['status'] = 'done'
-                        _phase_log['reset'] = _entry
 
-                # Fehlende Phasen mit State-Flags auffüllen
+                for _r in _auto_rows:
+                    _cmd = _r[0]
+                    _wert = _r[1]
+                    _grund = (_r[2] or '')[:80]
+                    _ts_str = _r[3][:16].replace('T', ' ') if _r[3] and len(_r[3]) > 15 else None
+                    _zeit = _ts_str[11:16] if _ts_str and len(_ts_str) >= 16 else None
+
+                    if _cmd == 'set_soc_min' and 'Morgen' in _grund:
+                        _phase_log['morgen'] = {
+                            'zeit': _zeit, 'status': 'done',
+                            'aktion': f'SOC_MIN → {_wert}%' if _wert else 'SOC_MIN geöffnet',
+                            'grund': _grund, 'manuell': False,
+                        }
+                    elif _cmd == 'set_soc_max' and 'Nachmittag' in _grund:
+                        _phase_log['nachmittag'] = {
+                            'zeit': _zeit, 'status': 'done',
+                            'aktion': f'SOC_MAX → {_wert}%' if _wert else 'SOC_MAX erhöht',
+                            'grund': _grund, 'manuell': False,
+                        }
+                    elif _cmd == 'set_discharge_rate':
+                        _phase_log['abend'] = {
+                            'zeit': _zeit, 'status': 'active',
+                            'aktion': f'Entladerate {_wert}%' if _wert else 'Entladerate-Limit',
+                            'grund': _grund, 'manuell': False,
+                        }
+                    elif _cmd in ('auto',) and 'TAG-Phase' in _grund:
+                        _phase_log['abend'] = {
+                            'zeit': _zeit, 'status': 'done',
+                            'aktion': 'Limits aufgehoben',
+                            'grund': _grund, 'manuell': False,
+                        }
+                    elif _cmd in ('set_soc_min', 'set_soc_max') and 'Komfort-Reset' in _grund:
+                        _phase_log['reset'] = {
+                            'zeit': _zeit, 'status': 'done',
+                            'aktion': 'Komfort-Reset',
+                            'grund': _grund, 'manuell': False,
+                        }
+
+                # ── Fallback: Fehlende Phasen per Vorausschau auffüllen ──
                 if 'morgen' not in _phase_log:
                     _phase_log['morgen'] = {
-                        'status': 'done' if _sched.get('morning_done') else 'pending',
-                        'zeit': None,
-                        'aktion': '—' if _sched.get('morning_done') else 'SOC_MIN → 5%',
-                        'grund': '', 'manuell': False,
+                        'status': 'pending', 'zeit': None,
+                        'aktion': 'SOC_MIN → 5%',
+                        'grund': 'Morgen-Öffnung (automatisch)', 'manuell': False,
                     }
                 if 'nachmittag' not in _phase_log:
                     _phase_log['nachmittag'] = {
-                        'status': 'done' if _sched.get('afternoon_done') else 'pending',
-                        'zeit': None,
-                        'aktion': '—' if _sched.get('afternoon_done') else 'SOC_MAX → 100%',
-                        'grund': '', 'manuell': False,
+                        'status': 'pending', 'zeit': None,
+                        'aktion': 'SOC_MAX → 100%',
+                        'grund': 'Nachmittag-Erhöhung', 'manuell': False,
                     }
-                _rate = _sched.get('evening_rate_percent')
                 if 'abend' not in _phase_log:
                     _phase_log['abend'] = {
-                        'status': 'active' if _sched.get('evening_rate_active') else 'pending',
-                        'zeit': None,
-                        'aktion': f"Entladerate {_rate}%" if _rate else 'Entladerate-Limit',
-                        'grund': '', 'manuell': False,
+                        'status': 'pending', 'zeit': None,
+                        'aktion': 'Entladerate-Limit',
+                        'grund': 'Abend/Nacht-Drosselung', 'manuell': False,
                     }
                 # Reset-Phase: Komfort-Bereich wiederherstellen
-                # Lese Komfort-Grenzen aus Config für Zielwerte
                 try:
                     import json as _json_cfg
                     _cfg_path = Path(__file__).resolve().parent.parent / 'config' / 'battery_control.json'
@@ -240,10 +247,9 @@ def api_battery_status():
                     _k_min, _k_max = 25, 75
                 if 'reset' not in _phase_log:
                     _phase_log['reset'] = {
-                        'status': 'pending',
-                        'zeit': None,
+                        'status': 'pending', 'zeit': None,
                         'aktion': f'SOC_MIN → {_k_min}%, SOC_MAX → {_k_max}%',
-                        'grund': 'Komfort-Reset (nächster Tageswechsel)',
+                        'grund': 'Komfort-Reset (nach Sunset)',
                         'manuell': False,
                     }
 
@@ -253,10 +259,11 @@ def api_battery_status():
         except Exception as e:
             logging.warning(f"Automation-State nicht lesbar: {e}")
 
-        # Letzte SOC-Umschaltung (zuerst automation_log, Fallback battery_control_log)
+        # Letzte SOC-Umschaltung (zuerst automation_log in data.db, Fallback battery_control_log)
         try:
-            with sqlite3.connect(config.DB_PATH) as _ldb:
-                # Neue Quelle: automation_log
+            _persist_db = str(Path(__file__).resolve().parent.parent / 'data.db')
+            with sqlite3.connect(_persist_db) as _ldb:
+                # Neue Quelle: automation_log (data.db)
                 row = _ldb.execute("""
                     SELECT ts, kommando, wert, grund, ergebnis
                     FROM automation_log

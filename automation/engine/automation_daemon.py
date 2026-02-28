@@ -94,6 +94,7 @@ class DataCollector:
         obs.ts = datetime.now().isoformat()
         self._collect_raw_data(obs)
         self._collect_battery_modbus(obs)   # StorCtl_Mod, In/OutWRte
+        self._collect_battery_soc_config(obs)  # SOC_MIN/MAX/MODE per HTTP API
         self._collect_wattpilot(obs)
         self._collect_battery_settings(obs)
         self._collect_pv_today(obs)      # VOR forecast — braucht pv_today_kwh
@@ -212,6 +213,43 @@ class DataCollector:
         except Exception as e:
             LOG.warning(f"Modbus StorCtl collect: {e}")
             self._modbus_client = None
+
+    # ── SOC_MIN/MAX/MODE aus Fronius HTTP API ────────────────
+
+    _soc_config_cache_ts: float = 0
+    _SOC_CONFIG_INTERVAL = 30   # Sekunden — HTTP-API nicht bei jedem 10s-Zyklus
+
+    def _collect_battery_soc_config(self, obs: ObsState):
+        """SOC_MIN, SOC_MAX, SOC_MODE aus Fronius Batterie-Config API.
+
+        Diese Werte werden vom Collector nicht in raw_data gespeichert,
+        sind aber für komfort_reset, morgen_soc_min, nachmittag_soc_max
+        essenziell.  Cache: 30s (reicht für 1-min Engine-Zyklen).
+        """
+        now = time.time()
+        if now - DataCollector._soc_config_cache_ts < self._SOC_CONFIG_INTERVAL:
+            return  # Cache noch gültig — vorherige Werte bleiben im obs
+
+        try:
+            from fronius_api import BatteryConfig
+            bc = BatteryConfig()
+            values = bc.get_values()
+
+            soc_min_val = values.get('BAT_M0_SOC_MIN')
+            soc_max_val = values.get('BAT_M0_SOC_MAX')
+            soc_mode_val = values.get('BAT_M0_SOC_MODE')
+
+            if soc_min_val is not None:
+                obs.soc_min = int(soc_min_val)
+            if soc_max_val is not None:
+                obs.soc_max = int(soc_max_val)
+            if soc_mode_val is not None:
+                obs.soc_mode = str(soc_mode_val).lower()
+
+            DataCollector._soc_config_cache_ts = now
+
+        except Exception as e:
+            LOG.debug(f"SOC-Config API: {e}")
 
     # ── WattPilot ────────────────────────────────────────────
 
@@ -570,10 +608,12 @@ class AutomationDaemon:
         schutz_cfg = self._load_schutz_config()
         self._tier1 = Tier1Checker(actuator=None, schutz_cfg=schutz_cfg)
 
-        # Actuator (Persist-DB = Haupt-DB für automation_log — dort liest die Web-API)
+        # Actuator (Persist-DB = data.db auf Disk — dort liest die Web-API)
+        # NICHT app_config.DB_PATH verwenden — das ist die RAM-Collector-DB!
+        _persist_path = os.path.join(_PROJECT_ROOT, 'data.db')
         self._actuator = Actuator(
             dry_run=self.dry_run,
-            persist_db_path=app_config.DB_PATH,
+            persist_db_path=_persist_path,
         )
 
         # Engine
@@ -786,14 +826,16 @@ def engine_vorausschau() -> list[dict]:
         matrix = lade_matrix(DEFAULT_MATRIX_PATH)
 
         from automation.engine.engine import (
-            RegelSocSchutz, RegelTempSchutz, RegelAbendEntladerate,
+            RegelSocSchutz, RegelTempSchutz, RegelKomfortReset,
+            RegelAbendEntladerate,
             RegelMorgenSocMin, RegelNachmittagSocMax, RegelZellausgleich,
             RegelForecastPlausi, RegelLaderateDynamisch, RegelWattpilotBattSchutz,
             RegelHeizpatrone,
         )
 
         regeln = [
-            RegelSocSchutz(), RegelTempSchutz(), RegelAbendEntladerate(),
+            RegelSocSchutz(), RegelTempSchutz(), RegelKomfortReset(),
+            RegelAbendEntladerate(),
             RegelMorgenSocMin(), RegelNachmittagSocMax(), RegelZellausgleich(),
             RegelForecastPlausi(), RegelLaderateDynamisch(), RegelWattpilotBattSchutz(),
             RegelHeizpatrone(),
