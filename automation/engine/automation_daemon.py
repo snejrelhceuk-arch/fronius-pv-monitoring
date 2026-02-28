@@ -64,14 +64,16 @@ PID_FILE = Path(__file__).parent.parent.parent / 'automation_daemon.pid'
 class DataCollector:
     """Liest Sensor-Daten aus der Collector-DB → ObsState.
 
-    KEIN eigener Modbus-Zugriff — nutzt was collector.py + modbus_v3
-    bereits in /dev/shm/fronius_data.db schreiben.
+    Primär read-only aus Collector-DB (/dev/shm/fronius_data.db).
+    Ausnahme: StorCtl_Mod, InWRte, OutWRte werden direkt per Modbus
+    gelesen, da der Collector diese Register nicht speichert.
     """
 
     def __init__(self, db_path: str = None):
         self._db_path = db_path or app_config.DB_PATH
         self._forecast_cache = None
         self._forecast_cache_ts = 0
+        self._modbus_client = None
 
     def _get_conn(self) -> Optional[sqlite3.Connection]:
         """Öffne read-only Verbindung zur Collector-DB."""
@@ -91,6 +93,7 @@ class DataCollector:
         """Sammle ALLE verfügbaren Daten → ObsState."""
         obs.ts = datetime.now().isoformat()
         self._collect_raw_data(obs)
+        self._collect_battery_modbus(obs)   # StorCtl_Mod, In/OutWRte
         self._collect_wattpilot(obs)
         self._collect_battery_settings(obs)
         self._collect_pv_today(obs)      # VOR forecast — braucht pv_today_kwh
@@ -142,6 +145,18 @@ class DataCollector:
             obs.wp_power_w = abs(p_wp)
             obs.wp_active = obs.wp_power_w > 200  # Schwelle: 200W
 
+            # ── WP 30-min Mittelwert (aus data_1min) ──
+            try:
+                now_ts = int(time.time())
+                wp_avg_row = conn.execute(
+                    "SELECT AVG(ABS(P_WP_avg)) FROM data_1min WHERE ts > ?",
+                    (now_ts - 1800,)
+                ).fetchone()
+                if wp_avg_row and wp_avg_row[0] is not None:
+                    obs.wp_power_avg30_w = round(wp_avg_row[0], 0)
+            except Exception as e:
+                LOG.debug(f"WP avg30 query: {e}")
+
             # ── Hausverbrauch (Bilanz) ──
             verbrauch = obs.pv_total_w - obs.batt_power_w + obs.grid_power_w
             obs.house_load_w = max(0, round(verbrauch, 0))
@@ -150,6 +165,50 @@ class DataCollector:
             LOG.warning(f"raw_data collect: {e}")
         finally:
             conn.close()
+
+    # ── Batterie Modbus (StorCtl_Mod, Lade-/Entladerate) ────
+
+    def _collect_battery_modbus(self, obs: ObsState):
+        """StorCtl_Mod, OutWRte, InWRte direkt per Modbus M124 lesen.
+
+        Diese Register werden vom Collector nicht in raw_data gespeichert,
+        sind aber für die Engine-Regelung (abend_entladerate, soc_schutz)
+        essenziell.
+        """
+        try:
+            from battery_control import (
+                ModbusClient, REG,
+                read_raw, read_int16_scaled as read_scaled,
+            )
+
+            if self._modbus_client is None:
+                self._modbus_client = ModbusClient(
+                    app_config.INVERTER_IP, app_config.MODBUS_PORT
+                )
+                if not self._modbus_client.connect():
+                    LOG.warning("Modbus-Verbindung für StorCtl fehlgeschlagen")
+                    self._modbus_client = None
+                    return
+                time.sleep(0.1)
+
+            client = self._modbus_client
+
+            # StorCtl_Mod (Bit 0=Charge-Limit, Bit 1=Discharge-Limit)
+            storctl = read_raw(client, REG['StorCtl_Mod'])
+            if storctl is not None:
+                obs.storctl_mod = storctl
+
+            # Lade-/Entladerate
+            outwrte, _, _ = read_scaled(client, REG['OutWRte'], REG['InOutWRte_SF'])
+            inwrte, _, _ = read_scaled(client, REG['InWRte'], REG['InOutWRte_SF'])
+            if outwrte is not None:
+                obs.discharge_rate_pct = outwrte
+            if inwrte is not None:
+                obs.charge_rate_pct = inwrte
+
+        except Exception as e:
+            LOG.warning(f"Modbus StorCtl collect: {e}")
+            self._modbus_client = None
 
     # ── WattPilot ────────────────────────────────────────────
 
@@ -176,6 +235,15 @@ class DataCollector:
             else:
                 obs.ev_power_w = 0
                 obs.ev_charging = False
+
+            # ── EV 30-min Mittelwert ──
+            ev_avg_row = conn.execute(
+                "SELECT AVG(power_w) FROM wattpilot_readings WHERE ts > ?",
+                (now - 1800,)
+            ).fetchone()
+            if ev_avg_row and ev_avg_row[0] is not None:
+                obs.ev_power_avg30_w = round(ev_avg_row[0], 0)
+
         except Exception as e:
             LOG.debug(f"wattpilot collect: {e}")
         finally:
@@ -220,10 +288,11 @@ class DataCollector:
                 pass
 
             # Stündliche Wolken + Power-Forecast
+            now_h = datetime.now().hour
+            power_hourly = None
             try:
                 hourly = sf.get_hourly_forecast()
                 if hourly:
-                    now_h = datetime.now().hour
                     # Aktuelle Wolken
                     for h in hourly:
                         h_start = h.get('hour', 0)
@@ -242,27 +311,50 @@ class DataCollector:
             except Exception:
                 pass
 
-            # Rest-Prognose + IST/SOLL
+            # Power-Forecast + IST/SOLL + Leistungsprofil
+            try:
+                power_hourly = sf.get_hourly_power_forecast()
+            except Exception:
+                pass
+
             if obs.forecast_kwh and obs.pv_today_kwh is not None:
                 obs.forecast_rest_kwh = max(0, round(obs.forecast_kwh - obs.pv_today_kwh, 1))
 
-                # IST/SOLL-Verhältnis: was hätten wir bis jetzt erzeugen sollen?
-                try:
-                    power_hourly = sf.get_hourly_power_forecast()
-                    if power_hourly:
+            if power_hourly:
+                # Stündliches Leistungsprofil für Engine-Regeln
+                obs.forecast_power_profile = [
+                    {'hour': hd.get('hour', int(hd.get('time', '  00')[11:13])),
+                     'total_ac_w': round(hd.get('total_ac', 0), 0)}
+                    for hd in power_hourly
+                ]
+
+                # IST/SOLL-Verhältnis
+                if obs.pv_today_kwh is not None:
+                    try:
                         expected_so_far_kwh = 0.0
                         for hd in power_hourly:
                             h_hour = hd.get('hour', 0)
                             if h_hour < now_h:
-                                # Summe über alle Strings
-                                h_total = sum(v for k, v in hd.items()
-                                              if k != 'hour' and isinstance(v, (int, float)))
-                                expected_so_far_kwh += h_total / 1000.0  # W→kWh (1h)
-                        if expected_so_far_kwh > 0.5:  # Nur wenn >0.5 kWh erwartet
+                                expected_so_far_kwh += hd.get('total_ac', 0) / 1000.0
+                        if expected_so_far_kwh > 0.5:
                             obs.pv_vs_forecast_pct = round(
                                 (obs.pv_today_kwh / expected_so_far_kwh) * 100, 1)
-                except Exception:
-                    pass
+                    except Exception:
+                        pass
+
+            # Clear-Sky-Peak-Stunde bestimmen
+            try:
+                from solar_geometry import get_clearsky_day_curve
+                from datetime import date as _date
+                cs_curve = get_clearsky_day_curve(_date.today(), interval_min=60)
+                if cs_curve:
+                    peak_entry = max(cs_curve, key=lambda e: e.get('total_ac', 0))
+                    peak_ts = peak_entry['timestamp']
+                    peak_dt = datetime.fromtimestamp(peak_ts)
+                    obs.clearsky_peak_h = round(
+                        peak_dt.hour + peak_dt.minute / 60.0, 1)
+            except Exception as e:
+                LOG.debug(f"clearsky_peak: {e}")
 
             # Cache speichern
             self._forecast_cache = {
@@ -270,6 +362,8 @@ class DataCollector:
                 'cloud_now_pct': obs.cloud_now_pct,
                 'cloud_avg_pct': obs.cloud_avg_pct,
                 'cloud_rest_avg_pct': obs.cloud_rest_avg_pct,
+                'clearsky_peak_h': obs.clearsky_peak_h,
+                'forecast_power_profile': obs.forecast_power_profile,
             }
             self._forecast_cache_ts = now
 
@@ -287,6 +381,8 @@ class DataCollector:
         obs.cloud_now_pct = c.get('cloud_now_pct', obs.cloud_now_pct)
         obs.cloud_avg_pct = c.get('cloud_avg_pct', obs.cloud_avg_pct)
         obs.cloud_rest_avg_pct = c.get('cloud_rest_avg_pct', obs.cloud_rest_avg_pct)
+        obs.clearsky_peak_h = c.get('clearsky_peak_h', obs.clearsky_peak_h)
+        obs.forecast_power_profile = c.get('forecast_power_profile', obs.forecast_power_profile)
         # Rest-Prognose immer frisch berechnen
         if obs.forecast_kwh and obs.pv_today_kwh is not None:
             obs.forecast_rest_kwh = max(0, round(obs.forecast_kwh - obs.pv_today_kwh, 1))

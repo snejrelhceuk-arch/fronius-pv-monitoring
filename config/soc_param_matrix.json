@@ -1,10 +1,8 @@
 {
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
-  "_updated": "2026-02-22",
-
+  "_updated": "2026-02-27",
   "regelkreise": {
-
     "soc_schutz": {
       "_doc": "Sicherheitshalber: SOC-Grenzen nie verletzen",
       "aktiv": true,
@@ -12,8 +10,11 @@
       "beschreibung": "SOC-Untergrenze/Obergrenze als harte Schutzschwelle",
       "parameter": {
         "stop_entladung_unter_pct": {
-          "wert": 5,
-          "bereich": [0, 20],
+          "wert": 7,
+          "bereich": [
+            0,
+            20
+          ],
           "einheit": "%",
           "obs_feld": "batt_soc_pct",
           "aktor_kommando": "stop_discharge",
@@ -21,7 +22,10 @@
         },
         "drosselung_unter_pct": {
           "wert": 10,
-          "bereich": [5, 30],
+          "bereich": [
+            5,
+            30
+          ],
           "einheit": "%",
           "obs_feld": "batt_soc_pct",
           "aktor_kommando": "set_discharge_rate",
@@ -29,8 +33,11 @@
           "beschreibung": "Unter diesem SOC: Entladerate auf 50% drosseln"
         },
         "stop_ladung_ueber_pct": {
-          "wert": 100,
-          "bereich": [80, 100],
+          "wert": 98,
+          "bereich": [
+            80,
+            100
+          ],
           "einheit": "%",
           "obs_feld": "batt_soc_pct",
           "aktor_kommando": "stop_charge",
@@ -40,7 +47,6 @@
       "score_gewicht": 90,
       "engine_zyklus": "fast"
     },
-
     "morgen_soc_min": {
       "_doc": "Morgens SOC_MIN öffnen: Batterie vor PV-Übernahme entleeren",
       "aktiv": true,
@@ -49,7 +55,10 @@
       "parameter": {
         "komfort_min_pct": {
           "wert": 25,
-          "bereich": [10, 40],
+          "bereich": [
+            10,
+            40
+          ],
           "einheit": "%",
           "obs_feld": "soc_min",
           "aktor_kommando": "set_soc_min",
@@ -57,7 +66,10 @@
         },
         "stress_min_pct": {
           "wert": 5,
-          "bereich": [0, 15],
+          "bereich": [
+            0,
+            15
+          ],
           "einheit": "%",
           "obs_feld": "soc_min",
           "aktor_kommando": "set_soc_min",
@@ -65,41 +77,59 @@
         },
         "min_prognose_kwh": {
           "wert": 5.0,
-          "bereich": [1, 20],
+          "bereich": [
+            1,
+            20
+          ],
           "einheit": "kWh",
           "obs_feld": "forecast_kwh",
           "beschreibung": "Mindest-Tagesprognose damit Öffnung stattfindet"
         },
         "uebernahme_schwelle": {
           "wert": 0.8,
-          "bereich": [0.5, 1.0],
+          "bereich": [
+            0.5,
+            1.0
+          ],
           "einheit": "Faktor",
           "beschreibung": "PV muss x% des Verbrauchs decken = Takeover (legacy, nicht mehr verwendet)"
         },
         "pv_bestaetigung_w": {
           "wert": 100,
-          "bereich": [50, 500],
+          "bereich": [
+            50,
+            500
+          ],
           "einheit": "W",
           "obs_feld": "pv_total_w",
           "beschreibung": "Live-PV Schwelle: Bestätigung dass Sonne tatsächlich da ist (nicht nur astronomisch). Öffnung erst wenn PV > dieser Wert nach Aktivierungszeit."
         },
         "wolken_klar_pct": {
           "wert": 30,
-          "bereich": [10, 50],
+          "bereich": [
+            10,
+            50
+          ],
           "einheit": "%",
           "obs_feld": "cloud_rest_avg_pct",
           "beschreibung": "Grenze für 'klarer Himmel': <30% → Offset 10-30min nach Sunrise"
         },
         "wolken_schwer_pct": {
           "wert": 70,
-          "bereich": [50, 90],
+          "bereich": [
+            50,
+            90
+          ],
           "einheit": "%",
           "obs_feld": "cloud_rest_avg_pct",
           "beschreibung": "Grenze für 'bewölkt': >70% → Offset 60-120min, SOC_MODE=auto"
         },
         "morgen_soc_max_pct": {
           "wert": 75,
-          "bereich": [50, 85],
+          "bereich": [
+            50,
+            85
+          ],
           "einheit": "%",
           "obs_feld": "soc_max",
           "aktor_kommando": "set_soc_max",
@@ -107,20 +137,29 @@
         },
         "max_vorlauf_h": {
           "wert": 0.25,
-          "bereich": [0, 2.0],
+          "bereich": [
+            0,
+            2.0
+          ],
           "einheit": "h",
           "beschreibung": "Legacy: Maximal x Stunden VOR PV-Takeover öffnen (nicht mehr verwendet)"
         },
         "fenster_ende_nach_sunrise_h": {
           "wert": 3,
-          "bereich": [1, 5],
+          "bereich": [
+            1,
+            5
+          ],
           "einheit": "h",
           "obs_feld": "sunrise",
           "beschreibung": "Morgen-Fenster endet x Stunden nach Sonnenaufgang. Danach übernimmt Nachmittag-Regel."
         },
         "drain_rate_fallback_kw": {
           "wert": 1.5,
-          "bereich": [0.5, 4.0],
+          "bereich": [
+            0.5,
+            4.0
+          ],
           "einheit": "kW",
           "beschreibung": "Fallback-Drain wenn kein Verbrauchshistorik verfügbar"
         }
@@ -130,7 +169,6 @@
       "engine_zyklus": "fast",
       "_engine_zyklus_doc": "fast: Haltemodus jede Minute prüfen. Aktivierung=Sonnenaufgang+wolkenabhängiger Offset+PV-Bestätigung."
     },
-
     "nachmittag_soc_max": {
       "_doc": "Nachmittags SOC_MAX erhöhen: Mehr Kapazität vor Abend freigeben",
       "aktiv": true,
@@ -139,7 +177,10 @@
       "parameter": {
         "komfort_max_pct": {
           "wert": 75,
-          "bereich": [60, 90],
+          "bereich": [
+            60,
+            90
+          ],
           "einheit": "%",
           "obs_feld": "soc_max",
           "aktor_kommando": "set_soc_max",
@@ -147,34 +188,58 @@
         },
         "stress_max_pct": {
           "wert": 100,
-          "bereich": [85, 100],
+          "bereich": [
+            85,
+            100
+          ],
           "einheit": "%",
           "obs_feld": "soc_max",
           "aktor_kommando": "set_soc_max",
           "beschreibung": "Stress-SOC_MAX (voll, maximale Kapazität)"
         },
         "start_stunde": {
-          "wert": 12,
-          "bereich": [10, 15],
+          "wert": 11,
+          "bereich": [
+            10,
+            15
+          ],
           "einheit": "h",
-          "beschreibung": "Absolut frühester Start (Fallback). Dynamische Startzeit wird aus Prognose berechnet: sicher→spät (13-16h), unsicher→früh (12h)"
+          "beschreibung": "Absolut frühester Start (Minimum). Öffnung nie vor dieser Stunde, auch bei schwachem Tag."
+        },
+        "oeffnungsschwelle_kw": {
+          "wert": 7,
+          "bereich": [
+            3,
+            15
+          ],
+          "einheit": "kW",
+          "beschreibung": "Ab Clear-Sky-Peak vorwärts: SOC_MAX öffnen wenn Prognoseleistung unter diesen Wert sinkt"
         },
         "surplus_sicherheitsfaktor": {
           "wert": 1.3,
-          "bereich": [1.0, 2.0],
+          "bereich": [
+            1.0,
+            2.0
+          ],
           "einheit": "Faktor",
           "beschreibung": "PV-Surplus muss x * Füllbedarf sein, sonst SOC_MAX erhöhen"
         },
         "wolken_schwer_pct": {
           "wert": 85,
-          "bereich": [60, 100],
+          "bereich": [
+            60,
+            100
+          ],
           "einheit": "%",
           "obs_feld": "cloud_avg_pct",
           "beschreibung": "Ab dieser Bewölkung: SOC_MAX sofort erhöhen"
         },
         "max_stunden_vor_sunset": {
           "wert": 1.5,
-          "bereich": [0.5, 3.0],
+          "bereich": [
+            0.5,
+            3.0
+          ],
           "einheit": "h",
           "obs_feld": "sunset",
           "beschreibung": "Deadline: x Stunden vor Sunset SOC_MAX zwingend erhöhen"
@@ -183,7 +248,6 @@
       "score_gewicht": 55,
       "engine_zyklus": "strategic"
     },
-
     "abend_entladerate": {
       "_doc": "Entladerate nach Tageszeit begrenzen — Spitzenlasten ans Netz",
       "aktiv": true,
@@ -192,45 +256,66 @@
       "parameter": {
         "abend_start_h": {
           "wert": 15,
-          "bereich": [13, 18],
+          "bereich": [
+            13,
+            18
+          ],
           "einheit": "h",
           "beschreibung": "Ab dieser Stunde: Abend-Rate aktiv"
         },
         "abend_ende_h": {
           "wert": 0,
-          "bereich": [0, 2],
+          "bereich": [
+            0,
+            2
+          ],
           "einheit": "h",
           "beschreibung": "Bis zu dieser Stunde (0=Mitternacht)"
         },
         "abend_rate_pct": {
           "wert": 29,
-          "bereich": [10, 80],
+          "bereich": [
+            10,
+            80
+          ],
           "einheit": "%",
           "aktor_kommando": "set_discharge_rate",
           "beschreibung": "Abend-Entladerate (~3 kW bei 10.24 kWh)"
         },
         "nacht_start_h": {
           "wert": 0,
-          "bereich": [0, 2],
+          "bereich": [
+            0,
+            2
+          ],
           "einheit": "h",
           "beschreibung": "Ab dieser Stunde: Nacht-Rate aktiv"
         },
         "nacht_ende_h": {
           "wert": 6,
-          "bereich": [4, 8],
+          "bereich": [
+            4,
+            8
+          ],
           "einheit": "h",
           "beschreibung": "Bis zu dieser Stunde"
         },
         "nacht_rate_pct": {
           "wert": 10,
-          "bereich": [0, 30],
+          "bereich": [
+            0,
+            30
+          ],
           "einheit": "%",
           "aktor_kommando": "set_discharge_rate",
           "beschreibung": "Nacht-Entladerate (~1 kW — Standby)"
         },
         "kritisch_soc_pct": {
           "wert": 10,
-          "bereich": [5, 20],
+          "bereich": [
+            5,
+            20
+          ],
           "einheit": "%",
           "obs_feld": "batt_soc_pct",
           "aktor_kommando": "hold",
@@ -240,7 +325,6 @@
       "score_gewicht": 65,
       "engine_zyklus": "fast"
     },
-
     "zellausgleich": {
       "_doc": "Monatlicher Vollzyklus für BYD-Zellbalancing",
       "aktiv": true,
@@ -249,46 +333,67 @@
       "parameter": {
         "soc_min_waehrend_pct": {
           "wert": 5,
-          "bereich": [0, 10],
+          "bereich": [
+            0,
+            10
+          ],
           "einheit": "%",
           "aktor_kommando": "set_soc_min",
           "beschreibung": "SOC_MIN während Zellausgleich"
         },
         "soc_max_waehrend_pct": {
           "wert": 100,
-          "bereich": [95, 100],
+          "bereich": [
+            95,
+            100
+          ],
           "einheit": "%",
           "aktor_kommando": "set_soc_max",
           "beschreibung": "SOC_MAX während Zellausgleich"
         },
         "min_prognose_kwh": {
           "wert": 50.0,
-          "bereich": [20, 80],
+          "bereich": [
+            20,
+            80
+          ],
           "einheit": "kWh",
           "obs_feld": "forecast_kwh",
           "beschreibung": "Mindestprognose für den Tag"
         },
         "notfall_min_prognose_kwh": {
           "wert": 25.0,
-          "bereich": [10, 50],
+          "bereich": [
+            10,
+            50
+          ],
           "einheit": "kWh",
           "beschreibung": "Gesenkte Schwelle wenn max_tage überschritten"
         },
         "max_tage_ohne_ausgleich": {
           "wert": 45,
-          "bereich": [20, 90],
+          "bereich": [
+            20,
+            90
+          ],
           "einheit": "Tage",
           "beschreibung": "Nach x Tagen: Notfall-Schwelle verwenden"
         },
         "fruehester_tag": {
           "wert": 1,
-          "bereich": [1, 10],
+          "bereich": [
+            1,
+            10
+          ],
           "einheit": "Tag",
           "beschreibung": "Frühester Tag im Monat"
         },
         "spaetester_tag": {
           "wert": 28,
-          "bereich": [20, 31],
+          "bereich": [
+            20,
+            31
+          ],
           "einheit": "Tag",
           "beschreibung": "Spätester regulärer Tag im Monat"
         }
@@ -296,7 +401,6 @@
       "score_gewicht": 30,
       "engine_zyklus": "strategic"
     },
-
     "temp_schutz": {
       "_doc": "Gradueller Laderate-Schutz nach Zelltemperatur (Tier-2, ergänzt Tier-1 Interrupt)",
       "aktiv": true,
@@ -305,7 +409,10 @@
       "parameter": {
         "stufe_25c_pct": {
           "wert": 100,
-          "bereich": [80, 100],
+          "bereich": [
+            80,
+            100
+          ],
           "einheit": "%",
           "obs_feld": "batt_temp_max_c",
           "aktor_kommando": "set_charge_rate",
@@ -313,7 +420,10 @@
         },
         "stufe_30c_pct": {
           "wert": 80,
-          "bereich": [50, 100],
+          "bereich": [
+            50,
+            100
+          ],
           "einheit": "%",
           "obs_feld": "batt_temp_max_c",
           "aktor_kommando": "set_charge_rate",
@@ -321,7 +431,10 @@
         },
         "stufe_35c_pct": {
           "wert": 68,
-          "bereich": [30, 80],
+          "bereich": [
+            30,
+            80
+          ],
           "einheit": "%",
           "obs_feld": "batt_temp_max_c",
           "aktor_kommando": "set_charge_rate",
@@ -329,7 +442,10 @@
         },
         "stufe_40c_pct": {
           "wert": 50,
-          "bereich": [20, 70],
+          "bereich": [
+            20,
+            70
+          ],
           "einheit": "%",
           "obs_feld": "batt_temp_max_c",
           "aktor_kommando": "set_charge_rate",
@@ -339,7 +455,6 @@
       "score_gewicht": 70,
       "engine_zyklus": "fast"
     },
-
     "forecast_plausibilisierung": {
       "_doc": "Rest-Prognose an Realität anpassen: IST vs. SOLL vergleichen, bei Abweichung verringern",
       "aktiv": true,
@@ -348,33 +463,48 @@
       "parameter": {
         "abweichung_schwelle_pct": {
           "wert": 70,
-          "bereich": [30, 90],
+          "bereich": [
+            30,
+            90
+          ],
           "einheit": "%",
           "obs_feld": "pv_vs_forecast_pct",
           "beschreibung": "Unter diesem IST/SOLL-Verhältnis: Rest-Prognose korrigieren"
         },
         "korrektur_faktor": {
           "wert": 0.7,
-          "bereich": [0.3, 1.0],
+          "bereich": [
+            0.3,
+            1.0
+          ],
           "einheit": "Faktor",
           "beschreibung": "Rest-Prognose × Faktor wenn IST/SOLL unter Schwelle"
         },
         "min_betriebsstunden": {
           "wert": 2.0,
-          "bereich": [0.5, 4.0],
+          "bereich": [
+            0.5,
+            4.0
+          ],
           "einheit": "h",
           "beschreibung": "Erst nach x Stunden Sonnenlicht plausibilisieren"
         },
         "cloud_rest_schwer_pct": {
           "wert": 80,
-          "bereich": [50, 100],
+          "bereich": [
+            50,
+            100
+          ],
           "einheit": "%",
           "obs_feld": "cloud_rest_avg_pct",
           "beschreibung": "Wenn Resttag-Wolken über Schwelle: zusätzliche Reduktion"
         },
         "cloud_reduktion_faktor": {
           "wert": 0.6,
-          "bereich": [0.3, 0.9],
+          "bereich": [
+            0.3,
+            0.9
+          ],
           "einheit": "Faktor",
           "beschreibung": "Zusätzlicher Reduktionsfaktor bei schwerer Bewölkung"
         }
@@ -382,7 +512,6 @@
       "score_gewicht": 50,
       "engine_zyklus": "strategic"
     },
-
     "laderate_dynamisch": {
       "_doc": "Laderate aktiv steuern: temp-abhängig + SOC-abhängig + PV-abhängig",
       "aktiv": true,
@@ -391,7 +520,10 @@
       "parameter": {
         "komfort_max_laderate_pct": {
           "wert": 80,
-          "bereich": [50, 100],
+          "bereich": [
+            50,
+            100
+          ],
           "einheit": "%",
           "obs_feld": "charge_rate_pct",
           "aktor_kommando": "set_charge_rate",
@@ -399,7 +531,10 @@
         },
         "stress_max_laderate_pct": {
           "wert": 100,
-          "bereich": [80, 100],
+          "bereich": [
+            80,
+            100
+          ],
           "einheit": "%",
           "obs_feld": "charge_rate_pct",
           "aktor_kommando": "set_charge_rate",
@@ -407,7 +542,10 @@
         },
         "wp_aktiv_reduktion_pct": {
           "wert": 60,
-          "bereich": [30, 90],
+          "bereich": [
+            30,
+            90
+          ],
           "einheit": "%",
           "obs_feld": "wp_active",
           "aktor_kommando": "set_charge_rate",
@@ -415,7 +553,10 @@
         },
         "pv_min_fuer_vollladung_w": {
           "wert": 5000,
-          "bereich": [2000, 10000],
+          "bereich": [
+            2000,
+            10000
+          ],
           "einheit": "W",
           "obs_feld": "pv_total_w",
           "beschreibung": "Mindest-PV-Leistung für volle Laderate"
@@ -424,7 +565,6 @@
       "score_gewicht": 45,
       "engine_zyklus": "fast"
     },
-
     "wattpilot_battschutz": {
       "_doc": "Batterieschutz bei WattPilot-Ladung: Entladerate drosseln, SOC_MIN anheben, Nutzerhinweis",
       "aktiv": true,
@@ -433,21 +573,30 @@
       "parameter": {
         "ev_leistung_schwelle_w": {
           "wert": 2000,
-          "bereich": [500, 5000],
+          "bereich": [
+            500,
+            5000
+          ],
           "einheit": "W",
           "obs_feld": "ev_power_w",
           "beschreibung": "Mindest-EV-Leistung damit Regel greift"
         },
         "soc_drosselung_ab_pct": {
           "wert": 50,
-          "bereich": [30, 70],
+          "bereich": [
+            30,
+            70
+          ],
           "einheit": "%",
           "obs_feld": "batt_soc_pct",
           "beschreibung": "Unter diesem SOC Entladerate auf 0.3C reduzieren"
         },
         "entladerate_reduziert_pct": {
           "wert": 30,
-          "bereich": [10, 50],
+          "bereich": [
+            10,
+            50
+          ],
           "einheit": "%",
           "obs_feld": "discharge_rate_pct",
           "aktor_kommando": "set_discharge_rate",
@@ -455,14 +604,20 @@
         },
         "soc_min_puffer_pct": {
           "wert": 5,
-          "bereich": [3, 15],
+          "bereich": [
+            3,
+            15
+          ],
           "einheit": "%",
           "obs_feld": "batt_soc_pct",
           "beschreibung": "SOC_MIN anheben wenn SOC innerhalb dieses Puffers über SOC_MIN"
         },
         "soc_min_netz_pct": {
           "wert": 25,
-          "bereich": [15, 40],
+          "bereich": [
+            15,
+            40
+          ],
           "einheit": "%",
           "obs_feld": "soc_min",
           "aktor_kommando": "set_soc_min",
@@ -470,7 +625,10 @@
         },
         "wolken_toleranz_s": {
           "wert": 300,
-          "bereich": [60, 600],
+          "bereich": [
+            60,
+            600
+          ],
           "einheit": "s",
           "beschreibung": "Kurze Wolke: so lange tolerieren bevor Regel greift (5min)"
         }
@@ -479,47 +637,45 @@
       "engine_zyklus": "fast"
     }
   },
-
   "beobachtungsfelder": {
     "_doc": "Referenz: Alle ObsState-Felder die von Regeln gelesen werden",
     "batterie": {
-      "batt_soc_pct":         "SOC [0..100%] — soc_schutz, abend_entladerate",
-      "batt_power_w":         "Leistung [W] — pos=Laden, neg=Entladen — laderate_dynamisch",
-      "batt_temp_max_c":      "Zell-Temp Maximum [°C] — temp_schutz",
-      "cha_state":            "Ladestatus [1=OFF..7] — laderate_dynamisch",
-      "charge_rate_pct":      "Aktuelle Laderate [%] — laderate_dynamisch, temp_schutz",
-      "discharge_rate_pct":   "Aktuelle Entladerate [%] — abend_entladerate",
-      "soc_min":              "Fronius SOC_MIN-Setting [%] — morgen_soc_min",
-      "soc_max":              "Fronius SOC_MAX-Setting [%] — nachmittag_soc_max",
-      "soc_mode":             "auto|manual — morgen, nachmittag",
-      "storctl_mod":          "Modbus StorCtl_Mod Bitfield — abend_entladerate"
+      "batt_soc_pct": "SOC [0..100%] — soc_schutz, abend_entladerate",
+      "batt_power_w": "Leistung [W] — pos=Laden, neg=Entladen — laderate_dynamisch",
+      "batt_temp_max_c": "Zell-Temp Maximum [°C] — temp_schutz",
+      "cha_state": "Ladestatus [1=OFF..7] — laderate_dynamisch",
+      "charge_rate_pct": "Aktuelle Laderate [%] — laderate_dynamisch, temp_schutz",
+      "discharge_rate_pct": "Aktuelle Entladerate [%] — abend_entladerate",
+      "soc_min": "Fronius SOC_MIN-Setting [%] — morgen_soc_min",
+      "soc_max": "Fronius SOC_MAX-Setting [%] — nachmittag_soc_max",
+      "soc_mode": "auto|manual — morgen, nachmittag",
+      "storctl_mod": "Modbus StorCtl_Mod Bitfield — abend_entladerate"
     },
     "erzeuger": {
-      "pv_total_w":           "PV-Leistung aktuell [W] — morgen_soc_min, laderate_dynamisch",
-      "pv_today_kwh":         "PV-Erzeugung heute [kWh] — forecast_plausibilisierung",
-      "forecast_kwh":         "Tagesprognose [kWh] — morgen, nachmittag, zellausgleich",
-      "forecast_rest_kwh":    "Rest-Prognose ab jetzt [kWh] — nachmittag, forecast_plausi",
-      "pv_vs_forecast_pct":   "IST/SOLL Verhältnis [%] — forecast_plausibilisierung",
-      "cloud_avg_pct":        "Wolken Tagesdurchschnitt [%] — nachmittag_soc_max",
-      "cloud_now_pct":        "Wolken aktuell [%] — forecast_plausibilisierung",
-      "cloud_rest_avg_pct":   "Wolken Resttag Schnitt [%] — forecast_plausi, nachmittag"
+      "pv_total_w": "PV-Leistung aktuell [W] — morgen_soc_min, laderate_dynamisch",
+      "pv_today_kwh": "PV-Erzeugung heute [kWh] — forecast_plausibilisierung",
+      "forecast_kwh": "Tagesprognose [kWh] — morgen, nachmittag, zellausgleich",
+      "forecast_rest_kwh": "Rest-Prognose ab jetzt [kWh] — nachmittag, forecast_plausi",
+      "pv_vs_forecast_pct": "IST/SOLL Verhältnis [%] — forecast_plausibilisierung",
+      "cloud_avg_pct": "Wolken Tagesdurchschnitt [%] — nachmittag_soc_max",
+      "cloud_now_pct": "Wolken aktuell [%] — forecast_plausibilisierung",
+      "cloud_rest_avg_pct": "Wolken Resttag Schnitt [%] — forecast_plausi, nachmittag"
     },
     "verbraucher": {
-      "wp_power_w":           "WP-Leistung aktuell [W] (SmartMeter WP) — laderate_dynamisch",
-      "wp_active":            "WP läuft (P_WP > 200W) — laderate_dynamisch",
-      "wp_today_kwh":         "WP-Verbrauch heute [kWh] — informativ",
-      "ev_power_w":           "WattPilot-Leistung [W] — wattpilot_battschutz",
-      "ev_charging":          "WattPilot lädt (car==2) — wattpilot_battschutz",
-      "ev_eco_mode":          "WattPilot Eco-Modus (lmo==4) — wattpilot_battschutz",
-      "house_load_w":         "Hausverbrauch [W] — Kapazitätsverteilung",
-      "heizpatrone_aktiv":    "Heizstab läuft (vorerst immer false) — geplant"
+      "wp_power_w": "WP-Leistung aktuell [W] (SmartMeter WP) — laderate_dynamisch",
+      "wp_active": "WP läuft (P_WP > 200W) — laderate_dynamisch",
+      "wp_today_kwh": "WP-Verbrauch heute [kWh] — informativ",
+      "ev_power_w": "WattPilot-Leistung [W] — wattpilot_battschutz",
+      "ev_charging": "WattPilot lädt (car==2) — wattpilot_battschutz",
+      "ev_eco_mode": "WattPilot Eco-Modus (lmo==4) — wattpilot_battschutz",
+      "house_load_w": "Hausverbrauch [W] — Kapazitätsverteilung",
+      "heizpatrone_aktiv": "Heizstab läuft (vorerst immer false) — geplant"
     },
     "zeit": {
-      "sunrise":              "Sonnenaufgang [Dezimalstunde] — morgen_soc_min",
-      "sunset":               "Sonnenuntergang [Dezimalstunde] — nachmittag_soc_max"
+      "sunrise": "Sonnenaufgang [Dezimalstunde] — morgen_soc_min",
+      "sunset": "Sonnenuntergang [Dezimalstunde] — nachmittag_soc_max"
     }
   },
-
   "hardware": {
     "_doc": "Unveränderliche Hardware-Referenz (read-only, aus battery_control.json gespiegelt)",
     "kapazitaet_kwh": 10.24,
@@ -528,7 +684,6 @@
     "max_lade_w": 10240,
     "max_entlade_w": 10240
   },
-
   "meta": {
     "komfort_bereich": "25–75% SOC (LFP-optimal, ~3000 Zyklen bis 90% Kap.)",
     "stress_bereich": "5–25% oder 75–100% SOC (nur prognosegesteuert)",

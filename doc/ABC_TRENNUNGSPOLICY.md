@@ -106,6 +106,13 @@ Aktuell erkennbare Vermischung (architektonisch relevant):
 - Forecast-API triggert Persistierung in DB (Write-Side-Effect im API-Pfad).
 - Einzelne Initialisierungen in der Web-Schicht übernehmen DB-nahe Aufgaben.
 
+**Bewusste Code-Duplikation (ABC-konform):**
+- `RawModbusClient` (modbus_v3.py, Schicht A) — **nur Lesen**, kein `write`-Capability.
+- `ModbusClient` (battery_control.py, Schicht C) — Lesen + Schreiben für Aktorik.
+- Die Duplikation des Socket-Codes ist gewollt: Der Collector (A) soll keine
+  Schreibfähigkeit besitzen. Eine gemeinsame Klasse würde dem Collector unnötige
+  Write-Capability geben — Verstoß gegen Prinzip 1 (Single Write Owner).
+
 Das ist **kein akuter Betriebsfehler**, aber ein wichtiger Ansatzpunkt für
 saubere zukünftige Entkopplung.
 

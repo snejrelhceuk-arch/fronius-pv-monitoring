@@ -28,6 +28,7 @@ data_backup_*.db
 # Runtime-Dateien (werden von laufenden Services generiert)
 collector.pid
 wattpilot_collector.pid
+automation_daemon.pid
 config/battery_scheduler_state.json
 config/battery_bms_checkpoints.json
 

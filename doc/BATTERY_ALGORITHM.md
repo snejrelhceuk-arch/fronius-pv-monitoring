@@ -629,14 +629,14 @@ CREATE TABLE battery_control_log (
 | Schritt | Beschreibung | Aufwand |
 |---------|-------------|---------|
 | 1 | ✅ Config-Datei `config/battery_control.json` | erledigt |
-| 2 | `battery_scheduler.py` erstellen (Algorithmus-Kern) | ~300 Zeilen |
-| 3 | DB-Tabelle `battery_control_log` anlegen | 1 SQL |
-| 4 | Cron-Job: alle 15 min `battery_scheduler.py` aufrufen | 1 Zeile |
-| 5 | Zellausgleich-Logik (1× monatlich) | ~50 Zeilen |
+| 2 | ✅ `battery_scheduler.py` erstellt (Algorithmus-Kern) | erledigt |
+| 3 | ✅ DB-Tabelle `battery_control_log` angelegt | erledigt |
+| 4 | ✅ ~~Cron-Job~~ → `pv-automation.service` (systemd, seit 2026-02-28) | erledigt |
+| 5 | ✅ Zellausgleich-Logik (1× monatlich, prognosegesteuert) | erledigt |
 | 6 | API-Endpunkt `/api/battery_control` in web_api.py | ~50 Zeilen |
 | 7 | UI-Buttons in tag_view.html Batterie-Bar | ~40 Zeilen |
 | 8 | Status-Anzeige: nächste geplante Aktion | ~30 Zeilen |
-| 9 | Systemd-Service (optional, statt Cron) | 1 Unit-File |
+| 9 | ✅ `pv-automation.service` (systemd, Score-basierte Engine) | erledigt |
 
 ---
 

@@ -30,8 +30,8 @@ MinRsvPct:          25%
 RvrtTms:            0 (KEIN Auto-Revert!)
 ```
 
-**Scheduler:** `battery_scheduler.py` via Cron alle 15 min (`5,20,35,50 * * * *`)  
-**Config:** `config/battery_control.json`  
+**Scheduler:** ~~`battery_scheduler.py` via Cron~~ → **`pv-automation.service`** (systemd, Score-basierte Engine mit 9 Regelkreisen, seit 2026-02-28)
+**Config:** `config/soc_param_matrix.json` (9 Regelkreise, 50+ Parameter)
 **State:** `config/battery_scheduler_state.json`
 
 ---
@@ -152,15 +152,18 @@ python3 battery_control.py --auto               # Automatik
 
 ---
 
-## Status (2026-02-12)
+## Status (2026-02-28)
 
-- [x] Scheduler produktiv (`battery_scheduler.py` via Cron, 15-min-Intervall)
+- [x] Engine produktiv (`pv-automation.service`, systemd, 9 Regelkreise)
+- [x] Legacy-Scheduler deaktiviert (`battery_scheduler.py` via Cron abgelöst)
 - [x] PV-Prognose via Geometrie-Engine (`solar_geometry` / `solar_forecast`)
 - [x] Tages-Reset mit Komfort-Defaults (SOC + Modbus)
-- [x] Konsistenz-Prüfung mit Auto-Korrektur
+- [x] Score-basierte Entscheidungen mit Cascade-Mechanismus
+- [x] Fuzzy-Scoring für nachmittag_soc_max (Clear-Sky-Peak + Leistungsschwelle)
+- [x] Verbraucher-Kontext: 30-min-Mittelwerte für EV/WP in Schwellenberechnung
 - [x] Retry-Logik für API + Modbus
 - [x] Abend-/Nacht-Entladeraten (29% / 10%)
 - [x] Monatlicher Zellausgleich (prognosegesteuert)
-- [x] Logging in SQLite (`battery_control_log`)
+- [x] Logging in SQLite (`automation_log` + `battery_control_log`)
 - [ ] Sommer-Ladebegrenzung (temperaturbasiert, Strategie E)
 - [ ] Web-Dashboard Integration (Status/Override)

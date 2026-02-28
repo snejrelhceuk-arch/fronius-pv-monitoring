@@ -405,24 +405,19 @@ class RegelMorgenSocMin(Regel):
 class RegelNachmittagSocMax(Regel):
     """SOC_MAX nachmittags erhöhen: Mehr Kapazität vor Abend.
 
-    *** PROGNOSEGESTEUERTE ÖFFNUNGSZEIT ***
-    Ziel: Der Akku soll immer VOLL werden, aber SOC_MAX=100% nicht
-    zu früh öffnen (Langlebigkeit).  Die Öffnungszeit hängt ab von:
+    *** CLEAR-SKY-PEAK + LEISTUNGSSCHWELLEN-ALGORITHMUS ***
+    Ziel: SOC_MAX=100% öffnen, wenn die PV-Leistung nachhaltig
+    unter die Schwelle (default 7 kW) absinkt — ausgehend vom
+    Clear-Sky-Peak.
 
-    1. Prognose-Sicherheit:
-       - Sichere Sonnentage (forecast_rest_kwh > Bedarf × 1.5):
-         Öffnung spät → 13:00 (Winter, sunset < 18h)
-                       → 15:00–16:00 (Sommer, sunset ≥ 18h)
-       - Unsichere Tage  (forecast_rest_kwh < Bedarf × 1.2):
-         Öffnung früh → 12:00 (damit der Akku sicher voll wird)
-       - Schlechte Tage   (forecast_rest_kwh < 3 kWh):
-         Öffnung SOFORT (Rest-Ertrag mitnehmen)
-
-    2. Verbraucher-Kontext:
-       - WP aktiv, Heizpatrone, Wattpilot → mehr PV wird verbraucht
-         → Sicherheitsfaktor erhöhen → ggf. früher öffnen
-
-    3. Deadline: max_stunden_vor_sunset als absolutes Sicherheitsnetz
+    Algorithmus:
+      1. clear-sky peak hour bestimmen (z.B. 12:30)
+      2. Ab dem Peak im Stunden-Leistungsprofil (Prognose) den
+         ersten Zeitpunkt finden, wo total_ac < schwelle_kw
+      3. Falls Prognose 1h nach Peak im Mittel schon < schwelle_kw
+         → direkt am Peak öffnen (schwacher Tag)
+      4. Deadline: sunset − 1.5h als absolutes Sicherheitsnetz
+      5. Wolken-Override: schwere Bewölkung → frühstmöglich
 
     Parametermatrix: regelkreise.nachmittag_soc_max
     """
@@ -431,105 +426,124 @@ class RegelNachmittagSocMax(Regel):
     regelkreis = 'nachmittag_soc_max'
     engine_zyklus = 'strategic'
 
+    def _effektive_schwelle_w(self, obs: ObsState, matrix: dict) -> float:
+        """Öffnungsschwelle unter Berücksichtigung aktiver Großverbraucher.
+
+        Grundidee: Die Schwelle ist "freie PV-Leistung für Batterie".
+        Wenn Großverbraucher (EV, WP) laufen, muss die PV-Leistung
+        höher sein, bevor die Batterie nachgeladen werden kann.
+
+        Verwendet 30-min Mittelwerte (bevorzugt) statt Snapshots:
+        - WP taktet (Kompressor an/aus) → Snapshot 0 oder 3kW, Avg realistisch
+        - EV Avg wirkt als Confidence-Fenster: gerade erst angesteckt →
+          Avg niedrig, seit 30min am Laden → volles Gewicht
+
+        effektive_schwelle = oeffnungsschwelle + verbraucher_avg30
+        """
+        basis_w = get_param(matrix, self.regelkreis, 'oeffnungsschwelle_kw', 7) * 1000
+
+        verbraucher_w = 0.0
+        # EV: 30-min Avg bevorzugt, Fallback auf Snapshot wenn charging
+        if obs.ev_power_avg30_w and obs.ev_power_avg30_w > 1000:
+            verbraucher_w += obs.ev_power_avg30_w
+        elif obs.ev_charging and obs.ev_power_w:
+            verbraucher_w += obs.ev_power_w
+        # WP: 30-min Avg bevorzugt, Fallback auf Snapshot wenn aktiv
+        if obs.wp_power_avg30_w and obs.wp_power_avg30_w > 500:
+            verbraucher_w += obs.wp_power_avg30_w
+        elif obs.wp_active and obs.wp_power_w:
+            verbraucher_w += obs.wp_power_w
+
+        eff = basis_w + verbraucher_w
+        if verbraucher_w > 100:
+            LOG.debug(f"nachmittag SOC_MAX: Schwelle {basis_w / 1000:.0f} kW "
+                      f"+ Verbraucher {verbraucher_w / 1000:.1f} kW "
+                      f"(WP avg30={obs.wp_power_avg30_w or 0:.0f}W, "
+                      f"EV avg30={obs.ev_power_avg30_w or 0:.0f}W) = {eff / 1000:.1f} kW")
+        return eff
+
     def _berechne_dynamische_startzeit(self, obs: ObsState, matrix: dict) -> float:
-        """Bestimme die optimale Öffnungszeit basierend auf Prognose.
+        """Bestimme die optimale Öffnungszeit basierend auf Clear-Sky-Peak.
 
         Returns: Dezimalstunde ab der SOC_MAX geöffnet werden soll.
 
         Algorithmus:
-          1. Berechne Füllbedarf: (100% - SOC_MAX_aktuell) × Kapazität
-          2. Berechne Ladedauer: Bedarf / erwartete Ladeleistung
-          3. Berücksichtige Verbraucher-Last (WP, WattPilot)
-          4. Wähle Startzeitpunkt so, dass Akku bei Sunset voll ist
-          5. Begrenze: nicht vor 12:00, nicht nach sunset - 1.5h
+          1. Finde Clear-Sky-Peak (Stunde der max. CS-Leistung)
+          2. Laufe im Forecast-Power-Profil ab Peak vorwärts
+          3. Erste Stunde mit total_ac < effektive Schwelle → Öffnungszeit
+             (Schwelle = oeffnungsschwelle_kw + aktive Verbraucher)
+          4. Falls 1h nach Peak schon im Mittel < Schwelle → am Peak öffnen
+          5. Fallback bei fehlenden Daten: Sunset − 3h
         """
         sunset = obs.sunset or 17.0
-        batt_kwh = 10.24  # Hardware-Kapazität
-        current_soc = obs.batt_soc_pct or 50
-        current_max = obs.soc_max or 75
+        schwelle_w = self._effektive_schwelle_w(obs, matrix)
+        min_start = get_param(matrix, self.regelkreis, 'start_stunde', 11)
+        deadline = sunset - get_param(matrix, self.regelkreis, 'max_stunden_vor_sunset', 1.5)
 
-        # Füllbedarf in kWh
-        fill_pct = 100 - current_soc
-        fill_kwh = fill_pct / 100.0 * batt_kwh
+        peak_h = obs.clearsky_peak_h
+        profil = obs.forecast_power_profile  # [{hour, total_ac_w}, ...]
 
-        # Erwartete Netto-Ladeleistung [kW]
-        # PV-Überschuss = PV - Hausverbrauch - Verbraucher
-        verbraucher_w = 0
-        if obs.wp_active and obs.wp_power_w:
-            verbraucher_w += obs.wp_power_w
-        if obs.ev_charging and obs.ev_power_w:
-            verbraucher_w += obs.ev_power_w
-        if obs.heizpatrone_aktiv:
-            verbraucher_w += 3000  # Typische Heizpatrone
+        # ── Fallback: kein Peak oder kein Profil verfügbar ──
+        if peak_h is None or not profil:
+            fb = max(min_start, deadline - 1.0)
+            LOG.info(f"nachmittag SOC_MAX: Kein Profil/Peak → Fallback {fb:.1f}h")
+            return fb
 
-        # Geschätzte durchschnittliche Ladeleistung (konservativ)
-        # Mittags typisch 5-8kW PV, abzgl. Verbrauch
-        avg_pv_w = 5000  # Konservative Schätzung
-        if obs.pv_total_w is not None and obs.pv_total_w > 1000:
-            avg_pv_w = obs.pv_total_w * 0.8  # 80% als Durchschnitt
-        haus_w = obs.house_load_w or 500
-        netto_lade_w = max(1000, avg_pv_w - haus_w - verbraucher_w)
-        netto_lade_kw = netto_lade_w / 1000.0
+        # ── Profil nach Stunde sortieren (Sicherheit) ──
+        profil_sorted = sorted(profil, key=lambda p: p.get('hour', 0))
 
-        # Ladedauer mit Sicherheitspuffer
-        lade_h = fill_kwh / netto_lade_kw * 1.3  # 30% Sicherheit
+        # ── Stunden nach dem Peak filtern ──
+        nach_peak = [p for p in profil_sorted if p['hour'] >= int(peak_h)]
+        if not nach_peak:
+            fb = max(min_start, deadline - 1.0)
+            LOG.info(f"nachmittag SOC_MAX: Kein Profil nach Peak {peak_h:.1f}h → {fb:.1f}h")
+            return fb
 
-        # Idealer Start: Sunset - Ladedauer
-        idealer_start = sunset - lade_h
+        # ── Check: Ist Prognose 1h nach Peak schon im Mittel < Schwelle? ──
+        peak_int = int(peak_h)
+        stunde_nach_peak = [p for p in profil_sorted
+                            if peak_int <= p['hour'] <= peak_int + 1]
+        if stunde_nach_peak:
+            avg_nach_peak = sum(p.get('total_ac_w', 0) for p in stunde_nach_peak) / len(stunde_nach_peak)
+            if avg_nach_peak < schwelle_w:
+                start = max(min_start, peak_h)
+                LOG.info(f"nachmittag SOC_MAX: Schwacher Tag — 1h nach Peak "
+                         f"∅{avg_nach_peak / 1000:.1f} kW < {schwelle_w / 1000:.0f} kW "
+                         f"→ öffne bei Peak {start:.1f}h")
+                return start
 
-        # ── Grenzen nach Saison ──
-        # Winter (sunset < 18h): frühestens 12:00, spätestens 13:00 (sicher)
-        # Übergang (18-20h):     frühestens 12:00, spätestens 15:00
-        # Sommer (sunset ≥ 20h): frühestens 13:00, spätestens 16:00
-        if sunset < 18.0:
-            # Winter: Wenig Sonnenstunden, eher früh öffnen
-            min_start = 12.0
-            max_start_sicher = 13.0  # Bei guter Prognose
-        elif sunset < 20.0:
-            # Übergang: Moderate Sonnendauer
-            min_start = 12.0
-            max_start_sicher = 15.0
-        else:
-            # Sommer: Viel Zeit
-            min_start = 13.0
-            max_start_sicher = 16.0
+        # ── Laufe ab Peak vorwärts: erste Stunde < Schwelle ──
+        for p in nach_peak:
+            if p.get('total_ac_w', 0) < schwelle_w:
+                start = max(min_start, float(p['hour']))
+                LOG.info(f"nachmittag SOC_MAX: Prognose {p.get('total_ac_w', 0) / 1000:.1f} kW "
+                         f"< {schwelle_w / 1000:.0f} kW ab {p['hour']}h → Start {start:.1f}h "
+                         f"(Peak {peak_h:.1f}h)")
+                return start
 
-        # Prognose-Sicherheit bestimmen
-        if obs.forecast_rest_kwh is not None:
-            # Sicherheits-Faktor: Berücksichtige Verbraucher
-            verbraucher_faktor = 1.0 + verbraucher_w / 5000.0  # +20% pro 1kW Verbraucher
-            benoetigter_rest = fill_kwh * verbraucher_faktor
-
-            if obs.forecast_rest_kwh > benoetigter_rest * 1.5:
-                # Sehr sicher → so spät wie möglich (LFP-Schonung)
-                start = min(max_start_sicher, max(idealer_start, min_start))
-                LOG.info(f"nachmittag SOC_MAX: SICHER — Rest {obs.forecast_rest_kwh:.1f} kWh "
-                         f">> Bedarf {benoetigter_rest:.1f} kWh → Start {start:.1f}h")
-            elif obs.forecast_rest_kwh > benoetigter_rest * 1.2:
-                # Moderat sicher → etwas früher
-                start = max(min_start, idealer_start - 0.5)
-                LOG.info(f"nachmittag SOC_MAX: MODERAT — Rest {obs.forecast_rest_kwh:.1f} kWh "
-                         f"≈ Bedarf {benoetigter_rest:.1f} kWh → Start {start:.1f}h")
-            else:
-                # Unsicher → SOFORT ab min_start
-                start = min_start
-                LOG.info(f"nachmittag SOC_MAX: UNSICHER — Rest {obs.forecast_rest_kwh:.1f} kWh "
-                         f"< Bedarf {benoetigter_rest:.1f} kWh → Start {start:.1f}h")
-        else:
-            # Keine Prognose verfügbar → konservativ: min_start
-            start = min_start
-            LOG.info(f"nachmittag SOC_MAX: Keine Restprognose → Start {start:.1f}h")
-
-        # Wolken-Override: Bei schwerer Bewölkung immer sofort ab min_start
-        wolken = get_param(matrix, self.regelkreis, 'wolken_schwer_pct', 85)
-        cloud_val = obs.cloud_rest_avg_pct if obs.cloud_rest_avg_pct is not None else obs.cloud_avg_pct
-        if cloud_val is not None and cloud_val > wolken:
-            start = min_start
-            LOG.info(f"nachmittag SOC_MAX: Wolken {cloud_val:.0f}% > {wolken}% → Start {start:.1f}h")
-
+        # ── Prognose bleibt den ganzen Tag über Schwelle → Deadline ──
+        start = max(min_start, deadline)
+        LOG.info(f"nachmittag SOC_MAX: Prognose bleibt >{schwelle_w / 1000:.0f} kW → "
+                 f"Deadline-Start {start:.1f}h")
         return start
 
     def bewerte(self, obs: ObsState, matrix: dict) -> int:
+        """Fuzzy-Score-Bewertung mit weichem Rampen-Anstieg.
+
+        Architektur:
+          - Vor dyn_start:  Score 0  (dyn_start selbst wird fuzzy berechnet
+            aus ClearSky-Peak, Prognose-Leistungsprofil, Verbraucherkontext)
+          - Ab dyn_start:   Rampe 60%→95% Score (linear bis Sunset)
+          - Deadline:       voller Score (100%)
+
+        Fuzzy-Qualität:
+          - dyn_start ist nicht hart konfiguriert sondern dynamisch
+            berechnet aus Peak + Leistungsprofil + Verbraucher
+          - Score steigt stetig mit abnehmender Restzeit
+          - Cascade-Mechanismus in Engine garantiert dass die Regel
+            auch bei niedrigerem Score ausgeführt wird, wenn stärkere
+            Regeln keine Aktionen erzeugen
+        """
         if not ist_aktiv(matrix, self.regelkreis):
             return 0
 
@@ -541,36 +555,37 @@ class RegelNachmittagSocMax(Regel):
         if obs.soc_max is not None and obs.soc_max >= stress_max:
             return 0
 
-        # Dynamische Startzeit berechnen
+        score_max = get_score_gewicht(matrix, self.regelkreis)  # 55
+        sunset = obs.sunset or 17.0
+        hours_left = max(0, sunset - hr)
+        max_h = get_param(matrix, self.regelkreis, 'max_stunden_vor_sunset', 1.5)
+
+        # ── Deadline: voller Score ──
+        if hours_left <= max_h:
+            return score_max
+
+        # ── Dynamische Startzeit (fuzzy-berechnet) ──
         dyn_start = self._berechne_dynamische_startzeit(obs, matrix)
+
+        # Vor der berechneten Startzeit → nicht aktiv
         if hr < dyn_start:
             return 0
 
-        # Deadline-Score: je näher Sunset, desto dringender
-        sunset = obs.sunset or 17.0
-        hours_left = sunset - hr
-        max_h = get_param(matrix, self.regelkreis, 'max_stunden_vor_sunset', 1.5)
+        # ── Ab dyn_start: Rampe 60%→95% Score ──
+        #    Proportional zu verbleibender Zeit bis Sunset
+        total_window = max(0.1, sunset - dyn_start)
+        elapsed_frac = min(1.0, (hr - dyn_start) / total_window)
 
-        if hours_left <= max_h:
-            return get_score_gewicht(matrix, self.regelkreis)  # Deadline!
+        # 60% am Anfang → 95% am Ende (kurz vor Deadline)
+        score_frac = 0.60 + 0.35 * elapsed_frac
 
-        score = get_score_gewicht(matrix, self.regelkreis)
-
-        # Schwere Bewölkung — jetzt mit Resttag-Wolkenprofil
+        # Schwere Bewölkung → Score-Boost (+10%)
         wolken = get_param(matrix, self.regelkreis, 'wolken_schwer_pct', 85)
         cloud_val = obs.cloud_rest_avg_pct if obs.cloud_rest_avg_pct is not None else obs.cloud_avg_pct
         if cloud_val is not None and cloud_val > wolken:
-            return int(score * 0.9)
+            score_frac = min(0.95, score_frac + 0.10)
 
-        # Rest-Prognose-Check: Reicht der PV-Ertrag noch für Volladung?
-        if obs.forecast_rest_kwh is not None and obs.forecast_rest_kwh < 3.0:
-            return int(score * 0.85)  # Wenig Rest-PV → SOC_MAX jetzt hoch
-
-        if hours_left < 4:
-            return int(score * 0.7)
-
-        # Im dynamischen Fenster → moderater Score
-        return int(score * 0.6)
+        return int(score_max * score_frac)
 
     def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
         komfort = get_param(matrix, self.regelkreis, 'komfort_max_pct', 75)
@@ -586,24 +601,18 @@ class RegelNachmittagSocMax(Regel):
 
         sunset = obs.sunset or 17.0
         now_h = datetime.now().hour + datetime.now().minute / 60.0
-        rest_kwh = f"{obs.forecast_rest_kwh:.1f}" if obs.forecast_rest_kwh else "?"
+        peak_h = obs.clearsky_peak_h
 
-        # Verbraucher-Info für Logging
-        verbraucher = []
-        if obs.wp_active:
-            verbraucher.append(f"WP {obs.wp_power_w or 0:.0f}W")
-        if obs.ev_charging:
-            verbraucher.append(f"EV {obs.ev_power_w or 0:.0f}W")
-        if obs.heizpatrone_aktiv:
-            verbraucher.append("Heizpatrone")
-        verb_str = f", Verbraucher: {', '.join(verbraucher)}" if verbraucher else ""
+        # Logging-Details
+        peak_str = f"Peak {peak_h:.1f}h" if peak_h else "Peak ?"
+        dyn_start = self._berechne_dynamische_startzeit(obs, matrix)
 
         aktionen.append({
             'tier': 2, 'aktor': 'batterie',
             'kommando': 'set_soc_max', 'wert': stress,
             'grund': (f'Nachmittag: SOC_MAX {komfort}%→{stress}%, '
                       f'{sunset - now_h:.1f}h bis Sunset, '
-                      f'Rest-PV {rest_kwh} kWh{verb_str}'),
+                      f'{peak_str}, Öffnung ab {dyn_start:.1f}h'),
         })
         return aktionen
 
@@ -1194,25 +1203,32 @@ class Engine:
             except Exception as e:
                 LOG.error(f"Aktionen erzeugen fehlgeschlagen '{regel.name}': {e}")
 
-        # 4b. Optimierungs-Gewinner (höchster Score)
+        # 4b. Optimierungs-Regeln: Gewinner first, Cascade bei leerer Aktion
+        #     Wenn der Score-Gewinner keine Aktionen erzeugt (z.B.
+        #     forecast_plausi entscheidet "keine Aktion nötig"), wird der
+        #     nächstbeste Kandidat versucht.  So blockiert eine Score-hohe
+        #     aber passiv bleibende Regel nie eine niedrigere aktive Regel.
         if optim_scores:
             optim_scores.sort(key=lambda x: x[0], reverse=True)
-            winner_score, winner = optim_scores[0]
-            LOG.info(f"Zyklus '{zyklus_typ}': Gewinner '{winner.name}' (Score {winner_score})")
 
-            # 5. Aktionen erzeugen
-            try:
-                aktionen = winner.erzeuge_aktionen(obs, self._matrix)
-            except Exception as e:
-                LOG.error(f"Aktionen erzeugen fehlgeschlagen '{winner.name}': {e}")
-                return ergebnisse
+            for winner_score, winner in optim_scores:
+                LOG.info(f"Zyklus '{zyklus_typ}': Gewinner '{winner.name}' (Score {winner_score})")
 
-            if aktionen:
-                # 6. An Actuator dispatchen
-                teil_ergebnisse = self.actuator.ausfuehren_plan(aktionen)
-                for e in teil_ergebnisse:
-                    LOG.info(f"  → {e.get('kommando')} = {'OK' if e.get('ok') else 'FEHLER'}")
-                ergebnisse.extend(teil_ergebnisse)
+                try:
+                    aktionen = winner.erzeuge_aktionen(obs, self._matrix)
+                except Exception as e:
+                    LOG.error(f"Aktionen erzeugen fehlgeschlagen '{winner.name}': {e}")
+                    continue
+
+                if aktionen:
+                    # 6. An Actuator dispatchen
+                    teil_ergebnisse = self.actuator.ausfuehren_plan(aktionen)
+                    for e in teil_ergebnisse:
+                        LOG.info(f"  → {e.get('kommando')} = {'OK' if e.get('ok') else 'FEHLER'}")
+                    ergebnisse.extend(teil_ergebnisse)
+                    break  # Erster Gewinner mit Aktionen → fertig
+                else:
+                    LOG.info(f"  '{winner.name}' hat keine Aktionen → Cascade zum Nächsten")
 
         return ergebnisse
 
