@@ -100,6 +100,7 @@ class DataCollector:
         self._collect_wp_today(obs)
         self._collect_geometry(obs)
         self._collect_forecast(obs)      # NACH pv_today für Rest-Prognose + IST/SOLL
+        self._collect_fritzdect(obs)
 
     # ── raw_data: PV, Netz, Batterie (aus Collector/Modbus) ──
 
@@ -463,6 +464,49 @@ class DataCollector:
                 pass
 
 
+    # ── Fritz!DECT: Heizpatrone Live-Status ──────────────────
+
+    _fritzdect_cache_ts: float = 0
+    _fritzdect_cache_data: dict = None
+    _FRITZDECT_POLL_INTERVAL = 60   # Fritz!Box 1× pro Minute (passend zu fast-cycle)
+
+    def _collect_fritzdect(self, obs: ObsState):
+        """HP-Status von Fritz!Box → obs.heizpatrone_aktiv.
+
+        Nutzt getdevicelistinfos (1 Bulk-Request) mit 30s-Cache.
+        Wird bei JEDEM collect() aufgerufen, damit Tier-1 stets
+        aktuellen HP-Zustand hat.
+        """
+        now = time.time()
+        if (self._fritzdect_cache_data is not None
+                and (now - self._fritzdect_cache_ts) < self._FRITZDECT_POLL_INTERVAL):
+            info = self._fritzdect_cache_data
+        else:
+            info = None
+            try:
+                from automation.engine.aktoren.aktor_fritzdect import (
+                    _load_fritz_config, _get_session_id, _aha_device_info
+                )
+                cfg = _load_fritz_config()
+                host = cfg.get('fritz_ip', '192.168.178.1')
+                ain = cfg.get('ain', '')
+                user = cfg.get('fritz_user', '')
+                pw = cfg.get('fritz_password', '')
+                if ain and user and pw:
+                    sid = _get_session_id(host, user, pw)
+                    if sid:
+                        info = _aha_device_info(host, ain, sid)
+            except Exception as e:
+                LOG.debug(f"Fritz!DECT collect: {e}")
+
+            DataCollector._fritzdect_cache_ts = now
+            DataCollector._fritzdect_cache_data = info
+
+        if info and info.get('state') is not None:
+            obs.heizpatrone_aktiv = str(info['state']).strip() == '1'
+        # Bei Fehler: alten Wert beibehalten (kein False-Reset)
+
+
 # ═════════════════════════════════════════════════════════════
 # Daemon-Hauptklasse
 # ═════════════════════════════════════════════════════════════
@@ -732,12 +776,14 @@ def engine_vorausschau() -> list[dict]:
             RegelSocSchutz, RegelTempSchutz, RegelAbendEntladerate,
             RegelMorgenSocMin, RegelNachmittagSocMax, RegelZellausgleich,
             RegelForecastPlausi, RegelLaderateDynamisch, RegelWattpilotBattSchutz,
+            RegelHeizpatrone,
         )
 
         regeln = [
             RegelSocSchutz(), RegelTempSchutz(), RegelAbendEntladerate(),
             RegelMorgenSocMin(), RegelNachmittagSocMax(), RegelZellausgleich(),
             RegelForecastPlausi(), RegelLaderateDynamisch(), RegelWattpilotBattSchutz(),
+            RegelHeizpatrone(),
         ]
 
         vorschau = []
