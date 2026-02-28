@@ -36,10 +36,9 @@ def api_battery_status():
     Plus: Scheduler-Status (Entladerate, Phasen-Flags).
     Cache: 60 Sekunden (Werte ändern sich selten).
     """
-    import time as _time
+    now = time.time()
 
     # Cache prüfen (60s gültig)
-    now = _time.time()
     if battery_cache['data'] and (now - battery_cache['ts']) < 60:
         return jsonify(battery_cache['data'])
 
@@ -48,591 +47,587 @@ def api_battery_status():
         if not api:
             return jsonify({"error": "FroniusAPI nicht verfügbar"}), 503
 
-        values = api.get_values()
-
-        result = {
-            'soc_min': values.get('BAT_M0_SOC_MIN'),
-            'soc_max': values.get('BAT_M0_SOC_MAX'),
-            'soc_mode': values.get('BAT_M0_SOC_MODE'),
-            'grid_charge': values.get('HYB_EVU_CHARGEFROMGRID'),
-            'ac_charge': values.get('HYB_BM_CHARGEFROMAC'),
-            'pac_min': values.get('HYB_BM_PACMIN'),
-            'backup_critical_soc': values.get('HYB_BACKUP_CRITICALSOC'),
-            'backup_reserved': values.get('HYB_BACKUP_RESERVED'),
-            'em_mode': values.get('HYB_EM_MODE'),
-        }
-
-        result['batt_energy_method'] = 'integration_ui_with_counter_fallback'
-
-        # Automation Engine State (echte Daten aus automation_log)
-        try:
-            import json as _json
-
-            with sqlite3.connect(config.DB_PATH) as _adb:
-                _24h_ago = int(now) - 86400
-
-                # Vergangene SOC-Umschaltungen (letzte 24 h) — nur SOC-Befehle
-                soc_rows = _adb.execute("""
-                    SELECT ts, kommando, wert, grund, ergebnis
-                    FROM automation_log
-                    WHERE aktor = 'batterie'
-                      AND kommando IN ('set_soc_min', 'set_soc_max', 'set_soc_mode')
-                      AND ts >= datetime(?, 'unixepoch')
-                    ORDER BY ts DESC
-                    LIMIT 20
-                """, (_24h_ago,)).fetchall()
-
-                result['soc_switches'] = [{
-                    'ts': r[0],
-                    'kommando': r[1],
-                    'wert': r[2],
-                    'grund': (r[3] or '')[:120],
-                    'ergebnis': r[4],
-                } for r in soc_rows]
-
-                # ALLE Engine-Aktionen der letzten 24 h (inkl. Lade-/Entladerate, hold)
-                all_rows = _adb.execute("""
-                    SELECT ts, kommando, wert, grund, ergebnis
-                    FROM automation_log
-                    WHERE aktor = 'batterie'
-                      AND ts >= datetime(?, 'unixepoch')
-                    ORDER BY ts DESC
-                    LIMIT 50
-                """, (_24h_ago,)).fetchall()
-
-                result['engine_aktionen'] = [{
-                    'ts': r[0],
-                    'kommando': r[1],
-                    'wert': r[2],
-                    'grund': (r[3] or '')[:120],
-                    'ergebnis': r[4],
-                } for r in all_rows]
-
-                # Letzter Engine-Zyklus: Gewinner-Regel + Score
-                last_action = _adb.execute("""
-                    SELECT ts, kommando, wert, grund, ergebnis
-                    FROM automation_log
-                    WHERE aktor = 'batterie'
-                    ORDER BY id DESC LIMIT 1
-                """).fetchone()
-                if last_action:
-                    result['last_engine_action'] = {
-                        'ts': last_action[0],
-                        'kommando': last_action[1],
-                        'wert': last_action[2],
-                        'grund': (last_action[3] or '')[:120],
-                        'ergebnis': last_action[4],
-                    }
-
-            # Engine-Vorausschau (Dry-Run aller Regeln auf aktuellem Zustand)
-            try:
-                from automation.engine.automation_daemon import engine_vorausschau
-                result['vorausschau'] = engine_vorausschau()
-            except Exception as ev:
-                logging.debug(f"Vorausschau nicht verfügbar: {ev}")
-                result['vorausschau'] = []
-
-            # Scheduler-State (Phasen-Flags, Legacy-Kompatibilität)
-            state_file = Path(__file__).resolve().parent.parent / 'config' / 'battery_scheduler_state.json'
-            if state_file.exists():
-                with open(state_file, 'r') as f:
-                    sched_state = _json.load(f)
-                result['scheduler'] = {
-                    'morning_done': sched_state.get('morning_done', False),
-                    'afternoon_done': sched_state.get('afternoon_done', False),
-                    'balancing_active': sched_state.get('balancing_active', False),
-                    'evening_rate_active': sched_state.get('evening_rate_active', False),
-                    'evening_rate_percent': sched_state.get('evening_rate_percent'),
-                    'manual_override': sched_state.get('manual_override', False),
-                    'last_date': sched_state.get('last_date'),
-                }
-
-            # ── Automation-Phasen für Tagesübersicht ──────────────────
-            # Kombiniert battery_control_log (heutige Aktionen) mit
-            # Scheduler-State (Flags), um pro Phase den Status zu zeigen.
-            try:
-                _sched = result.get('scheduler', {})
-                _today_start = int(now) - int(now) % 86400  # UTC midnight
-                # Lokale Mitternacht (genauer):
-                import calendar
-                _local_midnight = int(_time.mktime(
-                    _time.localtime(now)[:3] + (0, 0, 0, 0, 0, -1)))
-
-                with sqlite3.connect(config.DB_PATH) as _pdb:
-                    # ── Primär: automation_log (neue Engine) ──────────
-                    # automation_log liegt in data.db (Disk), NICHT in der RAM-DB
-                    _persist_db = str(Path(__file__).resolve().parent.parent / 'data.db')
-                    _auto_rows = []
-                    try:
-                        with sqlite3.connect(_persist_db) as _alog_db:
-                            _auto_rows = _alog_db.execute("""
-                                SELECT kommando, wert, grund, ts, ergebnis
-                                FROM automation_log
-                                WHERE aktor = 'batterie'
-                                  AND ts >= ?
-                                  AND ergebnis = 'OK'
-                                ORDER BY ts ASC
-                            """, (_time.strftime('%Y-%m-%d', _time.localtime(now)),)).fetchall()
-                    except Exception:
-                        pass
-
-                _phase_log = {}
-
-                for _r in _auto_rows:
-                    _cmd = _r[0]
-                    _wert = _r[1]
-                    _grund = (_r[2] or '')[:80]
-                    _ts_str = _r[3][:16].replace('T', ' ') if _r[3] and len(_r[3]) > 15 else None
-                    _zeit = _ts_str[11:16] if _ts_str and len(_ts_str) >= 16 else None
-
-                    if _cmd == 'set_soc_min' and 'Morgen' in _grund:
-                        _phase_log['morgen'] = {
-                            'zeit': _zeit, 'status': 'done',
-                            'aktion': f'SOC_MIN → {_wert}%' if _wert else 'SOC_MIN geöffnet',
-                            'grund': _grund, 'manuell': False,
-                        }
-                    elif _cmd == 'set_soc_max' and 'Nachmittag' in _grund:
-                        _phase_log['nachmittag'] = {
-                            'zeit': _zeit, 'status': 'done',
-                            'aktion': f'SOC_MAX → {_wert}%' if _wert else 'SOC_MAX erhöht',
-                            'grund': _grund, 'manuell': False,
-                        }
-                    elif _cmd == 'set_discharge_rate':
-                        _phase_log['abend'] = {
-                            'zeit': _zeit, 'status': 'active',
-                            'aktion': f'Entladerate {_wert}%' if _wert else 'Entladerate-Limit',
-                            'grund': _grund, 'manuell': False,
-                        }
-                    elif _cmd in ('auto',) and 'TAG-Phase' in _grund:
-                        _phase_log['abend'] = {
-                            'zeit': _zeit, 'status': 'done',
-                            'aktion': 'Limits aufgehoben',
-                            'grund': _grund, 'manuell': False,
-                        }
-                    elif _cmd in ('set_soc_min', 'set_soc_max') and 'Komfort-Reset' in _grund:
-                        _phase_log['reset'] = {
-                            'zeit': _zeit, 'status': 'done',
-                            'aktion': 'Komfort-Reset',
-                            'grund': _grund, 'manuell': False,
-                        }
-
-                # ── Fallback: Fehlende Phasen per Vorausschau auffüllen ──
-                if 'morgen' not in _phase_log:
-                    _phase_log['morgen'] = {
-                        'status': 'pending', 'zeit': None,
-                        'aktion': 'SOC_MIN → 5%',
-                        'grund': 'Morgen-Öffnung (automatisch)', 'manuell': False,
-                    }
-                if 'nachmittag' not in _phase_log:
-                    _phase_log['nachmittag'] = {
-                        'status': 'pending', 'zeit': None,
-                        'aktion': 'SOC_MAX → 100%',
-                        'grund': 'Nachmittag-Erhöhung', 'manuell': False,
-                    }
-                if 'abend' not in _phase_log:
-                    _phase_log['abend'] = {
-                        'status': 'pending', 'zeit': None,
-                        'aktion': 'Entladerate-Limit',
-                        'grund': 'Abend/Nacht-Drosselung', 'manuell': False,
-                    }
-                # Reset-Phase: Komfort-Bereich wiederherstellen
-                try:
-                    import json as _json_cfg
-                    _cfg_path = Path(__file__).resolve().parent.parent / 'config' / 'battery_control.json'
-                    with open(_cfg_path, 'r') as _cf:
-                        _bcfg = _json_cfg.load(_cf)
-                    _k_min = _bcfg.get('soc_grenzen', {}).get('komfort_min', 25)
-                    _k_max = _bcfg.get('soc_grenzen', {}).get('komfort_max', 75)
-                except Exception:
-                    _k_min, _k_max = 25, 75
-                if 'reset' not in _phase_log:
-                    _phase_log['reset'] = {
-                        'status': 'pending', 'zeit': None,
-                        'aktion': f'SOC_MIN → {_k_min}%, SOC_MAX → {_k_max}%',
-                        'grund': 'Komfort-Reset (nach Sunset)',
-                        'manuell': False,
-                    }
-
-                result['automation_phasen'] = _phase_log
-            except Exception as _pe:
-                logging.debug(f"Automation-Phasen: {_pe}")
-        except Exception as e:
-            logging.warning(f"Automation-State nicht lesbar: {e}")
-
-        # Letzte SOC-Umschaltung (zuerst automation_log in data.db, Fallback battery_control_log)
-        try:
-            _persist_db = str(Path(__file__).resolve().parent.parent / 'data.db')
-            with sqlite3.connect(_persist_db) as _ldb:
-                # Neue Quelle: automation_log (data.db)
-                row = _ldb.execute("""
-                    SELECT ts, kommando, wert, grund, ergebnis
-                    FROM automation_log
-                    WHERE aktor = 'batterie'
-                      AND kommando IN ('set_soc_min', 'set_soc_max', 'set_soc_mode')
-                    ORDER BY id DESC LIMIT 1
-                """).fetchone()
-                if row:
-                    result['last_soc_switch'] = {
-                        'ts':     row[0][:16].replace('T', ' ') if row[0] else '?',
-                        'action': row[1],
-                        'param':  row[1],
-                        'old':    None,
-                        'new':    row[2],
-                        'reason': (row[3] or '')[:90],
-                    }
-                else:
-                    # Legacy-Fallback: battery_control_log
-                    row = _ldb.execute("""
-                        SELECT ts, action, param, old_value, new_value, reason
-                        FROM battery_control_log
-                        WHERE action IN (
-                            'morning_open', 'afternoon_raise', 'comfort_reset',
-                            'comfort_defaults', 'balancing_start', 'evening_limit',
-                            'evening_auto', 'manual_set'
-                        )
-                        ORDER BY ts DESC LIMIT 1
-                    """).fetchone()
-                    if row:
-                        result['last_soc_switch'] = {
-                            'ts':     datetime.fromtimestamp(row[0]).strftime('%d.%m %H:%M'),
-                            'action': row[1],
-                            'param':  row[2],
-                            'old':    row[3],
-                            'new':    row[4],
-                            'reason': (row[5] or '')[:90],
-                        }
-        except Exception as e:
-            logging.debug(f"last_soc_switch query: {e}")
-
-        # Tages-Batterieenergie + SOC/SOH aus Echtzeit
-        try:
-            conn_b = get_db_connection()
-            if conn_b:
-                try:
-                    cb = conn_b.cursor()
-                    today_start = int(_time.mktime(_time.localtime(now)[:3] + (0,0,0, 0,0, -1)))
-                    cb.execute("""
-                        SELECT
-                            SUM(
-                                CASE
-                                    WHEN U_Batt_API_avg IS NULL OR I_Batt_API_avg IS NULL
-                                    THEN COALESCE(W_inBatt, 0)
-                                    WHEN I_Batt_API_avg >= 0
-                                    THEN (I_Batt_API_avg * U_Batt_API_avg) / 60.0
-                                    ELSE 0
-                                END
-                            ) / 1000.0,
-                            SUM(
-                                CASE
-                                    WHEN U_Batt_API_avg IS NULL OR I_Batt_API_avg IS NULL
-                                    THEN COALESCE(W_outBatt, 0)
-                                    WHEN I_Batt_API_avg < 0
-                                    THEN (ABS(I_Batt_API_avg) * U_Batt_API_avg) / 60.0
-                                    ELSE 0
-                                END
-                            ) / 1000.0
-                        FROM data_1min WHERE ts >= ?
-                    """, (today_start,))
-                    erow = cb.fetchone()
-                    result['batt_charge_kwh'] = round(erow[0] or 0, 2) if erow else 0
-                    result['batt_discharge_kwh'] = round(erow[1] or 0, 2) if erow else 0
-                    # Aktuellen SOC aus letztem raw_data Eintrag
-                    cb.execute("SELECT SOC_Batt FROM raw_data ORDER BY ts DESC LIMIT 1")
-                    soc_row = cb.fetchone()
-                    result['current_soc'] = round(soc_row[0], 1) if soc_row and soc_row[0] is not None else None
-                finally:
-                    conn_b.close()
-        except Exception as e:
-            logging.warning(f"Batterie-Tageswerte Fehler: {e}")
-
-        # BMS-Lifetime-Counter + Tages-Fixpunkt-Deltas
-        try:
-            import json as _json_bms
-            import requests as _req_bms
-
-            _bms_url = f'http://{config.INVERTER_IP}/components/BatteryManagementSystem/readable'
-            _bms_resp = _req_bms.get(_bms_url, timeout=2)
-            if _bms_resp.status_code == 200:
-                _bms_payload = _bms_resp.json()
-                _channels = None
-                _bms_data = _bms_payload.get('Body', {}).get('Data', {})
-
-                if isinstance(_bms_data, dict):
-                    for _comp in _bms_data.values():
-                        _candidate = (_comp or {}).get('channels', {})
-                        if _candidate:
-                            _channels = _candidate
-                            break
-
-                if _channels:
-                    _ws_charge = _channels.get('BAT_ENERGYACTIVE_LIFETIME_CHARGED_F64')
-                    _ws_discharge = _channels.get('BAT_ENERGYACTIVE_LIFETIME_DISCHARGED_F64')
-
-                    if _ws_charge is not None and _ws_discharge is not None:
-                        _bms_charge_life_kwh = float(_ws_charge) / 3600000.0
-                        _bms_discharge_life_kwh = float(_ws_discharge) / 3600000.0
-
-                        result['bms_lifetime_charge_kwh'] = round(_bms_charge_life_kwh, 3)
-                        result['bms_lifetime_discharge_kwh'] = round(_bms_discharge_life_kwh, 3)
-
-                        _checkpoint_created = False
-                        _today_start_ts = int(_time.mktime(_time.localtime(now)[:3] + (0,0,0, 0,0, -1)))
-                        _start_charge = None
-                        _start_discharge = None
-
-                        # Primär: feste day_start Checkpoints in DB
-                        try:
-                            _conn_cp = get_db_connection()
-                            if _conn_cp:
-                                try:
-                                    _cur_cp = _conn_cp.cursor()
-                                    _cur_cp.execute("""
-                                        SELECT W_Batt_Charge_BMS, W_Batt_Discharge_BMS
-                                        FROM energy_checkpoints
-                                        WHERE ts = ? AND checkpoint_type = 'day_start'
-                                        LIMIT 1
-                                    """, (_today_start_ts,))
-                                    _cp_row = _cur_cp.fetchone()
-                                    if _cp_row and _cp_row[0] is not None and _cp_row[1] is not None:
-                                        # DB speichert in Wh, wir rechnen in kWh
-                                        _start_charge = _cp_row[0] / 1000.0
-                                        _start_discharge = _cp_row[1] / 1000.0
-                                        result['bms_checkpoint_source'] = 'energy_checkpoints'
-                                finally:
-                                    _conn_cp.close()
-                        except Exception:
-                            pass
-
-                        # Fallback: bestehende JSON-Checkpoint-Datei
-                        if _start_charge is None or _start_discharge is None:
-                            _checkpoint_path = Path(__file__).resolve().parent.parent / 'config' / 'battery_bms_checkpoints.json'
-                            _today_key = datetime.fromtimestamp(now).strftime('%Y-%m-%d')
-                            _cp_data = {'days': {}}
-
-                            if _checkpoint_path.exists():
-                                try:
-                                    with open(_checkpoint_path, 'r') as _fcp:
-                                        _loaded = _json_bms.load(_fcp)
-                                        if isinstance(_loaded, dict):
-                                            _cp_data = _loaded
-                                            if 'days' not in _cp_data or not isinstance(_cp_data['days'], dict):
-                                                _cp_data['days'] = {}
-                                except Exception:
-                                    _cp_data = {'days': {}}
-
-                            _days = _cp_data['days']
-                            if _today_key not in _days:
-                                _days[_today_key] = {
-                                    'charge_kwh': _bms_charge_life_kwh,
-                                    'discharge_kwh': _bms_discharge_life_kwh,
-                                    'captured_ts': int(now)
-                                }
-                                _checkpoint_created = True
-                                with open(_checkpoint_path, 'w') as _fcp:
-                                    _json_bms.dump(_cp_data, _fcp, indent=2)
-
-                            _start_charge = _days[_today_key].get('charge_kwh')
-                            _start_discharge = _days[_today_key].get('discharge_kwh')
-                            result['bms_checkpoint_source'] = 'battery_bms_checkpoints.json'
-
-                        if _start_charge is not None and _start_discharge is not None:
-                            _delta_charge = max(0.0, _bms_charge_life_kwh - float(_start_charge))
-                            _delta_discharge = max(0.0, _bms_discharge_life_kwh - float(_start_discharge))
-
-                            result['bms_day_charge_kwh'] = round(_delta_charge, 3)
-                            result['bms_day_discharge_kwh'] = round(_delta_discharge, 3)
-                            if _checkpoint_created:
-                                result['batt_discharge_check'] = {
-                                    'ok': None,
-                                    'status': 'checkpoint_initialized',
-                                    'method': 'calc_vs_bms_fixpoint'
-                                }
-                            elif _delta_discharge < 0.2:
-                                result['batt_discharge_check'] = {
-                                    'ok': None,
-                                    'status': 'warmup',
-                                    'method': 'calc_vs_bms_fixpoint'
-                                }
-                            else:
-                                _calc_discharge = float(result.get('batt_discharge_kwh') or 0.0)
-                                _diff = abs(_calc_discharge - _delta_discharge)
-                                _threshold = max(0.25, _delta_discharge * 0.25)
-                                result['batt_discharge_check'] = {
-                                    'ok': _diff <= _threshold,
-                                    'diff_kwh': round(_diff, 3),
-                                    'threshold_kwh': round(_threshold, 3),
-                                    'method': 'calc_vs_bms_fixpoint'
-                                }
-        except Exception as e:
-            logging.debug(f"BMS Counter Check Fehler: {e}")
-
-        # Temperaturen aus Fronius /components/readable (WR + Batterie)
-        try:
-            import requests as _req
-            _comp_url = f'http://{config.INVERTER_IP}/components/readable'
-            _comp_resp = _req.get(_comp_url, timeout=3)
-            if _comp_resp.status_code == 200:
-                _comp_data = _comp_resp.json()
-                # WR-Temperaturen (Device 0 = Inverter)
-                _wr_ch = _comp_data.get('Body', {}).get('Data', {}).get('0', {}).get('channels', {})
-                _t = _wr_ch.get('DEVICE_TEMPERATURE_AMBIENTMEAN_01_F32')
-                if _t is not None:
-                    result['wr_temp_intern'] = round(_t, 1)
-                _t = _wr_ch.get('MODULE_TEMPERATURE_MEAN_01_F32')
-                if _t is not None:
-                    result['wr_temp_ac'] = round(_t, 1)
-                _t = _wr_ch.get('MODULE_TEMPERATURE_MEAN_03_F32')
-                if _t is not None:
-                    result['wr_temp_dc'] = round(_t, 1)
-                _t = _wr_ch.get('MODULE_TEMPERATURE_MEAN_04_F32')
-                if _t is not None:
-                    result['wr_temp_dc_batt'] = round(_t, 1)
-                # Batterie-Temperaturen (Device 16580608 = BYD Battery)
-                _batt_ch = _comp_data.get('Body', {}).get('Data', {}).get('16580608', {}).get('channels', {})
-                _t = _batt_ch.get('BAT_TEMPERATURE_CELL_F64')
-                if _t is not None:
-                    result['battery_temp'] = round(_t, 1)
-                _t = _batt_ch.get('BAT_TEMPERATURE_CELL_MAX_F64')
-                if _t is not None:
-                    result['battery_temp_max'] = round(_t, 1)
-                _t = _batt_ch.get('BAT_TEMPERATURE_CELL_MIN_F64')
-                if _t is not None:
-                    result['battery_temp_min'] = round(_t, 1)
-        except Exception as e:
-            logging.debug(f"F1 temperatures fetch: {e}")
-
-        # F2-Temperaturen (Fronius Symo 10.0, 192.168.2.123)
-        try:
-            import requests as _req2
-            _f2_url = 'http://192.168.2.123/components/readable'
-            _f2_resp = _req2.get(_f2_url, timeout=2)
-            if _f2_resp.status_code == 200:
-                _f2_data = _f2_resp.json()
-                _f2_ch = _f2_data.get('Body', {}).get('Data', {}).get('0', {}).get('channels', {})
-                _t = _f2_ch.get('DEVICE_TEMPERATURE_AMBIENTMEAN_01_F32')
-                if _t is not None:
-                    result['f2_temp_intern'] = round(_t, 1)
-                _t = _f2_ch.get('MODULE_TEMPERATURE_MEAN_01_F32')
-                if _t is not None:
-                    result['f2_temp_ac'] = round(_t, 1)
-                _t = _f2_ch.get('MODULE_TEMPERATURE_MEAN_03_F32')
-                if _t is not None:
-                    result['f2_temp_dc'] = round(_t, 1)
-                _t = _f2_ch.get('MODULE_TEMPERATURE_MEAN_04_F32')
-                if _t is not None:
-                    result['f2_temp_dc2'] = round(_t, 1)
-        except Exception as e:
-            logging.debug(f"F2 temperatures fetch: {e}")
-
-        # ── HP-Automation (Fritz!DECT Heizpatrone) ─────────────
-        # Log-Daten aus automation_log (Schalthistorie)
-        try:
-            with sqlite3.connect(config.DB_PATH) as _hdb:
-                _24h_ago_hp = int(now) - 86400
-                hp_rows = _hdb.execute("""
-                    SELECT ts, kommando, wert, grund, ergebnis
-                    FROM automation_log
-                    WHERE aktor = 'fritzdect'
-                      AND ts >= datetime(?, 'unixepoch')
-                    ORDER BY ts DESC
-                    LIMIT 10
-                """, (_24h_ago_hp,)).fetchall()
-
-                hp_aktionen = [{
-                    'ts': r[0][:16].replace('T', ' ') if r[0] else '?',
-                    'kommando': r[1],
-                    'wert': r[2],
-                    'grund': (r[3] or '')[:120],
-                    'ergebnis': r[4],
-                } for r in hp_rows]
-
-                result['hp_aktionen'] = hp_aktionen
-                hp_ein_count = sum(1 for a in hp_aktionen if a['kommando'] == 'hp_ein' and a['ergebnis'] == 'OK')
-                result['hp_bursts_heute'] = hp_ein_count
-        except Exception as _he:
-            logging.debug(f"HP-Log: {_he}")
-            result['hp_aktionen'] = []
-            result['hp_bursts_heute'] = 0
-
-        # Live-Status von der Fritz!Box (getdevicelistinfos, 1 Bulk-Request)
-        # Eigener Cache (120s) — überlebt battery_cache-Invalidierung
-        try:
-            global _fritzdect_cache
-            if _fritzdect_cache['data'] and (now - _fritzdect_cache['ts']) < _FRITZDECT_CACHE_TTL:
-                fritz_live = _fritzdect_cache['data']
-            else:
-                fritz_live = None
-                try:
-                    from automation.engine.aktoren.aktor_fritzdect import (
-                        _load_fritz_config, _get_session_id, _aha_device_info
-                    )
-                    _fcfg = _load_fritz_config()
-                    _fhost = _fcfg.get('fritz_ip', '192.168.178.1')
-                    _fain = _fcfg.get('ain', '')
-                    _fuser = _fcfg.get('fritz_user', '')
-                    _fpass = _fcfg.get('fritz_password', '')
-
-                    if _fain and _fuser and _fpass:
-                        _fsid = _get_session_id(_fhost, _fuser, _fpass)
-                        if _fsid:
-                            fritz_live = _aha_device_info(_fhost, _fain, _fsid)
-                except Exception as _fe:
-                    logging.debug(f"Fritz!DECT Live-Query: {_fe}")
-
-                _fritzdect_cache = {'ts': now, 'data': fritz_live}
-
-            if fritz_live and fritz_live.get('state') is not None:
-                state_raw = str(fritz_live.get('state')).strip()
-                zustand = 'EIN' if state_raw == '1' else 'AUS' if state_raw == '0' else '?'
-                power_w = (fritz_live.get('power_mw') or 0) / 1000
-                result['hp_status'] = {
-                    'zustand': zustand,
-                    'live': True,
-                    'power_w': round(power_w, 1),
-                    'energy_wh': fritz_live.get('energy_wh'),
-                    'name': fritz_live.get('name'),
-                    'seit': result.get('hp_aktionen', [{}])[0].get('ts') if result.get('hp_aktionen') else None,
-                    'grund': result.get('hp_aktionen', [{}])[0].get('grund', '') if result.get('hp_aktionen') else '',
-                    'kommando': result.get('hp_aktionen', [{}])[0].get('kommando') if result.get('hp_aktionen') else None,
-                }
-            else:
-                # Fritz!Box nicht erreichbar → Fallback auf Log
-                hp_aktionen = result.get('hp_aktionen', [])
-                if hp_aktionen:
-                    last = hp_aktionen[0]
-                    result['hp_status'] = {
-                        'zustand': 'EIN' if last['kommando'] == 'hp_ein' and last['ergebnis'] == 'OK' else 'AUS',
-                        'live': False,
-                        'seit': last['ts'],
-                        'grund': last['grund'],
-                        'kommando': last['kommando'],
-                    }
-                else:
-                    result['hp_status'] = {'zustand': '?', 'live': False, 'seit': None, 'grund': '', 'kommando': None}
-        except Exception as _hle:
-            logging.debug(f"HP-Live-Status: {_hle}")
-            result['hp_status'] = {'zustand': '?', 'live': False, 'seit': None, 'grund': '', 'kommando': None}
-
-        # SOH aus config
-        try:
-            import json as _json2
-            _batt_cfg_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'battery_control.json')
-            with open(_batt_cfg_path, 'r') as _f:
-                _batt_cfg = _json2.load(_f)
-            result['soh'] = float(_batt_cfg.get('batterie', {}).get('soh_prozent', 92.0))
-        except Exception:
-            result['soh'] = 92.0
+        result = _fetch_fronius_base(api)
+        _fetch_automation_state(now, result)
+        _fetch_last_soc_switch(result)
+        _fetch_battery_energy(now, result)
+        _fetch_bms_counters(now, result)
+        _fetch_temperatures(result)
+        _fetch_hp_status(now, result)
+        _fetch_soh(result)
 
         battery_cache['data'] = result
         battery_cache['ts'] = now
         return jsonify(result)
     except Exception as e:
         logging.error(f"Battery Status Fehler: {e}")
-        # Bei Fehler: alten Cache zurückgeben falls vorhanden
         if battery_cache['data']:
             return jsonify(battery_cache['data'])
         return jsonify({"error": str(e)}), 500
 
+
+# ── Hilfsfunktionen für api_battery_status ────────────────────────────────────────
+
+def _fetch_fronius_base(api):
+    """Basis-Werte vom Fronius GEN24 (SOC_MIN/MAX, Modus etc.)."""
+    values = api.get_values()
+    return {
+        'soc_min': values.get('BAT_M0_SOC_MIN'),
+        'soc_max': values.get('BAT_M0_SOC_MAX'),
+        'soc_mode': values.get('BAT_M0_SOC_MODE'),
+        'grid_charge': values.get('HYB_EVU_CHARGEFROMGRID'),
+        'ac_charge': values.get('HYB_BM_CHARGEFROMAC'),
+        'pac_min': values.get('HYB_BM_PACMIN'),
+        'backup_critical_soc': values.get('HYB_BACKUP_CRITICALSOC'),
+        'backup_reserved': values.get('HYB_BACKUP_RESERVED'),
+        'em_mode': values.get('HYB_EM_MODE'),
+        'batt_energy_method': 'integration_ui_with_counter_fallback',
+    }
+
+
+def _fetch_automation_state(now, result):
+    """Engine-State aus automation_log: SOC-Switches, Aktionen, Phasen."""
+    try:
+        import json as _json
+
+        with sqlite3.connect(config.DB_PATH) as _adb:
+            _24h_ago = int(now) - 86400
+
+            soc_rows = _adb.execute("""
+                SELECT ts, kommando, wert, grund, ergebnis
+                FROM automation_log
+                WHERE aktor = 'batterie'
+                  AND kommando IN ('set_soc_min', 'set_soc_max', 'set_soc_mode')
+                  AND ts >= datetime(?, 'unixepoch')
+                ORDER BY ts DESC
+                LIMIT 20
+            """, (_24h_ago,)).fetchall()
+
+            result['soc_switches'] = [{
+                'ts': r[0], 'kommando': r[1], 'wert': r[2],
+                'grund': (r[3] or '')[:120], 'ergebnis': r[4],
+            } for r in soc_rows]
+
+            all_rows = _adb.execute("""
+                SELECT ts, kommando, wert, grund, ergebnis
+                FROM automation_log
+                WHERE aktor = 'batterie'
+                  AND ts >= datetime(?, 'unixepoch')
+                ORDER BY ts DESC
+                LIMIT 50
+            """, (_24h_ago,)).fetchall()
+
+            result['engine_aktionen'] = [{
+                'ts': r[0], 'kommando': r[1], 'wert': r[2],
+                'grund': (r[3] or '')[:120], 'ergebnis': r[4],
+            } for r in all_rows]
+
+            last_action = _adb.execute("""
+                SELECT ts, kommando, wert, grund, ergebnis
+                FROM automation_log
+                WHERE aktor = 'batterie'
+                ORDER BY id DESC LIMIT 1
+            """).fetchone()
+            if last_action:
+                result['last_engine_action'] = {
+                    'ts': last_action[0], 'kommando': last_action[1],
+                    'wert': last_action[2],
+                    'grund': (last_action[3] or '')[:120],
+                    'ergebnis': last_action[4],
+                }
+
+        # Engine-Vorausschau
+        try:
+            from automation.engine.automation_daemon import engine_vorausschau
+            result['vorausschau'] = engine_vorausschau()
+        except Exception as ev:
+            logging.debug(f"Vorausschau nicht verfügbar: {ev}")
+            result['vorausschau'] = []
+
+        # Scheduler-State (Phasen-Flags, Legacy-Kompatibilität)
+        state_file = Path(__file__).resolve().parent.parent / 'config' / 'battery_scheduler_state.json'
+        if state_file.exists():
+            with open(state_file, 'r') as f:
+                sched_state = _json.load(f)
+            result['scheduler'] = {
+                'morning_done': sched_state.get('morning_done', False),
+                'afternoon_done': sched_state.get('afternoon_done', False),
+                'balancing_active': sched_state.get('balancing_active', False),
+                'evening_rate_active': sched_state.get('evening_rate_active', False),
+                'evening_rate_percent': sched_state.get('evening_rate_percent'),
+                'manual_override': sched_state.get('manual_override', False),
+                'last_date': sched_state.get('last_date'),
+            }
+
+        # Automation-Phasen für Tagesübersicht
+        _build_automation_phasen(now, result)
+
+    except Exception as e:
+        logging.warning(f"Automation-State nicht lesbar: {e}")
+
+
+def _build_automation_phasen(now, result):
+    """Tages-Phasenübersicht aus automation_log + Defaults."""
+    try:
+        _persist_db = str(Path(__file__).resolve().parent.parent / 'data.db')
+        _auto_rows = []
+        try:
+            with sqlite3.connect(_persist_db) as _alog_db:
+                _auto_rows = _alog_db.execute("""
+                    SELECT kommando, wert, grund, ts, ergebnis
+                    FROM automation_log
+                    WHERE aktor = 'batterie'
+                      AND ts >= ?
+                      AND ergebnis = 'OK'
+                    ORDER BY ts ASC
+                """, (time.strftime('%Y-%m-%d', time.localtime(now)),)).fetchall()
+        except Exception:
+            pass
+
+        _phase_log = {}
+
+        for _r in _auto_rows:
+            _cmd, _wert = _r[0], _r[1]
+            _grund = (_r[2] or '')[:80]
+            _ts_str = _r[3][:16].replace('T', ' ') if _r[3] and len(_r[3]) > 15 else None
+            _zeit = _ts_str[11:16] if _ts_str and len(_ts_str) >= 16 else None
+
+            if _cmd == 'set_soc_min' and 'Morgen' in _grund:
+                _phase_log['morgen'] = {
+                    'zeit': _zeit, 'status': 'done',
+                    'aktion': f'SOC_MIN → {_wert}%' if _wert else 'SOC_MIN geöffnet',
+                    'grund': _grund, 'manuell': False,
+                }
+            elif _cmd == 'set_soc_max' and 'Nachmittag' in _grund:
+                _phase_log['nachmittag'] = {
+                    'zeit': _zeit, 'status': 'done',
+                    'aktion': f'SOC_MAX → {_wert}%' if _wert else 'SOC_MAX erhöht',
+                    'grund': _grund, 'manuell': False,
+                }
+            elif _cmd == 'set_discharge_rate':
+                _phase_log['abend'] = {
+                    'zeit': _zeit, 'status': 'active',
+                    'aktion': f'Entladerate {_wert}%' if _wert else 'Entladerate-Limit',
+                    'grund': _grund, 'manuell': False,
+                }
+            elif _cmd in ('auto',) and 'TAG-Phase' in _grund:
+                _phase_log['abend'] = {
+                    'zeit': _zeit, 'status': 'done',
+                    'aktion': 'Limits aufgehoben',
+                    'grund': _grund, 'manuell': False,
+                }
+            elif _cmd in ('set_soc_min', 'set_soc_max') and 'Komfort-Reset' in _grund:
+                _phase_log['reset'] = {
+                    'zeit': _zeit, 'status': 'done',
+                    'aktion': 'Komfort-Reset',
+                    'grund': _grund, 'manuell': False,
+                }
+
+        # Fehlende Phasen mit Defaults auffüllen
+        if 'morgen' not in _phase_log:
+            _phase_log['morgen'] = {
+                'status': 'pending', 'zeit': None,
+                'aktion': 'SOC_MIN → 5%',
+                'grund': 'Morgen-Öffnung (automatisch)', 'manuell': False,
+            }
+        if 'nachmittag' not in _phase_log:
+            _phase_log['nachmittag'] = {
+                'status': 'pending', 'zeit': None,
+                'aktion': 'SOC_MAX → 100%',
+                'grund': 'Nachmittag-Erhöhung', 'manuell': False,
+            }
+        if 'abend' not in _phase_log:
+            _phase_log['abend'] = {
+                'status': 'pending', 'zeit': None,
+                'aktion': 'Entladerate-Limit',
+                'grund': 'Abend/Nacht-Drosselung', 'manuell': False,
+            }
+
+        # Reset-Phase: Komfort-Bereich wiederherstellen
+        try:
+            import json as _json_cfg
+            _cfg_path = Path(__file__).resolve().parent.parent / 'config' / 'battery_control.json'
+            with open(_cfg_path, 'r') as _cf:
+                _bcfg = _json_cfg.load(_cf)
+            _k_min = _bcfg.get('soc_grenzen', {}).get('komfort_min', 25)
+            _k_max = _bcfg.get('soc_grenzen', {}).get('komfort_max', 75)
+        except Exception:
+            _k_min, _k_max = 25, 75
+        if 'reset' not in _phase_log:
+            _phase_log['reset'] = {
+                'status': 'pending', 'zeit': None,
+                'aktion': f'SOC_MIN → {_k_min}%, SOC_MAX → {_k_max}%',
+                'grund': 'Komfort-Reset (nach Sunset)',
+                'manuell': False,
+            }
+
+        result['automation_phasen'] = _phase_log
+    except Exception as _pe:
+        logging.debug(f"Automation-Phasen: {_pe}")
+
+
+def _fetch_last_soc_switch(result):
+    """Letzte SOC-Umschaltung aus automation_log (Fallback: battery_control_log)."""
+    try:
+        _persist_db = str(Path(__file__).resolve().parent.parent / 'data.db')
+        with sqlite3.connect(_persist_db) as _ldb:
+            row = _ldb.execute("""
+                SELECT ts, kommando, wert, grund, ergebnis
+                FROM automation_log
+                WHERE aktor = 'batterie'
+                  AND kommando IN ('set_soc_min', 'set_soc_max', 'set_soc_mode')
+                ORDER BY id DESC LIMIT 1
+            """).fetchone()
+            if row:
+                result['last_soc_switch'] = {
+                    'ts':     row[0][:16].replace('T', ' ') if row[0] else '?',
+                    'action': row[1], 'param': row[1],
+                    'old': None, 'new': row[2],
+                    'reason': (row[3] or '')[:90],
+                }
+            else:
+                row = _ldb.execute("""
+                    SELECT ts, action, param, old_value, new_value, reason
+                    FROM battery_control_log
+                    WHERE action IN (
+                        'morning_open', 'afternoon_raise', 'comfort_reset',
+                        'comfort_defaults', 'balancing_start', 'evening_limit',
+                        'evening_auto', 'manual_set'
+                    )
+                    ORDER BY ts DESC LIMIT 1
+                """).fetchone()
+                if row:
+                    result['last_soc_switch'] = {
+                        'ts':     datetime.fromtimestamp(row[0]).strftime('%d.%m %H:%M'),
+                        'action': row[1], 'param': row[2],
+                        'old': row[3], 'new': row[4],
+                        'reason': (row[5] or '')[:90],
+                    }
+    except Exception as e:
+        logging.debug(f"last_soc_switch query: {e}")
+
+
+def _fetch_battery_energy(now, result):
+    """Tages-Batterieenergie (Ladung/Entladung) + aktueller SOC."""
+    try:
+        conn_b = get_db_connection()
+        if conn_b:
+            try:
+                cb = conn_b.cursor()
+                today_start = int(time.mktime(time.localtime(now)[:3] + (0, 0, 0, 0, 0, -1)))
+                cb.execute("""
+                    SELECT
+                        SUM(
+                            CASE
+                                WHEN U_Batt_API_avg IS NULL OR I_Batt_API_avg IS NULL
+                                THEN COALESCE(W_inBatt, 0)
+                                WHEN I_Batt_API_avg >= 0
+                                THEN (I_Batt_API_avg * U_Batt_API_avg) / 60.0
+                                ELSE 0
+                            END
+                        ) / 1000.0,
+                        SUM(
+                            CASE
+                                WHEN U_Batt_API_avg IS NULL OR I_Batt_API_avg IS NULL
+                                THEN COALESCE(W_outBatt, 0)
+                                WHEN I_Batt_API_avg < 0
+                                THEN (ABS(I_Batt_API_avg) * U_Batt_API_avg) / 60.0
+                                ELSE 0
+                            END
+                        ) / 1000.0
+                    FROM data_1min WHERE ts >= ?
+                """, (today_start,))
+                erow = cb.fetchone()
+                result['batt_charge_kwh'] = round(erow[0] or 0, 2) if erow else 0
+                result['batt_discharge_kwh'] = round(erow[1] or 0, 2) if erow else 0
+
+                cb.execute("SELECT SOC_Batt FROM raw_data ORDER BY ts DESC LIMIT 1")
+                soc_row = cb.fetchone()
+                result['current_soc'] = round(soc_row[0], 1) if soc_row and soc_row[0] is not None else None
+            finally:
+                conn_b.close()
+    except Exception as e:
+        logging.warning(f"Batterie-Tageswerte Fehler: {e}")
+
+
+def _fetch_bms_counters(now, result):
+    """BMS Lifetime-Counter + Tages-Fixpunkt-Deltas."""
+    try:
+        import json as _json_bms
+        import requests as _req_bms
+
+        _bms_url = f'http://{config.INVERTER_IP}/components/BatteryManagementSystem/readable'
+        _bms_resp = _req_bms.get(_bms_url, timeout=2)
+        if _bms_resp.status_code != 200:
+            return
+
+        _bms_payload = _bms_resp.json()
+        _channels = None
+        _bms_data = _bms_payload.get('Body', {}).get('Data', {})
+
+        if isinstance(_bms_data, dict):
+            for _comp in _bms_data.values():
+                _candidate = (_comp or {}).get('channels', {})
+                if _candidate:
+                    _channels = _candidate
+                    break
+
+        if not _channels:
+            return
+
+        _ws_charge = _channels.get('BAT_ENERGYACTIVE_LIFETIME_CHARGED_F64')
+        _ws_discharge = _channels.get('BAT_ENERGYACTIVE_LIFETIME_DISCHARGED_F64')
+        if _ws_charge is None or _ws_discharge is None:
+            return
+
+        _bms_charge_life_kwh = float(_ws_charge) / 3600000.0
+        _bms_discharge_life_kwh = float(_ws_discharge) / 3600000.0
+
+        result['bms_lifetime_charge_kwh'] = round(_bms_charge_life_kwh, 3)
+        result['bms_lifetime_discharge_kwh'] = round(_bms_discharge_life_kwh, 3)
+
+        _today_start_ts = int(time.mktime(time.localtime(now)[:3] + (0, 0, 0, 0, 0, -1)))
+        _start_charge, _start_discharge = None, None
+        _checkpoint_created = False
+
+        # Primär: DB energy_checkpoints
+        try:
+            _conn_cp = get_db_connection()
+            if _conn_cp:
+                try:
+                    _cp_row = _conn_cp.execute("""
+                        SELECT W_Batt_Charge_BMS, W_Batt_Discharge_BMS
+                        FROM energy_checkpoints
+                        WHERE ts = ? AND checkpoint_type = 'day_start'
+                        LIMIT 1
+                    """, (_today_start_ts,)).fetchone()
+                    if _cp_row and _cp_row[0] is not None and _cp_row[1] is not None:
+                        _start_charge = _cp_row[0] / 1000.0
+                        _start_discharge = _cp_row[1] / 1000.0
+                        result['bms_checkpoint_source'] = 'energy_checkpoints'
+                finally:
+                    _conn_cp.close()
+        except Exception:
+            pass
+
+        # Fallback: JSON-Checkpoint-Datei
+        if _start_charge is None or _start_discharge is None:
+            _checkpoint_path = Path(__file__).resolve().parent.parent / 'config' / 'battery_bms_checkpoints.json'
+            _today_key = datetime.fromtimestamp(now).strftime('%Y-%m-%d')
+            _cp_data = {'days': {}}
+
+            if _checkpoint_path.exists():
+                try:
+                    with open(_checkpoint_path, 'r') as _fcp:
+                        _loaded = _json_bms.load(_fcp)
+                        if isinstance(_loaded, dict):
+                            _cp_data = _loaded
+                            if 'days' not in _cp_data or not isinstance(_cp_data['days'], dict):
+                                _cp_data['days'] = {}
+                except Exception:
+                    _cp_data = {'days': {}}
+
+            _days = _cp_data['days']
+            if _today_key not in _days:
+                _days[_today_key] = {
+                    'charge_kwh': _bms_charge_life_kwh,
+                    'discharge_kwh': _bms_discharge_life_kwh,
+                    'captured_ts': int(now)
+                }
+                _checkpoint_created = True
+                with open(_checkpoint_path, 'w') as _fcp:
+                    _json_bms.dump(_cp_data, _fcp, indent=2)
+
+            _start_charge = _days[_today_key].get('charge_kwh')
+            _start_discharge = _days[_today_key].get('discharge_kwh')
+            result['bms_checkpoint_source'] = 'battery_bms_checkpoints.json'
+
+        if _start_charge is not None and _start_discharge is not None:
+            _delta_charge = max(0.0, _bms_charge_life_kwh - float(_start_charge))
+            _delta_discharge = max(0.0, _bms_discharge_life_kwh - float(_start_discharge))
+
+            result['bms_day_charge_kwh'] = round(_delta_charge, 3)
+            result['bms_day_discharge_kwh'] = round(_delta_discharge, 3)
+            if _checkpoint_created:
+                result['batt_discharge_check'] = {
+                    'ok': None, 'status': 'checkpoint_initialized',
+                    'method': 'calc_vs_bms_fixpoint',
+                }
+            elif _delta_discharge < 0.2:
+                result['batt_discharge_check'] = {
+                    'ok': None, 'status': 'warmup',
+                    'method': 'calc_vs_bms_fixpoint',
+                }
+            else:
+                _calc_discharge = float(result.get('batt_discharge_kwh') or 0.0)
+                _diff = abs(_calc_discharge - _delta_discharge)
+                _threshold = max(0.25, _delta_discharge * 0.25)
+                result['batt_discharge_check'] = {
+                    'ok': _diff <= _threshold,
+                    'diff_kwh': round(_diff, 3),
+                    'threshold_kwh': round(_threshold, 3),
+                    'method': 'calc_vs_bms_fixpoint',
+                }
+    except Exception as e:
+        logging.debug(f"BMS Counter Check Fehler: {e}")
+
+
+def _fetch_temperatures(result):
+    """WR-, Batterie- und F2-Temperaturen aus Fronius /components/readable."""
+    # F1 (GEN24)
+    try:
+        import requests as _req
+        _comp_resp = _req.get(
+            f'http://{config.INVERTER_IP}/components/readable', timeout=3)
+        if _comp_resp.status_code == 200:
+            _comp_data = _comp_resp.json()
+            _wr_ch = _comp_data.get('Body', {}).get('Data', {}).get('0', {}).get('channels', {})
+            for attr, key in [
+                ('wr_temp_intern', 'DEVICE_TEMPERATURE_AMBIENTMEAN_01_F32'),
+                ('wr_temp_ac',     'MODULE_TEMPERATURE_MEAN_01_F32'),
+                ('wr_temp_dc',     'MODULE_TEMPERATURE_MEAN_03_F32'),
+                ('wr_temp_dc_batt', 'MODULE_TEMPERATURE_MEAN_04_F32'),
+            ]:
+                _t = _wr_ch.get(key)
+                if _t is not None:
+                    result[attr] = round(_t, 1)
+
+            _batt_ch = _comp_data.get('Body', {}).get('Data', {}).get('16580608', {}).get('channels', {})
+            for attr, key in [
+                ('battery_temp',     'BAT_TEMPERATURE_CELL_F64'),
+                ('battery_temp_max', 'BAT_TEMPERATURE_CELL_MAX_F64'),
+                ('battery_temp_min', 'BAT_TEMPERATURE_CELL_MIN_F64'),
+            ]:
+                _t = _batt_ch.get(key)
+                if _t is not None:
+                    result[attr] = round(_t, 1)
+    except Exception as e:
+        logging.debug(f"F1 temperatures fetch: {e}")
+
+    # F2 (Symo 10.0)
+    try:
+        import requests as _req2
+        _f2_resp = _req2.get('http://192.168.2.123/components/readable', timeout=2)
+        if _f2_resp.status_code == 200:
+            _f2_ch = _f2_resp.json().get('Body', {}).get('Data', {}).get('0', {}).get('channels', {})
+            for attr, key in [
+                ('f2_temp_intern', 'DEVICE_TEMPERATURE_AMBIENTMEAN_01_F32'),
+                ('f2_temp_ac',     'MODULE_TEMPERATURE_MEAN_01_F32'),
+                ('f2_temp_dc',     'MODULE_TEMPERATURE_MEAN_03_F32'),
+                ('f2_temp_dc2',    'MODULE_TEMPERATURE_MEAN_04_F32'),
+            ]:
+                _t = _f2_ch.get(key)
+                if _t is not None:
+                    result[attr] = round(_t, 1)
+    except Exception as e:
+        logging.debug(f"F2 temperatures fetch: {e}")
+
+
+def _fetch_hp_status(now, result):
+    """Fritz!DECT Heizpatronen-Status: Log-Daten + Live-Abfrage."""
+    # Log-Daten aus automation_log
+    try:
+        with sqlite3.connect(config.DB_PATH) as _hdb:
+            _24h_ago_hp = int(now) - 86400
+            hp_rows = _hdb.execute("""
+                SELECT ts, kommando, wert, grund, ergebnis
+                FROM automation_log
+                WHERE aktor = 'fritzdect'
+                  AND ts >= datetime(?, 'unixepoch')
+                ORDER BY ts DESC
+                LIMIT 10
+            """, (_24h_ago_hp,)).fetchall()
+
+            hp_aktionen = [{
+                'ts': r[0][:16].replace('T', ' ') if r[0] else '?',
+                'kommando': r[1], 'wert': r[2],
+                'grund': (r[3] or '')[:120], 'ergebnis': r[4],
+            } for r in hp_rows]
+
+            result['hp_aktionen'] = hp_aktionen
+            result['hp_bursts_heute'] = sum(
+                1 for a in hp_aktionen
+                if a['kommando'] == 'hp_ein' and a['ergebnis'] == 'OK')
+    except Exception as _he:
+        logging.debug(f"HP-Log: {_he}")
+        result['hp_aktionen'] = []
+        result['hp_bursts_heute'] = 0
+
+    # Live-Status von Fritz!Box (eigener Cache 120s)
+    try:
+        global _fritzdect_cache
+        if _fritzdect_cache['data'] and (now - _fritzdect_cache['ts']) < _FRITZDECT_CACHE_TTL:
+            fritz_live = _fritzdect_cache['data']
+        else:
+            fritz_live = None
+            try:
+                from automation.engine.aktoren.aktor_fritzdect import (
+                    _load_fritz_config, _get_session_id, _aha_device_info
+                )
+                _fcfg = _load_fritz_config()
+                _fhost = _fcfg.get('fritz_ip', '192.168.178.1')
+                _fain = _fcfg.get('ain', '')
+                _fuser = _fcfg.get('fritz_user', '')
+                _fpass = _fcfg.get('fritz_password', '')
+
+                if _fain and _fuser and _fpass:
+                    _fsid = _get_session_id(_fhost, _fuser, _fpass)
+                    if _fsid:
+                        fritz_live = _aha_device_info(_fhost, _fain, _fsid)
+            except Exception as _fe:
+                logging.debug(f"Fritz!DECT Live-Query: {_fe}")
+
+            _fritzdect_cache = {'ts': now, 'data': fritz_live}
+
+        if fritz_live and fritz_live.get('state') is not None:
+            state_raw = str(fritz_live.get('state')).strip()
+            zustand = 'EIN' if state_raw == '1' else 'AUS' if state_raw == '0' else '?'
+            power_w = (fritz_live.get('power_mw') or 0) / 1000
+            hp_aktionen = result.get('hp_aktionen', [])
+            last_hp = hp_aktionen[0] if hp_aktionen else {}
+            result['hp_status'] = {
+                'zustand': zustand, 'live': True,
+                'power_w': round(power_w, 1),
+                'energy_wh': fritz_live.get('energy_wh'),
+                'name': fritz_live.get('name'),
+                'seit': last_hp.get('ts'),
+                'grund': last_hp.get('grund', ''),
+                'kommando': last_hp.get('kommando'),
+            }
+        else:
+            hp_aktionen = result.get('hp_aktionen', [])
+            if hp_aktionen:
+                last = hp_aktionen[0]
+                result['hp_status'] = {
+                    'zustand': 'EIN' if last['kommando'] == 'hp_ein' and last['ergebnis'] == 'OK' else 'AUS',
+                    'live': False, 'seit': last['ts'],
+                    'grund': last['grund'], 'kommando': last['kommando'],
+                }
+            else:
+                result['hp_status'] = {
+                    'zustand': '?', 'live': False, 'seit': None,
+                    'grund': '', 'kommando': None,
+                }
+    except Exception as _hle:
+        logging.debug(f"HP-Live-Status: {_hle}")
+        result['hp_status'] = {
+            'zustand': '?', 'live': False, 'seit': None,
+            'grund': '', 'kommando': None,
+        }
+
+
+def _fetch_soh(result):
+    """SOH-Prozent aus battery_control.json."""
+    try:
+        import json as _json2
+        _batt_cfg_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            'config', 'battery_control.json')
+        with open(_batt_cfg_path, 'r') as _f:
+            _batt_cfg = _json2.load(_f)
+        result['soh'] = float(_batt_cfg.get('batterie', {}).get('soh_prozent', 92.0))
+    except Exception:
+        result['soh'] = 92.0
 
 # ═══════════════════════════════════════════════════════════════
 # SYSTEM INFO ENDPOINT

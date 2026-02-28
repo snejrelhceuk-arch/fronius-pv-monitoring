@@ -29,11 +29,7 @@ import time
 from datetime import datetime
 from typing import Callable
 
-# Projekt-Root in sys.path
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-if _PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, _PROJECT_ROOT)
-
 from automation.engine.obs_state import (
     ObsState, init_ram_db, write_obs_state,
     write_heartbeat, load_param_matrix, RAM_DB_PATH,

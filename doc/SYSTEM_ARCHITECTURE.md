@@ -316,7 +316,7 @@ Volle Produktion: Collector, Aggregation, Battery-Steuerung, Web.
 | pv-automation | systemd (enabled) | automation_daemon.py (Score-basierte Engine, 9 Regelkreise, Batterie-Steuerung) |
 | pv-backup-gfs.timer | systemd (enabled) | backup_db_gfs.sh täglich 03:00 (Sohn intern alle 3 Tage) |
 | Cron (5 Aggregations-Jobs) | crontab (admin) | aggregate_1min, aggregate, aggregate_daily, monthly, statistics |
-| Cron (Monitor-Scripts) | crontab (admin) | monitor_collector.sh, monitor_wattpilot.sh, monitor_web_service.sh |
+| Cron (Monitor-Scripts) | crontab (admin) | monitor_collector.sh, monitor_wattpilot.sh |
 | capture_energy_checkpoints.py | Cron | Energie-Fixpunkte sichern |
 
 **Persistierung**: tmpfs → SD stündlich, zusätzlicher Pi5-rsync alle 6 Persist-Zyklen.

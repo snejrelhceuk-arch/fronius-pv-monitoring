@@ -157,7 +157,7 @@ Stack: Raspbian Bullseye 11, Python 3.9.2, Flask 1.1.2, gunicorn 23.0.0,
 
 
 ═════════════════════════════════════════════════════════════════
-DYNAMISCHE UPDATES (Stand: 2026-02-28 23:03)
+DYNAMISCHE UPDATES (Stand: 2026-03-01 00:38)
 ═════════════════════════════════════════════════════════════════
 
 --- Aktuelle Config-Werte ---
@@ -208,6 +208,8 @@ HEIZKOSTEN_ERSPARNIS = {
 HEIZPERIODE_MONATE = {10, 11, 12, 1, 2, 3}  # Okt–Mär (6 Monate)
 
 --- Letzte Git-Commits ---
+55f28aa TODO aufräumen: erledigte Abschnitte entfernt, Alerting zusammengeführt
+b20fab8 Tiefenprüfung: 7 Fixes (P1-P3) + 21/21 Tests grün
 b443081 Refactor: engine + observer in Subpackages aufgeteilt
 3188b8a refactor: battery_control.py → automation/battery_control.py
 f04128b feat: RegelKomfortReset, SOC-HTTP-Collector, Dedup, DB-Fix, Scheduler archiviert
@@ -216,8 +218,6 @@ f04128b feat: RegelKomfortReset, SOC-HTTP-Collector, Dedup, DB-Fix, Scheduler ar
 1055f34 System-Audit Bereinigung + Engine-Updates (2026-02-28)
 0ce4f72 Observer: systemd-Service + SQLite check_same_thread Fix
 0ebb751 ForecastCollector: Sunrise-Fallback auf Vortageswerte aus DB
-0414f74 Observer: ForecastCollector (Tier-3) — Trigger-basierte Prognose
-fd4031b Morgen-Schwelle 500→1500W: Haushaltslast (~1kW) + Lade-Überschuss berücksichtigen
 
 --- Kürzlich geänderte Module (8) ---
 
@@ -225,6 +225,11 @@ modbus_v3.py:
 modbus_v3.py — Modbus-Collector für Fronius Gen24 / SmartMeter
 Version 2.0 - 30.12.2025
 Version 2.1 - 31.12.2024 - RAM-Buffer + Batch-Writes
+
+aggregate.py:
+  def get_db():
+    return get_db_connection()
+
 
 automation/engine/engine.py:
 engine.py — Entscheidungs-Engine (Schicht S3)
@@ -234,11 +239,6 @@ Liest ObsState aus RAM-DB und SOC-Parametermatrix aus
 automation/engine/automation_daemon.py:
   class AutomationDaemon:  # S4 Orchestrator: Observer + Engine + Actuator in einem Prozess.
   def engine_vorausschau() -> list[dict]:  # Statische Funktion: Liest ObsState aus RAM-DB, führt Dry-Run aus.
-
-aggregate.py:
-  def get_db():
-    return get_db_connection()
-
 
 --- API-Endpunkte ---
   /                              → index  # Startseite: Redirect zu Flow-Chart

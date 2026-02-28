@@ -36,9 +36,6 @@ from typing import Optional
 
 # ── Projekt-Root ─────────────────────────────────────────────
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-if _PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, _PROJECT_ROOT)
-
 import config as app_config
 from automation.engine.obs_state import (
     ObsState, init_ram_db, write_obs_state, read_obs_state,

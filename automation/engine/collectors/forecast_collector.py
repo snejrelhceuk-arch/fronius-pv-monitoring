@@ -21,14 +21,9 @@ from __future__ import annotations
 import json
 import logging
 import os
-import sys
 import time
 from datetime import datetime
 from typing import Optional
-
-_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
-if _PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, _PROJECT_ROOT)
 
 from automation.engine.obs_state import ObsState
 

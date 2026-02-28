@@ -20,11 +20,6 @@ from __future__ import annotations
 import logging
 import os
 import sqlite3
-import sys
-
-_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-if _PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, _PROJECT_ROOT)
 
 import automation.engine.obs_state as obs_mod
 from automation.engine.obs_state import ObsState, read_obs_state
