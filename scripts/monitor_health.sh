@@ -55,10 +55,10 @@ fi
 log "=== Health-Check gestartet ==="
 
 # --- 1. Service-Check ---
-if systemctl is-active --quiet modbus-collector.service 2>/dev/null; then
-    ok "modbus-collector.service läuft"
+if systemctl is-active --quiet pv-collector.service 2>/dev/null; then
+    ok "pv-collector.service läuft"
 else
-    alert "KRITISCH" "modbus-collector.service ist NICHT aktiv!"
+    alert "KRITISCH" "pv-collector.service ist NICHT aktiv!"
 fi
 
 if systemctl is-active --quiet pv-web.service 2>/dev/null; then

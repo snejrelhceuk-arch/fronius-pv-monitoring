@@ -83,13 +83,17 @@ class ObsState:
     ev_state: Optional[str] = None        # 'charging'|'waiting'|'ready'|'disconnected'
     wp_power_w: Optional[float] = None    # WP elektrisch [W] (aus SmartMeter WP)
     wp_active: Optional[bool] = None      # WP läuft gerade (P_WP > Schwelle)
+    wp_power_avg30_w: Optional[float] = None  # WP 30-min Mittelwert [W]
     wp_today_kwh: Optional[float] = None  # WP-Verbrauch heute [kWh]
+    ev_power_avg30_w: Optional[float] = None  # EV 30-min Mittelwert [W]
     ww_temp_c: Optional[float] = None     # Warmwasserspeicher [°C] — geplant
     heizpatrone_aktiv: bool = False        # Heizstab-Status (vorerst immer False)
     # ── Prognose (Tier-3 Forecast) ────────────────────────
     pv_at_sunrise_1h_w: Optional[float] = None  # Progn. PV-Leistung 1h nach Sunrise [W]
     forecast_quality: Optional[str] = None       # 'gut' | 'mittel' | 'schlecht'
     forecast_ts: Optional[str] = None            # ISO-8601 wann Forecast zuletzt geholt
+    clearsky_peak_h: Optional[float] = None      # Clear-Sky-Peak Dezimalstunde
+    forecast_power_profile: Optional[list] = None # [{hour, total_ac_w}…] Stundenleistung
     # ── Zeit / Geometrie ─────────────────────────────────────
     sunrise: Optional[float] = None       # Dezimalstunde
     sunset: Optional[float] = None

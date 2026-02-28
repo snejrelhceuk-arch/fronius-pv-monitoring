@@ -1,9 +1,9 @@
 # Automation-Architektur — Schicht C
 
 **Erstellt:** 2026-02-22  
-**Letzte Überarbeitung:** 2026-02-22 (Entscheidungen E1–E6 eingearbeitet)  
-**Status:** Konzeptdokument (Diskussionsgrundlage, kein produktiver Code)  
-**Vorgänger:** `battery_scheduler.py` (monolithisch, nur Batterie)  
+**Letzte Überarbeitung:** 2026-02-28 (Engine produktiv: Cascade, Fuzzy-Scoring, Verbraucher-Kontext)  
+**Status:** Produktiv (Phase 2 abgeschlossen — Batterie läuft über pv-automation.service)  
+**Vorgänger:** `battery_scheduler.py` (monolithisch, nur Batterie — deaktiviert 2026-02-28)  
 **ABC-Referenz:** [ABC_TRENNUNGSPOLICY.md](ABC_TRENNUNGSPOLICY.md)
 
 ---
@@ -22,13 +22,13 @@ der PV-Anlage, das:
 
 ### Entwicklungsprinzip: Strikte Isolation
 
-Die neue Automation wird **vollständig getrennt** vom laufenden System
+Die Automation wurde **vollständig getrennt** vom laufenden System
 entwickelt:
 
-- `battery_scheduler.py` + Cron bleiben **unverändert produktiv**
-- Neuer Code entsteht in einem eigenen Verzeichnis (`automation/engine/`)
-- Kein gemeinsamer State, keine gemeinsame DB-Tabelle während der Entwicklung
-- Umschaltung erst nach abgeschlossener Testphase (Phase 2)
+- ~~`battery_scheduler.py` + Cron~~ → **`pv-automation.service`** (seit 2026-02-28)
+- Code in eigenem Verzeichnis (`automation/engine/`)
+- Kein gemeinsamer State mit Legacy-Scheduler
+- Umschaltung nach abgeschlossener Testphase (Phase 2, erledigt 2026-02-28)
 - Jeder Meilenstein ist einzeln testbar und rückrollbar
 - **Nicht alles auf einmal** — ein Aktor nach dem anderen
 
@@ -650,19 +650,23 @@ Phase 0 (jetzt):
   ✅  ABC-Policy definiert
       Keine Code-Änderungen
 
-Phase 1 — Parallelaufbau:
-  [ ]  automation_daemon.py anlegen (Skelett)
-  [ ]  Observer: collector.py-Daten in ObsState überführen
-  [ ]  aktor_batterie.py: Strategien A–F aus battery_scheduler.py extrahieren
-  [ ]  Engine: Batterie als einziges Plugin, Score = bestehender Algorithmus
-  [ ]  Actuator: InverterControl-Klasse übernehmen
-  [ ]  Parallel zu bestehendem Cron testen (--dry-run)
+Phase 1 — Parallelaufbau:  ✅ ABGESCHLOSSEN
+  [✅]  automation_daemon.py angelegt (Observer→Engine→Actuator)
+  [✅]  Observer: collector.py-Daten in ObsState überführt
+  [✅]  Engine: 9 Regelkreise (Batterie), Score-basiert mit Cascade
+  [✅]  Actuator: InverterControl + Modbus-Dispatch
+  [✅]  Parallel zu bestehendem Cron getestet (--dry-run)
 
-Phase 2 — Umschaltung Batterie:
-  [ ]  Cron-Job battery_scheduler deaktivieren
-  [ ]  automation_daemon übernimmt Batterie-Steuerung
-  [ ]  battery_scheduler.py bleibt als Fallback-Script (manuell aufrufbar)
-  [ ]  30 Tage Parallelbetrieb/Monitoring
+Phase 2 — Umschaltung Batterie:  ✅ ABGESCHLOSSEN (2026-02-28)
+  [✅]  Cron-Job battery_scheduler deaktiviert
+  [✅]  pv-automation.service übernimmt Batterie-Steuerung
+  [✅]  battery_scheduler.py bleibt als Fallback-Script (manuell aufrufbar)
+  [✅]  Engine-Erweiterungen:
+         - Cascade-Mechanismus (Winner ohne Aktion → nächster Kandidat)
+         - Fuzzy-Scoring für nachmittag_soc_max (Clear-Sky-Peak + Rampe)
+         - Verbraucher-Kontext (30-min Avg für EV/WP in Schwellenberechnung)
+         - StorCtl_Mod/InWRte/OutWRte direkt per Modbus gelesen
+  [ ]  30 Tage Parallelbetrieb/Monitoring (läuft)
 
 Phase 3 — Neue Aktoren (nach Hardware-Verfügbarkeit):
   [ ]  aktor_wattpilot.py (E-Auto, Hardware vorhanden)
@@ -805,8 +809,8 @@ danach migriert nach `automation_log`.
 | Aktoren | nur Batterie | alle (Plugin-Registry) |
 | Zyklus | 15 min Cron | 3-Tier: Interrupt / 5–30 s / 1–15 min |
 | Schutzregeln | implizit im Code | explizit in S2 Tier 1 (Observer) |
-| Konfiguration | 1 JSON + Code-Konstanten | `soc_param_matrix.json` — 6 Regelkreise, 36 Parameter |
-| Entscheidung | monolithisch in `run_scheduler()` | Score-basiert, 6 Matrix-Regeln, Highest-Score-Wins |
+| Konfiguration | 1 JSON + Code-Konstanten | `soc_param_matrix.json` — 9 Regelkreise, 50+ Parameter |
+| Entscheidung | monolithisch in `run_scheduler()` | Score-basiert, 9 Regelkreise, Cascade + Fuzzy-Scoring |
 | SOC-Umschaltungen | `battery_control_log` | **echte Daten** aus `automation_log` |
 | API-Anzeige | `battery_control_log` via DB-Query | `soc_switches[]` + `last_engine_action` via DB-Query |
 | Verifikation | `_verify_consistency()` (Batterie) | Actuator Read-Back (alle, inkl. Dry-Run) |
@@ -847,4 +851,4 @@ danach migriert nach `automation_log`.
 
 ---
 
-*Letzte Aktualisierung: 2026-02-22 (§5 Engine matrix-getrieben, §7 Web-API echte Daten, §11 aktualisiert)*
+*Letzte Aktualisierung: 2026-02-28 (Phase 2 produktiv: Cascade, Fuzzy-Scoring, Verbraucher-Kontext, 9 Regelkreise)*
