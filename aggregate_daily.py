@@ -219,9 +219,9 @@ def aggregate_daily():
                 cnt_pv_f1 = (cnt_dc1 or 0) + (cnt_dc2 or 0)
             else:
                 cnt_imp = cnt_exp = cnt_pv_f1 = cnt_inv = None
-                cnt_imp_start = cnt_imp_end = h_imp_start, h_imp_end
-                cnt_exp_start = cnt_exp_end = h_exp_start, h_exp_end
-                cnt_inv_start = cnt_inv_end = h_inv_start, h_inv_end
+                cnt_imp_start, cnt_imp_end = h_imp_start, h_imp_end
+                cnt_exp_start, cnt_exp_end = h_exp_start, h_exp_end
+                cnt_inv_start, cnt_inv_end = h_inv_start, h_inv_end
 
             # ── 3. F2/F3-Counter + Wärmepumpe-Counter aus raw_data (ab 12.02.) ──
             c.execute("""

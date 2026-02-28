@@ -1,25 +1,33 @@
 #!/bin/bash
-# Stoppt alle Fronius-Datenerfassungs-Prozesse
+# Stoppt alle PV-System-Dienste sauber über systemd
 
-echo "=== Stoppe Fronius-Prozesse ==="
+echo "=== Stoppe PV-System-Dienste ==="
 
-# Killalle Python-Prozesse im pv-system Verzeichnis
-echo "1. Stoppe Python-Prozesse..."
-pkill -f "pv-system/collector.py" 2>/dev/null && echo "  ✓ collector.py gestoppt"
-pkill -f "pv-system/aggregate" 2>/dev/null && echo "  ✓ aggregate Skripte gestoppt"
-pkill -f "pv-system/web_api.py" 2>/dev/null && echo "  ✓ web_api.py gestoppt"
-pkill -f "pv-system/modbus" 2>/dev/null && echo "  ✓ modbus Skripte gestoppt"
+# 1. Systemd-Services stoppen (bevorzugt)
+echo "1. Stoppe systemd-Services..."
+for svc in pv-collector pv-web pv-wattpilot pv-automation pv-observer; do
+    if systemctl is-active --quiet "$svc.service" 2>/dev/null; then
+        sudo systemctl stop "$svc.service" && echo "  ✓ $svc gestoppt" || echo "  ✗ $svc Stop fehlgeschlagen"
+    else
+        echo "  – $svc nicht aktiv"
+    fi
+done
+
+# 2. Verbleibende Prozesse die NICHT über systemd laufen
+echo ""
+echo "2. Stoppe verbleibende pv-system Python-Prozesse..."
+pkill -f "pv-system/aggregate" 2>/dev/null && echo "  ✓ aggregate Skripte gestoppt" || true
 
 sleep 2
 
-# Prüfe ob noch Prozesse laufen
+# 3. Prüfe ob noch Prozesse laufen
 echo ""
-echo "2. Verbleibende Fronius-Prozesse:"
-ps aux | grep -E "pv-system" | grep -v grep | grep python3
+echo "3. Verbleibende PV-System-Prozesse:"
+ps aux | grep -E "pv-system" | grep -v grep | grep python3 || echo "  (keine)"
 
-# Cron temporär deaktivieren
+# 4. Cron-Sicherung
 echo ""
-echo "3. Deaktiviere Cron (temporär):"
+echo "4. Cron-Info:"
 crontab -l > /tmp/crontab_backup.txt 2>/dev/null
 if [ $? -eq 0 ]; then
     echo "  ✓ Crontab gesichert nach /tmp/crontab_backup.txt"
@@ -31,7 +39,6 @@ fi
 
 echo ""
 echo "=== NÄCHSTE SCHRITTE ==="
-echo "1. Überprüfen ob Prozesse gestoppt: ps aux | grep fronius"
-echo "2. Falls nötig forciertes Killen: pkill -9 -f pv-system"
-echo "3. System-Neustart: sudo reboot"
-echo "4. Nach Neustart Cron wieder aktivieren"
+echo "1. Überprüfen: systemctl status pv-collector pv-web pv-wattpilot"
+echo "2. Neustart: sudo systemctl start pv-collector pv-web pv-wattpilot"
+echo "3. Falls nötig: sudo reboot"

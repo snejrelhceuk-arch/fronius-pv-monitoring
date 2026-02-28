@@ -380,16 +380,17 @@ def analyse():
     }
     template = template_map.get(request.path, 'analyse_pv_view.html')
 
-    conn.close()
-
-    return render_template(template,
-                         invest_pv_2022=invest_pv_2022,
-                         invest_pv_2024=invest_pv_2024,
-                         invest_wp_2022=invest_wp_2022,
-                         gesamt_invest_pv=gesamt_invest_pv,
-                         gesamt_invest_haushalt=gesamt_invest_haushalt,
-                         yearly_data=list(years_data.values()),
-                         amort_pv_data=amort_pv_data,
-                         amort_haushalt_data=amort_haushalt_data,
-                         current_year=current_year,
-                         freq_extremes=freq_extremes)
+    try:
+        return render_template(template,
+                             invest_pv_2022=invest_pv_2022,
+                             invest_pv_2024=invest_pv_2024,
+                             invest_wp_2022=invest_wp_2022,
+                             gesamt_invest_pv=gesamt_invest_pv,
+                             gesamt_invest_haushalt=gesamt_invest_haushalt,
+                             yearly_data=list(years_data.values()),
+                             amort_pv_data=amort_pv_data,
+                             amort_haushalt_data=amort_haushalt_data,
+                             current_year=current_year,
+                             freq_extremes=freq_extremes)
+    finally:
+        conn.close()

@@ -155,25 +155,6 @@ def get_avg_consumption_kw(minutes=30):
         return None
 
 
-def _get_live_pv_power():
-    """Aktuelle PV-Leistung aus data_1min (letzte 5 Minuten) [W].
-
-    Liest P_DC1 + P_DC2 (= echte PV-String-Erzeugung, ohne Batterie).
-    Returns: float (Watt) oder None wenn nicht verfügbar.
-    """
-    try:
-        with sqlite3.connect(DB_PATH) as db:
-            row = db.execute("""
-                SELECT COALESCE(P_DC1_avg, 0) + COALESCE(P_DC2_avg, 0)
-                FROM data_1min
-                WHERE ts > ? - 300
-                ORDER BY ts DESC LIMIT 1
-            """, (time.time(),)).fetchone()
-            return row[0] if row and row[0] is not None else None
-    except Exception:
-        return None
-
-
 def get_remaining_pv_surplus_kwh(hourly_forecast, current_hour, consumption_kw,
                                  power_hourly=None):
     """

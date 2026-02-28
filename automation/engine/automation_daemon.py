@@ -198,6 +198,8 @@ class DataCollector:
             storctl = read_raw(client, REG['StorCtl_Mod'])
             if storctl is not None:
                 obs.storctl_mod = storctl
+                # soc_mode: Limits aktiv → manual, sonst auto
+                obs.soc_mode = 'manual' if storctl > 0 else 'auto'
 
             # Lade-/Entladerate
             outwrte, _, _ = read_scaled(client, REG['OutWRte'], REG['InOutWRte_SF'])
@@ -323,8 +325,19 @@ class DataCollector:
 
             if power_hourly:
                 # Stündliches Leistungsprofil für Engine-Regeln
+                def _safe_hour(hd):
+                    """Stunde sicher aus 'hour' oder 'time'-Key extrahieren."""
+                    h = hd.get('hour')
+                    if h is not None:
+                        return int(h)
+                    t = hd.get('time', '')
+                    try:
+                        return int(t[11:13]) if len(t) >= 13 else 0
+                    except (ValueError, TypeError):
+                        return 0
+
                 obs.forecast_power_profile = [
-                    {'hour': hd.get('hour', int(hd.get('time', '  00')[11:13])),
+                    {'hour': _safe_hour(hd),
                      'total_ac_w': round(hd.get('total_ac', 0), 0)}
                     for hd in power_hourly
                 ]

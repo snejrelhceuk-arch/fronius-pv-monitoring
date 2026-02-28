@@ -137,10 +137,7 @@ class Tier1Checker:
             # ── WARNUNG: Ladeleistung auf 0.3C reduzieren ────
             obs.alarm_batt_temp = True
             self._batt_temp_limited = True
-            # 0.3C bei 10.24 kWh ≈ 3.07 kW → ~30% von WChaMax (10.24 kW)
-            reduce_pct = int(self._batt_temp_reduce_c_rate /
-                             (self._batt_kapazitaet_kwh / self._batt_kapazitaet_kwh) * 100)
-            # Genauer: 0.3C = 0.3 × 10.24 kW = 3.072 kW, WChaMax = 10.24 kW → 30%
+            # 0.3C = 0.3 × 10.24 kW = 3.072 kW, WChaMax = 10.24 kW → 30%
             reduce_pct = int(self._batt_temp_reduce_c_rate * 100)  # 0.3C → 30%
             actions.append({
                 'tier': 1,

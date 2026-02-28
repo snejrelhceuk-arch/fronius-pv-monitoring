@@ -141,7 +141,6 @@ def _in_range(p: dict) -> bool:
 def zeige_matrix(matrix: dict, farbig: bool = True):
     """Zeige die gesamte Parametermatrix tabellarisch an."""
 
-    c = (lambda x: x) if not farbig else (lambda x: x)
     hw = matrix.get('hardware', {})
 
     print()
