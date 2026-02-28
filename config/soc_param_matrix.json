@@ -48,126 +48,51 @@
       "engine_zyklus": "fast"
     },
     "morgen_soc_min": {
-      "_doc": "Morgens SOC_MIN öffnen: Batterie vor PV-Übernahme entleeren",
+      "_doc": "Morgens SOC_MIN öffnen: Batterie vor PV-Übernahme entleeren. Trigger: pv_at_sunrise_1h_w >= Schwelle",
       "aktiv": true,
       "prioritaet": 2,
-      "beschreibung": "SOC_MIN von Komfort (25%) auf Stress (5%) senken, wenn genug PV prognostiziert",
+      "beschreibung": "Bei Sunrise Prognosewert für +1h prüfen. >= 1500W → SOC_MIN=5%, SOC_MAX=75%, SOC_MODE=manual",
       "parameter": {
-        "komfort_min_pct": {
-          "wert": 25,
-          "bereich": [
-            10,
-            40
-          ],
-          "einheit": "%",
-          "obs_feld": "soc_min",
-          "aktor_kommando": "set_soc_min",
-          "beschreibung": "Komfort-SOC_MIN (Normalzustand, LFP-schonend)"
+        "pv_schwelle_sunrise_1h_w": {
+          "wert": 1500,
+          "bereich": [500, 5000],
+          "einheit": "W",
+          "obs_feld": "pv_at_sunrise_1h_w",
+          "beschreibung": "Mindest-PV-Prognose für Sunrise+1h damit Öffnung stattfindet"
         },
         "stress_min_pct": {
           "wert": 5,
-          "bereich": [
-            0,
-            15
-          ],
+          "bereich": [0, 15],
           "einheit": "%",
           "obs_feld": "soc_min",
           "aktor_kommando": "set_soc_min",
-          "beschreibung": "Stress-SOC_MIN (geöffnet, tiefe Entladung erlaubt)"
-        },
-        "min_prognose_kwh": {
-          "wert": 5.0,
-          "bereich": [
-            1,
-            20
-          ],
-          "einheit": "kWh",
-          "obs_feld": "forecast_kwh",
-          "beschreibung": "Mindest-Tagesprognose damit Öffnung stattfindet"
-        },
-        "uebernahme_schwelle": {
-          "wert": 0.8,
-          "bereich": [
-            0.5,
-            1.0
-          ],
-          "einheit": "Faktor",
-          "beschreibung": "PV muss x% des Verbrauchs decken = Takeover (legacy, nicht mehr verwendet)"
-        },
-        "pv_bestaetigung_w": {
-          "wert": 100,
-          "bereich": [
-            50,
-            500
-          ],
-          "einheit": "W",
-          "obs_feld": "pv_total_w",
-          "beschreibung": "Live-PV Schwelle: Bestätigung dass Sonne tatsächlich da ist (nicht nur astronomisch). Öffnung erst wenn PV > dieser Wert nach Aktivierungszeit."
-        },
-        "wolken_klar_pct": {
-          "wert": 30,
-          "bereich": [
-            10,
-            50
-          ],
-          "einheit": "%",
-          "obs_feld": "cloud_rest_avg_pct",
-          "beschreibung": "Grenze für 'klarer Himmel': <30% → Offset 10-30min nach Sunrise"
-        },
-        "wolken_schwer_pct": {
-          "wert": 70,
-          "bereich": [
-            50,
-            90
-          ],
-          "einheit": "%",
-          "obs_feld": "cloud_rest_avg_pct",
-          "beschreibung": "Grenze für 'bewölkt': >70% → Offset 60-120min, SOC_MODE=auto"
+          "beschreibung": "SOC_MIN nach Öffnung (tiefe Entladung erlaubt)"
         },
         "morgen_soc_max_pct": {
           "wert": 75,
-          "bereich": [
-            50,
-            85
-          ],
+          "bereich": [50, 85],
           "einheit": "%",
           "obs_feld": "soc_max",
           "aktor_kommando": "set_soc_max",
-          "beschreibung": "SOC_MAX morgens auf diesen Wert begrenzen. Verhindert dass PV die Batterie in <1h vollladt. Nachmittag öffnet später auf 100%."
-        },
-        "max_vorlauf_h": {
-          "wert": 0.25,
-          "bereich": [
-            0,
-            2.0
-          ],
-          "einheit": "h",
-          "beschreibung": "Legacy: Maximal x Stunden VOR PV-Takeover öffnen (nicht mehr verwendet)"
+          "beschreibung": "SOC_MAX morgens begrenzen (LFP-Schonung, Nachmittag öffnet später)"
         },
         "fenster_ende_nach_sunrise_h": {
           "wert": 3,
-          "bereich": [
-            1,
-            5
-          ],
+          "bereich": [1, 5],
           "einheit": "h",
           "obs_feld": "sunrise",
-          "beschreibung": "Morgen-Fenster endet x Stunden nach Sonnenaufgang. Danach übernimmt Nachmittag-Regel."
+          "beschreibung": "Morgen-Fenster endet x Stunden nach Sonnenaufgang"
         },
-        "drain_rate_fallback_kw": {
-          "wert": 1.5,
-          "bereich": [
-            0.5,
-            4.0
-          ],
-          "einheit": "kW",
-          "beschreibung": "Fallback-Drain wenn kein Verbrauchshistorik verfügbar"
+        "mittel_verzoegerung_h": {
+          "wert": 1.0,
+          "bereich": [0.5, 2.0],
+          "einheit": "h",
+          "beschreibung": "Bei forecast_quality=mittel: Öffnung erst Sunrise + x Stunden"
         }
       },
       "score_gewicht": 72,
       "_score_doc": "72 > AbendEntladerate(65): Morgen-Öffnung hat Vorrang. HALTE-Score 68 verhindert Rücksetzung.",
-      "engine_zyklus": "fast",
-      "_engine_zyklus_doc": "fast: Haltemodus jede Minute prüfen. Aktivierung=Sonnenaufgang+wolkenabhängiger Offset+PV-Bestätigung."
+      "engine_zyklus": "fast"
     },
     "nachmittag_soc_max": {
       "_doc": "Nachmittags SOC_MAX erhöhen: Mehr Kapazität vor Abend freigeben",
@@ -249,10 +174,10 @@
       "engine_zyklus": "strategic"
     },
     "komfort_reset": {
-      "_doc": "Täglicher Reset auf Komfort-SOC-Bereich (25–75%) am Abend/Nacht — recycelt aus battery_scheduler._apply_comfort_defaults",
+      "_doc": "Komfort-Reset: Abends auf 25/75%, PLUS intelligenter Früh-Reset am Nachmittag wenn Prognose nicht reicht",
       "aktiv": true,
       "prioritaet": 2,
-      "beschreibung": "Nach Sunset Stress-SOC (5/100%) zurück auf Komfort (25/75%), SOC_MODE=manual, Modbus=auto",
+      "beschreibung": "Nach Sunset oder schon nachmittags (wenn Prognose-Rest nicht reicht): zurück auf Komfort 25/75%",
       "parameter": {
         "komfort_min_pct": {
           "wert": 25,
@@ -271,11 +196,24 @@
           "beschreibung": "Komfort-SOC_MAX (LFP-Schonung, Normalzustand)"
         },
         "reset_nach_sunset_h": {
-          "wert": 1.0,
+          "wert": 0,
           "bereich": [0, 3],
           "einheit": "h",
           "obs_feld": "sunset",
-          "beschreibung": "Stunden nach Sunset bis Reset-Fenster beginnt"
+          "beschreibung": "Normaler Abend-Reset: ab Sunset (0 = sofort bei Sunset)"
+        },
+        "frueh_reset_ab_h": {
+          "wert": 13.0,
+          "bereich": [11, 16],
+          "einheit": "h",
+          "beschreibung": "Früh-Reset: Frühester Zeitpunkt für Nachmittags-Reset-Prüfung"
+        },
+        "erholung_schwelle_kwh": {
+          "wert": 10.0,
+          "bereich": [5, 20],
+          "einheit": "kWh",
+          "obs_feld": "forecast_rest_kwh",
+          "beschreibung": "Prognose-Rest ≥ Schwelle → nachhaltige Ladung möglich (z.B. nach Gewitter), kein Früh-Reset"
         }
       },
       "score_gewicht": 70,
