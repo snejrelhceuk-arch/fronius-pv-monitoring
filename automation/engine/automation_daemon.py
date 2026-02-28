@@ -3,9 +3,8 @@
 automation_daemon.py — S4 Engine-Daemon (Observer→Engine→Actuator Loop)
 
 Eigenständiger Prozess der alle Schichten orchestriert:
-  - Liest Sensor-Daten aus der bestehenden Collector-DB (raw_data, wattpilot_readings)
-  - Liest Forecast-/Geometrie-Daten aus solar_forecast
-  - Befüllt ObsState und schreibt in RAM-DB
+  - DataCollector: Sensor-Daten aus Collector-DB + Modbus + HTTP
+  - ForecastCollector: Solar-Prognose trigger-basiert (Tier 3)
   - Tier-1: Schwellenprüfung bei jedem Update (Sofort-Aktionen)
   - Engine: Score-basierte Regelauswertung (fast=1min, strategic=15min)
   - Actuator: Ausführung + Persist-DB-Logging (automation_log)
@@ -28,6 +27,7 @@ import os
 import signal
 import sqlite3
 import sys
+import threading
 import time
 from datetime import datetime, date
 from pathlib import Path
@@ -43,7 +43,7 @@ from automation.engine.obs_state import (
     ObsState, init_ram_db, write_obs_state, read_obs_state,
     write_heartbeat, RAM_DB_PATH,
 )
-from automation.engine.observer import Tier1Checker
+from automation.engine.collectors import DataCollector, Tier1Checker, ForecastCollector
 from automation.engine.actuator import Actuator
 from automation.engine.engine import Engine
 from automation.engine.param_matrix import DEFAULT_MATRIX_PATH
@@ -56,506 +56,6 @@ STRATEGIC_INTERVAL = 900    # Sekunden — Engine strategic-Zyklus (15 min)
 OBS_COLLECT_INTERVAL = 10   # Sekunden — ObsState Datensammlung
 PID_FILE = Path(__file__).parent.parent.parent / 'automation_daemon.pid'
 
-
-# ═════════════════════════════════════════════════════════════
-# DataCollector: Liest aus bestehender Collector-DB
-# ═════════════════════════════════════════════════════════════
-
-class DataCollector:
-    """Liest Sensor-Daten aus der Collector-DB → ObsState.
-
-    Primär read-only aus Collector-DB (/dev/shm/fronius_data.db).
-    Ausnahme: StorCtl_Mod, InWRte, OutWRte werden direkt per Modbus
-    gelesen, da der Collector diese Register nicht speichert.
-    """
-
-    def __init__(self, db_path: str = None):
-        self._db_path = db_path or app_config.DB_PATH
-        self._forecast_cache = None
-        self._forecast_cache_ts = 0
-        self._modbus_client = None
-
-    def _get_conn(self) -> Optional[sqlite3.Connection]:
-        """Öffne read-only Verbindung zur Collector-DB."""
-        try:
-            if not os.path.exists(self._db_path):
-                return None
-            conn = sqlite3.connect(
-                f'file:{self._db_path}?mode=ro', uri=True, timeout=3.0
-            )
-            conn.row_factory = sqlite3.Row
-            return conn
-        except Exception as e:
-            LOG.warning(f"Collector-DB nicht lesbar: {e}")
-            return None
-
-    def collect(self, obs: ObsState):
-        """Sammle ALLE verfügbaren Daten → ObsState."""
-        obs.ts = datetime.now().isoformat()
-        self._collect_raw_data(obs)
-        self._collect_battery_modbus(obs)   # StorCtl_Mod, In/OutWRte
-        self._collect_battery_soc_config(obs)  # SOC_MIN/MAX/MODE per HTTP API
-        self._collect_wattpilot(obs)
-        self._collect_battery_settings(obs)
-        self._collect_pv_today(obs)      # VOR forecast — braucht pv_today_kwh
-        self._collect_wp_today(obs)
-        self._collect_geometry(obs)
-        self._collect_forecast(obs)      # NACH pv_today für Rest-Prognose + IST/SOLL
-        self._collect_fritzdect(obs)
-
-    # ── raw_data: PV, Netz, Batterie (aus Collector/Modbus) ──
-
-    def _collect_raw_data(self, obs: ObsState):
-        """Aktuellste raw_data-Zeile → ObsState Erzeuger/Netz/Batterie."""
-        conn = self._get_conn()
-        if not conn:
-            return
-        try:
-            now = int(time.time())
-            row = conn.execute(
-                "SELECT * FROM raw_data WHERE ts > ? ORDER BY ts DESC LIMIT 1",
-                (now - 120,)
-            ).fetchone()
-            if not row:
-                return
-
-            d = dict(row)
-
-            # ── Erzeuger ──
-            p_dc1 = d.get('P_DC1', 0) or 0
-            p_dc2 = d.get('P_DC2', 0) or 0
-            p_f2 = d.get('P_F2', 0) or 0
-            p_f3 = d.get('P_F3', 0) or 0
-            obs.pv_f1_w = round(p_dc1 + p_dc2, 0)
-            obs.pv_f2_w = round(p_f2, 0)
-            obs.pv_f3_w = round(p_f3, 0)
-            obs.pv_total_w = round(obs.pv_f1_w + obs.pv_f2_w + obs.pv_f3_w, 0)
-
-            # ── Netz ──
-            p_netz = d.get('P_Netz', 0) or 0
-            obs.grid_power_w = round(p_netz, 0)
-
-            # ── Batterie (Strom/Spannung aus API) ──
-            i_batt = d.get('I_Batt_API', 0) or 0
-            u_batt = d.get('U_Batt_API', 0) or 0
-            obs.batt_power_w = round(i_batt * u_batt, 0)
-            obs.batt_soc_pct = d.get('SOC_Batt') or obs.batt_soc_pct
-            obs.cha_state = d.get('ChaSt_Batt') or obs.cha_state
-
-            # ── Verbraucher ──
-            p_wp = d.get('P_WP', 0) or 0
-            obs.wp_power_w = abs(p_wp)
-            obs.wp_active = obs.wp_power_w > 200  # Schwelle: 200W
-
-            # ── WP 30-min Mittelwert (aus data_1min) ──
-            try:
-                now_ts = int(time.time())
-                wp_avg_row = conn.execute(
-                    "SELECT AVG(ABS(P_WP_avg)) FROM data_1min WHERE ts > ?",
-                    (now_ts - 1800,)
-                ).fetchone()
-                if wp_avg_row and wp_avg_row[0] is not None:
-                    obs.wp_power_avg30_w = round(wp_avg_row[0], 0)
-            except Exception as e:
-                LOG.debug(f"WP avg30 query: {e}")
-
-            # ── Hausverbrauch (Bilanz) ──
-            verbrauch = obs.pv_total_w - obs.batt_power_w + obs.grid_power_w
-            obs.house_load_w = max(0, round(verbrauch, 0))
-
-        except Exception as e:
-            LOG.warning(f"raw_data collect: {e}")
-        finally:
-            conn.close()
-
-    # ── Batterie Modbus (StorCtl_Mod, Lade-/Entladerate) ────
-
-    def _collect_battery_modbus(self, obs: ObsState):
-        """StorCtl_Mod, OutWRte, InWRte direkt per Modbus M124 lesen.
-
-        Diese Register werden vom Collector nicht in raw_data gespeichert,
-        sind aber für die Engine-Regelung (abend_entladerate, soc_schutz)
-        essenziell.
-        """
-        try:
-            from automation.battery_control import (
-                ModbusClient, REG,
-                read_raw, read_int16_scaled as read_scaled,
-            )
-
-            if self._modbus_client is None:
-                self._modbus_client = ModbusClient(
-                    app_config.INVERTER_IP, app_config.MODBUS_PORT
-                )
-                if not self._modbus_client.connect():
-                    LOG.warning("Modbus-Verbindung für StorCtl fehlgeschlagen")
-                    self._modbus_client = None
-                    return
-                time.sleep(0.1)
-
-            client = self._modbus_client
-
-            # StorCtl_Mod (Bit 0=Charge-Limit, Bit 1=Discharge-Limit)
-            storctl = read_raw(client, REG['StorCtl_Mod'])
-            if storctl is not None:
-                obs.storctl_mod = storctl
-                # soc_mode: Limits aktiv → manual, sonst auto
-                obs.soc_mode = 'manual' if storctl > 0 else 'auto'
-
-            # Lade-/Entladerate
-            outwrte, _, _ = read_scaled(client, REG['OutWRte'], REG['InOutWRte_SF'])
-            inwrte, _, _ = read_scaled(client, REG['InWRte'], REG['InOutWRte_SF'])
-            if outwrte is not None:
-                obs.discharge_rate_pct = outwrte
-            if inwrte is not None:
-                obs.charge_rate_pct = inwrte
-
-        except Exception as e:
-            LOG.warning(f"Modbus StorCtl collect: {e}")
-            self._modbus_client = None
-
-    # ── SOC_MIN/MAX/MODE aus Fronius HTTP API ────────────────
-
-    _soc_config_cache_ts: float = 0
-    _SOC_CONFIG_INTERVAL = 30   # Sekunden — HTTP-API nicht bei jedem 10s-Zyklus
-
-    def _collect_battery_soc_config(self, obs: ObsState):
-        """SOC_MIN, SOC_MAX, SOC_MODE aus Fronius Batterie-Config API.
-
-        Diese Werte werden vom Collector nicht in raw_data gespeichert,
-        sind aber für komfort_reset, morgen_soc_min, nachmittag_soc_max
-        essenziell.  Cache: 30s (reicht für 1-min Engine-Zyklen).
-        """
-        now = time.time()
-        if now - DataCollector._soc_config_cache_ts < self._SOC_CONFIG_INTERVAL:
-            return  # Cache noch gültig — vorherige Werte bleiben im obs
-
-        try:
-            from fronius_api import BatteryConfig
-            bc = BatteryConfig()
-            values = bc.get_values()
-
-            soc_min_val = values.get('BAT_M0_SOC_MIN')
-            soc_max_val = values.get('BAT_M0_SOC_MAX')
-            soc_mode_val = values.get('BAT_M0_SOC_MODE')
-
-            if soc_min_val is not None:
-                obs.soc_min = int(soc_min_val)
-            if soc_max_val is not None:
-                obs.soc_max = int(soc_max_val)
-            if soc_mode_val is not None:
-                obs.soc_mode = str(soc_mode_val).lower()
-
-            DataCollector._soc_config_cache_ts = now
-
-        except Exception as e:
-            LOG.debug(f"SOC-Config API: {e}")
-
-    # ── WattPilot ────────────────────────────────────────────
-
-    def _collect_wattpilot(self, obs: ObsState):
-        """WattPilot Live-Daten aus wattpilot_readings."""
-        conn = self._get_conn()
-        if not conn:
-            return
-        try:
-            now = int(time.time())
-            row = conn.execute(
-                "SELECT power_w, car_state FROM wattpilot_readings "
-                "WHERE ts > ? ORDER BY ts DESC LIMIT 1",
-                (now - 120,)
-            ).fetchone()
-            if row:
-                obs.ev_power_w = round(row[0] or 0, 0)
-                car_state = row[1] or 0
-                obs.ev_charging = (car_state == 2)
-                obs.ev_state = {
-                    0: 'unknown', 1: 'disconnected', 2: 'charging',
-                    3: 'waiting', 4: 'complete', 5: 'error'
-                }.get(car_state, 'unknown')
-            else:
-                obs.ev_power_w = 0
-                obs.ev_charging = False
-
-            # ── EV 30-min Mittelwert ──
-            ev_avg_row = conn.execute(
-                "SELECT AVG(power_w) FROM wattpilot_readings WHERE ts > ?",
-                (now - 1800,)
-            ).fetchone()
-            if ev_avg_row and ev_avg_row[0] is not None:
-                obs.ev_power_avg30_w = round(ev_avg_row[0], 0)
-
-        except Exception as e:
-            LOG.debug(f"wattpilot collect: {e}")
-        finally:
-            conn.close()
-
-    # ── Batterie SOC/Mode Settings ───────────────────────────
-
-    def _collect_battery_settings(self, obs: ObsState):
-        """SOC_MIN/MAX/Mode aus Batterie-Config oder letzer bekannter Wert."""
-        cfg_path = os.path.join(_PROJECT_ROOT, 'config', 'battery_scheduler_state.json')
-        try:
-            if os.path.exists(cfg_path):
-                with open(cfg_path, 'r') as f:
-                    state = json.load(f)
-                # Diese Werte werden ggf. durch Observer-Modbus überschrieben
-                if obs.soc_min is None:
-                    obs.soc_min = state.get('current_soc_min')
-                if obs.soc_max is None:
-                    obs.soc_max = state.get('current_soc_max')
-        except Exception as e:
-            LOG.debug(f"battery_settings: {e}")
-
-    # ── Solar Forecast ───────────────────────────────────────
-
-    def _collect_forecast(self, obs: ObsState):
-        """Prognose + Wolken aus solar_forecast (Cache: 15 min)."""
-        now = time.time()
-        if now - self._forecast_cache_ts < 900 and self._forecast_cache:
-            self._apply_forecast_cache(obs)
-            return
-
-        try:
-            from solar_forecast import SolarForecast
-            sf = SolarForecast()
-
-            # Tagesprognose [kWh]
-            try:
-                fc = sf.get_day_forecast()
-                if fc and 'expected_kwh' in fc:
-                    obs.forecast_kwh = round(fc['expected_kwh'], 1)
-            except Exception:
-                pass
-
-            # Stündliche Wolken + Power-Forecast
-            now_h = datetime.now().hour
-            power_hourly = None
-            try:
-                hourly = sf.get_hourly_forecast()
-                if hourly:
-                    # Aktuelle Wolken
-                    for h in hourly:
-                        h_start = h.get('hour', 0)
-                        if h_start == now_h:
-                            obs.cloud_now_pct = h.get('cloud_cover')
-                            break
-
-                    # Tagesdurchschnitt + Resttag
-                    all_clouds = [h.get('cloud_cover', 50) for h in hourly]
-                    rest_clouds = [h.get('cloud_cover', 50) for h in hourly
-                                   if h.get('hour', 0) >= now_h]
-                    if all_clouds:
-                        obs.cloud_avg_pct = round(sum(all_clouds) / len(all_clouds), 1)
-                    if rest_clouds:
-                        obs.cloud_rest_avg_pct = round(sum(rest_clouds) / len(rest_clouds), 1)
-            except Exception:
-                pass
-
-            # Power-Forecast + IST/SOLL + Leistungsprofil
-            try:
-                power_hourly = sf.get_hourly_power_forecast()
-            except Exception:
-                pass
-
-            if obs.forecast_kwh and obs.pv_today_kwh is not None:
-                obs.forecast_rest_kwh = max(0, round(obs.forecast_kwh - obs.pv_today_kwh, 1))
-
-            if power_hourly:
-                # Stündliches Leistungsprofil für Engine-Regeln
-                def _safe_hour(hd):
-                    """Stunde sicher aus 'hour' oder 'time'-Key extrahieren."""
-                    h = hd.get('hour')
-                    if h is not None:
-                        return int(h)
-                    t = hd.get('time', '')
-                    try:
-                        return int(t[11:13]) if len(t) >= 13 else 0
-                    except (ValueError, TypeError):
-                        return 0
-
-                obs.forecast_power_profile = [
-                    {'hour': _safe_hour(hd),
-                     'total_ac_w': round(hd.get('total_ac', 0), 0)}
-                    for hd in power_hourly
-                ]
-
-                # IST/SOLL-Verhältnis
-                if obs.pv_today_kwh is not None:
-                    try:
-                        expected_so_far_kwh = 0.0
-                        for hd in power_hourly:
-                            h_hour = hd.get('hour', 0)
-                            if h_hour < now_h:
-                                expected_so_far_kwh += hd.get('total_ac', 0) / 1000.0
-                        if expected_so_far_kwh > 0.5:
-                            obs.pv_vs_forecast_pct = round(
-                                (obs.pv_today_kwh / expected_so_far_kwh) * 100, 1)
-                    except Exception:
-                        pass
-
-            # Clear-Sky-Peak-Stunde bestimmen
-            try:
-                from solar_geometry import get_clearsky_day_curve
-                from datetime import date as _date
-                cs_curve = get_clearsky_day_curve(_date.today(), interval_min=60)
-                if cs_curve:
-                    peak_entry = max(cs_curve, key=lambda e: e.get('total_ac', 0))
-                    peak_ts = peak_entry['timestamp']
-                    peak_dt = datetime.fromtimestamp(peak_ts)
-                    obs.clearsky_peak_h = round(
-                        peak_dt.hour + peak_dt.minute / 60.0, 1)
-            except Exception as e:
-                LOG.debug(f"clearsky_peak: {e}")
-
-            # Cache speichern
-            self._forecast_cache = {
-                'forecast_kwh': obs.forecast_kwh,
-                'cloud_now_pct': obs.cloud_now_pct,
-                'cloud_avg_pct': obs.cloud_avg_pct,
-                'cloud_rest_avg_pct': obs.cloud_rest_avg_pct,
-                'clearsky_peak_h': obs.clearsky_peak_h,
-                'forecast_power_profile': obs.forecast_power_profile,
-            }
-            self._forecast_cache_ts = now
-
-        except ImportError:
-            LOG.debug("solar_forecast nicht verfügbar")
-        except Exception as e:
-            LOG.warning(f"forecast collect: {e}")
-
-    def _apply_forecast_cache(self, obs: ObsState):
-        """Wende gecachte Forecast-Werte an."""
-        c = self._forecast_cache
-        if not c:
-            return
-        obs.forecast_kwh = c.get('forecast_kwh', obs.forecast_kwh)
-        obs.cloud_now_pct = c.get('cloud_now_pct', obs.cloud_now_pct)
-        obs.cloud_avg_pct = c.get('cloud_avg_pct', obs.cloud_avg_pct)
-        obs.cloud_rest_avg_pct = c.get('cloud_rest_avg_pct', obs.cloud_rest_avg_pct)
-        obs.clearsky_peak_h = c.get('clearsky_peak_h', obs.clearsky_peak_h)
-        obs.forecast_power_profile = c.get('forecast_power_profile', obs.forecast_power_profile)
-        # Rest-Prognose immer frisch berechnen
-        if obs.forecast_kwh and obs.pv_today_kwh is not None:
-            obs.forecast_rest_kwh = max(0, round(obs.forecast_kwh - obs.pv_today_kwh, 1))
-
-    # ── PV-Erzeugung heute ───────────────────────────────────
-
-    def _collect_pv_today(self, obs: ObsState):
-        """Bisherige PV-Erzeugung heute aus data_1min."""
-        conn = self._get_conn()
-        if not conn:
-            return
-        try:
-            today_start = int(time.mktime(date.today().timetuple()))
-            row = conn.execute(
-                "SELECT SUM(W_Ertrag) / 1000.0 FROM data_1min WHERE ts >= ?",
-                (today_start,)
-            ).fetchone()
-            if row and row[0] is not None:
-                obs.pv_today_kwh = round(row[0], 2)
-        except Exception as e:
-            LOG.debug(f"pv_today: {e}")
-        finally:
-            conn.close()
-
-    # ── WP-Verbrauch heute ───────────────────────────────────
-
-    def _collect_wp_today(self, obs: ObsState):
-        """WP-Verbrauch heute über Zählerstand-Differenz."""
-        conn = self._get_conn()
-        if not conn:
-            return
-        try:
-            today_start = int(time.mktime(date.today().timetuple()))
-            row = conn.execute(
-                "SELECT SUM(W_Imp_WP_delta) / 1000.0 FROM data_1min WHERE ts >= ?",
-                (today_start,)
-            ).fetchone()
-            if row and row[0] is not None:
-                obs.wp_today_kwh = round(row[0], 2)
-        except Exception as e:
-            LOG.debug(f"wp_today: {e}")
-        finally:
-            conn.close()
-
-    # ── Sonnenauf-/untergang ─────────────────────────────────
-
-    def _collect_geometry(self, obs: ObsState):
-        """Sunrise/Sunset aus solar_forecast (hat die Wetter-API Daten)."""
-        try:
-            from solar_forecast import SolarForecast
-            sf = SolarForecast()
-            sr_str, ss_str = sf.get_sunrise_sunset()
-            if sr_str and ss_str:
-                # "2026-02-22T07:06" → Dezimalstunde
-                sr_parts = sr_str.split('T')[1].split(':') if 'T' in sr_str else None
-                ss_parts = ss_str.split('T')[1].split(':') if 'T' in ss_str else None
-                if sr_parts:
-                    obs.sunrise = int(sr_parts[0]) + int(sr_parts[1]) / 60.0
-                if ss_parts:
-                    obs.sunset = int(ss_parts[0]) + int(ss_parts[1]) / 60.0
-                if obs.sunrise and obs.sunset:
-                    now_h = datetime.now().hour + datetime.now().minute / 60.0
-                    obs.is_day = obs.sunrise <= now_h <= obs.sunset
-        except Exception as e:
-            LOG.debug(f"geometry: {e}")
-
-            # Fallback: geometry_config.json
-            try:
-                cfg_path = os.path.join(_PROJECT_ROOT, 'config', 'geometry_config.json')
-                if os.path.exists(cfg_path):
-                    with open(cfg_path, 'r') as f:
-                        geo = json.load(f)
-                    if obs.sunrise is None:
-                        obs.sunrise = geo.get('sunrise_decimal_h')
-                    if obs.sunset is None:
-                        obs.sunset = geo.get('sunset_decimal_h')
-            except Exception:
-                pass
-
-
-    # ── Fritz!DECT: Heizpatrone Live-Status ──────────────────
-
-    _fritzdect_cache_ts: float = 0
-    _fritzdect_cache_data: dict = None
-    _FRITZDECT_POLL_INTERVAL = 60   # Fritz!Box 1× pro Minute (passend zu fast-cycle)
-
-    def _collect_fritzdect(self, obs: ObsState):
-        """HP-Status von Fritz!Box → obs.heizpatrone_aktiv.
-
-        Nutzt getdevicelistinfos (1 Bulk-Request) mit 30s-Cache.
-        Wird bei JEDEM collect() aufgerufen, damit Tier-1 stets
-        aktuellen HP-Zustand hat.
-        """
-        now = time.time()
-        if (self._fritzdect_cache_data is not None
-                and (now - self._fritzdect_cache_ts) < self._FRITZDECT_POLL_INTERVAL):
-            info = self._fritzdect_cache_data
-        else:
-            info = None
-            try:
-                from automation.engine.aktoren.aktor_fritzdect import (
-                    _load_fritz_config, _get_session_id, _aha_device_info
-                )
-                cfg = _load_fritz_config()
-                host = cfg.get('fritz_ip', '192.168.178.1')
-                ain = cfg.get('ain', '')
-                user = cfg.get('fritz_user', '')
-                pw = cfg.get('fritz_password', '')
-                if ain and user and pw:
-                    sid = _get_session_id(host, user, pw)
-                    if sid:
-                        info = _aha_device_info(host, ain, sid)
-            except Exception as e:
-                LOG.debug(f"Fritz!DECT collect: {e}")
-
-            DataCollector._fritzdect_cache_ts = now
-            DataCollector._fritzdect_cache_data = info
-
-        if info and info.get('state') is not None:
-            obs.heizpatrone_aktiv = str(info['state']).strip() == '1'
-        # Bei Fehler: alten Wert beibehalten (kein False-Reset)
 
 
 # ═════════════════════════════════════════════════════════════
@@ -582,10 +82,13 @@ class AutomationDaemon:
         # Komponenten
         self._db_conn = None
         self._collector = DataCollector()
+        self._forecast_collector = ForecastCollector()
         self._obs = ObsState()
+        self._obs_lock = threading.Lock()
         self._tier1 = None
         self._actuator = None
         self._engine = None
+        self._forecast_thread = None
 
         # Timing
         self._last_fast = 0
@@ -624,6 +127,16 @@ class AutomationDaemon:
         )
 
         self._running = True
+
+        # Tier-3: Forecast-Thread (trigger-basiert, prüft alle 30s)
+        if not self.once:
+            self._forecast_thread = threading.Thread(
+                target=self._tier3_forecast_loop,
+                daemon=True, name='tier3-forecast'
+            )
+            self._forecast_thread.start()
+            LOG.info("  Tier-3 Forecast-Thread gestartet")
+
         LOG.info(f"Daemon bereit — {len(self._engine._regeln)} Regeln registriert")
 
     def _load_schutz_config(self) -> dict:
@@ -643,6 +156,32 @@ class AutomationDaemon:
         except Exception as e:
             LOG.warning(f"Schutz-Config: {e} → Defaults")
             return {}
+
+    # ── Tier-3 Forecast ─────────────────────────────────────
+
+    def _tier3_forecast_loop(self):
+        """Tier-3 Loop: prüft alle 30s ob Forecast-Trigger fällig.
+
+        Läuft als separater Thread — ForecastCollector entscheidet selbst
+        ob ein Fetch nötig ist (startup, sunrise, 10:00, 14:00, fallback 6h).
+        """
+        LOG.info("  Tier-3 'forecast' gestartet (Trigger: startup, sunrise, 10:00, 14:00)")
+        while self._running:
+            try:
+                with self._obs_lock:
+                    self._forecast_collector.collect(self._obs)
+
+                # ObsState in RAM-DB schreiben wenn sich Forecast geändert hat
+                with self._obs_lock:
+                    if self._obs.forecast_ts:
+                        write_obs_state(self._db_conn, self._obs)
+
+                write_heartbeat(self._db_conn, 'daemon.forecast')
+
+            except Exception as e:
+                LOG.error(f"Tier-3 'forecast' Fehler: {e}", exc_info=True)
+
+            time.sleep(30)
 
     # ── Haupt-Loop ───────────────────────────────────────────
 
@@ -670,19 +209,30 @@ class AutomationDaemon:
         now = time.time()
         self._cycle_count += 1
 
-        # 1. Daten sammeln → ObsState
+        # 1. Daten sammeln → ObsState (thread-safe wg. Forecast-Thread)
         try:
-            self._collector.collect(self._obs)
+            with self._obs_lock:
+                self._collector.collect(self._obs)
         except Exception as e:
             LOG.error(f"Collector Fehler: {e}")
             return
 
+        # 1b. Bei --once: Forecast synchron ausführen (kein Thread)
+        if self.once:
+            try:
+                with self._obs_lock:
+                    self._forecast_collector.collect(self._obs)
+            except Exception as e:
+                LOG.warning(f"Forecast-Collect: {e}")
+
         # 2. Tier-1 Schwellenprüfung
-        tier1_actions = self._tier1.check(self._obs)
+        with self._obs_lock:
+            tier1_actions = self._tier1.check(self._obs)
 
         # 3. ObsState in RAM-DB schreiben
         try:
-            write_obs_state(self._db_conn, self._obs)
+            with self._obs_lock:
+                write_obs_state(self._db_conn, self._obs)
             write_heartbeat(self._db_conn, 'automation_daemon')
         except Exception as e:
             LOG.error(f"RAM-DB Schreibfehler: {e}")
