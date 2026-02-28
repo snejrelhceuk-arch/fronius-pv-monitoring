@@ -571,9 +571,13 @@ def _morning_algorithm(cfg, state, strategy, hourly, power_hourly,
                    reason, forecast_kwh, cloud_avg, soc)
         return
 
-    # REGEL B: Batterie schon tief genug
-    if soc is not None and soc < soc_min_default + 2 and not force:
-        reason = f"SOC={soc:.1f}% bereits nah an Minimum {soc_min_default}% — nicht nötig"
+    # REGEL B: Batterie schon tief genug → Öffnung nicht nötig
+    # Vergleich gegen soc_min_open (5%), nicht soc_min_default (25%)!
+    # Bug-Fix 2026-02-28: Vorher wurde gegen soc_min_default + 2 (= 27%)
+    # geprüft → SOC 24% wurde als "nah genug" angesehen und das Öffnen
+    # auf 5% wurde NIE ausgelöst.
+    if soc is not None and soc < soc_min_open + 2 and not force:
+        reason = f"SOC={soc:.1f}% bereits nah an Ziel-Minimum {soc_min_open}% — nicht nötig"
         LOG.info(f"  ✗ {reason}")
         # Nicht morning_done setzen — nächste Prüfung in 15 min
         return
