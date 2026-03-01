@@ -321,17 +321,25 @@ def aggregate_daily():
                 src_wp = "sum_delta"
 
             # Batterie: BMS-Counter bevorzugt, Fallback I×U aus hourly
-            W_Batt_Charge = sum_batt_charge or 0.0
-            W_Batt_Discharge = sum_batt_discharge or 0.0
+            W_Batt_Charge_IxU = sum_batt_charge or 0.0
+            W_Batt_Discharge_IxU = sum_batt_discharge or 0.0
             W_Batt_Charge_BMS = bms_charge_wh   # None oder Wh
             W_Batt_Discharge_BMS = bms_discharge_wh  # None oder Wh
 
+            # BMS-Counter für W_Batt_*_total bevorzugen (wie Counter bei PV/Bezug/Einsp)
+            # BMS misst am Batterie-Terminal → genauer als 1-min P×t-Integration
             if bms_charge_wh is not None:
-                logging.info(f"  {date_str}: BMS-Counter: Ch={bms_charge_wh:.0f} Wh, Dis={bms_discharge_wh:.0f} Wh"
-                             f" (I×U: Ch={W_Batt_Charge:.0f}, Dis={W_Batt_Discharge:.0f})")
+                W_Batt_Charge = bms_charge_wh
+                W_Batt_Discharge = bms_discharge_wh
+                logging.info(f"  {date_str}: Batt → BMS-Counter: Ch={bms_charge_wh:.0f} Wh, Dis={bms_discharge_wh:.0f} Wh"
+                             f" (I×U: Ch={W_Batt_Charge_IxU:.0f}, Dis={W_Batt_Discharge_IxU:.0f})")
+            else:
+                W_Batt_Charge = W_Batt_Charge_IxU
+                W_Batt_Discharge = W_Batt_Discharge_IxU
 
             # Beste verfügbare Batterie-Ladung für Restgrößen-Berechnung
-            best_batt_charge = bms_charge_wh if bms_charge_wh is not None else W_Batt_Charge
+            # (W_Batt_Charge ist bereits BMS wenn vorhanden, sonst I×U)
+            best_batt_charge = W_Batt_Charge
 
             # Direktverbrauch: Für ABGELAUFENE Tage als Restgröße berechnen
             # PV_Direct = PV − Einsp − BattCh (konsistent mit Zählerlogik)

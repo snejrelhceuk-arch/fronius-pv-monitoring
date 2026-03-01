@@ -92,6 +92,45 @@ W_AC_Inv = W_DC1 + W_DC2 + Batt_Entladung - Batt_Ladung
 
 ---
 
+## ⚠️ KRITISCH: Solarweb-Wattpilot ≠ Unser Wattpilot
+
+**Solarweb** zeigt unter `wattpilot_kwh` ausschließlich den **PV-Direkt-Anteil** der
+E-Auto-Ladung — also nur den Strom, der direkt von der PV-Anlage zum Wattpilot fließt.
+Der vom Netz bezogene Anteil der EV-Ladung erscheint in Solarweb **NICHT** als
+`wattpilot_kwh`, sondern geht unsichtbar im allgemeinen Netzbezug unter.
+
+**Unser System** zählt schlicht den **Gesamtverbrauch des Wattpilot** — also alles,
+was der Wattpilot verbraucht, egal ob aus PV oder Netz. Gemessen wird am
+dedizierten SmartMeter (`wattpilot_daily.energy_wh`). Keine Aufteilung nach Quelle.
+
+### Konsequenzen für den Solarweb-Abgleich
+
+| Feld | Solarweb-Bedeutung | Unser System |
+|------|-------------------|--------------|
+| `wattpilot_kwh` | Nur PV→EV (Solar-Direktanteil) | Gesamtverbrauch des Wattpilot (egal ob PV oder Netz) |
+| `direkt_kwh` | PV→Haus **ohne** Wattpilot | PV→Alles **inkl.** Wattpilot (`W_PV_Direct`) |
+| `netzbezug_kwh` | Inkl. Netz→EV (aber nicht separat) | Gesamter Netzbezug (inkl. Netz→EV) |
+
+### Richtige Vergleichsformeln
+
+```
+# Solarweb → Unser System: Direktverbrauch
+solarweb.direkt + solarweb.wattpilot  ≈  unser.W_PV_Direct / 1000
+
+# Solarweb-Wattpilot hat keinen eigenständigen Vergleichswert!
+# Unser wattpilot_daily enthält MEHR (den Netz-Anteil zusätzlich).
+# Deshalb: Solarweb-WP nur als Bestandteil von Direktverbrauch verwenden.
+```
+
+### Beim Import (import_solarweb_daily.py)
+
+Das Script rechnet korrekt: `W_PV_Direct = (direkt + wattpilot) × 1000`
+Damit geht der Solarweb-WP-Anteil im Direktverbrauch auf. Ein separater
+Vergleich von `wattpilot_kwh` zwischen Solarweb und unserem System ist
+**sinnlos**, da die Messbasis verschieden ist.
+
+---
+
 ## Häufige Fehlerquellen
 
 ### ❌ Falsch: SQL mit "timestamp"

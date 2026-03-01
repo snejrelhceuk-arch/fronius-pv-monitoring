@@ -3,7 +3,7 @@ set -euo pipefail
 
 PRIMARY_IP="${PRIMARY_IP:-192.0.2.181}"
 PRIMARY_WEB_PORT="${PRIMARY_WEB_PORT:-8000}"
-MAX_SYNC_AGE_SEC="${MAX_SYNC_AGE_SEC:-600}"
+MAX_SYNC_AGE_SEC="${MAX_SYNC_AGE_SEC:-660}"  # 660s > 10-Min-Sync-Intervall, verhindert Knappheits-WARNs
 _SCRIPT_BASE="$(cd "$(dirname "$0")/.." && pwd)"
 STATE_DIR="${STATE_DIR:-${_SCRIPT_BASE}/.state}"
 LOG_FILE="/tmp/pv_failover_health.log"
