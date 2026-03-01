@@ -1,6 +1,6 @@
 # Aggregation-Pipeline — Fronius PV-Anlage
 
-> Stand: 2026-02-08 | Ersetzt: AGGREGATION_PLAN.md (veraltet)
+> Stand: 2026-03-01
 
 ## 1. Pipeline-Übersicht
 
@@ -167,33 +167,7 @@ Zeiträume.
 Für `yearly_statistics` werden alle Jahre aus `monthly_statistics` summiert.
 Die historischen Monatswerte (CSV) fließen somit korrekt in die Jahressummen ein.
 
-## 8. Solarweb-Import für daily_data (2026-02-19)
-
-Die Counter-basierte Tagesaggregation hatte im Januar/Februar 2026
-Abweichungen gegenüber den Solarweb-Referenzwerten (Zähler-Resets,
-Modbus-Aussetzer). Um die Datenqualität zu sichern, wurde ein
-einmaliger Import durchgeführt:
-
-1. **`scripts/import_solarweb_daily.py`** liest CSV-Dateien aus
-   `imports/solarweb/` und aktualisiert `daily_data` (50 Tage: 01.01.–19.02.2026)
-2. `FIRST_AUTO_MONTH` in `aggregate_statistics.py` wurde auf `(2026, 1)` gesetzt,
-   sodass Jan+Feb nun aus den korrigierten daily_data aggregiert werden
-3. `monthly_statistics` und `yearly_statistics` wurden neu berechnet
-
-Parallel wurde `aggregate_daily.py` auf eine **Counter End−Start**-Strategie
-umgestellt (mit Fallback auf SUM(Δ) bei Zähler-Resets), sodass zukünftige
-Tage korrekte Werte ohne manuellen Import liefern.
-
-## 9. Entfernte Komponenten (2026-02-08)
-
-| Komponente | Grund |
-|-----------|-------|
-| `data_yearly` Tabelle | Redundant mit `yearly_statistics` |
-| `aggregate_yearly.py` | Ersetzt durch `aggregate_statistics.py` |
-| `data_15min` Cron-Cleanup | Redundant mit `cleanup_db()` in modbus_v3.py |
-| `data_weekly` Tabelle | Nie genutzt (bereits früher entfernt) |
-
-## 10. Frontend-Zuordnung
+## 8. Frontend-Zuordnung
 
 | Ansicht | API-Endpunkt | Datenquelle |
 |---------|-------------|-------------|
@@ -211,7 +185,7 @@ Der separate Frequenz-Chart in der Monatsansicht wurde in v6.1.0 entfernt.
 Hinweis: Die Web-API liest fuer Charts aus der RAM-DB; die Persist-DB wird
 regelmaessig aus der RAM-DB ueberschrieben.
 
-## 11. Überwachung / Debugging
+## 9. Überwachung / Debugging
 
 ### Logs prüfen
 ```bash

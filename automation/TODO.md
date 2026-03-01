@@ -86,10 +86,15 @@
 
 ## Phase 6: Software-Integration
 
-- [ ] `automation_control.py` als zentraler Steuerungsdaemon
-- [ ] Anbindung an bestehende DB (Automation-Tabellen in data.db)
+> **Hinweis (2026-03-01):** Die Automation-Engine ist produktiv (`pv-automation.service`).
+> 4-Schichten-Architektur in `automation/engine/`, 11 Regelkreise, 3 Aktoren.
+> Details: `doc/AUTOMATION_ARCHITEKTUR.md`
+
+- [x] Zentraler Steuerungsdaemon (`pv-automation.service`)
+- [x] Anbindung an RAM-DB (`/dev/shm/automation_obs.db`, 5 Tabellen)
 - [ ] Dashboard-Erweiterung: Automation-Tab in Web-UI
-- [ ] Logging & Alerting (Temperatur-Alarms, Fehler)
+- [x] Logging (automation_log in data.db + RAM-DB)
+- [ ] Alerting (Temperatur-Alarms, Fehler → Pushover)
 - [ ] Watchdog konfigurieren (Hardware-WDT der MEGA-BAS)
 
 ## Phase 7: 3-Phasen-Heizpatrone (Zukunft)

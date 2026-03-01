@@ -331,9 +331,10 @@ haushalt = max(0, round(verbrauch_gesamt - wattpilot - waermepumpe, 0))
 | **DB-Tabellen** | wattpilot_readings, wattpilot_daily |
 | **Datenaufbewahrung** | 90 Tage (tmpfs + NVMe Backup) |
 | **Namenskonvention** | "Wattpilot" (Wallbox), "WP/Wärmepumpe" (Heat Pump) |
+| **Automation** | `AktorWattpilot` registriert (Stub — loggt nur, steuert nicht). Phase-2-Anbindung ausstehend. |
 
 ---
 
-**Letzte Aktualisierung:** 2026-02-12  
+**Letzte Aktualisierung:** 2026-03-01  
 **Version:** 1.0  
 **Autor:** System Documentation

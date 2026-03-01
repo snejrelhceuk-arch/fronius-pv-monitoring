@@ -86,7 +86,7 @@ Typische Anwendungsfälle für Auto:
 ### Via Fronius HTTP-API (wie unser Stack es macht)
 
 ```python
-# fronius_api.py — InverterControl.set_soc_mode()
+# fronius_api.py — BatteryConfig.set_soc_mode()
 payload = {
     "batteries": [{
         "BAT_M0_SOC_MODE": "manual",   # oder "auto"
@@ -103,9 +103,15 @@ Einstellungen → Energiemanagement → Batteriensteuerung
 
 ---
 
-## Fehler im bisherigen Scheduler-Code
+## Fehler im ehemaligen Scheduler-Code
 
-In `battery_scheduler.py` wurde an mehreren Stellen irrtümlich angenommen,
+> **Hinweis:** `battery_scheduler.py` wurde 2026-02-28 archiviert und durch die
+> 4-Schichten-Automation-Engine ersetzt (`pv-automation.service`).
+> Die SOC-Steuerung erfolgt jetzt über `battery_control.py` + Regelkreise
+> in `automation/engine/`. Die hier beschriebenen Modus-Erkenntnisse bleiben
+> gültig als Referenz für das Fronius SOC-Verhalten.
+
+Im ehemaligen `battery_scheduler.py` wurde an mehreren Stellen irrtümlich angenommen,
 dass man im Auto-Modus SOC-Grenzen schreiben kann:
 
 ```python
@@ -161,5 +167,6 @@ SOC aktuell:      23.6 %
 ## Referenz
 
 - [Fronius SunSpec Implementation Guide Model 124](https://www.fronius.com/~/downloads/Solar%20Energy/Modbus/42,0410,2049.pdf)
-- `fronius_api.py` — `InverterControl.set_soc_mode()`, `set_soc_min()`, `set_soc_max()`
-- `battery_scheduler.py` — `_apply_comfort_defaults()`, `_check_balancing()`, `_verify_consistency()`
+- `fronius_api.py` — `set_soc_mode()`, `set_soc_min()`, `set_soc_max()`
+- `battery_control.py` — SOC-Steuerung (Nachfolger von battery_scheduler.py)
+- `automation/engine/` — Regelkreise `RegelSocSchutz`, `RegelZellausgleich` etc.
