@@ -14,7 +14,7 @@ Nach Stromausfall oder manuellen Eingriffen könnten **mehrere collector.py Proz
 
 ### 1. PID-File (Python-seitig)
 
-**Datei**: `/home/admin/Documents/PVAnlage/pv-system/collector.pid`
+**Datei**: `/home/admin/Dokumente/PVAnlage/pv-system/collector.pid`
 
 **Funktionsweise**:
 ```python
@@ -63,7 +63,7 @@ $ python3 collector.py
 ```bash
 crontab -e
 # Füge hinzu:
-*/5 * * * * /home/admin/Documents/PVAnlage/pv-system/monitor_collector.sh
+*/5 * * * * /home/admin/Dokumente/PVAnlage/pv-system/monitor_collector.sh
 ```
 
 **Verhalten**:
@@ -77,7 +77,7 @@ crontab -e
 ## Nach Stromausfall
 
 **Automatischer Recovery**:
-1. System bootet → systemd startet pv-collector.service
+1. System bootet → systemd startet pv-observer.service
 2. Python prüft PID-File (nicht vorhanden nach Reboot)
 3. Neues PID-File wird erstellt
 4. Cron-Monitoring prüft nach 0-5min
@@ -86,7 +86,7 @@ crontab -e
 **Manueller Check**:
 ```bash
 # Status prüfen
-systemctl status pv-collector
+systemctl status pv-observer
 ./check_single_instance.sh
 
 # Falls Duplikate
@@ -95,7 +95,7 @@ systemctl status pv-collector
 
 ## Systemd-Integration (Optional)
 
-**Könnte hinzugefügt werden** in `/etc/systemd/system/pv-collector.service`:
+**Könnte hinzugefügt werden** in `/etc/systemd/system/pv-observer.service`:
 ```ini
 [Service]
 ExecStartPre=/home/admin/Dokumente/PVAnlage/pv-system/check_single_instance.sh --kill-duplicates
@@ -109,7 +109,7 @@ PIDFile=/home/admin/Dokumente/PVAnlage/pv-system/collector.pid
 
 ```bash
 # 1. PID-File existiert
-cat /home/admin/Documents/PVAnlage/pv-system/collector.pid
+cat /home/admin/Dokumente/PVAnlage/pv-system/collector.pid
 # → Zeigt PID
 
 # 2. Prozess läuft mit dieser PID
@@ -117,7 +117,7 @@ ps aux | grep "python3.*collector.py"
 # → PID muss übereinstimmen
 
 # 3. Duplikat-Versuch blockiert
-python3 /home/admin/Documents/PVAnlage/pv-system/collector.py
+python3 /home/admin/Dokumente/PVAnlage/pv-system/collector.py
 # → [ERROR] collector.py laeuft bereits
 
 # 4. Monitoring-Test
@@ -134,13 +134,13 @@ sqlite3 data.db "SELECT AVG(t_poll_ms) FROM raw_data WHERE ts >= strftime('%s', 
 **PID-File manuell entfernen** (nur bei Problemen):
 ```bash
 # WARNUNG: Nur wenn collector WIRKLICH nicht läuft!
-rm /home/admin/Documents/PVAnlage/pv-system/collector.pid
-sudo systemctl restart modbus-collector
+rm /home/admin/Dokumente/PVAnlage/pv-system/collector.pid
+sudo systemctl restart pv-observer
 ```
 
 **Monitoring-Log prüfen**:
 ```bash
-tail -50 /home/admin/Documents/PVAnlage/pv-system/collector_monitor.log
+tail -50 /home/admin/Dokumente/PVAnlage/pv-system/collector_monitor.log
 ```
 
 ## Performance-Vergleich

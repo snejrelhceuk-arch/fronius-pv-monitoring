@@ -1,4 +1,4 @@
-# Datenbank-Schema (Stand: 14. Februar 2026)
+# Datenbank-Schema (Stand: 1. März 2026)
 
 > **Energiefluss-Modell und Counter-Semantik**: Siehe [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md) Abschnitt 2.
 > **⚠️ W_AC_Inv ≠ PV-Erzeugung!** W_AC_Inv inkludiert Batterie-Lade/Entladung.
@@ -25,8 +25,9 @@
 | `yearly_statistics` | 6 | permanent | Jahres-Aggregate |
 | `energy_checkpoints` | 33 | permanent | Absolute Zählerstände zu Rasterpunkten |
 | `energy_state` | 14 | permanent | Key-Value-Store für Energiezähler |
-| `forecast_daily` | — | 365 Tage | Tages-Prognose + Clear-Sky (NEU) |
-| `battery_control_log` | 16 | 90 Tage | Batterie-Steuerungsprotokoll |
+| `forecast_daily` | — | 365 Tage | Tages-Prognose + Clear-Sky |
+| `automation_log` | — | permanent | Automations-Protokoll (alle Aktoren) |
+| `battery_control_log` | 16 | 90 Tage | Batterie-Steuerungsprotokoll (Legacy) |
 | `system_info` | 1 | permanent | System-Metadaten |
 | `wattpilot_readings` | ~5.300 | 90 Tage | Wallbox-Einzelmessungen |
 | `wattpilot_daily` | 2 | 10 Jahre | Wallbox-Tagesaggregate |
@@ -44,7 +45,7 @@ raw_data (3s, Modbus)
     │       │       │
     │       │       └─► hourly_data     (aggregate.py)
     │       │
-    │       └─► daily_data      (aggregate_daily.py, nachts 00:05)
+    │       └─► daily_data      (aggregate_daily.py, Min 2/17/32/47)
     │               │
     │               ├─► data_monthly           (aggregate_monthly.py, 1. des Monats)
     │               └─► monthly_statistics     (aggregate_statistics.py)
@@ -76,7 +77,7 @@ Zusatzspalten fuer Prognose-Overlays (90 Tage Retention):
 - `P_PV_FC_avg`, `W_PV_FC_delta` (Forecast-Leistung/15min-Energie)
 - `P_PV_CS_avg`, `W_PV_CS_delta` (Clear-Sky-Leistung/15min-Energie)
 
-### forecast_daily (NEU)
+### forecast_daily
 Persistiert Tages-Prognosen und Clear-Sky für historischen Vergleich im Tag-Chart:
 - `date` (PK): YYYY-MM-DD
 - Zusammenfassung: expected_kwh, clearsky_kwh, quality, weather, Temperatur
@@ -96,12 +97,27 @@ Ermöglicht exakte Delta-Berechnung auch über Lücken hinweg.
 | `daily_data` | aggregate_daily.py | web_api.py, aggregate_monthly.py |
 | `forecast_daily` | web_api.py (lazy), Cron | web_api.py (Tag-Chart) |
 | `monthly_statistics` | aggregate_statistics.py | web_api.py (Analyse) |
+| `automation_log` | actuator.py (Engine) | web_api.py (Dashboard) |
 | `wattpilot_readings` | wattpilot_collector.py | web_api.py |
 
 ## Externe Datenquellen
 
 - **Open-Meteo API** → `solar_cache.db` (TTL-Cache) → `forecast_daily` (persistent)
 - **Solar-Geometrie-Engine** → Clear-Sky auf Basis von String-Konfiguration (on-the-fly + persistent)
+
+## Automation RAM-DB
+
+**Pfad:** `/dev/shm/automation_obs.db` (tmpfs)
+
+Genutzt von `pv-automation.service` für flüchtigen Zustand:
+
+| Tabelle | Inhalt |
+|---------|--------|
+| `obs_state` | Aktueller System-Snapshot (1 Zeile) |
+| `obs_history` | Ring-Puffer vergangener Snapshots (max 1000) |
+| `param_matrix` | Aktive Parametermatrix |
+| `action_plan` | Letzter Engine-Aktionsplan |
+| `heartbeat` | Service-Heartbeat |
 
 ## Dateien
 

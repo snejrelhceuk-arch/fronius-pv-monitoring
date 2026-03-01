@@ -2,7 +2,7 @@
 
 > **WICHTIG**: Dieses Dokument ist die zentrale Referenz für LLMs und Entwickler.
 > Vor jeder Änderung am System DIESES DOKUMENT ZUERST LESEN.
-> Stand: 2026-02-19
+> Stand: 2026-03-01
 
 ---
 
@@ -137,9 +137,9 @@ Gesamtverbrauch      = PV_total + W_Imp_Netz - W_Exp_Netz
 | `W_PV_total` | daily_data | Tages-PV-Erzeugung in Wh |
 | `W_*_start` / `W_*_end` | data_1min, data_15min, hourly, daily | Absolute Zählerstände am Intervall-Anfang/-Ende |
 
-**⚠️ SEMANTIK-KOLLISION (behoben 2026-02-11):**
+**⚠️ SEMANTIK-UNTERSCHIED:**
 - `data_1min.W_AC_Inv_delta` = AC-Counter-Delta (inkl. Batterie)
-- `data_15min.W_PV_total_delta` = Gesamt-PV (OHNE Batterie) — wurde von W_AC_Inv_delta UMBENANNT!
+- `data_15min.W_PV_total_delta` = Gesamt-PV (OHNE Batterie) — anderer Name, andere Semantik!
 
 ---
 
@@ -313,11 +313,11 @@ Volle Produktion: Collector, Aggregation, Battery-Steuerung, Web.
 | pv-collector | systemd (enabled) | modbus_v3.py (Poller + Persist-Thread) |
 | pv-wattpilot | systemd (enabled) | wattpilot_collector.py (WebSocket → raw_wattpilot) |
 | pv-web | systemd (enabled) | web_api.py (gunicorn, 3 Worker, Port 8000), After=pv-collector |
-| pv-automation | systemd (enabled) | automation_daemon.py (Score-basierte Engine, 9 Regelkreise, Batterie-Steuerung) |
+| pv-automation | systemd (enabled) | automation_daemon.py (Score-basierte Engine, 11 Regelkreise, Batterie+Geräte-Steuerung) |
 | pv-backup-gfs.timer | systemd (enabled) | backup_db_gfs.sh täglich 03:00 (Sohn intern alle 3 Tage) |
 | Cron (5 Aggregations-Jobs) | crontab (admin) | aggregate_1min, aggregate, aggregate_daily, monthly, statistics |
 | Cron (Monitor-Scripts) | crontab (admin) | monitor_collector.sh, monitor_wattpilot.sh |
-| capture_energy_checkpoints.py | Cron | Energie-Fixpunkte sichern |
+
 
 **Persistierung**: tmpfs → SD stündlich, zusätzlicher Pi5-rsync alle 6 Persist-Zyklen.
 **GFS**: Sohn 3-tägig aus RAM→SD; Vater/Großvater/Urgroßvater unverändert; neue Dateien zusätzlich auf Pi5 gespiegelt.
@@ -335,7 +335,7 @@ Passiv-Modus: Nur DB-Mirror, Read-Only-Web, Health-Check. **Kein Modbus, keine W
 | ~~pv-collector~~ | — | ❌ gestoppt | Doppelte Modbus-Abfragen verboten |
 | ~~pv-wattpilot~~ | — | ❌ gestoppt | WebSocket-Konflikt (nur 1 Verbindung) |
 | ~~Aggregation (Cron)~~ | — | ❌ role_guard | Sinnlos — DB wird alle 10 Min überschrieben |
-| ~~battery_scheduler~~ | — | ❌ role_guard | **GEFÄHRLICH** — schreibt Modbus-Register! |
+| ~~pv-automation~~ | — | ❌ role_guard | **GEFÄHRLICH** — schreibt Modbus-Register + Fritz!DECT! |
 | ~~Monitor-Scripts~~ | — | ❌ role_guard | Collector/Wattpilot bewusst aus |
 
 **Wichtig**: Die `.role`-Datei (`failover`) steuert alle Guards.  
@@ -413,14 +413,12 @@ Fixpunkte (daily_data._start/_end) sichern Langzeit-Bilanzen.
 | Thema | Status | Detail |
 |-------|--------|--------|
 | Jan 2026 _start/_end NULL | Nicht behebbar | raw_data für Jan bereits rotiert (7d Retention) |
-| data_monthly _start/_end | ✅ Behoben | aggregate_monthly.py propagiert seit 2026-02-14 |
 | energy_checkpoints | Inaktiv | 33 rekonstruierte Altdaten, kein aktiver Schreiber |
 | W_AC_Inv als PV-Counter | FALSCH | Inkludiert Batterie! PV = DC1+DC2+F2+F3 |
-| Pi4 SD-Card Verschleiß | Minimiert | Alternierend: ~24 GB/Jahr (1×/2 Tage à 132 MB) |
 | Batterie P×t vs Hardware | Offen | BMS-Counter via Component-API verfügbar, noch nicht im Hauptpfad |
-| Daten-Lücke 14.2. 03-12h | Akzeptiert | Pi4-Reboot, nicht rekonstruierbar |
 | SQLite 3.45.1 | Manuell | System-Lib ersetzt (/lib/arm-linux-gnueabihf/) |
 | System-Updates | Bewusst deaktiviert | Siehe Abschnitt "Update-Strategie" |
+| AktorWattpilot | Stub | Nur Logging, keine echte Steuerung (Phase 2) |
 
 ---
 
@@ -521,7 +519,9 @@ erfordert eine **Neuinstallation** (kein In-Place-Upgrade empfohlen):
 
 | Datei | Inhalt |
 |-------|--------|
+| config/soc_param_matrix.json | SOC-Parametermatrix für 11 Regelkreise (Prioritäten, Schwellen, Gewichte) |
 | config/battery_control.json | Batterie-Steuerungsregeln |
+| config/fritz_config.json | Fritz!DECT Smart-Plug-Konfiguration (Heizpatrone) |
 | config/color_config.json | Chart-Farbschema |
 | config/geometry_config.json | String-Geometrie, Optimierer-Gain, Verschattung |
 | config/solar_calibration.json | Kalibrationsfaktoren Clear-Sky |
@@ -562,31 +562,21 @@ beruecksichtigt.
 
 ---
 
-## 9. Modulbenennung — Ist vs. Soll (Architektur-Roadmap)
+## 9. Modulbenennung — Hinweise
 
-> **Stand:** 2026-02-28  
-> **Status:** Dokumentierend — kein Rename ohne CI/Import-Tests.  
-> Voraussetzung: `python3 -c "import <modul>"` für alle Module als Pre-Commit oder CI-Check.
+> **Status:** Dokumentierend — kein Rename ohne CI/Import-Tests.
 
-### Ist-Namen vs. architektonische Rolle
+### Historisch gewachsene Namen
 
-Historisch gewachsene Dateinamen weichen teilweise von ihrer tatsächlichen
-architektonischen Rolle ab. Diese Tabelle dient als **Referenz für künftige
-Refactorings**, nicht als sofortige Umbenennung.
+| Ist-Name | ABC | Tatsächliche Rolle | Bemerkung |
+|----------|-----|-------------------|-----------|
+| `modbus_v3.py` | A | Modbus-Poller, SunSpec-Parser, DB-Writer — IST der Collector | Name historisch, konzeptionell `collector_modbus` |
+| `collector.py` | A | Thin Entry-Point, ruft `poller_loop()` | Bleibt |
+| `battery_control.py` | A+C | Modbus-R/W-Client + Register-Defs + Steuerfunktionen + CLI | Drei Rollen in einer Datei (siehe unten) |
+| `modbus_quellen.py` | A | SunSpec-Register-Definitionen pro Gerät | Bleibt |
+| `fronius_api.py` | C | HTTP-API-Client (Auth + SOC/Mode R/W) | Bleibt |
 
-| Ist-Name | ABC | Tatsächliche Rolle | Soll-Name (Konzept) | Zeilen | Aktion |
-|----------|-----|-------------------|---------------------|--------|--------|
-| `modbus_v3.py` | A | Modbus-Poller, SunSpec-Parser, DB-Writer — IST der Collector | `collector_modbus.py` | 883 | Rename (wenn CI existiert) |
-| `collector.py` | A | Thin Entry-Point, ruft `poller_loop()` | `collector.py` (bleibt) | ~20 | — |
-| `battery_control.py` | C | **Zwei Rollen:** (1) Generischer Modbus-R/W-Client + Register-Defs, (2) Batterie-Steuerfunktionen | Aufsplittung: | 612 | Split |
-| | | → Modbus-Client + Register-Definitionen | `modbus_inverter.py` | ~250 | |
-| | | → Batterie-Steuerfunktionen (set_charge, hold, auto…) | verbleibt in `aktor_batterie.py` | ~200 | |
-| | | → CLI-Tool (print_status, main) | `tools/battery_status.py` | ~160 | |
-| `battery_scheduler.py` | C | Legacy-Scheduler (deaktiviert seit 2026-02-28) | Archivierung nach `archive/` | 1301 | Verschieben |
-| `modbus_quellen.py` | A | SunSpec-Register-Definitionen pro Gerät | `config/sunspec_register.py` | 331 | Optional |
-| `fronius_api.py` | C | HTTP-API-Client (Auth + SOC/Mode R/W) | `fronius_api.py` (bleibt) | 530 | — |
-
-### Kernproblem: `battery_control.py` hat drei Rollen
+### `battery_control.py` hat drei Rollen
 
 ```
 battery_control.py (612 Zeilen)
@@ -597,7 +587,6 @@ battery_control.py (612 Zeilen)
 │   └── write_single_register       → Schreiben (Actuation)
 │
 ├── Register-Definitionen           → REG{}, REG_120{}, Konstanten
-│   └── UNIT_ID, IP_ADDRESS, PORT   → Geräte-Konfiguration
 │
 ├── Hilfs-Funktionen                → read_raw, read_scaled, read_int16_scaled
 │   └── Nutzer: Observer (liest)    → ABC: A/C-Input
@@ -609,62 +598,31 @@ battery_control.py (612 Zeilen)
 └── CLI (print_status, main)        → Diagnose-Tool
 ```
 
-**ABC-Bewertung:** Der Observer importiert `ModbusClient` + `read_raw` aus
-`battery_control` — nicht um zu steuern, sondern um `StorCtl_Mod` / `InWRte` /
-`OutWRte` zu **lesen**. Der Name "battery_control" suggeriert fälschlich Steuerung.
-
 **Bewusste Code-Duplikation:** `RawModbusClient` (modbus_v3, Schicht A: nur Lesen)
 und `ModbusClient` (battery_control, Schicht C: Lesen + Schreiben) sind **getrennte
 Implementierungen** — die Trennung verhindert, dass Schicht A versehentlich
 Write-Capability erhält (→ ABC-Policy §2 Prinzip 1).
 
-### Abhängigkeiten von `battery_control.py` (17+ Import-Stellen)
+### Aktuelle Konsumenten von `battery_control.py`
 
 | Consumer | Importiert | Nutzt für |
 |----------|-----------|-----------|
 | `observer.py` | ModbusClient, REG, read_raw, read_int16_scaled | **Lesen** (ObsState) |
 | `automation_daemon.py` | ModbusClient, REG, read_raw, read_int16_scaled | **Lesen** (ObsState) |
 | `aktor_batterie.py` | alles (11 Symbole) | **Lesen + Schreiben** |
-| `battery_scheduler.py` | ModbusClient, IP, PORT, Steuerfunktionen | Legacy (deaktiviert) |
 
 Alle Imports sind **lazy** (`from battery_control import …` innerhalb von Methoden).
 
-### Voraussetzungen für Rename/Split
-
-1. **CI-Import-Check:** `python3 -c "import <modul>"` für alle 58 Module
-2. **Grep-Vollständigkeit:** Alle `from battery_control import` und `import battery_control`
-3. **Lazy-Import-Falle:** Fehler erst zur Laufzeit sichtbar — nicht beim Start
-4. **Tests:** `test_skeleton.py` muss alle Import-Pfade abdecken
-
-**Entscheidung:** Refactoring erst bei nächstem größerem Umbau (z.B. wenn
-`battery_scheduler.py` endgültig archiviert wird und die 4 Konsumenten auf 3 sinken).
-
 ---
 
-## 10. Dateigrößen-Richtlinie und Splitting-Strategie
+## 10. Dateigrößen-Richtlinie
 
 > **Regel:** Dateien > 800 Zeilen prüfen, > 1.200 Zeilen aktiv splitten.  
 > **Prüfung:** `find . -name "*.py" | xargs wc -l | sort -rn | head -15`
 
-### Aktueller Stand (2026-02-28, 25.337 Zeilen Python, 58 Module)
-
-| Datei | Zeilen | Status | Handlungsbedarf |
-|-------|--------|--------|-----------------|
-| `solar_geometry.py` | 1.979 | Aktiv, stabil | **Prüfen** — aber mathematisch zusammenhängend, Split schwierig |
-| `solar_forecast.py` | 1.353 | Aktiv, stabil | **Prüfen** — Cache/API/Prognose/Kalibrierung sind trennbar |
-| `battery_scheduler.py` | 1.301 | **Deaktiviert** | → Archivieren |
-| `pv-config.py` | 1.290 | Aktiv, stabil | OK — Menü-Tool, pro Menüpunkt ~100 Zeilen |
-| `automation/engine/engine.py` | 1.240 | Aktiv, produktiv | **Beobachten** — 9 Regelkreise, wächst mit neuen Aktoren |
-| `test_skeleton.py` | 976 | Tests | OK — Tests dürfen lang sein |
-| `modbus_v3.py` | 883 | Aktiv, 24/7 | OK — nach Audit von 1.956 auf 883 reduziert |
-| `routes/system.py` | 864 | Aktiv | **Prüfen** — viele Endpunkte, evtl. aufteilbar |
-| `observer.py` | 857 | Aktiv | OK — 3 Tiers + ObsState-Aufbau gehören zusammen |
-| `automation_daemon.py` | 830 | Aktiv | OK — Orchestrierung, nicht weiter zerlegbar |
-| `routes/realtime.py` | 814 | Aktiv | **Prüfen** — WebSocket + REST, evtl. trennbar |
-
 ### Splitting-Kriterien
 
-Nicht jede große Datei muss gesplittet werden. Aufteilen wenn:
+Aufteilen wenn:
 - **Mehrere unabhängige Verantwortlichkeiten** in einer Datei (wie `battery_control.py`)
 - **Verschiedene ABC-Schichten** in einer Datei vermischt
 - **Verschiedene Konsumenten** brauchen verschiedene Teile
@@ -672,4 +630,3 @@ Nicht jede große Datei muss gesplittet werden. Aufteilen wenn:
 Nicht aufteilen wenn:
 - Mathematisch/fachlich zusammenhängende Logik (solar_geometry: Sonnenverlauf ist ein Algorithmus)
 - Menü-/UI-Tool mit sequenziellen Abschnitten (pv-config.py)
-- Test-Dateien (dürfen beliebig lang sein)

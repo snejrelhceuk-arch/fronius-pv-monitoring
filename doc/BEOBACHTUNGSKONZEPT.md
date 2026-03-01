@@ -80,9 +80,9 @@ Bei externer Veröffentlichung nur eigene Formulierungen verwenden und auf
 
 | Datenpunkt | Kanal | Intervall | Quelle |
 |---|---|---|---|
-| Status (laden/warten/bereit) | WebSocket JSON | 2 s | wattpilot_collector.py |
-| Ist-Leistung (W), Energie (kWh) | WebSocket | 2 s | wattpilot_collector.py |
-| Phasenströme (A) | WebSocket | 2 s | wattpilot_collector.py |
+| Status (laden/warten/bereit) | WebSocket JSON | 10 s | wattpilot_collector.py |
+| Ist-Leistung (W), Energie (kWh) | WebSocket | 10 s | wattpilot_collector.py |
+| Phasenströme (A) | WebSocket | 10 s | wattpilot_collector.py |
 | Ladefreigabe setzen | WebSocket CMD | bei Bedarf | wattpilot_api.py |
 | E-Auto SOC | **fehlt** — E-Autos haben keine Schnittstelle | — | — |
 
@@ -130,9 +130,14 @@ Bei externer Veröffentlichung nur eigene Formulierungen verwenden und auf
 Verfügbar über Modbus M103 `PhVphA`, `Hz` — wird gesammelt aber nicht für Automation ausgewertet.  
 Interessant für: Frequenz-Regelung, Über-/Unterspannungsschutz.
 
-### 3.5 Fritz!DECT Steckdosen / Thermostate
+### 3.5 Fritz!DECT Steckdosen
 
-Nicht integriert. Würden Einzelverbraucher-Steuerung ermöglichen (Heizpatrone, Klimaanlage etc.).
+✅ **Integriert seit 2026-02-28.** `AktorFritzDECT` steuert die Heizpatrone (2 kW)
+über Fritz!Box AHA-HTTP-API (`setswitchon`/`setswitchoff`).
+Konfiguration: `config/fritz_config.json` (IP, AIN), Credentials via `.secrets`.
+Regelkreis: `RegelHeizpatrone` in `automation/engine/engine.py`.
+
+Weitere Fritz!DECT-Steckdosen könnten zusätzliche Verbraucher steuern (Klimaanlage etc.).
 
 ---
 
@@ -141,7 +146,7 @@ Nicht integriert. Würden Einzelverbraucher-Steuerung ermöglichen (Heizpatrone,
 | Kanal | Verfügbarkeit | Ausfall-Risiko | Fallback |
 |---|---|---|---|
 | Modbus TCP (F1/F2/F3) | 99 % | Netz-Ausfall | Letzte bekannte Werte (< 2 min) |
-| Fronius HTTP API | 97 % | WR-Neustart | State-File (battery_scheduler_state.json) |
+| Fronius HTTP API | 97 % | WR-Neustart | State-File (Legacy) |
 | Open-Meteo (Prognose) | 95 % | Internet-Ausfall | Letzter bekannter Forecast (< 6 h) |
 | Wattpilot WebSocket | 90 % | WS-Verbindungsverlust | Auto-Reconnect (monitor_wattpilot.sh) |
 | MEGA-BAS (geplant) | — | — | — |
@@ -214,5 +219,5 @@ Fehlende Werte werden als `None` übergeben — Regeln müssen `None`-sicher sei
 
 ---
 
-*Letzte Aktualisierung: 2026-02-20*  
+*Letzte Aktualisierung: 2026-03-01*  
 *Verwandte Dokumente:* [PARAMETER_MATRIZEN.md](PARAMETER_MATRIZEN.md) · [SCHUTZREGELN.md](SCHUTZREGELN.md) · [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md)

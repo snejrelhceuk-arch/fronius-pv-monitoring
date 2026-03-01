@@ -2,8 +2,7 @@
 
 **Erstellt:** 2026-02-22  
 **Letzte Überarbeitung:** 2026-03-01 (HP-Automation produktiv: Fritz!DECT, SOC-Notaus, flow_view)  
-**Status:** Produktiv (Phase 2 abgeschlossen — Batterie + HP laufen über pv-automation.service)  
-**Vorgänger:** `battery_scheduler.py` (monolithisch, nur Batterie — deaktiviert 2026-02-28)  
+**Status:** Produktiv (Batterie + Heizpatrone laufen über pv-automation.service)  
 **ABC-Referenz:** [ABC_TRENNUNGSPOLICY.md](ABC_TRENNUNGSPOLICY.md)
 
 ---
@@ -48,7 +47,7 @@ Mensch (SSH / VPN)
                        │ config/*.json
                        ▼
 ┌──────────────────────────────────────────────────────────┐
-│  S2  Observer                automation_observer.py       │
+│  S2  Observer                automation/engine/observer.py │
 │      (eigenständiger Prozess, interrupt-fähig)           │
 │                                                          │
 │      TIER 1: Interrupt (< 1 s)  → Sofort-Schutzaktion   │
@@ -149,14 +148,8 @@ def whiptail_menu(title, items):
 |-------|--------|-----------|
 | `config/battery_control.json` | Batterie SOC-Grenzen, Algorithmen | ✅ ja |
 | `config/fritz_config.json` | Fritz!Box-IP, AIN, HP-Leistung | ✅ ja |
-| `config/soc_param_matrix.json` | Regelkreis-Parameter (10 Kreise, 17 HP-Param.) | ✅ ja |
+| `config/soc_param_matrix.json` | Regelkreis-Parameter (11 Kreise) | ✅ ja |
 | `.secrets` | Credentials (FRITZ_USER/PASS, FRONIUS_PASS, etc.) | ✅ ja |
-| `config/automation_global.json` | Prioritäten, Saisonprofil, Modus | ❌ neu |
-| `config/device_ev.json` | E-Auto-Parameter, Urgency-Tabelle | ❌ neu |
-| `config/device_wp.json` | WP SG-Ready, Modbus-Register, Temps | ❌ neu |
-| `config/device_klima.json` | Außentemp-Schwellen, Leistung | ❌ neu |
-| `config/device_lueftung.json` | Frostgrenzen, Stufenlogik | ❌ neu |
-| `config/schutzregeln.json` | Determinierende Schwellen (Übertemp, Überlast) | ❌ neu |
 
 ### Config-Schema (Beispiel für ein Device)
 
@@ -407,47 +400,37 @@ class Action:
 ActionPlan = list[Action]
 ```
 
-### Aktor-Registry (erweiterungsoffen)
+### Aktor-Basis-Interface (AktorBase)
 
-Jeder Aktor wird als **Plugin** registriert. Die Engine kennt nur das
-Interface, nicht die Hardware:
+Jeder Aktor implementiert das `AktorBase`-Interface. Die Engine kennt nur
+das Interface, nicht die Hardware:
 
 ```python
-class AktorPlugin:
+class AktorBase:
     """Basis-Interface für alle steuerbaren Geräte."""
 
-    name: str                    # Eindeutiger Bezeichner
-    config_file: str             # JSON in config/
-    steuerungskanal: str         # 'modbus_tcp' | 'http_api' | 'websocket' | 'relay' | 'modbus_rtu'
+    name: str
 
-    def berechne_score(self, obs: ObsState, cfg: dict) -> float:
-        """Dringlichkeit 0.0–1.0 aus aktuellem Zustand und Config."""
+    def ausfuehren(self, kommando: str, wert: any) -> dict:
+        """Kommando ausführen. Return: Ergebnis-Dict."""
         ...
 
-    def erzeuge_aktion(self, obs: ObsState, cfg: dict, score: float) -> Action | None:
-        """Konkrete Aktion ableiten, oder None wenn nichts zu tun."""
-        ...
-
-    def verifiziere(self, obs: ObsState, aktion: Action) -> bool:
+    def verifiziere(self, kommando: str, wert: any) -> bool:
         """Nach Ausführung: Hat die Aktion gewirkt?"""
         ...
 ```
 
-### Geplante Aktor-Plugins
+Die Score-Berechnung (`bewerte()`) und Aktionserzeugung (`erzeuge_aktionen()`)
+sind Methoden der **Regeln** (`Regel`-Basisklasse in `regeln/basis.py`),
+nicht der Aktoren.
 
-| Plugin | Aktor | Steuerungskanal | Quelle (Recycling) |
-|--------|-------|-----------------|---------------------|
-| `aktor_batterie.py` | BYD HVS 10.2 | Modbus TCP + HTTP API | `battery_scheduler.py` ★ |
-| `aktor_wattpilot.py` | E-Auto Wallbox | WebSocket CMD | `wattpilot_api.py` |
-| `aktor_wp.py` | Dimplex SIK 11 | Modbus RTU (SG-Ready) | neu (Hardware ausstehend) |
-| `aktor_heizpatrone.py` | 2 kW Heizstab | Relay (Eight Relays HAT) | neu |
-| `aktor_klima.py` | Split-Klima 1.3 kW | Relay (Schütz) | neu |
-| `aktor_lueftung.py` | Lüftung + Klappen | Relay + 0-10V | neu |
+### Aktor-Plugins (Ist-Stand)
 
-Das Batterie-Plugin wird aus `battery_scheduler.py` **extrahiert** —
-die Strategien A–F (dokumentiert in BATTERIE_STRATEGIEN.md und
-BATTERY_ALGORITHM.md) werden 1:1 übernommen, nur in die Plugin-Struktur
-überführt.
+| Plugin | Aktor | Steuerungskanal | Status |
+|--------|-------|-----------------|--------|
+| `aktor_batterie.py` | BYD HVS 10.2 | Modbus TCP + HTTP API | ✅ Produktiv |
+| `aktor_fritzdect.py` | Fritz!DECT Smart-Plug (Heizpatrone 2 kW) | Fritz!Box AHA-HTTP-API | ✅ Produktiv |
+| `aktor_wattpilot.py` | E-Auto Wallbox | WebSocket CMD | ⚠️ Stub (nur Logging) |
 
 ### Kapazitätsverteilung (Budget-Algorithmus)
 
@@ -504,21 +487,12 @@ Für jede Aktion im ActionPlan (nach Priorität sortiert):
 
 ### Steuerungskanal-Dispatcher
 
-| Kanal | Zielsystem | Bestehendes Tool |
-|-------|-----------|------------------|
+| Kanal | Zielsystem | Tool |
+|-------|-----------|------|
 | `modbus_tcp` | Fronius Gen24 (F1/F2/F3) | `battery_control.py` → `ModbusClient` |
 | `http_api` | Fronius SOC/Mode Settings | `fronius_api.py` → `BatteryConfig` |
-| `websocket` | Wattpilot E-Auto | `wattpilot_api.py` |
-| `relay` | Eight Relays HAT (I2C) | `lib8relay` (neu) |
-| `modbus_rtu` | WP SIK 11 via MEGA-BAS RS485 | `pymodbus` (neu) |
-| `i2c_input` | MEGA-BAS Temperaturen | `megabas` (neu) |
-
-### Recycling aus bestehendem Code
-
-- `InverterControl`-Klasse aus `battery_scheduler.py` Zeile 247–420 →
-  wird zur Basis-Implementierung für `modbus_tcp` + `http_api` Dispatcher
-- Retry-Logik (`_retry`, `_retry_api`, `_retry_modbus`) → **direkt übernehmbar**
-- `set_soc_min()`, `set_soc_max()`, `set_soc_mode()` → ins Batterie-Plugin
+| `websocket` | Wattpilot E-Auto | `wattpilot_api.py` (Stub) |
+| `fritzdect` | Fritz!Box AHA-HTTP-API | `aktor_fritzdect.py` (Heizpatrone) |
 
 ---
 
@@ -596,7 +570,7 @@ Sammel-Daemon), weil er interrupt-fähig sein muss (Tier-1-Alarme).
 Engine und Actuator sind **Ableger** (Threads/Callbacks) des Observer-Prozesses:
 
 ```
-automation_observer.py  (systemd-Service, eigener Prozess)
+automation_daemon.py  (pv-automation.service, systemd)
   │
   ├── Tier 1: Interrupt-Handler  (GPIO-Callbacks, < 1 s)
   │     └── Alarm erkannt → Sofort-Aktion via Actuator
@@ -645,69 +619,32 @@ systemd → automation_observer.service
 
 ---
 
-## 9. Migrationsstrategie — battery_scheduler.py
+## 9. Regelkreise — Übersicht
 
-### Ist-Zustand
-- `battery_scheduler.py`: 1355 Zeilen, monolithisch
-- Enthält: Observation + Decision + Actuation + Config + State + Logging
-- Läuft als Cron-Job (alle 15 min)
-- Algorithmen A–F sind dokumentiert und stabil
+### 11 aktive Regeln in `automation/engine/regeln/`
 
-### Migrationsschritte
+| # | Klasse | Modul | Zyklus | Priorität | Funktion |
+|---|--------|-------|--------|-----------|----------|
+| 1 | `RegelSocSchutz` | schutz.py | fast | P1 Sicherheit | Tiefentladeschutz: Stop <5%, Drosselung <10% |
+| 2 | `RegelTempSchutz` | schutz.py | fast | P1 Sicherheit | Stufenweise Laderate-Reduktion bei Zelltemperatur 25–40°C |
+| 3 | `RegelKomfortReset` | soc_steuerung.py | mixed | P2 Steuerung | Täglicher Reset auf 25–75% SOC-Bereich, Early-Reset bei schlechter Prognose |
+| 4 | `RegelMorgenSocMin` | soc_steuerung.py | mixed | P2 Steuerung | SOC_MIN-Öffnung basierend auf Sunrise+1h PV-Prognose, Hold-Mode |
+| 5 | `RegelNachmittagSocMax` | soc_steuerung.py | mixed | P2 Steuerung | SOC_MAX→100% via Clear-Sky-Peak + Power-Threshold |
+| 6 | `RegelAbendEntladerate` | optimierung.py | mixed | P2 Steuerung | Tageszeit-abhängige Entladerate: Abend 29%, Nacht 10%, Tag auto |
+| 7 | `RegelZellausgleich` | optimierung.py | strategic | P3 Wartung | Monatlicher BYD-Zellausgleich (Vollzykus) |
+| 8 | `RegelForecastPlausi` | optimierung.py | strategic | P3 Optimierung | IST/SOLL-Abweichung >30% → SOC-Strategie anpassen |
+| 9 | `RegelLaderateDynamisch` | optimierung.py | mixed | P2 Steuerung | Dynamische Laderate basierend auf WP-Last, PV-Verfügbarkeit, SOC |
+| 10 | `RegelWattpilotBattSchutz` | geraete.py | fast | P1 Sicherheit | 3-stufiger Batterieschutz während EV-Ladung |
+| 11 | `RegelHeizpatrone` | geraete.py | fast | P2 Steuerung | 4-Phasen Forecast-gesteuerte Burst-Strategie für 2 kW HP via Fritz!DECT |
 
-```
-Phase 0 (jetzt):
-  ✅  Architektur dokumentieren (dieses Dokument)
-  ✅  ABC-Policy definiert
-      Keine Code-Änderungen
+### Collector-Subsystem in `automation/engine/collectors/`
 
-Phase 1 — Parallelaufbau:  ✅ ABGESCHLOSSEN
-  [✅]  automation_daemon.py angelegt (Observer→Engine→Actuator)
-  [✅]  Observer: collector.py-Daten in ObsState überführt
-  [✅]  Engine: 9 Regelkreise (Batterie), Score-basiert mit Cascade
-  [✅]  Actuator: InverterControl + Modbus-Dispatch
-  [✅]  Parallel zu bestehendem Cron getestet (--dry-run)
-
-Phase 2 — Umschaltung Batterie:  ✅ ABGESCHLOSSEN (2026-02-28)
-  [✅]  Cron-Job battery_scheduler deaktiviert
-  [✅]  pv-automation.service übernimmt Batterie-Steuerung
-  [✅]  battery_scheduler.py bleibt als Fallback-Script (manuell aufrufbar)
-  [✅]  Engine-Erweiterungen:
-         - Cascade-Mechanismus (Winner ohne Aktion → nächster Kandidat)
-         - Fuzzy-Scoring für nachmittag_soc_max (Clear-Sky-Peak + Rampe)
-         - Verbraucher-Kontext (30-min Avg für EV/WP in Schwellenberechnung)
-         - StorCtl_Mod/InWRte/OutWRte direkt per Modbus gelesen
-  [ ]  30 Tage Parallelbetrieb/Monitoring (läuft)
-
-Phase 3 — Neue Aktoren (nach Hardware-Verfügbarkeit):
-  [ ]  aktor_wattpilot.py (E-Auto, Hardware vorhanden)
-  [ ]  aktor_wp.py (Wärmepumpe, nach LWPM-410-Einbau)
-  [ ]  aktor_heizpatrone.py (nach Relais-HAT-Beschaffung)
-  [ ]  Config-Tool (pv-config.py) für Multi-Device
-
-Phase 4 — Vollbetrieb:
-  [ ]  Alle Aktoren in Engine integriert
-  [ ]  Dashboard zeigt alle Entscheidungen (B liest C-Protokoll)
-  [ ]  Config-Tool bedient alle Parameter
-  [ ]  battery_scheduler.py kann archiviert werden
-```
-
-### Was wird recycled, was wird neu gebaut?
-
-| Bestandteil | Herkunft | Aktion |
-|-------------|----------|--------|
-| `InverterControl` Klasse | battery_scheduler.py Z.247–420 | **Übernehmen** → Actuator-Dispatcher |
-| Retry-Logik `_retry()` | battery_scheduler.py Z.295–330 | **Übernehmen** → generisch für alle Kanäle |
-| Strategie A–F Entscheidungslogik | battery_scheduler.py | **Extrahieren** → `aktor_batterie.py` |
-| `load_config()` / `save_state()` | battery_scheduler.py | **Übernehmen** → Config-Layer generisch |
-| `_apply_comfort_defaults()` | battery_scheduler.py | **Übernehmen** → Batterie-Plugin Tagesreset |
-| `_verify_consistency()` | battery_scheduler.py | **Übernehmen** → Actuator Verifikation |
-| `log_action()` | battery_scheduler.py | **Erweitern** → automation_log mit allen Aktoren |
-| Prognose-Anbindung | run_scheduler() | **Verschieben** → Observer (SolarForecast ist Observation) |
-| `ModbusClient` | battery_control.py | **Nutzen** als Actuator-Kanal |
-| `BatteryConfig` | fronius_api.py | **Nutzen** als Actuator-Kanal |
-| Wattpilot-Anbindung | wattpilot_api.py | **Nutzen** als Actuator-Kanal |
-| ObsState-Definition | BEOBACHTUNGSKONZEPT.md §5 | **Implementieren** (bisher nur Doku) |
+| Klasse | Modul | Funktion |
+|--------|-------|----------|
+| `DataCollector` | data_collector.py | Liest Collector-DB + Modbus + HTTP API → ObsState |
+| `BatteryCollector` | battery_collector.py | Direktes Modbus/HTTP-Polling (für Observer standalone) |
+| `ForecastCollector` | forecast_collector.py | Trigger-basierte Solarprognose |
+| `Tier1Checker` | tier1_checker.py | Deterministische Schwellenprüfungen (Safety-Bypass) |
 
 ---
 
@@ -808,29 +745,18 @@ CREATE TABLE obs_state_snapshot (
 4. Engine wartet auf erstes vollständiges ObsState → dann erster Zyklus
 5. Actuator setzt Komfort-Defaults (wie bisher `_apply_comfort_defaults()`)
 
-Die bestehende Tabelle `battery_control_log` bleibt bis Phase 2 aktiv,
-danach migriert nach `automation_log`.
+Die bestehende Tabelle `battery_control_log` ist Legacy und wird nicht mehr aktiv befüllt.
 
 ---
 
-## 11. Gegenüberstellung Alt vs. Neu
+## 11. Offene Punkte
 
-| Aspekt | Alt (battery_scheduler) | Neu (Engine-Architektur) |
-|--------|-------------------------|--------------------------|
-| Aktoren | nur Batterie | alle (Plugin-Registry) |
-| Zyklus | 15 min Cron | 3-Tier: Interrupt / 5–30 s / 1–15 min |
-| Schutzregeln | implizit im Code | explizit in S2 Tier 1 (Observer) |
-| Konfiguration | 1 JSON + Code-Konstanten | `soc_param_matrix.json` — 9 Regelkreise, 50+ Parameter |
-| Entscheidung | monolithisch in `run_scheduler()` | Score-basiert, 9 Regelkreise, Cascade + Fuzzy-Scoring |
-| SOC-Umschaltungen | `battery_control_log` | **echte Daten** aus `automation_log` |
-| API-Anzeige | `battery_control_log` via DB-Query | `soc_switches[]` + `last_engine_action` via DB-Query |
-| Verifikation | `_verify_consistency()` (Batterie) | Actuator Read-Back (alle, inkl. Dry-Run) |
-| Protokoll | `battery_control_log` | `automation_log` (alle Aktoren, Persist-DB) |
-| Zustandsdaten | In-Memory Dict | RAM-DB (`/dev/shm/automation_obs.db`) |
-| Dashboard | `battery_control_log`, Scheduler-State | B liest `automation_log` (read-only, echte Daten) |
-| Bedienung | JSON-Editor / CLI-Args | SSH Config-Tool + CLI (`param_matrix.py`) |
-| B→C Steuerung | nicht vorgesehen | **strikt verboten** (E6) |
-| Test | manuell | 17 Dry-Run-Tests (`test_skeleton.py`) |
+| Thema | Status | Detail |
+|-------|--------|--------|
+| AktorWattpilot | Stub | Nur Logging, keine echte EV-Steuerung |
+| WW-Temperatur-Sensor | Nicht vorhanden | `ww_temp_c` in ObsState immer `None` — HP-Übertemperaturschutz inaktiv |
+| Batterie-Temperaturen | Teilweise | `batt_temp_c` wird nur im Observer-Pfad (BatteryCollector) befüllt, nicht im Daemon-Pfad (DataCollector) |
+| `ev_eco_mode` | Nicht befüllt | ObsState-Feld vorhanden, aber DataCollector setzt es nicht |
 
 ---
 
@@ -862,4 +788,4 @@ danach migriert nach `automation_log`.
 
 ---
 
-*Letzte Aktualisierung: 2026-02-28 (Phase 2 produktiv: Cascade, Fuzzy-Scoring, Verbraucher-Kontext, 9 Regelkreise)*
+*Letzte Aktualisierung: 2026-03-01 (11 Regelkreise, Fritz!DECT produktiv, battery_scheduler archiviert)*
