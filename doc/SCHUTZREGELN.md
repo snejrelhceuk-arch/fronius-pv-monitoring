@@ -9,7 +9,7 @@
 ## Grundprinzip
 
 > **Schutzregeln sind Hardgrenzen, keine Empfehlungen.**  
-> Sie werden in jeder Scheduler-Iteration ausgeführt, *bevor* Morgen-/Nachmittag-/Abend-Algorithmen laufen.  
+> Sie werden in jedem Engine-Zyklus geprüft, *bevor* Optimierungs-Algorithmen laufen.  
 > Kein manueller Override, kein Fuzzy-Score kann eine Schutzregel außer Kraft setzen.  
 > Bei Widerspruch: Schutzregel gewinnt immer.
 
@@ -26,7 +26,7 @@
 | **Zusatz** | SOC_MIN auf 10 % setzen (Modbus MinRsvPct) |
 | **Freigabe** | SOC > 20 % für > 5 min |
 | **Protokoll** | DB-Eintrag + Log: `protection_bat_low_soc` |
-| **Status** | Geplant — noch nicht implementiert |
+| **Status** | ✅ Implementiert — `RegelSocSchutz` in `automation/engine/regeln/schutz.py` |
 
 ### SR-BAT-02: Übertemperatur-Schutz
 
@@ -38,26 +38,26 @@
 | **Aktion 2** | Laden komplett stoppen (InWRte = 0 %) |
 | **Freigabe** | Temp < 38 °C |
 | **Protokoll** | `protection_bat_overtemp` |
-| **Status** | Geplant |
+| **Status** | ✅ Implementiert — `RegelTempSchutz` in `automation/engine/regeln/schutz.py` (stufenweise Reduktion bei 25/30/35/40°C) |
 
 ### SR-BAT-03: RvrtTms = 0 — Dauerhafte Modbus-Werte
 
 | Feld | Wert |
 |---|---|
 | **Hintergrund** | Fronius-Modbus M124 kennt `RvrtTms` (Revert-Timer). Bei `RvrtTms = 0` gelten geschriebene Werte **dauerhaft** bis zum nächsten Schreibzugriff oder WR-Neustart. |
-| **Risiko** | Wenn Scheduler abstürzt nachdem er `OutWRte = 0 %` gesetzt hat → Batterie entlädt nie wieder! |
-| **Schutzmaßnahme** | Nach jedem Reboot des Schedulers: Modbus-Status lesen und plausibilisieren. Wenn `StorCtl_Mod ≠ 0` und kein evening_rate_active → Reset via `_apply_comfort_defaults()`. |
-| **Monitoring** | `_verify_consistency()` in battery_scheduler.py |
+| **Risiko** | Wenn Automation ausfällt nachdem sie `OutWRte = 0 %` gesetzt hat → Batterie entlädt nie wieder! |
+| **Schutzmaßnahme** | Nach jedem Neustart: Modbus-Status lesen und plausibilisieren. Komfort-Defaults wiederherstellen. |
+| **Monitoring** | Actuator Read-Back-Verifikation in `automation/engine/actuator.py` |
 | **Status** | ✅ Implementiert (verify_consistency) |
 
 ### SR-BAT-04: SOC_MODE-Konsistenz
 
 | Feld | Wert |
 |---|---|
-| **Auslöser** | `SOC_MODE = "auto"` aber `morning_done = False` oder `afternoon_done = False` |
+| **Auslöser** | `SOC_MODE = "auto"` aber Engine erwartet Manual-Modus |
 | **Problem** | Im Auto-Modus sind SOC_MIN/MAX nicht steuerbar (siehe FRONIUS_SOC_MODUS.md) |
-| **Aktion** | Warnung im Log; beim nächsten Scheduler-Lauf auf Manual zurücksetzen |
-| **Status** | Dokumentiert — `_verify_consistency()` prüft SOC_MIN/MAX aber nicht SOC_MODE korrekt |
+| **Aktion** | Warnung im Log; beim nächsten Engine-Lauf auf Manual zurücksetzen |
+| **Status** | ✅ Implementiert — Engine prüft SOC_MODE-Konsistenz |
 
 ---
 
@@ -173,9 +173,9 @@
 
 | Feld | Wert |
 |---|---|
-| **Funktion** | `_verify_consistency()` in battery_scheduler.py |
+| **Funktion** | Actuator Read-Back-Verifikation in `automation/engine/actuator.py` |
 | **Prüft** | SOC_MIN vs. erwarteter Wert, StorCtl_Mod vs. erwartetem Modus |
-| **Auslöser** | Jeder Scheduler-Lauf (alle 15 min) |
+| **Auslöser** | Jeder Engine-Zyklus (1 min fast / 15 min strategic) |
 | **Risiko** | Überschreibt manuell gesetzte Werte! |
 | **Schutz** | `manual_override` Flag verhindert Überschreiben |
 | **Status** | ✅ Implementiert |
@@ -257,28 +257,29 @@
 
 | Regel | Priorität | Status |
 |---|---|---|
-| SR-SIM-01 | — | ✅ Implementiert |
-| SR-MODBUS-02 | Mittel | ✅ Implementiert |
+| SR-BAT-01 | Hoch | ✅ Implementiert (`RegelSocSchutz`) |
+| SR-BAT-02 | Kritisch | ✅ Implementiert (`RegelTempSchutz`) |
 | SR-BAT-03 | Hoch | ✅ Implementiert |
-| SR-BAT-04 | Mittel | ⚠️ Teilweise |
+| SR-BAT-04 | Mittel | ✅ Implementiert (Engine-Konsistenzprüfung) |
+| SR-MODBUS-02 | Mittel | ✅ Implementiert (Actuator Read-Back) |
 | SR-FO-01 | Kritisch | ✅ Implementiert |
 | SR-FO-02 | Kritisch | ⚠️ Organisatorisch |
 | SR-FO-03 | Hoch | ⚠️ Organisatorisch |
 | SR-FO-04 | Mittel | ✅ Implementiert |
 | SR-FO-05 | Mittel | ✅ Implementiert |
-| SR-BAT-01 | Hoch | 🔲 Geplant |
-| SR-BAT-02 | Kritisch | 🔲 Geplant |
-| SR-EV-03 | Kritisch | 🔲 Geplant |
+| SR-HP-01 | Hoch | ✅ Implementiert (`RegelHeizpatrone` Notaus: SOC-abhängig) |
+| SR-EV-BATT | Hoch | ✅ Implementiert (`RegelWattpilotBattSchutz`) |
+| SR-EV-03 | Kritisch | 🔲 Geplant (AktorWattpilot ist Stub) |
 | SR-EV-01 | Mittel | 🔲 Geplant |
 | SR-EV-02 | Niedrig | 🔲 Geplant |
-| SR-WP-01 | Kritisch | 🔲 Geplant (WP fehlt) |
-| SR-WP-02 | Mittel | 🔲 Geplant (WP fehlt) |
-| SR-WP-03 | Niedrig | 🔲 Geplant (WP fehlt) |
+| SR-WP-01 | Kritisch | 🔲 Geplant (WP-Modbus fehlt) |
+| SR-WP-02 | Mittel | 🔲 Geplant (WP-Modbus fehlt) |
+| SR-WP-03 | Niedrig | 🔲 Geplant (WP-Modbus fehlt) |
 | SR-NET-01 | Mittel | 🔲 Geplant |
 | SR-NET-02 | Niedrig | 🔲 Monitoring |
 | SR-MODBUS-01 | Niedrig | 🔲 Geplant |
 
 ---
 
-*Letzte Aktualisierung: 2026-02-20*  
+*Letzte Aktualisierung: 2026-03-01*  
 *Verwandte Dokumente:* [PARAMETER_MATRIZEN.md](PARAMETER_MATRIZEN.md) · [BEOBACHTUNGSKONZEPT.md](BEOBACHTUNGSKONZEPT.md) · [FRONIUS_SOC_MODUS.md](FRONIUS_SOC_MODUS.md) · [BATTERY_ALGORITHM.md](BATTERY_ALGORITHM.md) · [DUAL_HOST_ARCHITECTURE.md](DUAL_HOST_ARCHITECTURE.md)

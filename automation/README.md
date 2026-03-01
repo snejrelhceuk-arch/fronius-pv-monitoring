@@ -113,8 +113,8 @@ abschalten. Bei DC-Versorgung fehlt der Nulldurchgang → TRIAC schaltet nicht a
 |-----------|----------------------|---------------|
 | Leistung | **2 kW** | 3-Phasen, 3×2 kW = 6 kW? |
 | Phasen | 1-phasig 230V | **3-phasig 400V** |
-| **230V-Versorgung** | **Fritz!DECT Steckdose (Primärschaltung)** | MEGA-BAS → Schütz? |
-| **Steuerung** | **24V-Relais + 2 Temperatursensoren** | MEGA-BAS Integration |
+| **230V-Versorgung** | **Fritz!DECT Steckdose (Primärschaltung)** | MEGA-BAS → Schütz (später) |
+| **Steuerung** | **✅ AktorFritzDECT (produktiv seit 2026-02-28)** | MEGA-BAS Integration |
 | Schutz | 2 unabhängige Temp.-Sensoren | + MEGA-BAS Thermistor |
 | PV-Abhängigkeit | Manuell / Fritz!DECT | Automatisch bei PV-Überschuss |
 | Verbrauch 2025 | **2.614 kWh** (13% vom Gesamtverbrauch) | Steigend bei Vollautomatik |
@@ -389,15 +389,26 @@ Wenn PV_Überschuss > Schwellwert UND Speicher_Temp < 80°C:
 
 ## 6. Abhängigkeiten & Integration
 
+> **Hinweis (2026-03-01):** Die Automation-Engine ist produktiv als `pv-automation.service`.
+> Architektur-Details: [doc/AUTOMATION_ARCHITEKTUR.md](../doc/AUTOMATION_ARCHITEKTUR.md)
+
 ```
  solar_forecast.py ──┐
                      │
  collector.py ───────┤     ┌───────────────────────┐
-   (Modbus-Daten)    ├────►│  automation_control.py │
-                     │     │  (NEUE Steuerlogik)    │
+   (Modbus-Daten)    ├────►│  automation/engine/   │
+                     │     │  (4-Schichten-Engine) │
  battery_control.py ─┤     └───────┬───────────────┘
                      │             │
  wattpilot_api.py ───┘             ▼
+                       ┌──────────────────────────────┐
+                       │ Aktoren:                      │
+                       │  AktorBatterie (Modbus TCP)    │
+                       │  AktorFritzDECT (HTTP API)     │
+                       │  AktorWattpilot (Stub)         │
+                       └──────────────────────────────┘
+
+ Geplant (MEGA-BAS):
                             ┌──────────────┐
                             │  MEGA-BAS    │  Eight Relays HAT
                             │  (I2C 0x48)  │  (I2C, stackable)

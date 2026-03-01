@@ -77,7 +77,7 @@ crontab -e
 ## Nach Stromausfall
 
 **Automatischer Recovery**:
-1. System bootet → systemd startet pv-collector.service
+1. System bootet → systemd startet pv-observer.service
 2. Python prüft PID-File (nicht vorhanden nach Reboot)
 3. Neues PID-File wird erstellt
 4. Cron-Monitoring prüft nach 0-5min
@@ -86,7 +86,7 @@ crontab -e
 **Manueller Check**:
 ```bash
 # Status prüfen
-systemctl status pv-collector
+systemctl status pv-observer
 ./check_single_instance.sh
 
 # Falls Duplikate
@@ -95,7 +95,7 @@ systemctl status pv-collector
 
 ## Systemd-Integration (Optional)
 
-**Könnte hinzugefügt werden** in `/etc/systemd/system/pv-collector.service`:
+**Könnte hinzugefügt werden** in `/etc/systemd/system/pv-observer.service`:
 ```ini
 [Service]
 ExecStartPre=/srv/pv-system/check_single_instance.sh --kill-duplicates
@@ -135,7 +135,7 @@ sqlite3 data.db "SELECT AVG(t_poll_ms) FROM raw_data WHERE ts >= strftime('%s', 
 ```bash
 # WARNUNG: Nur wenn collector WIRKLICH nicht läuft!
 rm /srv/pv-system/collector.pid
-sudo systemctl restart modbus-collector
+sudo systemctl restart pv-observer
 ```
 
 **Monitoring-Log prüfen**:

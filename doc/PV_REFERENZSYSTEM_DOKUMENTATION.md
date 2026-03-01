@@ -27,7 +27,7 @@ Diese Daten werden **gemeinfrei** zur Verfügung gestellt.
 - Raspberry Pi 5 + NVMe SSD
 - Python-basiertes Monitoring
 - SQLite Datenbank (11 MB, 13 Tabellen)
-- Chart.js Visualisierung
+- ECharts 5.4.3 Visualisierung
 
 ---
 

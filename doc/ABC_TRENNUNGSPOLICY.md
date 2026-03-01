@@ -1,6 +1,6 @@
 # A/B/C Trennungspolicy — Datenbank, Web-API, Automatisierung
 
-**Stand:** 21. Februar 2026  
+**Stand:** 1. März 2026  
 **Status:** Governance-Dokument (dokumentierend, ohne Laufzeitwirkung)  
 **Geltungsbereich:** Architekturentscheidungen und künftige Änderungen im Repo `pv-system`
 
@@ -174,8 +174,10 @@ Nutzen jetzt:
 1. **Policy-Checkliste in PR-Reviews nutzen**
 2. **Write-Side-Effects aus B schrittweise nach C verlagern**
 3. **A/B/C-Kontrakt als kurzes Kapitel in `SYSTEM_ARCHITECTURE.md` pflegen**
-4. **Automation-Engine gemäß 4-Schichten-Architektur aufbauen**
-   → Siehe [AUTOMATION_ARCHITEKTUR.md](AUTOMATION_ARCHITEKTUR.md)
+4. **✅ Automation-Engine gemäß 4-Schichten-Architektur aufgebaut**
+   → Produktiv seit 2026-02-28. Siehe [AUTOMATION_ARCHITEKTUR.md](AUTOMATION_ARCHITEKTUR.md)
+   Schreibkanäle: Modbus TCP (Batterie), Fritz!DECT (Heizpatrone), Wattpilot (Stub).
+   RAM-DB: `/dev/shm/automation_obs.db` (5 Tabellen).
 
 Diese Folge-Schritte sind absichtlich **nicht Teil** dieser dokumentierenden Änderung.
 

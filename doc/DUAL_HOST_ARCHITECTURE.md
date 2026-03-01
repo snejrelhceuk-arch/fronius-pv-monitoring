@@ -21,7 +21,7 @@
 │  ✓ Wattpilot Collector          │     │  ✗ Wattpilot (gestoppt)         │
 │  ✓ Web-API (3 Gunicorn Worker)  │     │  ✓ Web-API (1 Worker, read-only)│
 │  ✓ Aggregation (Cron, 5 Jobs)   │     │  ✗ Aggregation (role_guard)     │
-│  ✓ Battery Scheduler (Modbus!)  │     │  ✗ Battery Scheduler (role_guard)│
+│  ✓ pv-automation (Modbus+DECT!) │     │  ✗ pv-automation (role_guard)   │
 │  ✓ Monitor-Scripts (Cron)       │     │  ✗ Monitor-Scripts (role_guard)  │
 │  ✓ DB in tmpfs (/dev/shm)      │     │  ✓ DB in tmpfs (Mirror → tmpfs) │
 │  ✓ Persist: tmpfs → SD (stündlich)│   │  ✓ Mirror-Sync (alle 10 Min)    │
@@ -130,7 +130,7 @@ source "$(dirname "$0")/scripts/role_guard.sh" 2>/dev/null || exit 0
 | `pv-collector.service` | Doppelte Modbus-Abfragen → Datendurcheinander |
 | `pv-wattpilot.service` | WebSocket-Konflikt (nur 1 Verbindung), 17% CPU |
 | `aggregate_*.py` (Cron) | Sinnlos — DB wird alle 10 Min überschrieben |
-| `battery_scheduler.py` | **GEFÄHRLICH** — schreibt Modbus-Register zum WR! |
+| `pv-automation.service` | **GEFÄHRLICH** — schreibt Modbus-Register zum WR + Fritz!DECT! |
 | `monitor_wattpilot.sh` | Startet Wattpilot neu → sabotiert passive mode |
 | `monitor_collector.sh` | Collector ist bewusst aus |
 | `capture_energy_checkpoints.py` | Schreibt Checkpoints, die beim Sync verloren gehen |
@@ -335,7 +335,7 @@ Installation (einmalig pro Host, nach `git clone` oder `sync_code_to_peer.sh`):
 | `__pycache__/` | Python-Bytecode |
 | `backup/` | Lokale Backups |
 | `.secrets` | Zugangsdaten |
-| `config/battery_scheduler_state.json` | Laufzeitstatus Battery-Scheduler |
+| `config/battery_scheduler_state.json` | Laufzeitstatus (Legacy) |
 | `config/battery_bms_checkpoints.json` | BMS-Checkpoints |
 
 ### Ersteinrichtung auf neuem Host

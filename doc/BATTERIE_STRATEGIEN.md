@@ -30,16 +30,16 @@ MinRsvPct:          25%
 RvrtTms:            0 (KEIN Auto-Revert!)
 ```
 
-**Scheduler:** ~~`battery_scheduler.py` via Cron~~ → **`pv-automation.service`** (systemd, Score-basierte Engine mit 9 Regelkreisen, seit 2026-02-28)
-**Config:** `config/soc_param_matrix.json` (9 Regelkreise, 50+ Parameter)
-**State:** `config/battery_scheduler_state.json`
+**Scheduler:** **`pv-automation.service`** (systemd, Score-basierte Engine mit 11 Regelkreisen)
+**Config:** `config/soc_param_matrix.json` (11 Regelkreise, 50+ Parameter)
+**State:** `config/battery_scheduler_state.json` (Legacy)
 
 ---
 
 ## Strategien A–F (Kurzuebersicht)
 
 
-> [doc/BATTERY_ALGORITHM.md](doc/BATTERY_ALGORITHM.md) dokumentiert.
+> [BATTERY_ALGORITHM.md](BATTERY_ALGORITHM.md) dokumentiert.
 
 | Strategie | Kurzbeschreibung | Details |
 |----------|------------------|---------|
@@ -53,7 +53,7 @@ RvrtTms:            0 (KEIN Auto-Revert!)
 ## Tages-Zeitplan (nur Referenz)
 
 Der konkrete Ablauf variiert nach Prognose. Siehe die Beispiele in
-[doc/BATTERY_ALGORITHM.md](doc/BATTERY_ALGORITHM.md) Abschnitt 6 und 7.
+[BATTERY_ALGORITHM.md](BATTERY_ALGORITHM.md) Abschnitt 6 und 7.
 ---
 
 ## Technische Kontroll-Matrix
@@ -79,10 +79,10 @@ Limits aktiv!
 
 **Mitigierung:**
 1. **Tages-Reset:** `_apply_comfort_defaults()` setzt SOC + Modbus bei neuem Tag auf Komfort
-2. **Konsistenz-Prüfung:** `_verify_consistency()` korrigiert Abweichungen bei jedem Scheduler-Lauf
-3. **Retry-Logik:** `InverterControl` wiederholt API/Modbus-Calls 2× mit 1.5s Delay
-4. **Cron-Intervall:** Alle 15 min — versäumte Aktionen werden beim nächsten Lauf nachgeholt
-5. **Fail-Safe Default:** Bei Scheduler-Ausfall → Komfort-Bereich bleibt aktiv:
+2. **Konsistenz-Prüfung:** Actuator Read-Back verifiziert jede Änderung
+3. **Retry-Logik:** `AktorBatterie` wiederholt API/Modbus-Calls 2× mit 1.5s Delay
+4. **Engine-Zyklus:** Fast-Cycle 1 min, Strategic 15 min — versäumte Aktionen werden nachgeholt
+5. **Fail-Safe Default:** Bei Engine-Ausfall → Komfort-Bereich bleibt aktiv:
    ```python
    # Komfort-Defaults (sicher für alle Szenarien)
    SOC_MIN=25%, SOC_MAX=75%, StorCtl_Mod=0
@@ -152,18 +152,18 @@ python3 battery_control.py --auto               # Automatik
 
 ---
 
-## Status (2026-02-28)
+## Status (2026-03-01)
 
-- [x] Engine produktiv (`pv-automation.service`, systemd, 9 Regelkreise)
-- [x] Legacy-Scheduler deaktiviert (`battery_scheduler.py` via Cron abgelöst)
+- [x] Engine produktiv (`pv-automation.service`, systemd, 11 Regelkreise)
 - [x] PV-Prognose via Geometrie-Engine (`solar_geometry` / `solar_forecast`)
 - [x] Tages-Reset mit Komfort-Defaults (SOC + Modbus)
 - [x] Score-basierte Entscheidungen mit Cascade-Mechanismus
 - [x] Fuzzy-Scoring für nachmittag_soc_max (Clear-Sky-Peak + Leistungsschwelle)
 - [x] Verbraucher-Kontext: 30-min-Mittelwerte für EV/WP in Schwellenberechnung
-- [x] Retry-Logik für API + Modbus
+- [x] Retry-Logik für API + Modbus (AktorBatterie)
 - [x] Abend-/Nacht-Entladeraten (29% / 10%)
 - [x] Monatlicher Zellausgleich (prognosegesteuert)
-- [x] Logging in SQLite (`automation_log` + `battery_control_log`)
+- [x] Heizpatrone via Fritz!DECT (RegelHeizpatrone + AktorFritzDECT)
+- [x] Logging in SQLite (`automation_log`)
 - [ ] Sommer-Ladebegrenzung (temperaturbasiert, Strategie E)
-- [ ] Web-Dashboard Integration (Status/Override)
+- [ ] Wattpilot-Steuerung (AktorWattpilot ist Stub)
