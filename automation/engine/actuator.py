@@ -87,8 +87,12 @@ class Actuator:
         """Standard-Aktoren registrieren."""
         self._aktoren['batterie'] = AktorBatterie(dry_run=self.dry_run)
         self._aktoren['wattpilot'] = AktorWattpilot(dry_run=self.dry_run)
-        self._aktoren['fritzdect'] = AktorFritzDECT(dry_run=self.dry_run)
+        # ── HP-Aktor stillgelegt (V2-Umbau) ─────────────────────
+        # Regeln evaluieren + loggen weiterhin, aber kein Schaltbefehl.
+        # → Auf self.dry_run zurücksetzen, sobald V2 erprobt ist.
+        self._aktoren['fritzdect'] = AktorFritzDECT(dry_run=True)
         LOG.info(f"Aktoren registriert: {list(self._aktoren.keys())}")
+        LOG.info("  ⚠ fritzdect: DRY-RUN erzwungen (V2-Umbau)")
 
     def registriere_aktor(self, name: str, aktor: AktorBase):
         """Zusätzlichen Aktor registrieren (Plugin-System)."""

@@ -1,7 +1,7 @@
 {
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
-  "_updated": "2026-02-28",
+  "_updated": "2026-03-01",
   "regelkreise": {
     "soc_schutz": {
       "_doc": "Sicherheitshalber: SOC-Grenzen nie verletzen",
@@ -55,14 +55,20 @@
       "parameter": {
         "pv_schwelle_sunrise_1h_w": {
           "wert": 1500,
-          "bereich": [500, 5000],
+          "bereich": [
+            500,
+            5000
+          ],
           "einheit": "W",
           "obs_feld": "pv_at_sunrise_1h_w",
           "beschreibung": "Mindest-PV-Prognose für Sunrise+1h damit Öffnung stattfindet"
         },
         "stress_min_pct": {
           "wert": 5,
-          "bereich": [0, 15],
+          "bereich": [
+            0,
+            15
+          ],
           "einheit": "%",
           "obs_feld": "soc_min",
           "aktor_kommando": "set_soc_min",
@@ -70,7 +76,10 @@
         },
         "morgen_soc_max_pct": {
           "wert": 75,
-          "bereich": [50, 85],
+          "bereich": [
+            50,
+            85
+          ],
           "einheit": "%",
           "obs_feld": "soc_max",
           "aktor_kommando": "set_soc_max",
@@ -78,14 +87,20 @@
         },
         "fenster_ende_nach_sunrise_h": {
           "wert": 3,
-          "bereich": [1, 5],
+          "bereich": [
+            1,
+            5
+          ],
           "einheit": "h",
           "obs_feld": "sunrise",
           "beschreibung": "Morgen-Fenster endet x Stunden nach Sonnenaufgang"
         },
         "mittel_verzoegerung_h": {
           "wert": 1.0,
-          "bereich": [0.5, 2.0],
+          "bereich": [
+            0.5,
+            2.0
+          ],
           "einheit": "h",
           "beschreibung": "Bei forecast_quality=mittel: Öffnung erst Sunrise + x Stunden"
         }
@@ -181,7 +196,10 @@
       "parameter": {
         "komfort_min_pct": {
           "wert": 25,
-          "bereich": [10, 40],
+          "bereich": [
+            10,
+            40
+          ],
           "einheit": "%",
           "obs_feld": "soc_min",
           "aktor_kommando": "set_soc_min",
@@ -189,7 +207,10 @@
         },
         "komfort_max_pct": {
           "wert": 75,
-          "bereich": [60, 90],
+          "bereich": [
+            60,
+            90
+          ],
           "einheit": "%",
           "obs_feld": "soc_max",
           "aktor_kommando": "set_soc_max",
@@ -197,20 +218,29 @@
         },
         "reset_nach_sunset_h": {
           "wert": 0,
-          "bereich": [0, 3],
+          "bereich": [
+            0,
+            3
+          ],
           "einheit": "h",
           "obs_feld": "sunset",
           "beschreibung": "Normaler Abend-Reset: ab Sunset (0 = sofort bei Sunset)"
         },
         "frueh_reset_ab_h": {
           "wert": 13.0,
-          "bereich": [11, 16],
+          "bereich": [
+            11,
+            16
+          ],
           "einheit": "h",
           "beschreibung": "Früh-Reset: Frühester Zeitpunkt für Nachmittags-Reset-Prüfung"
         },
         "erholung_schwelle_kwh": {
           "wert": 10.0,
-          "bereich": [5, 20],
+          "bereich": [
+            5,
+            20
+          ],
           "einheit": "kWh",
           "obs_feld": "forecast_rest_kwh",
           "beschreibung": "Prognose-Rest ≥ Schwelle → nachhaltige Ladung möglich (z.B. nach Gewitter), kein Früh-Reset"
@@ -615,111 +645,243 @@
       "parameter": {
         "min_ladeleistung_w": {
           "wert": 5000,
-          "bereich": [2000, 10000],
+          "bereich": [
+            2000,
+            10000
+          ],
           "einheit": "W",
           "obs_feld": "batt_power_w",
           "beschreibung": "Mindest-Batterie-Ladeleistung damit HP einschaltet (>5kW = Anlage hat Kapazität)"
         },
         "min_ladeleistung_morgens_w": {
           "wert": 3000,
-          "bereich": [1000, 8000],
+          "bereich": [
+            1000,
+            8000
+          ],
           "einheit": "W",
           "obs_feld": "batt_power_w",
           "beschreibung": "Vormittags-Schwelle (lockerer bei guter Prognose, rest_kwh>20)"
         },
         "min_rest_kwh": {
           "wert": 12.0,
-          "bereich": [5.0, 30.0],
+          "bereich": [
+            5.0,
+            30.0
+          ],
           "einheit": "kWh",
           "obs_feld": "forecast_rest_kwh",
           "beschreibung": "Mindest-Restprognose kWh damit HP-Burst erlaubt"
         },
         "min_rest_kwh_morgens": {
           "wert": 20.0,
-          "bereich": [10.0, 40.0],
+          "bereich": [
+            10.0,
+            40.0
+          ],
           "einheit": "kWh",
           "obs_feld": "forecast_rest_kwh",
           "beschreibung": "Vormittags: lockerer Burst nur bei sehr guter Tagesprognose"
         },
         "min_rest_h": {
           "wert": 2.0,
-          "bereich": [1.0, 4.0],
+          "bereich": [
+            1.0,
+            4.0
+          ],
           "einheit": "h",
           "obs_feld": "rest_h",
           "beschreibung": "Mindest-Reststunden PV bis Sonnenuntergang (Phase-4: HARD BLOCK)"
         },
         "min_rest_h_morgens": {
           "wert": 5.0,
-          "bereich": [3.0, 8.0],
+          "bereich": [
+            3.0,
+            8.0
+          ],
           "einheit": "h",
           "obs_feld": "rest_h",
           "beschreibung": "Vormittags: lang genug Sonne für EV+Batt nach HP-Burst"
         },
         "burst_dauer_lang_s": {
           "wert": 1800,
-          "bereich": [600, 3600],
+          "bereich": [
+            600,
+            3600
+          ],
           "einheit": "s",
           "beschreibung": "Burst-Dauer bei guter Prognose (30 Min)"
         },
         "burst_dauer_kurz_s": {
           "wert": 900,
-          "bereich": [300, 1800],
+          "bereich": [
+            300,
+            1800
+          ],
           "einheit": "s",
           "beschreibung": "Burst-Dauer bei mäßiger Prognose oder nachmittags spät (15 Min)"
         },
         "min_pause_s": {
           "wert": 300,
-          "bereich": [60, 600],
+          "bereich": [
+            60,
+            600
+          ],
           "einheit": "s",
           "beschreibung": "Mindestpause zwischen Aus- und Wiedereinschalten (Hysterese)"
         },
         "max_wattpilot_w": {
           "wert": 500,
-          "bereich": [0, 5000],
+          "bereich": [
+            0,
+            5000
+          ],
           "einheit": "W",
           "obs_feld": "ev_power_w",
           "beschreibung": "HP nur wenn WattPilot unter diesem Wert (kein konkurrierendes EV-Laden)"
         },
         "batt_reserve_kwh": {
           "wert": 2.0,
-          "bereich": [0.5, 5.0],
+          "bereich": [
+            0.5,
+            5.0
+          ],
           "einheit": "kWh",
           "beschreibung": "Reserve über Batterie-Vollladung hinaus die Prognose abdecken muss"
         },
         "batt_reserve_nachmittag_kwh": {
           "wert": 3.0,
-          "bereich": [1.0, 8.0],
+          "bereich": [
+            1.0,
+            8.0
+          ],
           "einheit": "kWh",
           "beschreibung": "Nachmittags spät: größere Reserve für sichere Batterie-Volladung"
         },
         "notaus_netzbezug_w": {
           "wert": 200,
-          "bereich": [0, 500],
+          "bereich": [
+            0,
+            500
+          ],
           "einheit": "W",
           "obs_feld": "grid_power_w",
           "aktor_kommando": "hp_aus",
-          "beschreibung": "Netzbezug > dieser Wert → HP sofort AUS"
-        },
-        "notaus_entladung_hochsoc_w": {
-          "wert": -1000,
-          "bereich": [-2000, 0],
-          "einheit": "W",
-          "obs_feld": "batt_power_w",
-          "aktor_kommando": "hp_aus",
-          "beschreibung": "SOC ≥ 90%: Batterie-Entladung bis zu diesem Wert tolerieren (neg. = Entladung). Standard -1000W, einstellbar 0..−2000W"
-        },
-        "notaus_soc_schwelle_pct": {
-          "wert": 90,
-          "bereich": [50, 100],
-          "einheit": "%",
-          "obs_feld": "batt_soc_pct",
-          "beschreibung": "Unter diesem SOC: HP AUS bei JEDER Batterie-Entladung (egal wie gering)"
+          "beschreibung": "Netzbezug > dieser Wert (Ø5 Min Durchschnitt) → HP AUS"
         },
         "speicher_temp_max_c": {
           "wert": 78,
-          "bereich": [60, 85],
+          "bereich": [
+            60,
+            85
+          ],
           "einheit": "°C",
           "beschreibung": "Warmwasserspeicher Übertemperatur → HP sofort AUS"
+        },
+        "_drain_doc": "Phase 0 — Morgen-Drain: HP um Batterie schneller zu leeren, wenn wenig Verbrauch und gute Prognose",
+        "drain_min_soc_pct": {
+          "wert": 10,
+          "bereich": [
+            5,
+            30
+          ],
+          "einheit": "%",
+          "obs_feld": "batt_soc_pct",
+          "beschreibung": "Drain nur wenn SOC über diesem Wert (Tiefentladeschutz)"
+        },
+        "drain_max_haushalt_w": {
+          "wert": 700,
+          "bereich": [
+            200,
+            2000
+          ],
+          "einheit": "W",
+          "obs_feld": "house_load_w",
+          "beschreibung": "Drain nur bei niedrigem Hausverbrauch (unter diesem Wert)"
+        },
+        "drain_max_wp_w": {
+          "wert": 500,
+          "bereich": [
+            100,
+            2000
+          ],
+          "einheit": "W",
+          "obs_feld": "wp_power_w",
+          "beschreibung": "Drain nur wenn WP-Leistung unter diesem Wert"
+        },
+        "drain_max_ev_w": {
+          "wert": 1000,
+          "bereich": [
+            200,
+            5000
+          ],
+          "einheit": "W",
+          "obs_feld": "ev_power_w",
+          "beschreibung": "Drain nur wenn EV-Ladung unter diesem Wert"
+        },
+        "drain_min_prognose_kw": {
+          "wert": 4.0,
+          "bereich": [
+            2.0,
+            10.0
+          ],
+          "einheit": "kW",
+          "obs_feld": "forecast_power_profile",
+          "beschreibung": "Prognose muss ≥ diesen Wert in kommenden Stunden zeigen"
+        },
+        "drain_fenster_ende_h": {
+          "wert": 10.0,
+          "bereich": [
+            8.0,
+            12.0
+          ],
+          "einheit": "h",
+          "beschreibung": "Drain nur vor dieser Uhrzeit (10:00 = Drain bis max 10 Uhr)"
+        },
+        "drain_burst_dauer_s": {
+          "wert": 2700,
+          "bereich": [
+            900,
+            5400
+          ],
+          "einheit": "s",
+          "beschreibung": "Drain-Burst Maximaldauer (45 Min) — Sicherheits-Backstop"
+        },
+        "extern_respekt_s": {
+          "wert": 3600,
+          "bereich": [
+            0,
+            7200
+          ],
+          "einheit": "s",
+          "beschreibung": "Hysterese bei externem Einschalten (1h): WEICHE Notaus-Kriterien pausieren, HARTE (Temp, SOC-abs, rest_h) wirken sofort. 0 = deaktiviert."
+        },
+        "potenzial_gut_kwh": {
+          "wert": 30.0,
+          "bereich": [
+            15.0,
+            60.0
+          ],
+          "einheit": "kWh",
+          "beschreibung": "Tagesprognose ab der HP parallel mit WP+EV laufen darf und Batterie-Entladung immer toleriert wird"
+        },
+        "potenzial_ausreichend_kwh": {
+          "wert": 20.0,
+          "bereich": [
+            10.0,
+            40.0
+          ],
+          "einheit": "kWh",
+          "beschreibung": "Tagesprognose ab der HP parallel mit WP laufen darf (nicht EV). Entladung toleriert wenn SOC_MAX ≤ 75%"
+        },
+        "potenzial_maessig_kwh": {
+          "wert": 15.0,
+          "bereich": [
+            5.0,
+            30.0
+          ],
+          "einheit": "kWh",
+          "beschreibung": "Tagesprognose ab der HP solo laufen darf (kein WP/EV). Entladung toleriert wenn SOC_MAX ≤ 75%"
         }
       },
       "score_gewicht": 40,
