@@ -157,7 +157,7 @@ Stack: Raspbian Bullseye 11, Python 3.9.2, Flask 1.1.2, gunicorn 23.0.0,
 
 
 ═════════════════════════════════════════════════════════════════
-DYNAMISCHE UPDATES (Stand: 2026-03-01 00:40)
+DYNAMISCHE UPDATES (Stand: 2026-03-01 04:00)
 ═════════════════════════════════════════════════════════════════
 
 --- Aktuelle Config-Werte ---
@@ -208,6 +208,7 @@ HEIZKOSTEN_ERSPARNIS = {
 HEIZPERIODE_MONATE = {10, 11, 12, 1, 2, 3}  # Okt–Mär (6 Monate)
 
 --- Letzte Git-Commits ---
+b4bdfe6 Doku-Audit: 17 Dokumente mit Code-Realität abgeglichen
 f923b14 Aufräumen: sys.path-Hacks entfernt, system.py refactored, monitor_web_service.sh gelöscht
 55f28aa TODO aufräumen: erledigte Abschnitte entfernt, Alerting zusammengeführt
 b20fab8 Tiefenprüfung: 7 Fixes (P1-P3) + 21/21 Tests grün
@@ -217,13 +218,13 @@ f04128b feat: RegelKomfortReset, SOC-HTTP-Collector, Dedup, DB-Fix, Scheduler ar
 0ee2301 Tiefenprüfung: 12 Fixes (K1-K3 kritisch, H1-H7 hoch, M5-M8 mittel)
 85ef2b3 feat: HP-Automation via Fritz!DECT — Komplett-Implementation
 1055f34 System-Audit Bereinigung + Engine-Updates (2026-02-28)
-0ce4f72 Observer: systemd-Service + SQLite check_same_thread Fix
 
---- Kürzlich geänderte Module (8) ---
+--- Kürzlich geänderte Module (10) ---
 
-automation/engine/automation_daemon.py:
-  class AutomationDaemon:  # S4 Orchestrator: Observer + Engine + Actuator in einem Prozess.
-  def engine_vorausschau() -> list[dict]:  # Statische Funktion: Liest ObsState aus RAM-DB, führt Dry-Run aus.
+aggregate.py:
+  def get_db():
+    return get_db_connection()
+
 
 modbus_v3.py:
 modbus_v3.py — Modbus-Collector für Fronius Gen24 / SmartMeter
@@ -234,11 +235,6 @@ automation/engine/engine.py:
 engine.py — Entscheidungs-Engine (Schicht S3)
 
 Liest ObsState aus RAM-DB und SOC-Parametermatrix aus
-
-aggregate.py:
-  def get_db():
-    return get_db_connection()
-
 
 --- API-Endpunkte ---
   /                              → index  # Startseite: Redirect zu Flow-Chart

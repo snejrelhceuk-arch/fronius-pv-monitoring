@@ -21,6 +21,8 @@ Seit Feb 6, 2026 arbeitet das System mit Zählerstand-Deltas (korrekt).
 Davor war P×t-Integration im Einsatz, die ~50% systematisch zu niedrig lag.
 
 - [ ] **Anfang März**: Feb-Abgleich durchführen, FIRST_AUTO_MONTH auf `(2026, 2)` hochsetzen
+- [x] **2026-03-01**: Feb-Abgleich durchgeführt (inkl. RAM-DB-Vergleich); Februar ist damit abgehakt
+- [ ] **März-Ziel**: März-Abweichung im Monatsverlauf beobachten und zum Monatswechsel final abgleichen
 - [ ] **2022–2025 CSV-Import**: Solarweb-Jahreswerte prüfen (vermutlich korrekt, da Solarweb-Export)
 - [ ] Langfristig: Abweichung Richtung 0 beobachten (Zählerstand-Delta = korrekt seit Feb 6)
 
@@ -98,6 +100,16 @@ ohne Batterie-Entladung. Forecast-gesteuerte Burst-Strategie (15–30 Min Laufze
 - [x] **Schutzregel-Klassifikation**: Engine erkennt FritzDECT-Regeln als Schutzregeln
 - [ ] **Status-Anzeige tag_view**: HP-Schaltzustand in tag_view integrieren
       (flow_view zeigt bereits HP EIN/AUS + Leistung)
+
+---
+
+## Erledigt — Failover / Infrastruktur
+
+- [x] **2026-03-01**: SSH-Alias `failsafe-pi4` (jk@192.168.2.105) in `~/.ssh/config` eingetragen
+- [x] **2026-03-01**: `MAX_SYNC_AGE_SEC` 600→660 s (Health-Check-Schwelle knapper als
+      10-Min-Sync-Intervall → sporadische Fehl-WARNs; 660 s gibt 60 s Puffer)
+- [x] **2026-03-01**: Reboot-Ursache analysiert: WLAN-Fehler (`brcmf_run_escan: error -52`)
+      um 16:27, danach 30 Min Sync-Ausfall wegen korrupter incoming-DB; ab 17:03 stabil
 
 ---
 

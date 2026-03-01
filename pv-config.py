@@ -95,7 +95,9 @@ def wt_menu(text: str, items: list[tuple[str, str]]) -> Optional[str]:
     """Menü anzeigen. items = [(tag, description), ...]. Rückgabe: gewählter Tag oder None."""
     args = ['--menu', text, str(WT_H), str(WT_W), str(WT_LIST_H)]
     for tag, desc in items:
-        args.extend([tag, desc])
+        # Whiptail interpretiert '-...' am Desc-Anfang als Flag → Space-Prefix
+        safe_desc = f' {desc}' if desc.startswith('-') else desc
+        args.extend([tag, safe_desc])
     rc, choice = _wt(args)
     return choice if rc == 0 else None
 
@@ -104,7 +106,8 @@ def wt_checklist(text: str, items: list[tuple[str, str, bool]]) -> Optional[list
     """Checklist. items = [(tag, desc, checked), ...]. Rückgabe: Liste gewählter Tags."""
     args = ['--checklist', text, str(WT_H), str(WT_W), str(WT_LIST_H)]
     for tag, desc, checked in items:
-        args.extend([tag, desc, 'ON' if checked else 'OFF'])
+        safe_desc = f' {desc}' if desc.startswith('-') else desc
+        args.extend([tag, safe_desc, 'ON' if checked else 'OFF'])
     rc, output = _wt(args)
     if rc != 0:
         return None
@@ -404,7 +407,14 @@ def menu_regelkreise():
     # Zusammenfassung
     summary = 'Folgende Änderungen:\n\n'
     for name, aktiv in aenderungen:
-        summary += f'  {"✓ AN" if aktiv else "✗ AUS"}: {name}\n'
+        prio = matrix['regelkreise'][name].get('prioritaet', 0)
+        if name == 'heizpatrone':
+            detail = ' (HP-Steuerung, nicht die Last!)' if not aktiv else ' (HP-Automatik)'
+        elif prio == 1:
+            detail = ' ⚠ SICHERHEIT'
+        else:
+            detail = ''
+        summary += f'  {"✓ Steuerung AN" if aktiv else "✗ Steuerung AUS"}: {name}{detail}\n'
     summary += '\nÄnderungen speichern?'
 
     if not wt_yesno(summary):

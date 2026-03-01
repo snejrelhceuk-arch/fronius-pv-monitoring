@@ -113,6 +113,21 @@ Die Bilanz-Differenz (Δ) approximiert die Systemverluste unabhängig!
 | Fronius W_DC1 + W_DC2 | Momentaufnahme | Nur F1 | ✅ DC-Zähler (Lifetime) |
 | data_1min W_DC_delta | 1 Minute | Nur F1 | ✅ Aber Batt-Durchsatz verzerrt |
 
+## ⚠️ Solarweb-Wattpilot: Nur PV-Anteil!
+
+Beim Solarweb-Abgleich ist zwingend zu beachten:
+
+- **Solarweb `wattpilot_kwh`** = nur der Solar-Direktanteil der EV-Ladung
+- **Solarweb `netzbezug_kwh`** = enthält den Netz→EV-Anteil implizit (nicht separat sichtbar)
+- **Unser `wattpilot_daily`** = Gesamtverbrauch des Wattpilot, egal ob PV oder Netz (SmartMeter zählt einfach alles)
+
+Daher beim Abgleich:
+- `wattpilot` **niemals einzeln** vergleichen (verschiedene Messbasis)
+- `direkt + wattpilot` **zusammen** vergleichen → entspricht unserem `W_PV_Direct`
+- Netzbezug-Deltas enthalten immer einen Netz→EV-Anteil, der in Solarweb unsichtbar ist
+
+---
+
 ## Bewertung und Entscheidung
 
 ### Solarweb: Generator-orientierte Zählung (DC)

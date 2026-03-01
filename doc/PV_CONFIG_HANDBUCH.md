@@ -76,6 +76,8 @@ Zeigt alle Regelkreise als Checkliste. Ein Regelkreis ist entweder **aktiv** (�
 
 > **Warnung:** P1-Regeln (soc_schutz, temp_schutz, wattpilot_battschutz) sollten **niemals** deaktiviert werden. Sie verhindern Hardware-Schäden an der BYD HVS.
 
+**Heizpatrone (P2) deaktivieren:** Wird der HP-Regelkreis deaktiviert, werden keine neuen Bursts/Drains mehr gestartet. Der **Notaus-Pfad bleibt immer aktiv** — eine manuell oder per Burst eingeschaltete HP wird beim nächsten Zyklus sicher abgeschaltet (Burst-Timer, Netzbezug, Entladung). Die HP bleibt also nicht "vergessen" eingeschaltet.
+
 ---
 
 ## 4. Menü 2: Parameter-Matrix
@@ -339,31 +341,72 @@ Score um 16:30h:     55  (Deadline, voller Score)
 - **SOC_MAX ≈ 75%:** Die Batterie wird aus Langlebigkeitsgründen selten über 75% geladen. SOC ≥ 90% ist praktisch unerreichbar.
 - **Batterie-Ladeleistung (`batt_power_w`)** ist der zuverlässige Indikator: Wenn die Batterie mit >5 kW lädt, hat die Anlage echten Überschuss.
 
-**4-Phasen-Logik:**
+**5-Phasen-Logik:**
 
 | Phase | Bedingung | Burst-Dauer | Zweck |
 |-------|-----------|-------------|-------|
-| **1 — Morgens** | rest_h > 5, rest_kwh > 20, P_Batt > 3 kW | 30 Min. | Langer Tag, großzügig Warmwasser machen |
+| **0 — Morgen-Drain** | Uhr < 10h, wenig Verbrauch, SOC > 10%, Prognose gut/mittel, Forecast ≥ 4 kW | 45 Min. | Batterie schneller leeren wenn SOC_MIN geöffnet — Warmwasser als Senke |
+| **1 — Vormittag** | rest_h > 5, rest_kwh > 20, P_Batt > 3 kW | 30 Min. | Langer Tag, großzügig Warmwasser machen |
 | **2 — Mittags** | P_Batt > 5 kW, rest_kwh deckt Batt + Reserve | 30 Min. | Hauptphase bei Batterie-Sättigung |
 | **3 — Nachmittags** | rest_h < 3, konservativ | 15 Min. | Kurze Restzeit → nur kurze Bursts |
 | **4 — HARD BLOCK** | rest_h < 2 | — | Batterie-Volladung hat Vorrang |
 
-**Notaus-Bedingungen (sofort AUS, immer aktiv — auch bei `aktiv: false`):**
-- Netzbezug > 200 W → PV reicht nicht
-- Batterie entlädt → SOC-abhängig:
-  - SOC ≥ 90%: toleriert bis −1000 W (konfigurierbar), darüber → AUS
-  - SOC < 90%: jede Entladung → sofort AUS
-- Speicher-Temperatur ≥ 78 °C → Übertemperatur
-- WattPilot > 500 W → EV lädt, kein Platz für HP
+**Phase 0 (Morgen-Drain) im Detail:**
+
+Wenn `morgen_soc_min` den SOC_MIN früh auf 5% öffnet, entlädt sich die Batterie durch den Hausverbrauch. Bei niedrigem Verbrauch (z.B. 500 W) dauert das sehr lange. Phase 0 schaltet die HP gezielt ein, um die Batterie schneller zu leeren — das Warmwasser wird als Energiesenke genutzt.
+
+**Bedingungen (alle müssen erfüllt sein):**
+- Uhrzeit vor `drain_fenster_ende` (Standard: 10:00)
+- Batterie lädt nicht (P_Batt < 500 W, also kein PV-Überschuss)
+- Haushalt < 700 W, WP < 500 W, EV < 1000 W (wenig anderweitiger Verbrauch)
+- SOC > 10% (nicht schon fast leer)
+- `forecast_quality` ist „gut“ oder „mittel“
+- Forecast zeigt ≥ 4 kW in den kommenden Stunden (PV wird kommen)
+
+**Drain-Notaus:** Im Drain-Modus toleriert der Notaus die Batterie-Entladung (die ja gewollt ist). Er greift aber ein wenn:
+- SOC ≤ `drain_min_soc_pct` (Batterie leer genug)
+- Haushalt/WP/EV-Verbrauch steigt über die Schwellen (mit 1.2× Hysterese bei Haushalt)
+- Netzbezug, WW-Übertemperatur oder Burst-Timer-Ablauf
+
+**Notaus-Kriterien (HART vs. KONTEXTABHÄNGIG):**
+
+| # | Kriterium | Typ | Extern-Hysterese | Wirkung |
+|---|-----------|-----|------------------|--------|
+| 1 | `rest_h < min_rest_h` (2h vor Sunset) | **HART** | Sofort | Batterie muss für die Nacht voll werden |
+| 2 | WW-Temperatur ≥ 78 °C | **HART** | Sofort | Verbrühungs-/Überdruckschutz |
+| 3 | SOC ≤ `stop_entladung_unter` (7%) | **HART** | Sofort | Absoluter Tiefentladeschutz (aus soc_schutz) |
+| 4 | Batterie entlädt — potenzialabhängig | **KONTEXT** | Pausiert 1h | Abhängig von Potenzial und SOC_MAX (s.u.) |
+| 5 | Verbraucher-Konkurrenz (WP/EV) | **KONTEXT** | Pausiert 1h | Abhängig von Potenzial-Stufe (s.u.) |
+| 6 | Netzbezug > 200 W | **KONTEXT** | Pausiert 1h | Kurzzeitig normal bei HP-Zuschalten |
+| 7 | Burst-Timer abgelaufen | **KONTEXT** | Pausiert 1h | Kein Timer bei manuellem Einschalten |
+
+**Potenzial-Skala (Tagesprognose kWh):**
+
+Die HP-Steuerung klassifiziert die Tagesprognose in Potenzial-Stufen und passt
+die Regeln daran an:
+
+| Stufe | Schwelle | Parallel-Betrieb | Batterie-Entladung toleriert? |
+|-------|----------|-------------------|-------------------------------|
+| `niedrig` | < 15 kWh | HP nur solo (kein WP/EV) | **Nie** — HP immer AUS bei Entladung |
+| `maessig` | 15–20 kWh | HP nur solo (kein WP/EV) | Nur wenn SOC_MAX ≤ 75% (Batterie noch nicht voll angefordert) |
+| `ausreichend` | 20–30 kWh | HP + WP parallel, EV blockiert | Nur wenn SOC_MAX ≤ 75% |
+| `gut` | ≥ 30 kWh | HP + WP + EV alle parallel | **Immer** — genug Sonne für alles |
+
+**Logik:** Morgens/Vormittags steht SOC_MAX typisch bei 75% (Batterie wird gedrosselt,
+Verbraucher haben Vorrang). In dieser Phase toleriert die Engine Batterie-Entladung bei
+mäßigem/ausreichendem Potenzial, weil PV die Batterie später wieder füllt. Erst wenn
+SOC_MAX auf 100% geht (Nachmittag) wird die Batterie-Entladung strenger bewertet.
+
+**Extern-Erkennung:** Wenn die HP außerhalb der Engine eingeschaltet wird (pv-config Menü 6, Fritz!Box-App, physischer Schalter), erkennt die Engine dies automatisch: HP ist EIN, aber kein Burst/Drain läuft. In diesem Fall gelten für `extern_respekt_s` (Standard: 1 Stunde) nur die **HARTEN** Kriterien. Danach übernimmt die Engine wieder normal.
 
 > **Hinweis:** Der Notaus läuft im Engine fast-cycle (60 s) und ist
 > **immer aktiv**, auch wenn der Regelkreis auf `aktiv: false` steht.
-> Dies schützt vor manuell eingeschalteter HP, die unbemerkt die
-> Batterie entlädt.
+> HARTE Kriterien (Temperatur, SOC-Schutzgrenze, Sunset) greifen
+> auch während der Extern-Hysterese.
 
 | Parameter | Standard | Bereich | Wirkung |
 |-----------|----------|---------|--------|
-| min_ladeleistung | 5000 W | 2000–10000 W | **Mindest-Batterie-Ladeleistung.** HP schaltet erst ein, wenn die Batterie mit mindestens dieser Leistung lädt. 5 kW bedeutet: Die Anlage hat echten Überschuss. Niedriger = aggressiver (früher EIN), höher = konservativer. |
+| min_ladeleistung | 5000 W | 2000–10000 W | **Mindest-Batterie-Ladeleistung (Basis).** Wird potenzialabhängig herunterskaliert: gut=50% (2500W), ausreichend=70% (3500W), mäßig/niedrig=100% (5000W). Der Burst-Timer schützt vor Flip-Flop nach dem Einschalten. |
 | min_ladeleistung_morgens | 3000 W | 1000–8000 W | **Vormittags-Schwelle.** Bei guter Tagesprognose (>20 kWh) reichen 3 kW Ladeleistung, weil genug Sonne für Batterie+HP erwartet wird. |
 | min_rest_kwh | 12.0 kWh | 5–30 kWh | **Mindest-Restprognose.** HP-Burst nur wenn die Rest-Tagesprognose genug kWh zeigt, um Batterie voll zu laden UND HP zu versorgen. |
 | min_rest_kwh_morgens | 20.0 kWh | 10–40 kWh | **Vormittags-Mindestprognose.** Lang genug Sonne erwartet für HP + Batterie + eventuelle EV-Ladung. |
@@ -372,26 +415,45 @@ Score um 16:30h:     55  (Deadline, voller Score)
 | burst_dauer_lang | 1800 s | 600–3600 s | **Burst-Dauer bei guter Prognose (30 Min).** HP läuft maximal diese Zeit, dann aus und Pause. |
 | burst_dauer_kurz | 900 s | 300–1800 s | **Burst-Dauer bei mäßiger Prognose (15 Min).** Kürzere Einschaltzeit bei weniger Reserven. |
 | min_pause | 300 s | 60–600 s | **Mindestpause zwischen Bursts.** Verhindert Flip-Flop (z.B. Wolke durchzieht → AUS → sofort wieder EIN). |
-| max_wattpilot | 500 W | 0–5000 W | **Obergrenze EV-Ladung.** HP nur wenn WattPilot unter diesem Wert — EV-Ladung und HP gleichzeitig überlasten die Anlage. |
+| max_wattpilot | 500 W | 0–5000 W | **Obergrenze EV-Ladung.** (Legacy, durch Potenzial-Logik ersetzt.) HP darf mit EV parallel laufen wenn Potenzial ≥ `gut`. |
 | batt_reserve | 2.0 kWh | 0.5–5.0 kWh | **Prognose-Reserve.** Restprognose muss Batterie-Volladung + diese Reserve decken, damit HP erlaubt wird. |
 | batt_reserve_nachmittag | 3.0 kWh | 1–8 kWh | **Größere Reserve nachmittags.** Weniger Restzeit → mehr Puffer für sichere Volladung. |
-| notaus_netzbezug | 200 W | 0–500 W | **Netzbezug-Schwelle.** Wenn das Haus aus dem Netz bezieht (>200 W), wird HP sofort ausgeschaltet. |
-| notaus_entladung | −500 W | −2000–0 W | **Batterie-Entladung-Schwelle (SOC < 90%).** Negativer Wert = Batterie gibt ab. HP sofort AUS. Bei SOC < `notaus_soc_schwelle_pct` wird jede Entladung über diesen Wert gestoppt. |
-| notaus_entladung_hochsoc_w | −1000 W | −2000–0 W | **Tolerierte Entladung bei hohem SOC.** Bei SOC ≥ `notaus_soc_schwelle_pct` darf die Batterie bis zu diesem Wert entladen, bevor HP abgeschaltet wird. −1000 W = 1 kW Entladung toleriert (Nulleinspeiser-Nachregelung). |
-| notaus_soc_schwelle_pct | 90 % | 50–100 % | **SOC-Schwelle für Entladeschutz.** Oberhalb: tolerantere Abschaltung (`notaus_entladung_hochsoc_w`). Unterhalb: sofortige Abschaltung bei jeder Entladung. |
+| notaus_netzbezug | 200 W | 0–500 W | **Netzbezug-Schwelle (Ø5 Min).** Wenn der geglättete 5-Minuten-Durchschnitt des Netzbezugs diesen Wert überschreitet → HP AUS. Glättung verhindert Abschaltung durch kurzzeitige Leistungssprünge (±10 kW). |
 | speicher_temp_max | 78 °C | 60–85 °C | **Warmwasser-Übertemperatur.** HP sofort AUS bei ≥78 °C. Schutz vor Verbrühung/Überdruck. |
+| potenzial_gut_kwh | 30.0 kWh | 15–60 kWh | **Tagesprognose für Potenzial "gut".** Ab hier: HP + WP + EV alle parallel, Batterie-Entladung immer toleriert. |
+| potenzial_ausreichend_kwh | 20.0 kWh | 10–40 kWh | **Tagesprognose für "ausreichend".** HP + WP parallel (kein EV). Entladung toleriert wenn SOC_MAX ≤ 75%. |
+| potenzial_maessig_kwh | 15.0 kWh | 5–30 kWh | **Tagesprognose für "mäßig".** HP nur solo (kein WP/EV). Entladung toleriert wenn SOC_MAX ≤ 75%. Unter diesem Wert → "niedrig": HP nur bei explizitem Burst, keine Entladung toleriert. |
+| drain_min_soc | 10% | 5–30% | **Drain-SOC-Untergrenze.** Phase 0 nur wenn SOC über diesem Wert. Drain-Notaus schaltet HP aus wenn SOC diesen Wert erreicht. |
+| drain_max_haushalt | 700 W | 200–2000 W | **Max. Hausverbrauch für Drain.** HP-Drain nur bei niedrigem Haushalt — sonst leert die Batterie schon schnell genug. |
+| drain_max_wp | 500 W | 100–2000 W | **Max. WP-Leistung für Drain.** Wenn WP läuft, braucht die Batterie keinen zusätzlichen Drain. |
+| drain_max_ev | 1000 W | 200–5000 W | **Max. EV-Ladung für Drain.** EV verbraucht bereits genug Batterie. |
+| drain_min_prognose | 4.0 kW | 2–10 kW | **Mindest-Prognoseleistung.** Forecast muss in den kommenden Stunden ≥ diesen Wert in kW zeigen. Stellt sicher, dass PV die Batterie später wieder füllt. |
+| drain_fenster_ende | 10.0 h | 8–12 h | **Drain nur vor dieser Uhrzeit.** Standard 10:00 — danach produziert PV und Phase 1–3 übernehmen. |
+| drain_burst_dauer | 2700 s | 900–5400 s | **Drain-Burst Maximaldauer (45 Min).** Sicherheits-Backstop — Drain-Notaus (SOC, Verbraucher) beendet den Drain meist früher. |
+| extern_respekt | 3600 s | 0–7200 s | **Extern-Hysterese.** Wenn HP außerhalb der Engine eingeschaltet wird, pausieren WEICHE Notaus-Kriterien für diese Dauer. HARTE Kriterien (Temp, SOC-abs, Sunset) wirken immer sofort. 0 = deaktiviert (Notaus greift sofort wie bisher). |
 
-**Rechenbeispiel (sonniger Märztag):**
+**Rechenbeispiel (sonniger Märztag, ≈ 45 kWh Prognose):**
 ```
-12:00 — SOC = 73% (≈ SOC_MAX), P_Batt = +6.2 kW, Forecast_rest = 18 kWh
-  Check: P_Batt > 5 kW ✓, rest_kwh > 12 ✓, rest_h = 5.5 > 2 ✓
-  rest_fill = (100% − 73%) × 10.24 kWh = 2.8 kWh  (was Batterie noch braucht)
-  rest_kwh (18) > rest_fill (2.8) + reserve (2.0) = 4.8 kWh ✓
+08:00 — SOC = 40%, SOC_MAX = 75%, P_Batt = −200W (Haushalt)
+  Potenzial: 45 kWh → "gut" (≥ 30 kWh)
+  Phase 0 Drain prüft: Prognose gut, Verbraucher niedrig, SOC > 10%
+  → HP EIN (Drain 45 Min) — Batterie absichtlich leeren
+
+10:30 — SOC = 25%, P_Batt = +3.5 kW, Forecast_rest = 38 kWh
+  Potenzial: "gut" → WP+EV parallel erlaubt
+  Phase 1: rest_h = 7.5 > 5 ✓, rest_kwh = 38 > 20 ✓, P_Batt > 3 kW ✓
   → HP EIN (Burst 30 Min.)
-12:30 — Burst-Ende → HP AUS, Pause ≥ 5 Min.
-12:36 — Engine prüft erneut: P_Batt = 5.8 kW, rest_kwh = 15 → neuer Burst
-...
-15:30 — rest_h = 1.8 < 2.0 → Phase 4 HARD BLOCK, kein neuer Burst
+
+12:00 — SOC = 73% (≈ SOC_MAX), P_Batt = +3.2 kW, WP = 2.5 kW
+  Potenzial: "gut" → min_lade = 5000×50% = 2500W
+  Phase 2: P_Batt 3200 > 2500 ✓, HP + WP parallel OK ✓
+  → HP EIN (Burst 30 Min.)  ← mit alter 5000W-Schwelle wäre HP AUS geblieben!
+
+14:00 — SOC = 85%, SOC_MAX = 100%, P_Batt = −1.5 kW (Wolke)
+  Potenzial: "gut" → Entladung immer toleriert ✓
+  HP bleibt an (laufender Burst respektiert)
+
+15:30 — rest_h = 1.8 < 2.0 → HART → HP sofort AUS, kein neuer Burst
 ```
 
 > **Erstinbetriebnahme:** Der Regelkreis wird mit `aktiv: false` ausgeliefert. Vor dem Einschalten: `.secrets` mit `FRITZ_USER`/`FRITZ_PASSWORD` füllen, AIN prüfen (Menü 6 → Verbindungstest), dann im Menü 1 (Regelkreise) aktivieren. Die Schwellwerte sollten an echten Sonnentagen kalibriert werden.

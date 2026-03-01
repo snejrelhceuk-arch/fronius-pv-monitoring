@@ -101,6 +101,24 @@ Die Rest-Δ (2–12 kWh) sind vollständig durch Solarwebs Rundung auf ~10 kWh e
 
 ---
 
+## 4b. ⚠️ Solarweb-Wattpilot ist KEIN echter Verbrauchswert
+
+**Kritische Erkenntnis (2026-03-01):** Die Solarweb-Spalte `wattpilot_kwh` enthält
+**ausschließlich den PV-Direkt-Anteil** der EV-Ladung. Netz→EV-Strom wird von Solarweb
+nicht als Wattpilot ausgewiesen — er verschwindet im allgemeinen `netzbezug_kwh`.
+
+Daraus folgt:
+- `solarweb.wattpilot_kwh` ist eine **Teilmenge** von `solarweb.direkt_kwh + solarweb.wattpilot_kwh`
+- Unser `wattpilot_daily` zählt einfach den Gesamtverbrauch des Wattpilot (PV + Netz, keine Quellenunterscheidung)
+- Ein direkter Vergleich `solarweb.wattpilot ↔ unser.wattpilot_daily` ist **ungültig**
+- Solarweb-Wattpilot darf nur **addiert zum Direktverbrauch** verglichen werden:
+  ```
+  solarweb.direkt + solarweb.wattpilot  ≈  unser.W_PV_Direct / 1000
+  ```
+- Ein eigenständiger Vergleich der Wattpilot-Spalte liefert systematisch falsche Deltas
+
+---
+
 ## 5. Komponentenvergleich Archiv vs. Solarweb
 
 Alle Einzelkomponenten stimmen hervorragend überein (Δ = SW-Rundung):
