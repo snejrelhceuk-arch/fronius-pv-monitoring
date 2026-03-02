@@ -50,8 +50,8 @@ def erzeuger_page():
 @bp.route('/analyse')
 @bp.route('/amortisation')  # Redirect-Kompatibilität
 def analyse_redirect():
-    """Redirect zur Erzeuger-Tagesansicht (Standard-Analyseseite)"""
-    return redirect('/erzeuger')
+    """Redirect zur PV-Übersicht (Standard-Analyseseite)"""
+    return redirect('/analyse/pv')
 
 
 @bp.route('/analyse/pv')
@@ -242,6 +242,7 @@ def analyse():
     amort_pv_data = []
     kum_invest_pv = 0
     kum_solar = 0
+    kum_brutto_ersparnis_pv = 0
 
     for year in sorted(years_data.keys()):
         invest_jahr_pv = invest_pv_2022 if year == 2022 else (invest_pv_2024 if year == 2024 else 0)
@@ -250,13 +251,13 @@ def analyse():
 
         # Brutto-Ersparnis (wie Solarweb)
         brutto_ersparnis = years_data[year]['ersparnis_solar']
+        kum_brutto_ersparnis_pv += brutto_ersparnis
 
         # Netz-Kosten (was tatsächlich bezahlt wird, inkl. Grundpreis)
         netz_kosten = years_data[year]['kosten_strom']
 
-        # Relative Amortisation (Brutto)
-        rel_amort_pv = (brutto_ersparnis / gesamt_invest_pv * 100) if gesamt_invest_pv > 0 else 0
-        jahre_amort_pv = (100.0 / rel_amort_pv) if rel_amort_pv > 0 else 0
+        # Fortschritt: Wie viel % der Investition sind bisher gedeckt
+        fortschritt_pv = (kum_brutto_ersparnis_pv / gesamt_invest_pv * 100) if gesamt_invest_pv > 0 else 0
 
         # EUR/kWh PV-Anlage (real): Was hat jede kWh gekostet?
         eur_kwh_real = kum_invest_pv / kum_solar if kum_solar > 0 else 0
@@ -267,22 +268,29 @@ def analyse():
         solar_prognose_25j = kum_solar + (jahre_verbleibend * 18000)
         eur_kwh_25j = kum_invest_pv / solar_prognose_25j if solar_prognose_25j > 0 else 0
 
-        # Prognose 25J
-        wartung_pv = gesamt_invest_pv * 0.01
-        prognose_pv_25j = (brutto_ersparnis - wartung_pv) * 25
-
         amort_pv_data.append({
             'year': year,
             'solar': years_data[year]['solar'],
             'brutto_ersparnis': brutto_ersparnis,
             'netz_kosten': netz_kosten,
-            'rel_amort': rel_amort_pv,
-            'jahre_amort': jahre_amort_pv,
-            'kum_ersparnis': kum_solar * years_data[year]['strompreis'],  # Approximation
+            'kum_ersparnis': kum_brutto_ersparnis_pv,
+            'fortschritt': fortschritt_pv,
             'eur_kwh_real': eur_kwh_real,
             'eur_kwh_25j': eur_kwh_25j,
-            'prognose_25j': prognose_pv_25j
         })
+
+    # PV-Amortisationsprognose: Wann wird 100% erreicht?
+    if amort_pv_data and kum_brutto_ersparnis_pv > 0:
+        rest_pv = gesamt_invest_pv - kum_brutto_ersparnis_pv
+        letzte_jahre = amort_pv_data[-2:] if len(amort_pv_data) >= 2 else amort_pv_data[-1:]
+        avg_ersparnis_pv = sum(d['brutto_ersparnis'] for d in letzte_jahre) / len(letzte_jahre)
+        if rest_pv > 0 and avg_ersparnis_pv > 0:
+            jahre_rest_pv = rest_pv / avg_ersparnis_pv
+            amort_pv_jahr = amort_pv_data[-1]['year'] + round(jahre_rest_pv)
+        else:
+            amort_pv_jahr = amort_pv_data[-1]['year']  # Bereits amortisiert
+    else:
+        amort_pv_jahr = None
 
     # ========================================
     # HAUSHALTS-AMORTISATION (inkl. Wärmepumpe, alle Ersparnisse)
@@ -308,13 +316,8 @@ def analyse():
         # Netz-Kosten (was tatsächlich bezahlt wird, inkl. Grundpreis)
         netz_kosten = years_data[year]['kosten_strom']
 
-        # Relative Amortisation
-        rel_amort_haushalt = (gesamt_ersparnis / gesamt_invest_haushalt * 100) if gesamt_invest_haushalt > 0 else 0
-        jahre_amort_haushalt = (100.0 / rel_amort_haushalt) if rel_amort_haushalt > 0 else 0
-
-        # Prognose 25J
-        wartung_haushalt = gesamt_invest_haushalt * 0.01
-        prognose_haushalt_25j = (gesamt_ersparnis - wartung_haushalt) * 25
+        # Fortschritt: Wie viel % der Investition durch kumulierte Ersparnis gedeckt
+        fortschritt_haushalt = (kum_ersparnis_haushalt / gesamt_invest_haushalt * 100) if gesamt_invest_haushalt > 0 else 0
 
         # Effektiver Strompreis (Netzkosten inkl. Grundpreis / Gesamtverbrauch)
         if years_data[year]['gesamt_verbr'] > 0:
@@ -330,12 +333,48 @@ def analyse():
             'heiz_ersparnis': years_data[year]['heiz_ersparnis'],
             'benzin_ersparnis': years_data[year]['benzin_ersparnis'],
             'gesamt_ersparnis': gesamt_ersparnis,
-            'rel_amort': rel_amort_haushalt,
-            'jahre_amort': jahre_amort_haushalt,
             'kum_ersparnis': kum_ersparnis_haushalt,
-            'prognose_25j': prognose_haushalt_25j,
+            'fortschritt': fortschritt_haushalt,
             'eff_strompreis': eff_strompreis
         })
+
+    # Haushalt-Amortisationsprognose: Wann wird 100% erreicht?
+    if amort_haushalt_data and kum_ersparnis_haushalt > 0:
+        rest_haushalt = gesamt_invest_haushalt - kum_ersparnis_haushalt
+        letzte_jahre_h = amort_haushalt_data[-2:] if len(amort_haushalt_data) >= 2 else amort_haushalt_data[-1:]
+        avg_ersparnis_h = sum(d['gesamt_ersparnis'] for d in letzte_jahre_h) / len(letzte_jahre_h)
+        if rest_haushalt > 0 and avg_ersparnis_h > 0:
+            jahre_rest_h = rest_haushalt / avg_ersparnis_h
+            amort_haushalt_jahr = amort_haushalt_data[-1]['year'] + round(jahre_rest_h)
+        else:
+            amort_haushalt_jahr = amort_haushalt_data[-1]['year']
+    else:
+        amort_haushalt_jahr = None
+
+    # ========================================
+    # GESAMTSUMMEN für Templates
+    # ========================================
+    totals = {
+        'solar': sum(d['solar'] for d in years_data.values()),
+        'direkt': sum(d['direkt'] for d in years_data.values()),
+        'batt_lad': sum(d['batt_lad'] for d in years_data.values()),
+        'batt_entl': sum(d['batt_entl'] for d in years_data.values()),
+        'netz_einsp': sum(d['netz_einsp'] for d in years_data.values()),
+        'netz_bezug': sum(d['netz_bezug'] for d in years_data.values()),
+        'gesamt_verbr': sum(d['gesamt_verbr'] for d in years_data.values()),
+        'kosten_strom': sum(d['kosten_strom'] for d in years_data.values()),
+        'ersparnis_solar': sum(d['ersparnis_solar'] for d in years_data.values()),
+        'netto_ersparnis_strom': sum(d['netto_ersparnis_strom'] for d in years_data.values()),
+        'heiz_ersparnis': sum(d['heiz_ersparnis'] for d in years_data.values()),
+        'benzin_ersparnis': sum(d['benzin_ersparnis'] for d in years_data.values()),
+        'netto_ersparnis': sum(d['netto_ersparnis'] for d in years_data.values()),
+        'wattpilot': sum(d['wattpilot'] for d in years_data.values()),
+        'sonnenstunden': sum(d.get('sonnenstunden', 0) or 0 for d in years_data.values()),
+        'monate': sum(d['monate'] for d in years_data.values()),
+    }
+    totals['autarkie'] = (totals['solar'] / totals['gesamt_verbr'] * 100) if totals['gesamt_verbr'] > 0 else 0
+    totals['batt_wirkungsgrad'] = (totals['batt_entl'] / totals['batt_lad'] * 100) if totals['batt_lad'] > 0 else 0
+    totals['km_gefahren'] = sum(d.get('km_gefahren', 0) or 0 for d in years_data.values())
 
     # Aktuelle Werte für Info-Cards
     current_year = max(years_data.keys())
@@ -390,6 +429,9 @@ def analyse():
                              yearly_data=list(years_data.values()),
                              amort_pv_data=amort_pv_data,
                              amort_haushalt_data=amort_haushalt_data,
+                             totals=totals,
+                             amort_pv_jahr=amort_pv_jahr,
+                             amort_haushalt_jahr=amort_haushalt_jahr,
                              current_year=current_year,
                              freq_extremes=freq_extremes)
     finally:
