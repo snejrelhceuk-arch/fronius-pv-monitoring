@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <title>Haushalt — PV-Anlage</title>
-    <link rel="stylesheet" href="/static/css/analyse-dark.css?v=20260219b">
+    <link rel="stylesheet" href="/static/css/analyse-dark.css?v=20260302">
 </head>
 <body>
     <div class="container">
@@ -30,6 +30,30 @@
             {% if freq_extremes.f_min %}<span class="freq-min">Min. {{ "%.3f"|format(freq_extremes.f_min)|replace('.', ',') }} Hz</span> ({{ freq_extremes.f_min_label }} Uhr){% endif %}
         </div>
         {% endif %}
+
+        <!-- Summary Cards -->
+        <div class="summary-cards">
+            <div class="summary-card">
+                <div class="label">Gesamt-Verbrauch</div>
+                <div class="value accent">{{ "{:,.0f}".format(totals.gesamt_verbr) }} kWh</div>
+                <div class="sub">seit 2022</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">Gesamt Netto-Ersparnis</div>
+                <div class="value positive">{{ "{:,.0f}".format(totals.netto_ersparnis) }} €</div>
+                <div class="sub">Strom + Heizung + Benzin</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">E-Auto gefahren</div>
+                <div class="value accent">{{ "{:,.0f}".format(totals.km_gefahren) }} km</div>
+                <div class="sub">mit Solarstrom</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">Ø Autarkie</div>
+                <div class="value accent">{{ "%.1f"|format(totals.autarkie) }}%</div>
+                <div class="sub">Solar / Verbrauch</div>
+            </div>
+        </div>
 
         <div class="section">
             <div class="section-title">Jährliche Haushalt-Kennzahlen</div>
@@ -64,6 +88,20 @@
                     </tr>
                     {% endfor %}
                 </tbody>
+                <tfoot>
+                    <tr>
+                        <td>Gesamt</td>
+                        <td>{{ "{:,.0f}".format(totals.gesamt_verbr) }} kWh</td>
+                        <td>{{ "{:,.0f}".format(totals.solar) }} kWh</td>
+                        <td>{{ "{:,.0f}".format(totals.netz_bezug) }} kWh</td>
+                        <td>{{ "%.1f"|format(totals.autarkie) }}%</td>
+                        <td>{{ "{:,.0f}".format(totals.km_gefahren) }} km</td>
+                        <td>{{ "{:,.2f}".format(totals.netto_ersparnis_strom) }} €</td>
+                        <td>{{ "{:,.2f}".format(totals.heiz_ersparnis) }} €</td>
+                        <td>{{ "{:,.2f}".format(totals.benzin_ersparnis) }} €</td>
+                        <td>{{ "{:,.2f}".format(totals.netto_ersparnis) }} €</td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
 

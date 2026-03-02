@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <title>PV-Übersicht — PV-Anlage</title>
-    <link rel="stylesheet" href="/static/css/analyse-dark.css?v=20260219b">
+    <link rel="stylesheet" href="/static/css/analyse-dark.css?v=20260302">
     <style>
         /* PV-Analyse spezifisch */
         .header-row {
@@ -40,6 +40,30 @@
         </div>
         {% endif %}
 
+        <!-- Summary Cards -->
+        <div class="summary-cards">
+            <div class="summary-card">
+                <div class="label">Gesamt-Erzeugung</div>
+                <div class="value accent">{{ "{:,.0f}".format(totals.solar) }} kWh</div>
+                <div class="sub">seit 2022</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">Gesamt Netzbezug</div>
+                <div class="value">{{ "{:,.0f}".format(totals.netz_bezug) }} kWh</div>
+                <div class="sub">inkl. Grundpreis {{ "{:,.0f}".format(totals.kosten_strom) }} €</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">Brutto-Ersparnis Solar</div>
+                <div class="value positive">{{ "{:,.0f}".format(totals.ersparnis_solar) }} €</div>
+                <div class="sub">Erzeugung × Strompreis</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">Ø Autarkie</div>
+                <div class="value accent">{{ "%.1f"|format(totals.autarkie) }}%</div>
+                <div class="sub">Solar / Verbrauch</div>
+            </div>
+        </div>
+
         <div class="section">
             <div class="section-title">Jährliche PV-Kennzahlen</div>
             <table>
@@ -73,6 +97,20 @@
                     </tr>
                     {% endfor %}
                 </tbody>
+                <tfoot>
+                    <tr>
+                        <td>Gesamt</td>
+                        <td>{{ "{:,.0f}".format(totals.solar) }} kWh</td>
+                        <td>{{ "{:,.0f}".format(totals.direkt) }} kWh</td>
+                        <td>{{ "{:,.0f}".format(totals.batt_lad) }} kWh</td>
+                        <td>{{ "{:,.0f}".format(totals.batt_entl) }} kWh</td>
+                        <td>{{ "%.1f"|format(totals.batt_wirkungsgrad) }}%</td>
+                        <td>{{ "{:,.0f}".format(totals.netz_einsp) }} kWh</td>
+                        <td>{{ "{:,.0f}".format(totals.netz_bezug) }} kWh</td>
+                        <td>{{ "%.1f"|format(totals.autarkie) }}%</td>
+                        <td>{{ "%.0f"|format(totals.sonnenstunden) }} h</td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
 
@@ -103,6 +141,17 @@
                     </tr>
                     {% endfor %}
                 </tbody>
+                <tfoot>
+                    <tr>
+                        <td>Gesamt</td>
+                        <td>{{ totals.monate }}</td>
+                        <td>–</td>
+                        <td>{{ "{:,.0f}".format(totals.netz_bezug) }} kWh</td>
+                        <td>{{ "{:,.2f}".format(totals.kosten_strom) }} €</td>
+                        <td>{{ "{:,.2f}".format(totals.ersparnis_solar) }} €</td>
+                        <td style="color: {{ 'rgba(255,255,255,0.95)' if totals.netto_ersparnis_strom >= 0 else 'rgba(255,255,255,0.6)' }};">{{ "{:,.2f}".format(totals.netto_ersparnis_strom) }} €</td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
 
