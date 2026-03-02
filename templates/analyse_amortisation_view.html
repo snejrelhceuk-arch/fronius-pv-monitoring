@@ -5,13 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <title>Amortisation — PV-Anlage</title>
-    <link rel="stylesheet" href="/static/css/analyse-dark.css?v=20260219b">
-    <style>
-        /* Amortisation spezifisch */
-        .highlight-row {
-            background: #fff3cd;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/css/analyse-dark.css?v=20260302">
+    <!-- highlight-row jetzt in analyse-dark.css -->
 </head>
 <body>
     <div class="container">
@@ -37,9 +32,33 @@
         </div>
         {% endif %}
 
+        <!-- Summary Cards -->
+        <div class="summary-cards">
+            <div class="summary-card">
+                <div class="label">Investition PV</div>
+                <div class="value">{{ "{:,.0f}".format(gesamt_invest_pv) }} €</div>
+                <div class="sub">{% if amort_pv_data %}Fortschritt {{ "%.0f"|format(amort_pv_data[-1].fortschritt) }}%{% endif %}</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">PV amortisiert</div>
+                <div class="value accent">{% if amort_pv_jahr %}~{{ amort_pv_jahr }}{% else %}–{% endif %}</div>
+                <div class="sub">{% if amort_pv_data %}Kum. {{ "{:,.0f}".format(amort_pv_data[-1].kum_ersparnis) }} € bisher{% endif %}</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">Investition Haushalt</div>
+                <div class="value">{{ "{:,.0f}".format(gesamt_invest_haushalt) }} €</div>
+                <div class="sub">{% if amort_haushalt_data %}Fortschritt {{ "%.0f"|format(amort_haushalt_data[-1].fortschritt) }}%{% endif %}</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">Haushalt amortisiert</div>
+                <div class="value accent">{% if amort_haushalt_jahr %}~{{ amort_haushalt_jahr }}{% else %}–{% endif %}</div>
+                <div class="sub">{% if amort_haushalt_data %}Kum. {{ "{:,.0f}".format(amort_haushalt_data[-1].kum_ersparnis) }} € bisher{% endif %}</div>
+            </div>
+        </div>
+
         <!-- PV-Amortisation -->
         <div class="section">
-            <div class="section-title">PV-Amortisation (Invest 2022: 24.000 €, 2024: 8.000 € | Gesamt: {{ "{:,.0f}".format(gesamt_invest_pv) }} €)</div>
+            <div class="section-title">PV-Amortisation (Invest: {{ "{:,.0f}".format(gesamt_invest_pv) }} €)</div>
             <table>
                 <thead>
                     <tr>
@@ -47,11 +66,10 @@
                         <th>Solar</th>
                         <th>Brutto-Ersparnis</th>
                         <th>Netz-Kosten</th>
-                        <th>Rel. Amort.</th>
-                        <th>In Jahren</th>
+                        <th>Kum. Ersparnis</th>
+                        <th>Fortschritt</th>
                         <th>€/kWh (real)</th>
                         <th>€/kWh (25J)</th>
-                        <th>Prognose¹</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -61,20 +79,33 @@
                         <td><strong>{{ "{:,.0f}".format(year.solar) }} kWh</strong></td>
                         <td><strong>{{ "{:,.2f}".format(year.brutto_ersparnis) }} €</strong></td>
                         <td><strong>{{ "{:,.2f}".format(year.netz_kosten) }} €</strong></td>
-                        <td><strong>{{ "%.2f"|format(year.rel_amort) }}%</strong></td>
-                        <td><strong>{{ "%.1f"|format(year.jahre_amort) }} a</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.kum_ersparnis) }} €</strong></td>
+                        <td><strong>{{ "%.1f"|format(year.fortschritt) }}%</strong></td>
                         <td><strong>{{ "%.3f"|format(year.eur_kwh_real) }} €</strong></td>
                         <td><strong>{{ "%.3f"|format(year.eur_kwh_25j) }} €</strong></td>
-                        <td><strong>{{ "{:,.0f}".format(year.prognose_25j) }} €</strong></td>
                     </tr>
                     {% endfor %}
                 </tbody>
+                <tfoot>
+                    <tr>
+                        <td>Gesamt</td>
+                        <td>{{ "{:,.0f}".format(totals.solar) }} kWh</td>
+                        <td>{{ "{:,.2f}".format(totals.ersparnis_solar) }} €</td>
+                        <td>{{ "{:,.2f}".format(totals.kosten_strom) }} €</td>
+                        <td>{{ "{:,.0f}".format(amort_pv_data[-1].kum_ersparnis) }} €</td>
+                        <td>{{ "%.1f"|format(amort_pv_data[-1].fortschritt) }}%</td>
+                        <td>{{ "%.3f"|format(amort_pv_data[-1].eur_kwh_real) }} €</td>
+                        <td>{{ "%.3f"|format(amort_pv_data[-1].eur_kwh_25j) }} €</td>
+                    </tr>
+                </tfoot>
             </table>
-            <div style="margin-top: 15px; font-size: 12px; color: #666;">
-                <p>¹ <em>Prognose</em>: 25 Jahre gerechnete Brutto-Ersparnis bei 1% Wartungskosten (320 €/Jahr)</p>
-                <p><strong>Brutto-Ersparnis:</strong> Solar-Erzeugung × Strompreis (wie Solarweb-Berechnung)</p>
+            <div style="margin-top: 15px; font-size: 12px; color: rgba(255,255,255,0.45);">
+                <p><strong>Brutto-Ersparnis:</strong> Solar-Erzeugung × Strompreis (Nulleinspeiser)</p>
+                <p><strong>Kum. Ersparnis:</strong> Aufaddierte Brutto-Ersparnisse seit Beginn</p>
+                <p><strong>Fortschritt:</strong> Kum. Ersparnis / Investition × 100</p>
                 <p><strong>€/kWh (real):</strong> Investition / kumulierte Solar-Produktion</p>
-                <p><strong>€/kWh (25J):</strong> Investition / Prognose kumuliert 25 Jahre (mit 18.000 kWh/Jahr ab 2026)</p>
+                <p><strong>€/kWh (25J):</strong> Investition / Prognose 25 Jahre (mit 18.000 kWh/Jahr ab 2026)</p>
+                {% if amort_pv_jahr %}<p><strong>Prognose:</strong> Amortisation ca. {{ amort_pv_jahr }} (Ø letzte 2 Jahre)</p>{% endif %}
             </div>
         </div>
 
@@ -92,46 +123,49 @@
 
         <!-- Haushalts-Amortisation -->
         <div class="section">
-            <div class="section-title">Haushalts-Amortisation (Invest PV: {{ "{:,.0f}".format(gesamt_invest_pv) }} € + Wärmepumpe: 12.000 € | Gesamt: {{ "{:,.0f}".format(gesamt_invest_haushalt) }} €)</div>
+            <div class="section-title">Haushalts-Amortisation (Invest: {{ "{:,.0f}".format(gesamt_invest_haushalt) }} €, inkl. Wärmepumpe)</div>
             <table>
                 <thead>
                     <tr>
                         <th>Jahr</th>
-                        <th>Invest Jahr</th>
                         <th>Strom-Netto</th>
-                        <th>Netz-Kosten</th>
                         <th>Heizung</th>
                         <th>Benzin</th>
-                        <th>GESAMT Ersparnis</th>
-                        <th>Rel. Amort.</th>
-                        <th>In Jahren</th>
-                        <th>Real (kumuliert)</th>
-                        <th>Prognose²</th>
+                        <th>Jahres-Ersparnis</th>
+                        <th>Kum. Ersparnis</th>
+                        <th>Fortschritt</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for year in amort_haushalt_data %}
                     <tr>
                         <td><strong>{{ year.year }}</strong></td>
-                        <td><strong>{% if year.invest_jahr > 0 %}{{ "{:,.0f}".format(year.invest_jahr) }} €{% endif %}</strong></td>
                         <td><strong>{{ "{:,.2f}".format(year.strom_ersparnis) }} €</strong></td>
-                        <td><strong>{{ "{:,.2f}".format(year.netz_kosten) }} €</strong></td>
                         <td><strong>{{ "{:,.0f}".format(year.heiz_ersparnis) }} €</strong></td>
                         <td><strong>{{ "{:,.2f}".format(year.benzin_ersparnis) }} €</strong></td>
                         <td><strong>{{ "{:,.2f}".format(year.gesamt_ersparnis) }} €</strong></td>
-                        <td><strong>{{ "%.2f"|format(year.rel_amort) }}%</strong></td>
-                        <td><strong>{{ "%.1f"|format(year.jahre_amort) }} a</strong></td>
-                        <td><strong>{{ "{:,.2f}".format(year.kum_ersparnis) }} €</strong></td>
-                        <td><strong>{{ "{:,.0f}".format(year.prognose_25j) }} €</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.kum_ersparnis) }} €</strong></td>
+                        <td><strong>{{ "%.1f"|format(year.fortschritt) }}%</strong></td>
                     </tr>
                     {% endfor %}
                 </tbody>
+                <tfoot>
+                    <tr>
+                        <td>Gesamt</td>
+                        <td>{{ "{:,.2f}".format(totals.netto_ersparnis_strom) }} €</td>
+                        <td>{{ "{:,.0f}".format(totals.heiz_ersparnis) }} €</td>
+                        <td>{{ "{:,.2f}".format(totals.benzin_ersparnis) }} €</td>
+                        <td>{{ "{:,.2f}".format(totals.netto_ersparnis) }} €</td>
+                        <td>{{ "{:,.0f}".format(amort_haushalt_data[-1].kum_ersparnis) }} €</td>
+                        <td>{{ "%.1f"|format(amort_haushalt_data[-1].fortschritt) }}%</td>
+                    </tr>
+                </tfoot>
             </table>
-            <div style="margin-top: 15px; font-size: 12px; color: #666;">
-                <p>² <em>Prognose</em>: 25 Jahre gerechnete Gesamt-Ersparnis bei 1% Wartungskosten (440 €/Jahr)</p>
-                <p><strong>Strom:</strong> Netto-Ersparnis (Solar × Preis − Netz × Preis)</p>
-                <p><strong>Heizung:</strong> Eingesparte Brennstoffkosten, nur Heizperiode Okt–Mär (Budget/6 pro Heizmonat: 2022: 250€, 2023: 500€, ab 2024: 450€)</p>
+            <div style="margin-top: 15px; font-size: 12px; color: rgba(255,255,255,0.45);">
+                <p><strong>Strom-Netto:</strong> (Solar × Preis) − Netzkosten inkl. Grundpreis</p>
+                <p><strong>Heizung:</strong> Eingesparte Brennstoffkosten, nur Okt–Mär (2022: 250€, 2023: 500€, ab 2024: 450€ pro Heizmonat)</p>
                 <p><strong>Benzin:</strong> E-Auto statt Verbrenner (15 kWh/100km → 10 €/100km gespart)</p>
+                {% if amort_haushalt_jahr %}<p><strong>Prognose:</strong> Amortisation ca. {{ amort_haushalt_jahr }} (Ø letzte 2 Jahre)</p>{% endif %}
             </div>
         </div>
     </div>

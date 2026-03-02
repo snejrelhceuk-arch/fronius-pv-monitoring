@@ -42,6 +42,14 @@ h1 {
     border-left: 3px solid rgba(255,255,255,0.3);
     color: rgba(255,255,255,0.7);
 }
+.header-info h3 {
+    color: rgba(255,255,255,0.9);
+    margin-top: 0;
+}
+.header-info p,
+.header-info strong {
+    color: rgba(255,255,255,0.7);
+}
 
 /* ── Tables ── */
 table {
@@ -76,6 +84,50 @@ td:first-child {
 tbody tr:hover {
     background: rgba(255,255,255,0.05);
 }
+tfoot tr {
+    border-top: 2px solid rgba(255,255,255,0.25);
+    background: rgba(102,126,234,0.12);
+}
+tfoot td {
+    color: rgba(255,255,255,0.95);
+    font-weight: 700;
+    padding-top: 14px;
+    padding-bottom: 14px;
+}
+
+/* ── Summary Cards ── */
+.summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 30px;
+}
+.summary-card {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    padding: 18px;
+    text-align: center;
+}
+.summary-card .label {
+    font-size: 12px;
+    color: rgba(255,255,255,0.5);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.summary-card .value {
+    font-size: 26px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.95);
+}
+.summary-card .value.positive { color: #4ade80; }
+.summary-card .value.accent { color: #60a5fa; }
+.summary-card .sub {
+    font-size: 11px;
+    color: rgba(255,255,255,0.4);
+    margin-top: 4px;
+}
 
 /* ── Section ── */
 .section {
@@ -103,6 +155,16 @@ tbody tr:hover {
 .footer-note h4 {
     margin-top: 0;
     color: rgba(255,255,255,0.7);
+}
+.footer-note li,
+.footer-note p,
+.footer-note strong {
+    color: rgba(255,255,255,0.55);
+}
+
+/* ── Highlight Row (Dark) ── */
+.highlight-row {
+    background: rgba(102,126,234,0.15) !important;
 }
 
 /* ── Top Navigation ── */
