@@ -19,6 +19,7 @@ from typing import Optional
 
 from automation.engine.obs_state import ObsState
 from automation.engine.regeln.basis import Regel
+from automation.engine.regeln.soc_extern import soc_extern_tracker
 from automation.engine.param_matrix import (
     ist_aktiv, get_param, get_score_gewicht,
 )
@@ -130,6 +131,15 @@ class RegelZellausgleich(Regel):
         if obs.forecast_kwh is None:
             return 0
 
+        # ── SOC-Extern-Toleranz ──
+        soc_extern_tracker.aktualisiere(obs, matrix)
+        if soc_extern_tracker.ist_toleriert(matrix):
+            verbleibend = soc_extern_tracker.verbleibend_s(matrix)
+            LOG.debug(f'{self.name}: SOC extern geändert '
+                      f'({soc_extern_tracker.extern_grund}) '
+                      f'→ toleriert ({verbleibend}s verbleibend)')
+            return 0
+
         letzter = self._letzter_ausgleich()
         if letzter:
             try:
@@ -181,7 +191,7 @@ class RegelZellausgleich(Regel):
     def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
         soc_min = get_param(matrix, self.regelkreis, 'soc_min_waehrend_pct', 5)
         soc_max = get_param(matrix, self.regelkreis, 'soc_max_waehrend_pct', 100)
-        return [
+        aktionen = [
             {
                 'tier': 2, 'aktor': 'batterie',
                 'kommando': 'set_soc_min', 'wert': soc_min,
@@ -193,6 +203,10 @@ class RegelZellausgleich(Regel):
                 'grund': f'Zellausgleich: SOC_MAX → {soc_max}% (Vollladung)',
             },
         ]
+        # Engine-Aktionen registrieren (Extern-Erkennung)
+        for a in aktionen:
+            soc_extern_tracker.registriere_aktion(a.get('kommando', ''), a.get('wert'))
+        return aktionen
 
 
 # ═════════════════════════════════════════════════════════════
@@ -217,6 +231,15 @@ class RegelForecastPlausi(Regel):
             return 0
 
         if obs.pv_vs_forecast_pct is None or obs.forecast_rest_kwh is None:
+            return 0
+
+        # ── SOC-Extern-Toleranz ──
+        soc_extern_tracker.aktualisiere(obs, matrix)
+        if soc_extern_tracker.ist_toleriert(matrix):
+            verbleibend = soc_extern_tracker.verbleibend_s(matrix)
+            LOG.debug(f'{self.name}: SOC extern geändert '
+                      f'({soc_extern_tracker.extern_grund}) '
+                      f'→ toleriert ({verbleibend}s verbleibend)')
             return 0
 
         min_h = get_param(matrix, self.regelkreis, 'min_betriebsstunden', 2.0)
@@ -265,6 +288,11 @@ class RegelForecastPlausi(Regel):
             })
         else:
             LOG.info(f"Forecast-Plausi: IST/SOLL {ist_pct:.0f}%, Rest {rest_korrigiert} kWh — keine Aktion")
+
+        # Engine-Aktionen registrieren (Extern-Erkennung)
+        for a in aktionen:
+            soc_extern_tracker.registriere_aktion(a.get('kommando', ''), a.get('wert'))
+
         return aktionen
 
 

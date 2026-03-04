@@ -13,6 +13,7 @@ import logging
 import time
 from collections import deque
 from datetime import datetime
+import config
 
 from automation.engine.obs_state import ObsState
 from automation.engine.regeln.basis import Regel
@@ -379,7 +380,7 @@ class RegelHeizpatrone(Regel):
                 and (time.time() - self._letzte_aus) < min_pause):
             return 0
 
-        batt_rest_kwh = max(0, (soc_max_eff - soc) * 10.24 / 100)
+        batt_rest_kwh = max(0, (soc_max_eff - soc) * config.PV_BATTERY_KWH / 100)
 
         forecast_kwh = obs.forecast_kwh or 0
         potenzial = self._potenzial(forecast_kwh, matrix)
@@ -564,7 +565,7 @@ class RegelHeizpatrone(Regel):
             return []
 
         # ── HP ist AUS → prüfe ob Burst gestartet werden soll ─
-        batt_rest_kwh = max(0, (soc_max_eff - soc) * 10.24 / 100)
+        batt_rest_kwh = max(0, (soc_max_eff - soc) * config.PV_BATTERY_KWH / 100)
         min_rest_h_morgens = get_param(matrix, self.regelkreis, 'min_rest_h_morgens', 5.0)
         min_rest_kwh_morgens = get_param(matrix, self.regelkreis, 'min_rest_kwh_morgens', 20.0)
         min_lade_morgens = get_param(matrix, self.regelkreis, 'min_ladeleistung_morgens_w', 3000)

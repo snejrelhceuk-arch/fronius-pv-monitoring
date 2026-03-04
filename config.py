@@ -46,7 +46,7 @@ TIMEZONE = 'Europe/Berlin'
 # --- PV-Anlage (seit Okt/2025: 37.59 kWp) ---
 PV_KWP_TOTAL = 37.59        # Gesamt installierte Leistung
 PV_INVERTER_KW = 26.5       # F1=12kW + F2=10kW + F3=4.5kW
-PV_BATTERY_KWH = 10.24      # BYD HVS 10.2 (usable)
+PV_BATTERY_KWH = 20.48      # BYD HVS parallel (2x usable)
 PV_NULLEINSPEISUNG = True    # Nulleinspeiser
 
 # --- Netzwerk ---

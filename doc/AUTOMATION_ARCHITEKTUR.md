@@ -628,7 +628,7 @@ systemd → automation_observer.service
 | 1 | `RegelSocSchutz` | schutz.py | fast | P1 Sicherheit | Tiefentladeschutz: Stop <5%, Drosselung <10% |
 | 2 | `RegelTempSchutz` | schutz.py | fast | P1 Sicherheit | Stufenweise Laderate-Reduktion bei Zelltemperatur 25–40°C |
 | 3 | `RegelKomfortReset` | soc_steuerung.py | mixed | P2 Steuerung | Täglicher Reset auf 25–75% SOC-Bereich, Early-Reset bei schlechter Prognose |
-| 4 | `RegelMorgenSocMin` | soc_steuerung.py | mixed | P2 Steuerung | SOC_MIN-Öffnung basierend auf Sunrise+1h PV-Prognose, Hold-Mode |
+| 4 | `RegelMorgenSocMin` | soc_steuerung.py | mixed | P2 Steuerung | SOC_MIN-Öffnung basierend auf Sunrise+1h PV-Prognose, Hold-Mode, konfigurierbarer Vorlauf |
 | 5 | `RegelNachmittagSocMax` | soc_steuerung.py | mixed | P2 Steuerung | SOC_MAX→100% via Clear-Sky-Peak + Power-Threshold |
 | 6 | `RegelAbendEntladerate` | optimierung.py | mixed | P2 Steuerung | Tageszeit-abhängige Entladerate: Abend 29%, Nacht 10%, Tag auto |
 | 7 | `RegelZellausgleich` | optimierung.py | strategic | P3 Wartung | Monatlicher BYD-Zellausgleich (Vollzykus) |
@@ -645,6 +645,12 @@ systemd → automation_observer.service
 | `BatteryCollector` | battery_collector.py | Direktes Modbus/HTTP-Polling (für Observer standalone) |
 | `ForecastCollector` | forecast_collector.py | Trigger-basierte Solarprognose |
 | `Tier1Checker` | tier1_checker.py | Deterministische Schwellenprüfungen (Safety-Bypass) |
+
+### Querschnitts-Module in `automation/engine/regeln/`
+
+| Modul | Funktion |
+|-------|----------|
+| `soc_extern.py` | SOC-Extern-Toleranz: Erkennt manuell geänderte SOC-Werte (Fronius App) und stellt 30-min Toleranzperiode bereit |
 
 ---
 
@@ -788,4 +794,4 @@ Die bestehende Tabelle `battery_control_log` ist Legacy und wird nicht mehr akti
 
 ---
 
-*Letzte Aktualisierung: 2026-03-01 (11 Regelkreise, Fritz!DECT produktiv, battery_scheduler archiviert)*
+*Letzte Aktualisierung: 2026-03-04 (11 Regelkreise + SOC-Extern-Toleranz, Morgen-Vorlauf, Fritz!DECT produktiv, battery_scheduler archiviert)*

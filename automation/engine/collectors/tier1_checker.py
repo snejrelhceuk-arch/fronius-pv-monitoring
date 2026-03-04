@@ -34,7 +34,7 @@ class Tier1Checker:
         self._batt_temp_warn = self.cfg.get('batt_temp_warn_c', 40)
         self._batt_temp_alarm = self.cfg.get('batt_temp_alarm_c', 45)
         self._batt_temp_reduce_c_rate = self.cfg.get('batt_temp_reduce_c_rate', 0.3)
-        self._batt_kapazitaet_kwh = self.cfg.get('batt_kapazitaet_kwh', 10.24)
+        self._batt_kapazitaet_kwh = self.cfg.get('batt_kapazitaet_kwh', 20.48)
         self._batt_soc_kritisch = self.cfg.get('batt_soc_kritisch', 5)
         self._netz_ueberlast_warn_w = self.cfg.get('netz_ueberlast_warn_w', 24000)
         self._netz_ueberlast_alarm_w = self.cfg.get('netz_ueberlast_alarm_w', 26000)
@@ -87,7 +87,7 @@ class Tier1Checker:
     def _check_batt_temp(self, obs: ObsState) -> list[dict]:
         """Batterie-Temperatur-Schutzlogik mit Hysterese.
 
-        Ab 40°C: Ladeleistung auf 0.3C reduzieren (= ~3 kW bei 10.24 kWh)
+        Ab 40°C: Ladeleistung auf 0.3C reduzieren (= ~6 kW bei 20.48 kWh)
         Ab 45°C: Ladung komplett stoppen
         Hysterese: Erst bei < 38°C wieder normalisieren
         """

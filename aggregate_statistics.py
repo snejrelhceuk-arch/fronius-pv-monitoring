@@ -132,9 +132,10 @@ def update_monthly_statistics():
             except Exception:
                 pass
 
-            # Autarkie: Anteil Eigenverbrauch am Gesamtverbrauch
-            eigenverbrauch_kwh = direkt + batt_entl
-            autarkie = (eigenverbrauch_kwh / gesamt * 100) if gesamt > 0 else 0
+            # Autarkie: Anteil des Verbrauchs, der NICHT aus dem Netz kommt
+            # (1 - Bezug/Verbrauch) ist korrekt, weil Direktverbrauch den
+            # Wattpilot-PV-Anteil nicht enthält (WTP sitzt hinter Netz-SM)
+            autarkie = ((1 - bezug / gesamt) * 100) if gesamt > 0 else 0
 
             # Eigenverbrauchsquote: Anteil selbst verbrauchter PV am PV-Ertrag
             eigenverbrauch_pct = ((solar - einsp) / solar * 100) if solar > 0 else 0
@@ -231,17 +232,21 @@ def update_yearly_statistics():
                 _autarkie_avg, _eigen_avg, wp, monate, sonnenstunden_jahr = row
 
             # Autarkie/Eigenverbrauch aus Jahressummen berechnen (gewichtet, nicht AVG)
-            eigenverbrauch_kwh = direkt + batt_entl
-            autarkie = (eigenverbrauch_kwh / gesamt * 100) if gesamt > 0 else 0
+            # Korrekte Formel: (1 - Bezug/Verbrauch) — Direktverbrauch enthält
+            # den Wattpilot-PV-Anteil nicht (WTP sitzt hinter Netz-Smartmeter)
+            autarkie = ((1 - bezug / gesamt) * 100) if gesamt > 0 else 0
             eigenverbrauch_pct = ((solar - einsp) / solar * 100) if solar > 0 else 0
+
+            # Autark verbrauchte kWh = Verbrauch - Bezug (alles, was nicht vom Netz kam)
+            autarkie_kwh = gesamt - bezug
 
             # Gewichteter Jahres-Strompreis (aus monatlichen Preisen)
             monats_preise = [get_strompreis(year, m) for m in range(1, 13)]
             strompreis = sum(monats_preise) / 12
 
             # Ersparnisse berechnen
-            ersparnis_autarkie = eigenverbrauch_kwh * strompreis
-            ersparnis_eigen = solar * strompreis
+            ersparnis_autarkie = autarkie_kwh * strompreis
+            ersparnis_eigen = (solar - einsp) * strompreis
             einnahmen_einsp = einsp * EINSPEISEVERGUETUNG
 
             sonnenstunden_val = round(sonnenstunden_jahr, 1) if sonnenstunden_jahr else None

@@ -85,7 +85,7 @@ class Observer:
                 'batt_temp_warn_c': warn_c,
                 'batt_temp_alarm_c': 45,
                 'batt_temp_reduce_c_rate': 0.3,
-                'batt_kapazitaet_kwh': batt.get('kapazitaet_kwh', 10.24),
+                'batt_kapazitaet_kwh': batt.get('kapazitaet_kwh', 20.48),
                 'batt_soc_kritisch': cfg.get('soc_grenzen', {}).get('absolutes_minimum', 5),
                 'netz_ueberlast_warn_w': 24000,
                 'netz_ueberlast_alarm_w': 26000,
