@@ -54,6 +54,10 @@ MONATE_KURZ = [
 KWP_PHASE = {2021: 21.40, 2022: 21.40, 2023: 21.40, 2024: 21.40,
              2025: 26.07, 2026: 37.59}  # 2025 gewichteter Schnitt
 
+# kWh Batterie-Kapazität je Phase (für Vollzyklen-Berechnung)
+BATT_KWH_PHASE = {2021: 10.24, 2022: 10.24, 2023: 10.24, 2024: 10.24,
+                  2025: 10.24, 2026: 20.48}  # ab März 2026: 2× HVS parallel
+
 # ── Farben ──
 COL_HEADER_BG = colors.HexColor('#1a5276')
 COL_HEADER_FG = colors.white
@@ -106,9 +110,9 @@ styles.add(ParagraphStyle(
 # ── Hilfsfunktionen ──
 
 def fmt(val, decimals=1):
-    """Zahl formatieren, None → '–'."""
+    """Zahl formatieren, None -> '--'."""
     if val is None:
-        return "–"
+        return "--"
     if decimals == 0:
         return f"{val:,.0f}".replace(",", ".")
     return f"{val:,.{decimals}f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -117,15 +121,15 @@ def fmt(val, decimals=1):
 def fmt_pct(val):
     """Prozent formatieren."""
     if val is None:
-        return "–"
-    return f"{val:.1f}\u2009%".replace(".", ",")
+        return "--"
+    return f"{val:.1f} %".replace(".", ",")
 
 
 def fmt_eur(val):
     """Euro formatieren."""
     if val is None or val == 0:
-        return "–"
-    return f"{val:,.0f}\u2009\u20ac".replace(",", ".")
+        return "--"
+    return f"{val:,.0f} EUR".replace(",", ".")
 
 
 def _table_style_base():
@@ -216,12 +220,12 @@ def build_hardware_page():
     # ── Batterie ──
     elements.append(Paragraph("Batteriespeicher", styles['SectionHead']))
     batt_data = [
-        ["Modell", "BYD Battery-Box Premium HVS 10.2"],
-        ["Kapazit\u00e4t", "10,24 kWh (nutzbar) / 10 kW Lade-/Entladeleistung"],
-        ["Typ", "LiFePO\u2084 (Lithium-Eisenphosphat)"],
+        ["Modell", "2× BYD Battery-Box Premium HVS (parallel, BCU 2.0)"],
+        ["Kapazit\u00e4t", "20,48 kWh (nutzbar) / 12 kW Lade-/Entladeleistung"],
+        ["Typ", "LiFePO4 (Lithium-Eisenphosphat)"],
         ["Kopplung", "DC-gekoppelt an F1 (Gen24 Hybrid)"],
         ["BMS", "BYD Battery Management System (Modbus RTU via Gen24)"],
-        ["Seit", "November 2021 (unver\u00e4ndert)"],
+        ["Seit", "Tower 1: Nov 2021, Tower 2: M\u00e4rz 2026"],
     ]
     t = Table(batt_data, colWidths=[35 * mm, 140 * mm])
     t.setStyle(TableStyle([
@@ -334,9 +338,9 @@ def build_year_page(year, monthly_rows, yearly_row):
     elements.append(Paragraph("Energiebilanz  (kWh)", styles['TableTitle']))
 
     eb_header = ["Mon.", "PV", "Direkt",
-                 "Batt \u2191", "Batt \u2193",
+                 "Batt+", "Batt-",
                  "Bezug", "Einsp.",
-                 "Verbr.", "\u2600h"]
+                 "Verbr.", "Sonne"]
     eb_rows = [eb_header]
 
     # Summen
@@ -352,7 +356,7 @@ def build_year_page(year, monthly_rows, yearly_row):
         eb_rows.append(row)
 
     # Summenzeile
-    sum_row = ["\u03a3 Jahr"]
+    sum_row = ["Gesamt"]
     for s in eb_sums:
         sum_row.append(fmt(s, 0) if abs(s) >= 10 else fmt(s, 1))
     eb_rows.append(sum_row)
@@ -372,7 +376,7 @@ def build_year_page(year, monthly_rows, yearly_row):
     elements.append(Paragraph("Verbraucher & Kennzahlen", styles['TableTitle']))
 
     vk_header = ["Mon.", "Haushalt", "Heizpatr.", "Wattpilot",
-                 "\u03a3 Verbr.", "Autarkie", "Eigenv."]
+                 "Gesamt", "Autarkie", "Eigenv."]
     vk_rows = [vk_header]
 
     vk_sums = [0.0] * 4  # haushalt, hp, wtp, verbr
@@ -402,13 +406,13 @@ def build_year_page(year, monthly_rows, yearly_row):
     # Summenzeile
     yr = yearly_row or {}
     sum_row2 = [
-        "\u03a3 Jahr",
+        "Gesamt",
         fmt(vk_sums[0], 0),
         fmt(vk_sums[1], 0),
         fmt(vk_sums[2], 0),
         fmt(vk_sums[3], 0),
         fmt_pct(yr.get('autarkie')) if yr else fmt_pct(aut_sum / aut_count if aut_count else None),
-        fmt_pct(yr.get('eigenverbrauch')) if yr else "\u2013",
+        fmt_pct(yr.get('eigenverbrauch')) if yr else "--",
     ]
     vk_rows.append(sum_row2)
 
@@ -431,7 +435,7 @@ def build_year_page(year, monthly_rows, yearly_row):
         kwp = KWP_PHASE.get(year, 37.59)
         spez_ertrag = yr['pv'] / kwp if yr['pv'] else 0
         batt_eff = yr['batt_dis'] / yr['batt_ch'] * 100 if yr['batt_ch'] > 0 else 0
-        vollzyklen = yr['batt_ch'] / 10.24 if yr['batt_ch'] else 0
+        vollzyklen = yr['batt_ch'] / BATT_KWH_PHASE.get(year, 20.48) if yr['batt_ch'] else 0
         haushalt_yr = (yr['verbr'] or 0) - (yr['hp'] or 0) - (yr['wtp'] or 0)
 
         # Zwei-Spalten Kennzahlen-Tabelle
@@ -451,9 +455,9 @@ def build_year_page(year, monthly_rows, yearly_row):
             ["  davon Haushalt", f"{fmt(haushalt_yr, 0)} kWh",
              "", "Durch Eigenverbr.", fmt_eur(yr.get('ersparnis_ev'))],
             ["  davon Heizpatrone", f"{fmt(yr['hp'], 0)} kWh",
-             "", "Strompreis", f"{fmt(yr.get('strompreis', 0.33), 2)} \u20ac/kWh"],
+             "", "Strompreis", f"{fmt(yr.get('strompreis', 0.33), 2)} EUR/kWh"],
             ["  davon Wattpilot", f"{fmt(yr['wtp'], 0)} kWh",
-             "", "Einsp.-Verg\u00fctung", f"{fmt(yr.get('eisp_verg', 0.082), 3)} \u20ac/kWh"],
+             "", "Einsp.-Verg.", f"{fmt(yr.get('eisp_verg', 0.082), 3)} EUR/kWh"],
         ]
 
         t3 = Table(kz_data, colWidths=[34 * mm, 28 * mm, 6 * mm, 36 * mm, 30 * mm])
@@ -506,7 +510,7 @@ def _phase_label(year):
     if year <= 2024:
         return "  (Phase 1: 21,40 kWp)"
     elif year == 2025:
-        return "  (Phase 1\u21922\u21923)"
+        return "  (Phase 1>2>3)"
     else:
         return "  (Phase 3: 37,59 kWp)"
 
@@ -518,12 +522,14 @@ def _phase_note(year):
     elif 2022 <= year <= 2023:
         return "Phase 1: 21,40 kWp, Gen24 10 kW, BYD HVS 10 kWh"
     elif year == 2024:
-        return "Phase 1: 21,40 kWp, Gen24 10 kW, BYD HVS 10 kWh  \u2014  Wattpilot ab April 2024"
+        return "Phase 1: 21,40 kWp, Gen24 10 kW, BYD HVS 10 kWh  -  Wattpilot ab April 2024"
     elif year == 2025:
-        return ("Phase 1 (Jan\u2013Apr): 21,40 kWp  \u2192  Phase 2 (Mai\u2013Sep): 26,07 kWp  \u2192  "
+        return ("Phase 1 (Jan-Apr): 21,40 kWp  >  Phase 2 (Mai-Sep): 26,07 kWp  >  "
                 "Phase 3 (ab Okt): 37,59 kWp")
+    elif year == 2026:
+        return ("Phase 3: 37,59 kWp, 3 WR  -  ab M\u00e4rz: 2\u00d7 BYD HVS parallel (20,48 kWh)")
     else:
-        return "Phase 3: 37,59 kWp, 3 Wechselrichter, 98 Module  \u2014  Datenerfassung via Modbus (3s)"
+        return "Phase 3: 37,59 kWp, 3 Wechselrichter, 98 Module, 2\u00d7 BYD HVS (20,48 kWh)"
 
 
 # ══════════════════════════════════════════════════════════════════════

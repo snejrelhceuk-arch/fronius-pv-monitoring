@@ -3,6 +3,21 @@
   "_version": "1.0.0",
   "_updated": "2026-03-01",
   "regelkreise": {
+    "soc_extern": {
+      "_doc": "Toleranz für extern geänderte SOC-Werte (z.B. manuell via Fronius App). Wenn SOC_MIN oder SOC_MAX außerhalb der Automation geändert werden, respektiert die Engine die Werte für die konfigurierte Dauer.",
+      "aktiv": true,
+      "parameter": {
+        "extern_respekt_s": {
+          "wert": 1800,
+          "bereich": [
+            0,
+            7200
+          ],
+          "einheit": "s",
+          "beschreibung": "Toleranzzeit bei extern geänderten SOC_MIN/SOC_MAX (Default 30 Min). Engine überschreibt fremde Werte erst nach Ablauf. 0 = deaktiviert. Analog zu heizpatrone.extern_respekt_s."
+        }
+      }
+    },
     "soc_schutz": {
       "_doc": "Sicherheitshalber: SOC-Grenzen nie verletzen",
       "aktiv": true,
@@ -103,6 +118,15 @@
           ],
           "einheit": "h",
           "beschreibung": "Bei forecast_quality=mittel: Öffnung erst Sunrise + x Stunden"
+        },
+        "morgen_vorlauf_min": {
+          "wert": 15,
+          "bereich": [
+            0,
+            60
+          ],
+          "einheit": "min",
+          "beschreibung": "Morgen-Mechanik um x Minuten vor Sunrise vorziehen. Gilt für Forecast-Fetch, SOC_MIN-Zeitfenster und Verzögerungsberechnung. 0 = kein Vorlauf."
         }
       },
       "score_gewicht": 72,
@@ -251,7 +275,7 @@
     },
     "abend_entladerate": {
       "_doc": "Entladerate nach Tageszeit begrenzen — Spitzenlasten ans Netz",
-      "aktiv": true,
+      "aktiv": false,
       "prioritaet": 2,
       "beschreibung": "Abends/nachts Entladerate reduzieren, damit Batterie für Grundlast reicht",
       "parameter": {
@@ -515,7 +539,7 @@
     },
     "laderate_dynamisch": {
       "_doc": "Laderate aktiv steuern: temp-abhängig + SOC-abhängig + PV-abhängig",
-      "aktiv": true,
+      "aktiv": false,
       "prioritaet": 2,
       "beschreibung": "Laderate dynamisch begrenzen abhängig von Temp, SOC-Bereich und aktueller PV-Leistung",
       "parameter": {

@@ -14,6 +14,7 @@ import logging
 from datetime import datetime
 from automation.engine.obs_state import ObsState
 from automation.engine.regeln.basis import Regel, _first_not_none
+from automation.engine.regeln.soc_extern import soc_extern_tracker
 from automation.engine.param_matrix import (
     ist_aktiv, get_param, get_score_gewicht, get_regelkreis,
 )
@@ -45,17 +46,27 @@ class RegelMorgenSocMin(Regel):
     engine_zyklus = 'fast'
 
     def _im_zeitfenster(self, obs: ObsState, matrix: dict) -> bool:
-        """Sunrise bis Sunrise + fenster_ende_h."""
+        """(Sunrise - Vorlauf) bis Sunrise + fenster_ende_h."""
         now = datetime.now()
         hr = now.hour + now.minute / 60.0
         sunrise = obs.sunrise or 7.0
+        vorlauf_h = get_param(matrix, self.regelkreis, 'morgen_vorlauf_min', 15) / 60.0
         ende_h = get_param(matrix, self.regelkreis, 'fenster_ende_nach_sunrise_h', 3)
-        return sunrise <= hr <= sunrise + ende_h
+        return (sunrise - vorlauf_h) <= hr <= sunrise + ende_h
 
     def bewerte(self, obs: ObsState, matrix: dict) -> int:
         if not ist_aktiv(matrix, self.regelkreis):
             return 0
         if not self._im_zeitfenster(obs, matrix):
+            return 0
+
+        # ── SOC-Extern-Toleranz ──
+        soc_extern_tracker.aktualisiere(obs, matrix)
+        if soc_extern_tracker.ist_toleriert(matrix):
+            verbleibend = soc_extern_tracker.verbleibend_s(matrix)
+            LOG.debug(f'{self.name}: SOC extern geändert '
+                      f'({soc_extern_tracker.extern_grund}) '
+                      f'→ toleriert ({verbleibend}s verbleibend)')
             return 0
 
         stress = get_param(matrix, self.regelkreis, 'stress_min_pct', 5)
@@ -83,15 +94,17 @@ class RegelMorgenSocMin(Regel):
                       f"< {schwelle}W → kein Trigger")
             return 0
 
-        # ── VERZÖGERUNG: 'mittel' → erst Sunrise + 1h ──
+        # ── VERZÖGERUNG: 'mittel' → erst Sunrise + 1h (abzgl. Vorlauf) ──
         if obs.forecast_quality == 'mittel':
             now_h = datetime.now().hour + datetime.now().minute / 60.0
             sunrise = obs.sunrise or 7.0
+            vorlauf_h = get_param(matrix, self.regelkreis, 'morgen_vorlauf_min', 15) / 60.0
             verzoegerung = get_param(matrix, self.regelkreis, 'mittel_verzoegerung_h', 1.0)
-            if now_h < sunrise + verzoegerung:
+            trigger_h = (sunrise - vorlauf_h) + verzoegerung
+            if now_h < trigger_h:
                 LOG.debug(f"morgen_soc_min: forecast_quality=mittel → warte bis "
-                          f"SR+{verzoegerung:.0f}h ({sunrise + verzoegerung:.2f}h, "
-                          f"jetzt {now_h:.2f}h)")
+                          f"SR-{vorlauf_h*60:.0f}min+{verzoegerung:.0f}h "
+                          f"({trigger_h:.2f}h, jetzt {now_h:.2f}h)")
                 return 0
 
         return score
@@ -131,6 +144,10 @@ class RegelMorgenSocMin(Regel):
                           f'{obs.soc_max or "?"}%→{komfort_max}% '
                           f'(LFP-Schonung)'),
             })
+
+        # Engine-Aktionen registrieren (Extern-Erkennung)
+        for a in aktionen:
+            soc_extern_tracker.registriere_aktion(a.get('kommando', ''), a.get('wert'))
 
         return aktionen
 
@@ -227,6 +244,15 @@ class RegelNachmittagSocMax(Regel):
         if not ist_aktiv(matrix, self.regelkreis):
             return 0
 
+        # ── SOC-Extern-Toleranz ──
+        soc_extern_tracker.aktualisiere(obs, matrix)
+        if soc_extern_tracker.ist_toleriert(matrix):
+            verbleibend = soc_extern_tracker.verbleibend_s(matrix)
+            LOG.debug(f'{self.name}: SOC extern geändert '
+                      f'({soc_extern_tracker.extern_grund}) '
+                      f'→ toleriert ({verbleibend}s verbleibend)')
+            return 0
+
         now = datetime.now()
         hr = now.hour + now.minute / 60.0
 
@@ -287,6 +313,11 @@ class RegelNachmittagSocMax(Regel):
                       f'{sunset - now_h:.1f}h bis Sunset, '
                       f'{peak_str}, Öffnung ab {dyn_start:.1f}h'),
         })
+
+        # Engine-Aktionen registrieren (Extern-Erkennung)
+        for a in aktionen:
+            soc_extern_tracker.registriere_aktion(a.get('kommando', ''), a.get('wert'))
+
         return aktionen
 
 
@@ -386,6 +417,15 @@ class RegelKomfortReset(Regel):
         if not ist_aktiv(matrix, self.regelkreis):
             return 0
 
+        # ── SOC-Extern-Toleranz ──
+        soc_extern_tracker.aktualisiere(obs, matrix)
+        if soc_extern_tracker.ist_toleriert(matrix):
+            verbleibend = soc_extern_tracker.verbleibend_s(matrix)
+            LOG.debug(f'{self.name}: SOC extern geändert '
+                      f'({soc_extern_tracker.extern_grund}) '
+                      f'→ toleriert ({verbleibend}s verbleibend)')
+            return 0
+
         score = get_score_gewicht(matrix, self.regelkreis)
 
         # ── Früh-Reset nachmittags (SOC niedrig + Prognose reicht nicht) ──
@@ -458,5 +498,9 @@ class RegelKomfortReset(Regel):
                      f"SOC_MIN={obs.soc_min}→{komfort_min}, "
                      f"SOC_MAX={obs.soc_max}→{komfort_max}, "
                      f"Mode={obs.soc_mode}→manual")
+
+        # Engine-Aktionen registrieren (Extern-Erkennung)
+        for a in aktionen:
+            soc_extern_tracker.registriere_aktion(a.get('kommando', ''), a.get('wert'))
 
         return aktionen

@@ -80,7 +80,7 @@ class AutomationDaemon:
         # Komponenten
         self._db_conn = None
         self._collector = DataCollector()
-        self._forecast_collector = ForecastCollector()
+        self._forecast_collector = ForecastCollector()  # Vorlauf wird in start() gesetzt
         self._obs = ObsState()
         self._obs_lock = threading.Lock()
         self._tier1 = None
@@ -124,6 +124,13 @@ class AutomationDaemon:
             matrix_path=DEFAULT_MATRIX_PATH,
         )
 
+        # Morgen-Vorlauf aus Parametermatrix an ForecastCollector übergeben
+        from automation.engine.param_matrix import get_param
+        vorlauf = get_param(self._engine._matrix, 'morgen_soc_min',
+                            'morgen_vorlauf_min', 15)
+        self._forecast_collector.morgen_vorlauf_min = vorlauf
+        LOG.info(f"  Morgen-Vorlauf: {vorlauf} min (Sunrise-Trigger vorgezogen)")
+
         self._running = True
 
         # Tier-3: Forecast-Thread (trigger-basiert, prüft alle 30s)
@@ -148,7 +155,7 @@ class AutomationDaemon:
                 'batt_temp_warn_c': 40,
                 'batt_temp_alarm_c': 45,
                 'batt_temp_reduce_c_rate': 0.3,
-                'batt_kapazitaet_kwh': batt.get('kapazitaet_kwh', 10.24),
+                'batt_kapazitaet_kwh': batt.get('kapazitaet_kwh', 20.48),
                 'batt_soc_kritisch': cfg.get('soc_grenzen', {}).get('absolutes_minimum', 5),
             }
         except Exception as e:
