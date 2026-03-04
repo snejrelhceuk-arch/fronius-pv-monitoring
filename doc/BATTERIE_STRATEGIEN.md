@@ -165,5 +165,7 @@ python3 battery_control.py --auto               # Automatik
 - [x] Monatlicher Zellausgleich (prognosegesteuert)
 - [x] Heizpatrone via Fritz!DECT (RegelHeizpatrone + AktorFritzDECT)
 - [x] Logging in SQLite (`automation_log`)
+- [x] SOC-Extern-Toleranz: Fremde SOC-Änderungen (Fronius App) werden 30 min respektiert
+- [x] Morgen-Vorlauf: Batterielogik wird morgen_vorlauf_min (default 15 min) vor Sunrise getriggert
 - [ ] Sommer-Ladebegrenzung (temperaturbasiert, Strategie E)
 - [ ] Wattpilot-Steuerung (AktorWattpilot ist Stub)

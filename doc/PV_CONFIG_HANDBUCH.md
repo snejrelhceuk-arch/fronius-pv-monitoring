@@ -11,6 +11,7 @@ Version 1.3 — Stand: 1. März 2026
 2. [Hauptmenü-Übersicht](#2-hauptmenü-übersicht)
 3. [Menü 1: Regelkreise ein/aus](#3-menü-1-regelkreise-einaus)
 4. [Menü 2: Parameter-Matrix](#4-menü-2-parameter-matrix)
+   - [4.0 soc_extern — SOC-Extern-Toleranz](#40-soc_extern--soc-extern-toleranz)
    - [4.1 soc_schutz — Harte Schutzschwellen](#41-soc_schutz--harte-schutzschwellen-priorität-1)
    - [4.2 morgen_soc_min — Morgenöffnung](#42-morgen_soc_min--morgenöffnung-priorität-2)
    - [4.3 nachmittag_soc_max — Nachmittagsanhebung](#43-nachmittag_soc_max--nachmittagsanhebung-priorität-2)
@@ -101,6 +102,22 @@ Die Einheit steht immer beim angezeigten Wert (z.B. `5%`, `100W`, `5.0kWh`).
 
 ---
 
+### 4.0 soc_extern — SOC-Extern-Toleranz
+
+**Zweck:** Wenn SOC_MIN oder SOC_MAX manuell in der Fronius App (oder einem anderen externen Tool) geändert werden, respektiert die Engine diese Werte für eine konfigurierbare Toleranzzeit. Das verhindert, dass die Automation sofort überschreibt.
+
+**Muster:** Analog zur Heizpatronen-Extern-Erkennung (§4.10 `extern_respekt`). Die Engine erkennt automatisch, ob eine SOC-Änderung von ihr selbst oder extern stammt.
+
+| Parameter | Standard | Bereich | Wirkung |
+|-----------|----------|---------|--------|
+| extern_respekt | 1800 s | 0–7200 s | **Toleranzzeit bei extern geänderten SOC-Werten (30 Min).** Alle SOC-Steuerungsregeln (morgen_soc_min, nachmittag_soc_max, komfort_reset, forecast_plausi, zellausgleich) pausieren für diese Dauer. Schutzregeln (soc_schutz, temp_schutz) sind NICHT betroffen. 0 = deaktiviert. |
+
+**Sicherheit:** Schutzregeln (Tier-1, Modbus-basiert) wie `stop_discharge`, `stop_charge` wirken immer sofort — sie nutzen Modbus, nicht SOC HTTP API.
+
+**Erkennungsmechanik:** Der `SocExternTracker` (Singleton in `soc_extern.py`) vergleicht pro Engine-Zyklus SOC_MIN/SOC_MAX mit den vorherigen Werten. Änderungen werden als Engine-intern erkannt wenn die Engine kurz zuvor ein Kommando mit diesem Zielwert registriert hat (Grace-Window: 5 Min). Alle anderen Änderungen → extern → Toleranzperiode startet.
+
+---
+
 ### 4.1 soc_schutz — Harte Schutzschwellen (Priorität 1)
 
 **Zweck:** Absolute SOC-Grenzen, die nie verletzt werden dürfen. Schützt die BYD-Zellen vor Tiefentladung und Überladung.
@@ -140,14 +157,14 @@ Die Einheit steht immer beim angezeigten Wert (z.B. `5%`, `100W`, `5.0kWh`).
 | wolken_schwer | 70% | 50–90% | **Grenze "bewölkt".** Über 70% Bewölkung: Spätere Öffnung (60–120 Min. nach Sunrise) oder gar keine Öffnung. Niedrigerer Wert = schon bei mittlerer Bewölkung vorsichtig. |
 | morgen_soc_max | 75% | 50–85% | **SOC_MAX morgens begrenzen.** Verhindert, dass PV die Batterie in weniger als einer Stunde volllädt. PV-Überschuss geht stattdessen ins Netz. Nachmittags wird SOC_MAX dann auf 100% erhöht. Niedriger = mehr Einspeisung, höher = schnellere Batterieladung. |
 | fenster_ende_nach_sunrise | 3 h | 1–5 h | **Ende des Morgen-Fensters.** Nach X Stunden nach Sonnenaufgang übernimmt der Nachmittag-Regelkreis. Längeres Fenster = mehr Zeit für die Morgenöffnung. |
+| morgen_vorlauf | 15 min | 0–60 min | **Morgen-Vorlauf.** Die gesamte Morgen-Mechanik (Forecast-Fetch, SOC_MIN-Zeitfenster, Verzögerungsberechnung) wird um X Minuten vor Sunrise vorgezogen. Sorgt dafür, dass die Prognose und SOC-Entscheidung früher verfügbar sind. 0 = kein Vorlauf. |
 | drain_rate_fallback | 1.5 kW | 0.5–4.0 kW | **Angenommene Entladerate wenn keine Verbrauchshistorie verfügbar.** Wird nur am ersten Tag nach Reset benötigt. |
 | uebernahme_schwelle | 0.8 | 0.5–1.0 | **(Legacy, nicht mehr verwendet.)** PV muss x% des Verbrauchs decken. |
-| max_vorlauf | 0.25 h | 0–2 h | **(Legacy, nicht mehr verwendet.)** |
 
-**Typisches Szenario:**
-1. 07:00 Sonnenaufgang, Prognose 25 kWh, Bewölkung 20%
-2. → Wolken < 30% = "klar" → Offset 15 Min.
-3. 07:15 PV = 150 W > 100 W Schwelle → **SOC_MIN wird von 25% auf 5% gesenkt**
+**Typisches Szenario (morgen_vorlauf = 15 min):**
+1. 06:45 Sunrise in 15 Min. → Forecast-Fetch wird getriggert (Vorlauf)
+2. 06:45 Prognose 25 kWh, Bewölkung 20% → Zeitfenster ab 06:45 offen
+3. 06:50 PV@SR+1h = 2000 W > 1500 W Schwelle → **SOC_MIN wird von 25% auf 5% gesenkt**
 4. Batterie entlädt sich auf ~5% durch Hausverbrauch
 5. 10:00 PV übernimmt → Batterie wird geladen (SOC_MAX = 75%)
 

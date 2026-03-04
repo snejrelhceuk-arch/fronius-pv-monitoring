@@ -34,7 +34,7 @@ class ForecastCollector:
     """Holt Solar-Prognose zu definierten Tageszeitpunkten.
 
     Trigger-Zeitpunkte:
-      ① Sunrise        → Morgen-Entscheidung (SOC_MIN öffnen?)
+      ① Sunrise - Vorlauf → Morgen-Entscheidung (SOC_MIN öffnen?)
       ② 10:00          → Tagesverlauf-Update (SOC_MAX anpassen)
       ③ 14:00          → Abend-Reserve-Planung
       + Initialer Fetch beim Daemon-Start
@@ -48,11 +48,12 @@ class ForecastCollector:
     FIXED_TRIGGERS = [10.0, 14.0]
     FALLBACK_INTERVAL_S = 6 * 3600  # 6h
 
-    def __init__(self):
+    def __init__(self, morgen_vorlauf_min: int = 15):
         self._sf = None               # SolarForecast Instanz (lazy)
         self._last_fetch_ts = 0       # Unix-Timestamp letzter Fetch
         self._sunrise_h = None        # Heutige Sunrise-Stunde (Dezimal)
         self._sunset_h = None
+        self.morgen_vorlauf_min = morgen_vorlauf_min  # Sunrise-Trigger Vorlauf [min]
         self._triggers_today = set()  # Welche Trigger heute schon gelaufen
         self._last_date = None        # Für Tageswechsel-Erkennung
         self._hourly_profile = None   # Letztes hourly_profile (für _get_pv_at_hour)
@@ -94,9 +95,9 @@ class ForecastCollector:
             should_fetch = True
             trigger_name = 'startup'
 
-        # Sunrise-Trigger
+        # Sunrise-Trigger (mit Vorlauf)
         elif (self._sunrise_h is not None
-              and now_h >= self._sunrise_h
+              and now_h >= self._sunrise_h - self.morgen_vorlauf_min / 60.0
               and 'sunrise' not in self._triggers_today):
             should_fetch = True
             trigger_name = 'sunrise'
