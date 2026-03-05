@@ -157,7 +157,7 @@ Stack: Raspbian Bullseye 11, Python 3.9.2, Flask 1.1.2, gunicorn 23.0.0,
 
 
 ═════════════════════════════════════════════════════════════════
-DYNAMISCHE UPDATES (Stand: 2026-03-04 04:00)
+DYNAMISCHE UPDATES (Stand: 2026-03-05 04:00)
 ═════════════════════════════════════════════════════════════════
 
 --- Aktuelle Config-Werte ---
@@ -208,6 +208,7 @@ HEIZKOSTEN_ERSPARNIS = {
 HEIZPERIODE_MONATE = {10, 11, 12, 1, 2, 3}  # Okt–Mär (6 Monate)
 
 --- Letzte Git-Commits ---
+18f4bbf SOC-Extern-Toleranz + Morgen-Vorlauf + Docs
 ff8c768 Analyse-Ansichten: Navigation, Summen, Amortisation, Dark-Theme
 0adc07e Heizpatrone RegelGeraete, Failover-Tuning, Doku & Kalibrierung
 b4bdfe6 Doku-Audit: 17 Dokumente mit Code-Realität abgeglichen
@@ -217,23 +218,8 @@ b20fab8 Tiefenprüfung: 7 Fixes (P1-P3) + 21/21 Tests grün
 b443081 Refactor: engine + observer in Subpackages aufgeteilt
 3188b8a refactor: battery_control.py → automation/battery_control.py
 f04128b feat: RegelKomfortReset, SOC-HTTP-Collector, Dedup, DB-Fix, Scheduler archiviert
-0ee2301 Tiefenprüfung: 12 Fixes (K1-K3 kritisch, H1-H7 hoch, M5-M8 mittel)
 
---- Kürzlich geänderte Module (12) ---
-
-config.py:
-Zentrale Konfiguration für Fronius PV-Monitoring
-Alle gemeinsam genutzten Parameter an einer Stelle.
-  def load_secret(env_key, secrets_file=None):  # Lade ein Secret aus Umgebungsvariable oder .secrets-Datei.
-
-automation/engine/automation_daemon.py:
-  class AutomationDaemon:  # S4 Orchestrator: Observer + Engine + Actuator in einem Prozess.
-  def engine_vorausschau() -> list[dict]:  # Statische Funktion: Liest ObsState aus RAM-DB, führt Dry-Run aus.
-
-automation/engine/engine.py:
-engine.py — Entscheidungs-Engine (Schicht S3)
-
-Liest ObsState aus RAM-DB und SOC-Parametermatrix aus
+--- Kürzlich geänderte Module (1) ---
 
 --- API-Endpunkte ---
   /                              → index  # Startseite: Redirect zu Flow-Chart

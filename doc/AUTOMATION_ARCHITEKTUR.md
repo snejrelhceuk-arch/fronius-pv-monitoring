@@ -428,7 +428,7 @@ nicht der Aktoren.
 
 | Plugin | Aktor | Steuerungskanal | Status |
 |--------|-------|-----------------|--------|
-| `aktor_batterie.py` | BYD HVS 10.2 | Modbus TCP + HTTP API | ✅ Produktiv |
+| `aktor_batterie.py` | 2× BYD HVS 20.48 kWh | Modbus TCP + HTTP API | ✅ Produktiv |
 | `aktor_fritzdect.py` | Fritz!DECT Smart-Plug (Heizpatrone 2 kW) | Fritz!Box AHA-HTTP-API | ✅ Produktiv |
 | `aktor_wattpilot.py` | E-Auto Wallbox | WebSocket CMD | ⚠️ Stub (nur Logging) |
 

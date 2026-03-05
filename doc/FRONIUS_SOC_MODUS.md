@@ -1,7 +1,7 @@
 # Fronius Gen24 — SOC-Modus (Auto vs. Manuell)
 
 **Erstellt:** 2026-02-20  
-**Betrifft:** F1 (Wohnhaus, Gen24 12kW + BYD HVS 10.2kWh), soweit relevant auch F2
+**Betrifft:** F1 (Wohnhaus, Gen24 12kW + 2× BYD HVS 20.48 kWh), soweit relevant auch F2
 
 ---
 

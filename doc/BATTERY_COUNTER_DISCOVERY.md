@@ -35,7 +35,12 @@ w_batt = abs(p_batt) × dt_hours               # Integration über Zeit
 
 ### 2.2 BYD BMS Component (ID: 16580608)
 
-**Attribute:**
+> **Update März 2026:** Seit dem Einbau des zweiten BYD HVS Towers (parallel, alte BCU als Master)
+> meldet das BMS aggregierte Werte für beide Towers: capacity_wh=20480, max_power=20480 W.
+> Die Hardware-Zähler (LIFETIME_CHARGED/DISCHARGED) laufen kumuliert weiter.
+> Serial bleibt P030T020Z2104140191 (alte BCU = Master).
+
+**Attribute (Stand Feb 2026, Einzelbatterie — historisch):**
 ```
 device-class:     Storage
 manufacturer:     BYD

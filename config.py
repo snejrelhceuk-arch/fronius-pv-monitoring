@@ -114,9 +114,10 @@ STROM_GRUNDPREISE = [
 # --- Finanzdaten (Investitionen & Betriebskosten) ---
 INVEST_PV_2022 = 24000           # EUR (PV-Anlage + Batterie)
 INVEST_PV_2024 = 8000            # EUR (Erweiterung 13kWp + Optimierer)
+INVEST_BATT_2026 = 3000          # EUR (2. BYD HVS Tower, parallel)
 INVEST_WP_2022 = 12000           # EUR (Wärmepumpe)
-GESAMT_INVEST_PV = INVEST_PV_2022 + INVEST_PV_2024  # 32.000 EUR
-GESAMT_INVEST_HAUSHALT = GESAMT_INVEST_PV + INVEST_WP_2022  # 44.000 EUR
+GESAMT_INVEST_PV = INVEST_PV_2022 + INVEST_PV_2024 + INVEST_BATT_2026  # 35.000 EUR
+GESAMT_INVEST_HAUSHALT = GESAMT_INVEST_PV + INVEST_WP_2022  # 47.000 EUR
 
 HAUSHALT_BASIS_KWH = 3000        # kWh/Jahr Grundlast (Licht, Komfort, Lüftung)
 

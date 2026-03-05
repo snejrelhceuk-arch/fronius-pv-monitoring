@@ -15,7 +15,7 @@
 
 ---
 
-## 1. Heimspeicher BYD HVS 10.2 kWh (F1)
+## 1. Heimspeicher 2× BYD HVS 20.48 kWh (F1)
 
 ### SR-BAT-01: Tiefentladeschutz
 

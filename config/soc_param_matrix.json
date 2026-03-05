@@ -1,11 +1,11 @@
 {
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
-  "_updated": "2026-03-01",
+  "_updated": "2026-03-05",
   "regelkreise": {
     "soc_extern": {
       "_doc": "Toleranz für extern geänderte SOC-Werte (z.B. manuell via Fronius App). Wenn SOC_MIN oder SOC_MAX außerhalb der Automation geändert werden, respektiert die Engine die Werte für die konfigurierte Dauer.",
-      "aktiv": true,
+      "aktiv": false,
       "parameter": {
         "extern_respekt_s": {
           "wert": 1800,
@@ -20,12 +20,12 @@
     },
     "soc_schutz": {
       "_doc": "Sicherheitshalber: SOC-Grenzen nie verletzen",
-      "aktiv": true,
+      "aktiv": false,
       "prioritaet": 1,
       "beschreibung": "SOC-Untergrenze/Obergrenze als harte Schutzschwelle",
       "parameter": {
         "stop_entladung_unter_pct": {
-          "wert": 7,
+          "wert": 5,
           "bereich": [
             0,
             20
@@ -36,7 +36,7 @@
           "beschreibung": "Unter diesem SOC: Entladung sofort stoppen"
         },
         "drosselung_unter_pct": {
-          "wert": 10,
+          "wert": 7,
           "bereich": [
             5,
             30
@@ -64,7 +64,7 @@
     },
     "morgen_soc_min": {
       "_doc": "Morgens SOC_MIN öffnen: Batterie vor PV-Übernahme entleeren. Trigger: pv_at_sunrise_1h_w >= Schwelle",
-      "aktiv": true,
+      "aktiv": false,
       "prioritaet": 2,
       "beschreibung": "Bei Sunrise Prognosewert für +1h prüfen. >= 1500W → SOC_MIN=5%, SOC_MAX=75%, SOC_MODE=manual",
       "parameter": {
@@ -120,7 +120,7 @@
           "beschreibung": "Bei forecast_quality=mittel: Öffnung erst Sunrise + x Stunden"
         },
         "morgen_vorlauf_min": {
-          "wert": 15,
+          "wert": 30,
           "bereich": [
             0,
             60
@@ -135,7 +135,7 @@
     },
     "nachmittag_soc_max": {
       "_doc": "Nachmittags SOC_MAX erhöhen: Mehr Kapazität vor Abend freigeben",
-      "aktiv": true,
+      "aktiv": false,
       "prioritaet": 2,
       "beschreibung": "SOC_MAX von Komfort (75%) auf Stress (100%) anheben wenn PV-Fenster schließt",
       "parameter": {
@@ -214,7 +214,7 @@
     },
     "komfort_reset": {
       "_doc": "Komfort-Reset: Abends auf 25/75%, PLUS intelligenter Früh-Reset am Nachmittag wenn Prognose nicht reicht",
-      "aktiv": true,
+      "aktiv": false,
       "prioritaet": 2,
       "beschreibung": "Nach Sunset oder schon nachmittags (wenn Prognose-Rest nicht reicht): zurück auf Komfort 25/75%",
       "parameter": {
@@ -343,8 +343,8 @@
           ],
           "einheit": "%",
           "obs_feld": "batt_soc_pct",
-          "aktor_kommando": "hold",
-          "beschreibung": "Unter diesem SOC: Entladesperre (Hold)"
+          "aktor_kommando": "stop_discharge",
+          "beschreibung": "Unter diesem SOC: nur Entladung stoppen (Laden bleibt erlaubt!)"
         }
       },
       "score_gewicht": 65,
@@ -352,7 +352,7 @@
     },
     "zellausgleich": {
       "_doc": "Monatlicher Vollzyklus für BYD-Zellbalancing",
-      "aktiv": true,
+      "aktiv": false,
       "prioritaet": 3,
       "beschreibung": "Prognosegesteuert: Am ersten guten Sonnentag vollständig laden",
       "parameter": {
@@ -428,7 +428,7 @@
     },
     "temp_schutz": {
       "_doc": "Gradueller Laderate-Schutz nach Zelltemperatur (Tier-2, ergänzt Tier-1 Interrupt)",
-      "aktiv": true,
+      "aktiv": false,
       "prioritaet": 1,
       "beschreibung": "Laderate stufenweise reduzieren bei steigender Batterie-Temperatur",
       "parameter": {
@@ -482,7 +482,7 @@
     },
     "forecast_plausibilisierung": {
       "_doc": "Rest-Prognose an Realität anpassen: IST vs. SOLL vergleichen, bei Abweichung verringern",
-      "aktiv": true,
+      "aktiv": false,
       "prioritaet": 2,
       "beschreibung": "PV-Erzeugung mit Prognose vergleichen, forecast_rest_kwh berechnen und ggf. reduzieren",
       "parameter": {
@@ -592,12 +592,12 @@
     },
     "wattpilot_battschutz": {
       "_doc": "Batterieschutz bei WattPilot-Ladung: Entladerate drosseln, SOC_MIN anheben, Nutzerhinweis",
-      "aktiv": true,
+      "aktiv": false,
       "prioritaet": 1,
       "beschreibung": "Schützt Batterie vor Tiefentladung durch EV-Ladung (bis 22kW)",
       "parameter": {
         "ev_leistung_schwelle_w": {
-          "wert": 2000,
+          "wert": 5000,
           "bereich": [
             500,
             5000
