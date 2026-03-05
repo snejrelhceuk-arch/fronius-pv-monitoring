@@ -37,7 +37,7 @@ class RegelAbendEntladerate(Regel):
     """Entladerate nach Tageszeit begrenzen.
 
     Abend: 29%, Nacht: 10%, Tag: auto.
-    SOC < kritisch → Hold.
+    SOC < kritisch → Entladung STOP (Laden bleibt erlaubt!).
 
     Parametermatrix: regelkreise.abend_entladerate
     """
@@ -87,8 +87,8 @@ class RegelAbendEntladerate(Regel):
         if obs.batt_soc_pct is not None and obs.batt_soc_pct < kritisch:
             return [{
                 'tier': 2, 'aktor': 'batterie',
-                'kommando': 'hold',
-                'grund': f'SOC-Notbremse: {obs.batt_soc_pct:.1f}% < {kritisch}% → Hold',
+                'kommando': 'stop_discharge',
+                'grund': f'SOC-Notbremse: {obs.batt_soc_pct:.1f}% < {kritisch}% → Entladung STOP (Laden erlaubt)',
             }]
 
         phase, rate = self._get_phase(matrix)

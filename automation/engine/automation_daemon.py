@@ -93,6 +93,9 @@ class AutomationDaemon:
         self._last_strategic = 0
         self._cycle_count = 0
 
+        # Matrix-Auto-Reload
+        self._matrix_mtime: float = 0
+
     def start(self):
         """Initialisiere alle Komponenten."""
         LOG.info("=" * 60)
@@ -141,6 +144,12 @@ class AutomationDaemon:
             )
             self._forecast_thread.start()
             LOG.info("  Tier-3 Forecast-Thread gestartet")
+
+        # Matrix-mtime merken
+        try:
+            self._matrix_mtime = os.path.getmtime(DEFAULT_MATRIX_PATH)
+        except OSError:
+            self._matrix_mtime = 0
 
         LOG.info(f"Daemon bereit — {len(self._engine._regeln)} Regeln registriert")
 
@@ -268,6 +277,16 @@ class AutomationDaemon:
 
         # 6. Engine strategic-Zyklus (alle 15 min)
         if now - self._last_strategic >= STRATEGIC_INTERVAL:
+            # Matrix-Auto-Reload: mtime prüfen
+            try:
+                mt = os.path.getmtime(DEFAULT_MATRIX_PATH)
+                if mt != self._matrix_mtime:
+                    self._engine.reload_matrix()
+                    self._matrix_mtime = mt
+                    LOG.info("Matrix-Auto-Reload: Parametermatrix neu geladen")
+            except OSError:
+                pass
+
             try:
                 results = self._engine.zyklus('strategic')
                 if results:

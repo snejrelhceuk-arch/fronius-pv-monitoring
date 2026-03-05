@@ -18,7 +18,7 @@
     │  MPPT1: String 1+2       MPPT2: String 3+4                 │           │
     │  (20+20)×345Wp=13,8kWp   (8+8)×345Wp=5,52kWp               │           │
     │        │                       │                            │           │
-    │     │   F1: Gen24 12 kW    │◄──── BYD Battery 10,24 kWh    │           │
+    │     │   F1: Gen24 12 kW    │◄──── 2× BYD Battery 20,48 kWh   │           │
     │     │   (Hybrid-WR)        │      (DC-gekoppelt!)           │           │
     │     │   19,32 kWp          │                                │           │
     │     └─────────┬────────────┘                                │           │

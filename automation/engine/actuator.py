@@ -22,6 +22,7 @@ _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.
 from automation.engine.aktoren.aktor_batterie import AktorBatterie, AktorBase
 from automation.engine.aktoren.aktor_wattpilot import AktorWattpilot
 from automation.engine.aktoren.aktor_fritzdect import AktorFritzDECT
+from automation.engine.schaltlog import logge_engine
 
 LOG = logging.getLogger('actuator')
 
@@ -67,6 +68,10 @@ def init_persist_log(db_path: str = PERSIST_DB_PATH) -> sqlite3.Connection:
 # Actuator
 # ═════════════════════════════════════════════════════════════
 
+# Deduplizierungs-Sperre: Identische Befehle innerhalb dieser Zeit überspringen
+DEDUP_INTERVALL_S = 45  # Sekunden
+
+
 class Actuator:
     """Dispatcher: Empfängt Aktionen, führt aus, verifiziert, loggt.
 
@@ -82,6 +87,9 @@ class Actuator:
         # Aktor-Registry
         self._aktoren: dict[str, AktorBase] = {}
         self._register_default_aktoren()
+
+        # Deduplizierung: {(aktor, kommando, wert_str): timestamp}
+        self._letzte_aktion: dict[tuple, float] = {}
 
     def _register_default_aktoren(self):
         """Standard-Aktoren registrieren."""
@@ -118,17 +126,34 @@ class Actuator:
             dict mit 'ok', 'kommando', 'detail', optional 'verify'
         """
         aktor_name = aktion.get('aktor', '')
+        kommando = aktion.get('kommando', '?')
+        wert_str = str(aktion.get('wert', ''))
+        dedup_key = (aktor_name, kommando, wert_str)
+
         aktor = self._aktoren.get(aktor_name)
 
         if not aktor:
             LOG.error(f"Kein Aktor für '{aktor_name}' registriert")
-            ergebnis = {'ok': False, 'kommando': aktion.get('kommando', '?'),
+            ergebnis = {'ok': False, 'kommando': kommando,
                         'detail': f'Kein Aktor: {aktor_name}'}
             self._log_aktion(aktion, ergebnis)
             return ergebnis
 
+        # ── Deduplizierung: identischen Befehl nicht wiederholen ──
+        now = time.time()
+        letzte_ts = self._letzte_aktion.get(dedup_key, 0)
+        if (now - letzte_ts) < DEDUP_INTERVALL_S:
+            LOG.debug(f"Dedup: {aktor_name}.{kommando}={wert_str} übersprungen "
+                      f"(vor {now - letzte_ts:.0f}s bereits gesendet)")
+            return {'ok': True, 'kommando': kommando,
+                    'detail': 'Dedupliziert (identischer Befehl kürzlich gesendet)'}
+
         # Ausführen
         ergebnis = aktor.ausfuehren(aktion)
+
+        # Bei Erfolg: Timestamp für Deduplizierung merken
+        if ergebnis.get('ok'):
+            self._letzte_aktion[dedup_key] = now
 
         # Read-Back Verifikation (nur bei echtem Betrieb und Erfolg)
         if ergebnis.get('ok') and not self.dry_run:
@@ -202,6 +227,21 @@ class Actuator:
             conn.commit()
         except Exception as e:
             LOG.error(f"Persist-DB Logging fehlgeschlagen: {e}")
+
+        # ── Zentrales Schaltlog ──
+        try:
+            wert_str = ''
+            if aktion.get('wert') is not None:
+                wert_str = str(aktion['wert'])
+            logge_engine(
+                aktor=aktion.get('aktor', '?'),
+                kommando=aktion.get('kommando', '?'),
+                wert=wert_str,
+                ergebnis=status,
+                grund=aktion.get('grund', ''),
+            )
+        except Exception as e:
+            LOG.warning(f"Schaltlog Eintrag fehlgeschlagen: {e}")
 
     # ── Cleanup ──────────────────────────────────────────────
 

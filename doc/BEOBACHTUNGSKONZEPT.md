@@ -2,7 +2,7 @@
 
 **Erstellt:** 2026-02-20  
 **Standort:** Erlau 51.01 °N 12.95 °O, ca. 270 m NN  
-**System:** 37.59 kWp / 3 WR / BYD HVS 10.2 kWh / Pi4-Kollector
+**System:** 37.59 kWp / 3 WR / 2× BYD HVS 20.48 kWh / RPi5-Collector
 
 ---
 

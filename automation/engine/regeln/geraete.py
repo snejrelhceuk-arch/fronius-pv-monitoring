@@ -20,6 +20,7 @@ from automation.engine.regeln.basis import Regel
 from automation.engine.param_matrix import (
     ist_aktiv, get_param, get_score_gewicht,
 )
+from automation.engine.schaltlog import logge_extern
 
 LOG = logging.getLogger('engine')
 
@@ -286,6 +287,8 @@ class RegelHeizpatrone(Regel):
             if self._burst_ende == 0 and not self._drain_modus:
                 self._extern_ein_ts = time.time()
                 LOG.info('HP extern eingeschaltet erkannt → Hysterese aktiv')
+                logge_extern('fritzdect', 'HP extern EIN',
+                             'Manuell eingeschaltet (nicht durch Engine)')
         if not obs.heizpatrone_aktiv:
             self._extern_ein_ts = 0
         self._letzter_hp_zustand = obs.heizpatrone_aktiv
