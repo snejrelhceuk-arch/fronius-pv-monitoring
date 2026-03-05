@@ -236,14 +236,14 @@ Score um 16:30h:     55  (Deadline, voller Score)
 |-----------|----------|---------|---------|
 | abend_start | 15 h | 13–18 h | **Start der Abend-Drosselung.** Ab dieser Uhrzeit wird die maximale Entladerate begrenzt. Früher = mehr Netzanteil am Nachmittag, aber Batterie hält länger. |
 | abend_ende | 0 h | 0–2 h | **Ende der Abend-Phase** (0 = Mitternacht). |
-| abend_rate | 29% | 10–80% | **Maximale Entladerate am Abend.** 29% der BYD HVS 10.24 kWh ≈ **3.0 kW**. Alles über 3 kW (z.B. Herd mit 4 kW) wird aus dem Netz bezogen. Niedriger = mehr Netzanteil, Batterie hält länger. Höher = mehr Eigenverbrauch, aber Batterie könnte vor Mitternacht leer sein. |
+| abend_rate | 29% | 10–80% | **Maximale Entladerate am Abend.** 29% der 2× BYD HVS 20,48 kWh ≈ **5.9 kW**. Alles darüber wird aus dem Netz bezogen. Niedriger = mehr Netzanteil, Batterie hält länger. Höher = mehr Eigenverbrauch, aber Batterie könnte vor Mitternacht leer sein. ⚠️ *Regel aktuell deaktiviert (März 2026).* |
 | nacht_start | 0 h | 0–2 h | **Start der Nacht-Phase.** |
 | nacht_ende | 6 h | 4–8 h | **Ende der Nacht-Phase.** |
 | nacht_rate | 10% | 0–30% | **Maximale Entladerate in der Nacht.** 10% ≈ **1.0 kW** — reicht für Standby-Last (Kühlschrank, Heizung, WLAN). Spart die letzten kWh für den Morgen. |
 | kritisch_soc | 10% | 5–20% | **Entladesperre (Hold).** Unter diesem SOC wird die Batterie komplett gesperrt (0 W Entladung). Sicherheitsnetz damit die Batterie nie völlig leer wird. |
 
 **Rechenbeispiel:**
-- 18:00 Uhr: SOC = 80%, Kapazität 10.24 kWh × (80%–10%) = **7.2 kWh** nutzbar
+- 18:00 Uhr: SOC = 80%, Kapazität 20.48 kWh × (80%–10%) = **14.3 kWh** nutzbar
 - Abend-Rate 3 kW → 7.2 kWh ÷ 3 kW = **2.4 Stunden** bei Volllast
 - Real: Grundlast ~400 W + Spitzen → Batterie hält bis ca. 2–4 Uhr nachts
 - Nacht-Rate 1 kW → restliche kWh reichen für Standby bis Sonnenaufgang
@@ -338,7 +338,7 @@ Score um 16:30h:     55  (Deadline, voller Score)
 |-----------|----------|---------|---------|
 | ev_leistung_schwelle | 2000 W | 500–5000 W | **Mindest-EV-Leistung damit die Regel greift.** Erst ab 2 kW EV-Ladung wird die Batterie geschützt. Unter 2 kW ist die Last unkritisch. |
 | soc_drosselung_ab | 50% | 30–70% | **SOC-Schwelle für Drosselung.** Unter diesem SOC wird die Entladerate reduziert wenn ein EV lädt. Verhindert schnelle Tiefentladung. |
-| entladerate_reduziert | 30% | 10–50% | **Reduzierte Entladerate.** ≈ 0.3C bei 10.24 kWh → ca. 3 kW max. Die Batterie gibt nur Grundlast ab, das EV wird primär aus PV/Netz versorgt. |
+| entladerate_reduziert | 30% | 10–50% | **Reduzierte Entladerate.** ≈ 0.3C bei 20.48 kWh → ca. 6 kW max. Die Batterie gibt nur Grundlast ab, das EV wird primär aus PV/Netz versorgt. |
 | soc_min_puffer | 5% | 3–15% | **SOC_MIN-Anhebung.** Wenn SOC innerhalb dieses Puffers über SOC_MIN liegt, wird SOC_MIN temporär angehoben. Verhindert Grenzwert-Oszillation. |
 | soc_min_netz | 25% | 15–40% | **SOC_MIN bei Netzumstellung.** Wenn die Batterie zu stark beansprucht wird, wird SOC_MIN auf diesen Wert gesetzt → Batterie hält 25% Reserve und das Haus bezieht aus dem Netz. |
 | wolken_toleranz | 300 s | 60–600 s | **Wolkentoleranz.** Kurze PV-Einbrüche (Wolkendurchgang) werden X Sekunden lang toleriert, bevor die Schutzregel greift. Verhindert Flip-Flop bei wechselnder Bewölkung. |
@@ -548,7 +548,7 @@ Steuert die 2-kW-Heizpatrone im Warmwasserspeicher über eine Fritz!DECT-Steckdo
 
 ## 9. Grundlagenwissen
 
-### SOC-Bereiche der BYD HVS 10.24 (LFP)
+### SOC-Bereiche der 2× BYD HVS 20.48 kWh (LFP)
 
 ```
   0%  ████░░░░░░░░░░░░░░░░  25% ████████████░░░░  75% ████████████████  100%
@@ -598,10 +598,10 @@ Bei gleichzeitig aktiven Regeln entscheidet der Score:
 
 | Parameter | Wert |
 |-----------|------|
-| Batterie | BYD HVS 10.2 (LFP) |
-| Kapazität | 10.24 kWh |
-| Max. Ladeleistung | 10.24 kW (1C) |
-| Max. Entladeleistung | 10.24 kW (1C) |
+| Batterie | 2× BYD HVS parallel (LFP, BCU 2.0 Master) |
+| Kapazität | 20.48 kWh (2× 10.24 kWh) |
+| Max. Ladeleistung | 12 kW (WR-Limit, BMS erlaubt 20.48 kW) |
+| Max. Entladeleistung | 12 kW (WR-Limit, BMS erlaubt 20.48 kW) |
 | PV-Anlage | 37.59 kWp (3 Strings) |
 | WR-Limit | 26.5 kW (3× Fronius Gen24) |
 | Chemie | LiFePO₄ (LFP) |

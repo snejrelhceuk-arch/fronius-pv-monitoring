@@ -4,9 +4,9 @@
 
 | Parameter | Wert | Quelle |
 |-----------|------|--------|
-| Batterie | BYD HVS 10.2 kWh (LFP, SOH 92%) | Fixwert |
-| Nutzbar 20→5% | **1.53 kWh** | (15% × 10.2) |
-| Nutzbar 70→100% | **3.06 kWh** | (30% × 10.2) |
+| Batterie | 2× BYD HVS 20.48 kWh (LFP, parallel, SOH ~96%) | battery_control.json |
+| Nutzbar 20→5% | **3.07 kWh** | (15% × 20.48) |
+| Nutzbar 70→100% | **6.14 kWh** | (30% × 20.48) |
 | Nacht-Grundlast | ~1000 W (00–06 Uhr) | DB Mittelwert 7d |
 | Morgen-Last | ~2500 W (07–09 Uhr) | DB Mittelwert 7d |
 | PV-Start (Feb) | ~08:00 (spürbar ab 09:00) | Forecast |
@@ -485,8 +485,8 @@ Aufheben (Tag-Phase):
 
 ```json
 "leistungsbegrenzung": {
-    "entladerate_abend_prozent": 29,    ← 29% × 10240W = ~3,0 kW
-    "entladerate_nacht_prozent": 10,    ← 10% × 10240W = ~1,0 kW
+    "entladerate_abend_prozent": 29,    ← 29% × 20480W = ~5,9 kW (⚠️ Regel deaktiviert seit März 2026)
+    "entladerate_nacht_prozent": 10,    ← 10% × 20480W = ~2,0 kW (⚠️ Regel deaktiviert seit März 2026)
 },
 "zeitsteuerung": {
     "abend_entladelimit_ab": 15,        ← Beginn Abend-Phase
@@ -498,7 +498,7 @@ Aufheben (Tag-Phase):
 
 ### Warum 29% Abend?
 
-- 29% × 10.240 W = **2.970 W** (≈ 3 kW)
+- 29% × 20.480 W = **5.939 W** (≈ 5,9 kW) — ⚠️ *Regel deaktiviert seit März 2026*
 - Deckt ab: Küche (800W), TV/Licht (300W), Kühlschrank (150W), Standby (200W) = ~1.450 W
 - Deckt NICHT ab: Backofen (3.500W), Waschmaschine (2.200W), Trockner (2.500W)
 - Spitzenlasten → Grid bezieht automatisch den Rest (Nulleinspeiser-Setup)

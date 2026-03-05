@@ -42,7 +42,7 @@ Diese Daten werden **gemeinfrei** zur Verfügung gestellt.
 | **3** | Ab Okt 2025 | **37,59 kWp** | Gen24 12kW + Gen24 10kW + Symo 4,5kW |
 
 **Standort:** Mittelsachsen (Erlau, 51,01°N 12,95°E, 315m NN)  
-**Batterie:** BYD HVS 10,24 kWh / 10 kW (seit Nov 2021, unverändert)  
+**Batterie:** 2× BYD HVS 20,48 kWh / 12 kW (Tower 1 seit Nov 2021, Tower 2 seit März 2026)  
 **Strategie:** Nulleinspeiser (seit Beginn)
 
 ---
@@ -88,7 +88,7 @@ Diese Daten werden **gemeinfrei** zur Verfügung gestellt.
 | **Generator** | 19,32 kWp | 12,42 kWp | 5,85 kWp | **37,59 kWp** |
 | **Inverter** | 12,0 kW | 10,0 kW | 4,5 kW | **26,5 kW** |
 | **Overpaneling** | 161% | 124% | 130% | **142%** |
-| **Batterie** | BYD HVS 10 kWh | — | — | **10,24 kWh** |
+| **Batterie** | BYD HVS 10 kWh | — | — | **20,48 kWh** (2× HVS parallel, ab März 2026) |
 
 > Summe Module: 62× 345 Wp + 36× 450 Wp = 21,39 + 16,20 = **37,59 kWp**  
 > Summe Wechselrichter: 12 + 10 + 4,5 = **26,5 kW** (+ 1 kW Smart Meter = 27,5 kW Systemleistung)  
@@ -227,12 +227,12 @@ Die Erweiterung von 21,4 kWp auf 37,6 kWp (+76%) führte zu:
 
 **Warum funktioniert das?**
 - Verbrauch wächst parallel (E-Autos: +5.423 kWh Wattpilot in 2025)
-- 10,2 kWh Batterie bleibt ausreichend (keine Überdimensionierung nötig)
+- 20,48 kWh Batterie (seit März 2026, vorher 10,2 kWh) bietet größere Nacht-/Morgen-Pufferung
 - Multi-Wechselrichter-Setup verhindert Abregelung
 
 ### 4. Batterie-Dimensionierung
 
-**Nur 10,2 kWh Batterie** bei 37,6 kWp PV!
+**20,48 kWh Batterie** (seit März 2026, vorher 10,2 kWh) bei 37,6 kWp PV!
 
 Ratio: 0,27 kWh Batterie pro kWp PV (extrem niedrig)
 
@@ -298,10 +298,11 @@ Ratio: 0,27 kWh Batterie pro kWp PV (extrem niedrig)
 **Investition (geschätzt):**
 - Phase 1 (2021): ~20.000 € (21,4 kWp + Gen24 + Batterie)
 - Phase 2 (2025): ~15.000 € (16,2 kWp + Gen24 + Symo)
-- **Gesamt: ~35.000 €**
+- Batterie 2 (2026): ~3.000 € (2. BYD HVS Tower)
+- **Gesamt: ~38.000 €**
 
 **Amortisation:**
-- Bei 4.600 €/Jahr Ersparnis: **7,6 Jahre**
+- Bei 5.000 €/Jahr Ersparnis: **7,6 Jahre**
 - Ohne Erweiterung (bei 3.000 €/Jahr): **6,7 Jahre**
 
 **Faktoren:**
@@ -336,7 +337,7 @@ Ratio: 0,27 kWh Batterie pro kWp PV (extrem niedrig)
 ### Was überrascht hat:
 
 1. **Kleine Batterie ausreichend**
-   - 10,2 kWh für 37,6 kWp funktioniert
+   - 20,48 kWh seit März 2026 (vorher 10,2 kWh für 37,6 kWp — funktionierte bereits)
    - Große Verbraucher wichtiger als große Batterie
    - Kosten/Nutzen: Kleine Batterie besser
 
@@ -378,7 +379,7 @@ Ratio: 0,27 kWh Batterie pro kWp PV (extrem niedrig)
 
 2. **Zweite Batterie?**
    - Diskussionswürdig
-   - Aktuell: 10,2 kWh funktioniert
+   - Aktuell: 20,48 kWh (2× HVS parallel seit März 2026)
    - Alternative: E-Auto-Batterien als V2H (Vehicle-to-Home)
    - Kosten: 8.000 € für +10 kWh Batterie vs. bereits 150 kWh in Autos
 
@@ -392,7 +393,7 @@ Ratio: 0,27 kWh Batterie pro kWp PV (extrem niedrig)
 1. **Vehicle-to-Home (V2H)**
    - Bidirektionales Laden
    - E-Auto als Haus-Batterie nutzen
-   - 150 kWh statt 10,2 kWh verfügbar!
+   - 150 kWh statt 20,48 kWh verfügbar!
 
 2. **Dynamische Stromtarife**
    - Tibber, aWATTar etc.
@@ -414,6 +415,7 @@ Apr 2024    | +3x E-Autos (50kWh) + Wattpilot
 Mai 2025    | Erweiterung Start
 Okt 2025    | Final: 37,6 kWp + Gen24 12kW + Gen24 10kW + Symo 4,5kW
 Feb 2026    | Modbus-Logging: P×t → Zählerstand-Delta (Driftkorrektur)
+Mär 2026    | +BYD HVS Tower 2 (BCU 2.0) → 20,48 kWh parallel
 ```
 
 ### Performance Summary
@@ -487,7 +489,7 @@ Beide Methoden sind korrekt, nur unterschiedliche Perspektiven!
 
 ### PV-Anlage: Kosten pro kWh
 
-**Investition:** 32.000 € (2022: 24.000 € + 2024: 8.000 €)
+**Investition:** 35.000 € (2022: 24.000 € + 2024: 8.000 € + 2026: 3.000 € Batterie 2)
 
 **EUR/kWh Entwicklung (real):**
 
@@ -518,7 +520,7 @@ kontinuierlich durch steigende Produktion.
 Die Gesamtinvestition umfasst **zwei unterschiedliche Systeme**:
 
 #### 1. PV-Amortisation (Technische Sicht)
-**Investition:** 32.000 € (reine PV-Anlage)  
+**Investition:** 35.000 € (reine PV-Anlage inkl. Batterie-Erweiterung 2026)  
 **Berechnung:** Brutto-Ersparnis (Solar × Strompreis, wie Solarweb)
 
 | Jahr | Brutto-Ersparnis | Rel. Amort. | EUR/kWh (25J) |
@@ -531,7 +533,7 @@ Die Gesamtinvestition umfasst **zwei unterschiedliche Systeme**:
 **Fokus:** Was kostet die PV-Anlage pro kWh? Wie schnell amortisiert sich das System selbst?
 
 #### 2. Haushalts-Amortisation (Finanzielle Realität)
-**Investition:** 44.000 € (PV 32.000 € + Wärmepumpe 12.000 €)  
+**Investition:** 47.000 € (PV 35.000 € + Wärmepumpe 12.000 €)  
 **Berechnung:** Alle Ersparnisse (Strom-Netto + Heizung + Benzin)
 
 **WICHTIG:** Heiz- und Benzin-Ersparnis sind **netto nach Abzug anteiliger Netzkosten** für WP und E-Auto.

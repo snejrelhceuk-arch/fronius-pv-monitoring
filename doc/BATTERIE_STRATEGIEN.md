@@ -4,7 +4,7 @@
 
 **Hardware:**
 - Fronius Gen24 12 kW (F1) — Firmware PS: 1.6.1-30738, PS2: 3.5.6-23416
-- BYD Battery-Box Premium HVS 10,2 kWh (LFP-Chemie)
+- 2× BYD Battery-Box Premium HVS 20,48 kWh (LFP-Chemie, parallel seit März 2026)
 - SOH: 92%, Zelltemp: 15–18 °C, Systemspannung: ~418 V
 
 **Steuerungskanäle:**
@@ -23,8 +23,8 @@ Netzladung:         EIN
 AC-Ladung:          EIN
 HYB_EM_MODE:        0 (AUTOMATIK)
 StorCtl_Mod:        0 (kein Limit aktiv)
-InWRte:             100% (≙ 10.240 W)
-OutWRte:            100% (≙ 10.240 W)
+InWRte:             100% (≙ 20.480 W)
+OutWRte:            100% (≙ 20.480 W)
 ChaGriSet:          1 (Grid ON)
 MinRsvPct:          25%
 RvrtTms:            0 (KEIN Auto-Revert!)

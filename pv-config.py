@@ -1705,6 +1705,60 @@ def _speichere_matrix(matrix: dict):
 
 
 # ═══════════════════════════════════════════════════════════════
+# Schalt-Logbuch
+# ═══════════════════════════════════════════════════════════════
+
+def menu_schaltlog():
+    """Zentrales Schalt-Logbuch anzeigen (scrollbar).
+
+    Zeigt alle Schaltvorgänge:
+      • ENGINE: eigene Aktionen (exakter Zeitstempel)
+      • EXTERN: extern erkannte Änderungen (~ungefährer Zeitpunkt)
+    """
+    from automation.engine.schaltlog import lese_log, SCHALTLOG_PATH
+
+    while True:
+        choice = wt_menu('Schalt-Logbuch — Alle Schaltvorgänge', [
+            ('1', 'Logbuch anzeigen (neueste zuerst)'),
+            ('2', 'Logbuch anzeigen (letzte 100)'),
+            ('3', 'Logbuch anzeigen (alle)'),
+            ('4', f'Status & Dateigröße'),
+        ])
+        if not choice:
+            return
+
+        if choice in ('1', '2', '3'):
+            if choice == '2':
+                text = lese_log(max_zeilen=100)
+            elif choice == '3':
+                text = lese_log(max_zeilen=2000)
+            else:
+                text = lese_log(max_zeilen=500)
+
+            tmp = '/tmp/pv_schaltlog.txt'
+            with open(tmp, 'w') as f:
+                f.write(text)
+            wt_textbox(tmp)
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+        elif choice == '4':
+            info = f'Schaltlog-Datei: {SCHALTLOG_PATH}\n\n'
+            if os.path.exists(SCHALTLOG_PATH):
+                size = os.path.getsize(SCHALTLOG_PATH)
+                with open(SCHALTLOG_PATH, 'r') as f:
+                    n_lines = sum(1 for _ in f)
+                info += (f'Dateigröße: {size:,} Bytes\n'
+                         f'Einträge:   {n_lines}\n'
+                         f'Max:        2000 (ältere werden automatisch entfernt)\n')
+            else:
+                info += 'Datei existiert noch nicht.\nSie wird beim ersten Schaltvorgang angelegt.\n'
+            wt_msgbox(info)
+
+
+# ═══════════════════════════════════════════════════════════════
 # Hauptmenü
 # ═══════════════════════════════════════════════════════════════
 
@@ -1722,6 +1776,7 @@ def hauptmenu():
             ('4', 'System-Status & Warnungen'),
             ('5', 'Solar-Prognose'),
             ('6', 'Heizpatrone (Fritz!DECT)'),
+            ('7', 'Schalt-Logbuch'),
             ('q', 'Beenden'),
         ]:
             args.extend([tag, desc])
@@ -1743,6 +1798,8 @@ def hauptmenu():
             menu_forecast()
         elif choice == '6':
             menu_heizpatrone()
+        elif choice == '7':
+            menu_schaltlog()
 
 
 # ═══════════════════════════════════════════════════════════════

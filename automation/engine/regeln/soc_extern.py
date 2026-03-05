@@ -17,6 +17,7 @@ from typing import Optional
 
 from automation.engine.obs_state import ObsState
 from automation.engine.param_matrix import get_param
+from automation.engine.schaltlog import logge_extern
 
 LOG = logging.getLogger('engine')
 
@@ -84,6 +85,8 @@ class SocExternTracker:
                 respekt_s = get_param(matrix, 'soc_extern', 'extern_respekt_s', 1800)
                 LOG.info(f'SOC extern geändert erkannt: {self._extern_grund} '
                          f'→ Toleranz {respekt_s}s aktiv')
+                logge_extern('batterie', self._extern_grund,
+                             f'Toleranz {respekt_s}s')
 
         # ── SOC_MAX Prüfung ──
         if (self._prev_max is not None and soc_max is not None
@@ -99,6 +102,8 @@ class SocExternTracker:
                 respekt_s = get_param(matrix, 'soc_extern', 'extern_respekt_s', 1800)
                 LOG.info(f'SOC extern geändert erkannt: {self._extern_grund} '
                          f'→ Toleranz {respekt_s}s aktiv')
+                logge_extern('batterie', self._extern_grund,
+                             f'Toleranz {respekt_s}s')
 
         self._prev_min = soc_min
         self._prev_max = soc_max
