@@ -95,6 +95,9 @@ class AutomationDaemon:
         self._last_strategic = 0
         self._cycle_count = 0
 
+        # Sunset-Erkennung für Tagesbericht
+        self._war_tag: Optional[bool] = None  # is_day im vorherigen Zyklus
+
         # Matrix-Auto-Reload
         self._matrix_mtime: float = 0
 
@@ -314,6 +317,17 @@ class AutomationDaemon:
                 self._last_strategic = now
             except Exception as e:
                 LOG.error(f"Engine strategic-Zyklus: {e}")
+
+        # 7. Sunset-Erkennung → Tagesbericht senden
+        if self._notifier and self._obs.is_day is not None:
+            if self._war_tag is True and self._obs.is_day is False:
+                LOG.info("Sunset erkannt → Tagesbericht wird gesendet")
+                try:
+                    with self._obs_lock:
+                        self._notifier.sende_sunset_bericht(self._obs)
+                except Exception as e:
+                    LOG.error(f"Sunset-Tagesbericht Fehler: {e}")
+            self._war_tag = self._obs.is_day
 
         # Heartbeat-Log (alle 5 min)
         if self._cycle_count % (300 // OBS_COLLECT_INTERVAL) == 0:
