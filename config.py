@@ -149,7 +149,7 @@ HEIZPERIODE_MONATE = {10, 11, 12, 1, 2, 3}  # Okt–Mär (6 Monate)
 
 # --- E-Mail-Benachrichtigungen ---
 # Einmalige Meldung bei kritischen Events (Deduplizierung: 1× pro Event-Typ pro Tag)
-NOTIFICATION_EMAIL = 'jk@hekabe.de'
+NOTIFICATION_EMAIL = 'navigator@hekabe.de'
 NOTIFICATION_SMTP_HOST = 'smtp.strato.de'  # Strato SMTP-Relay
 NOTIFICATION_SMTP_PORT = 465               # SSL (nicht 587/STARTTLS)
 NOTIFICATION_SMTP_USER = 'navigator@hekabe.de'
@@ -157,7 +157,8 @@ NOTIFICATION_SMTP_USER = 'navigator@hekabe.de'
 # Setzen via: pv-config → Benachrichtigungen → SMTP-Passwort
 NOTIFICATION_FROM = 'navigator@hekabe.de'
 # Meldbare Events — Keys müssen in EVENT_THRESHOLDS definiert sein
-NOTIFICATION_EVENTS = ['batt_temp_40', 'batt_soc_kritisch']
+# Sonder-Event 'sunset_tagesbericht': 24h-Zusammenfassung bei Sonnenuntergang
+NOTIFICATION_EVENTS = ['batt_temp_40', 'batt_soc_kritisch', 'netz_ueberlast', 'sunset_tagesbericht']
 # Schwellwerte für Events (obs_feld, operator, schwelle)
 EVENT_THRESHOLDS = {
     'batt_temp_40':      {'obs_feld': 'batt_temp_max_c', 'op': '>=', 'schwelle': 40,  'text': 'Batterie-Temperatur ≥ 40°C'},

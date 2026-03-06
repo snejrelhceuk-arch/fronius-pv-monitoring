@@ -48,7 +48,7 @@
           "beschreibung": "Unter diesem SOC: Entladerate auf 50% drosseln"
         },
         "stop_ladung_ueber_pct": {
-          "wert": 98,
+          "wert": 100,
           "bereich": [
             80,
             100

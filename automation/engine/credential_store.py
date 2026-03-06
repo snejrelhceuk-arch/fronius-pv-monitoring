@@ -113,8 +113,12 @@ def lade(name: str) -> str | None:
         Klartext-String oder None wenn nicht vorhanden / nicht entschlüsselbar
     """
     ziel = _key_path(name)
-    if not ziel.exists():
-        LOG.debug(f'Credential-Datei nicht gefunden: {ziel}')
+    try:
+        if not ziel.exists():
+            LOG.debug(f'Credential-Datei nicht gefunden: {ziel}')
+            return None
+    except PermissionError:
+        LOG.warning(f'Keine Leserechte auf {ziel} — als root ausführen?')
         return None
 
     try:
@@ -126,6 +130,9 @@ def lade(name: str) -> str | None:
             f'Credential {ziel} konnte nicht entschlüsselt werden — '
             f'machine-id geändert oder Datei von anderem Host?'
         )
+        return None
+    except PermissionError:
+        LOG.warning(f'Keine Leserechte auf {ziel} — als root ausführen?')
         return None
     except Exception as e:
         LOG.error(f'Credential {ziel} Lesefehler: {e}')

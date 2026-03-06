@@ -18,3 +18,30 @@
  2026-03-06, 15:32 bis 15:45  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Burst 30 Min): Phase 2 (Mittag): P_Batt=7067W, rest_kwh=69.2, ba  (13x)
  2026-03-06, 15:46:21  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
 ~2026-03-06, 15:46  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)
+~2026-03-06, 15:47  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)
+~2026-03-06, 15:46 bis 15:55  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (4x)
+~2026-03-06, 15:47 bis 15:57  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (4x)
+ 2026-03-06, 15:58 bis 16:01  ENGINE   fritzdect    hp_aus                        OK       HP AUS: HART: Phase 4 rest_h=1.9 < 2.0 → HARD BLOCK  (4x)
+~2026-03-06, 15:47 bis 16:01  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (5x)
+ 2026-03-06, 16:02 bis 16:16  ENGINE   fritzdect    hp_aus                        OK       HP AUS: HART: Phase 4 rest_h=1.7 < 2.0 → HARD BLOCK  (14x)
+~2026-03-06, 15:46 bis 16:16  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (11x)
+ 2026-03-06, 16:17 bis 16:31  ENGINE   fritzdect    hp_aus                        OK       HP AUS: HART: Phase 4 rest_h=1.4 < 2.0 → HARD BLOCK  (15x)
+~2026-03-06, 15:46 bis 16:32  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (21x)
+~2026-03-06, 15:46 bis 16:41  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (25x)
+ 2026-03-06, 16:46 bis 17:01  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%  (2x)
+ 2026-03-06, 17:06:00  ENGINE   batterie     set_charge_rate=68            OK       Laderate dynamisch: PV 3413W < 5000W → Laderate 68%
+ 2026-03-06, 17:09:04  ENGINE   batterie     set_charge_rate=63            OK       Laderate dynamisch: PV 3151W < 5000W → Laderate 63%
+ 2026-03-06, 17:11:07  ENGINE   batterie     set_charge_rate=58            OK       Laderate dynamisch: PV 2944W < 5000W → Laderate 58%
+ 2026-03-06, 17:14:12  ENGINE   batterie     set_charge_rate=52            OK       Laderate dynamisch: PV 2623W < 5000W → Laderate 52%
+ 2026-03-06, 17:16:14  ENGINE   batterie     set_charge_rate=47            OK       Laderate dynamisch: PV 2383W < 5000W → Laderate 47%
+ 2026-03-06, 17:16:58  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-06, 17:18:20  ENGINE   batterie     set_charge_rate=40            OK       Laderate dynamisch: PV 2006W < 5000W → Laderate 40%
+ 2026-03-06, 17:20:24  ENGINE   batterie     set_charge_rate=35            OK       Laderate dynamisch: PV 1783W < 5000W → Laderate 35%
+ 2026-03-06, 17:21:26  ENGINE   batterie     set_charge_rate=30            OK       Laderate dynamisch: PV 1516W < 5000W → Laderate 30%
+ 2026-03-06, 17:32 bis 17:47  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%  (2x)
+ 2026-03-06, 17:57:19  ENGINE   batterie     set_soc_mode=manual           OK       Komfort-Reset 17:57: SOC_MODE→manual
+ 2026-03-06, 17:57:20  ENGINE   batterie     set_soc_max=75                OK       Komfort-Reset 17:57: SOC_MAX 100%→75% (Tagesende, LFP-Schonung)
+ 2026-03-06, 17:57 bis 17:58  ENGINE   batterie     auto                          OK       Komfort-Reset 17:58: Modbus StorCtl_Mod 1→0 (Limits aufheben)  (2x)
+ 2026-03-06, 17:57 bis 18:02  ENGINE   batterie     auto                          OK       Komfort-Reset 18:02: Modbus StorCtl_Mod 1→0 (Limits aufheben)  (6x)
+ 2026-03-06, 17:57 bis 18:13  ENGINE   batterie     auto                          OK       Komfort-Reset 18:13: Modbus StorCtl_Mod 1→0 (Limits aufheben)  (17x)
+ 2026-03-06, 17:57 bis 23:09  ENGINE   batterie     auto                          OK       Komfort-Reset 23:09: Modbus StorCtl_Mod 1→0 (Limits aufheben)  (304x)

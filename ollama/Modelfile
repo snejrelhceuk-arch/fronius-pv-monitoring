@@ -157,7 +157,7 @@ Stack: Raspbian Bullseye 11, Python 3.9.2, Flask 1.1.2, gunicorn 23.0.0,
 
 
 ═════════════════════════════════════════════════════════════════
-DYNAMISCHE UPDATES (Stand: 2026-03-06 04:00)
+DYNAMISCHE UPDATES (Stand: 2026-03-06 15:47)
 ═════════════════════════════════════════════════════════════════
 
 --- Aktuelle Config-Werte ---
@@ -206,8 +206,16 @@ HAUSHALT_BASIS_KWH = 3000        # kWh/Jahr Grundlast (Licht, Komfort, Lüftung)
 WP_BASIS = {
 HEIZKOSTEN_ERSPARNIS = {
 HEIZPERIODE_MONATE = {10, 11, 12, 1, 2, 3}  # Okt–Mär (6 Monate)
+NOTIFICATION_EMAIL = 'jk@hekabe.de'
+NOTIFICATION_SMTP_HOST = 'smtp.strato.de'  # Strato SMTP-Relay
+NOTIFICATION_SMTP_PORT = 465               # SSL (nicht 587/STARTTLS)
+NOTIFICATION_SMTP_USER = 'navigator@hekabe.de'
+NOTIFICATION_FROM = 'navigator@hekabe.de'
+NOTIFICATION_EVENTS = ['batt_temp_40', 'batt_soc_kritisch']
+EVENT_THRESHOLDS = {
 
 --- Letzte Git-Commits ---
+47cb477 fix: Tier-1 SOC Recovery + feat: BMS-Live, E-Mail, Forecast
 403135c feat: 2× BYD HVS 20.48 kWh parallel — Batterie-Upgrade März 2026
 18f4bbf SOC-Extern-Toleranz + Morgen-Vorlauf + Docs
 ff8c768 Analyse-Ansichten: Navigation, Summen, Amortisation, Dark-Theme
@@ -217,7 +225,6 @@ f923b14 Aufräumen: sys.path-Hacks entfernt, system.py refactored, monitor_web_s
 55f28aa TODO aufräumen: erledigte Abschnitte entfernt, Alerting zusammengeführt
 b20fab8 Tiefenprüfung: 7 Fixes (P1-P3) + 21/21 Tests grün
 b443081 Refactor: engine + observer in Subpackages aufgeteilt
-3188b8a refactor: battery_control.py → automation/battery_control.py
 
 --- Kürzlich geänderte Module (5) ---
 

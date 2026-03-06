@@ -62,7 +62,9 @@ Forecast) — jetzt fehlt die Auswertung und Zustellung.
 **Aktive Benachrichtigungen (E-Mail):**
 - [x] Kanal: E-Mail via Strato SMTP/SSL — `EventNotifier` + `credential_store` (2026-03-06)
 - [x] Trigger: konfigurierbar in `config.py` NOTIFICATION_EVENTS (Inverter offline, Collector gestoppt, SOC-Schutz, Grid-Export, …)
-- [ ] Tageszusammenfassung abends: Ertrag, Autarkie, Auffälligkeiten
+- [x] Sunset-Tagesbericht: 24h-Zusammenfassung (Sunset→Sunset) per E-Mail bei Sonnenuntergang (2026-03-06)
+      Datenquelle: `hourly_data` direkt. Trigger: `is_day` True→False in `automation_daemon.py`
+      Format: SOC, Batterie, Energie (PV/Verbrauch/Bezug/Einspeisung/Autarkie), Verbraucher (WP, EV)
 
 **Forecast-getriebene Empfehlungen:**
 - [x] "Morgen erwartet: X kWh" → `forecast_tomorrow_kwh` in obs_state, Nachtlade-Schwelle in soc_steuerung (2026-03-06)
