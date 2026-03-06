@@ -1,11 +1,11 @@
 {
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
-  "_updated": "2026-03-05",
+  "_updated": "2026-03-06",
   "regelkreise": {
     "soc_extern": {
       "_doc": "Toleranz für extern geänderte SOC-Werte (z.B. manuell via Fronius App). Wenn SOC_MIN oder SOC_MAX außerhalb der Automation geändert werden, respektiert die Engine die Werte für die konfigurierte Dauer.",
-      "aktiv": false,
+      "aktiv": true,
       "parameter": {
         "extern_respekt_s": {
           "wert": 1800,
@@ -20,7 +20,7 @@
     },
     "soc_schutz": {
       "_doc": "Sicherheitshalber: SOC-Grenzen nie verletzen",
-      "aktiv": false,
+      "aktiv": true,
       "prioritaet": 1,
       "beschreibung": "SOC-Untergrenze/Obergrenze als harte Schutzschwelle",
       "parameter": {
@@ -64,7 +64,7 @@
     },
     "morgen_soc_min": {
       "_doc": "Morgens SOC_MIN öffnen: Batterie vor PV-Übernahme entleeren. Trigger: pv_at_sunrise_1h_w >= Schwelle",
-      "aktiv": false,
+      "aktiv": true,
       "prioritaet": 2,
       "beschreibung": "Bei Sunrise Prognosewert für +1h prüfen. >= 1500W → SOC_MIN=5%, SOC_MAX=75%, SOC_MODE=manual",
       "parameter": {
@@ -135,7 +135,7 @@
     },
     "nachmittag_soc_max": {
       "_doc": "Nachmittags SOC_MAX erhöhen: Mehr Kapazität vor Abend freigeben",
-      "aktiv": false,
+      "aktiv": true,
       "prioritaet": 2,
       "beschreibung": "SOC_MAX von Komfort (75%) auf Stress (100%) anheben wenn PV-Fenster schließt",
       "parameter": {
@@ -214,7 +214,7 @@
     },
     "komfort_reset": {
       "_doc": "Komfort-Reset: Abends auf 25/75%, PLUS intelligenter Früh-Reset am Nachmittag wenn Prognose nicht reicht",
-      "aktiv": false,
+      "aktiv": true,
       "prioritaet": 2,
       "beschreibung": "Nach Sunset oder schon nachmittags (wenn Prognose-Rest nicht reicht): zurück auf Komfort 25/75%",
       "parameter": {
@@ -268,6 +268,16 @@
           "einheit": "kWh",
           "obs_feld": "forecast_rest_kwh",
           "beschreibung": "Prognose-Rest ≥ Schwelle → nachhaltige Ladung möglich (z.B. nach Gewitter), kein Früh-Reset"
+        },
+        "nachtlade_schwelle_kwh": {
+          "wert": 20.0,
+          "bereich": [
+            5,
+            50
+          ],
+          "einheit": "kWh",
+          "obs_feld": "forecast_tomorrow_kwh",
+          "beschreibung": "Morgen-Prognose < Schwelle → erzwungene Nachtladung (SOC_MIN auf Komfort). Bei ≥ Schwelle: SOC_MIN bleibt niedrig, PV morgen reicht aus."
         }
       },
       "score_gewicht": 70,
@@ -275,7 +285,7 @@
     },
     "abend_entladerate": {
       "_doc": "Entladerate nach Tageszeit begrenzen — Spitzenlasten ans Netz",
-      "aktiv": false,
+      "aktiv": true,
       "prioritaet": 2,
       "beschreibung": "Abends/nachts Entladerate reduzieren, damit Batterie für Grundlast reicht",
       "parameter": {
@@ -352,7 +362,7 @@
     },
     "zellausgleich": {
       "_doc": "Monatlicher Vollzyklus für BYD-Zellbalancing",
-      "aktiv": false,
+      "aktiv": true,
       "prioritaet": 3,
       "beschreibung": "Prognosegesteuert: Am ersten guten Sonnentag vollständig laden",
       "parameter": {
@@ -428,7 +438,7 @@
     },
     "temp_schutz": {
       "_doc": "Gradueller Laderate-Schutz nach Zelltemperatur (Tier-2, ergänzt Tier-1 Interrupt)",
-      "aktiv": false,
+      "aktiv": true,
       "prioritaet": 1,
       "beschreibung": "Laderate stufenweise reduzieren bei steigender Batterie-Temperatur",
       "parameter": {
@@ -482,7 +492,7 @@
     },
     "forecast_plausibilisierung": {
       "_doc": "Rest-Prognose an Realität anpassen: IST vs. SOLL vergleichen, bei Abweichung verringern",
-      "aktiv": false,
+      "aktiv": true,
       "prioritaet": 2,
       "beschreibung": "PV-Erzeugung mit Prognose vergleichen, forecast_rest_kwh berechnen und ggf. reduzieren",
       "parameter": {
@@ -539,7 +549,7 @@
     },
     "laderate_dynamisch": {
       "_doc": "Laderate aktiv steuern: temp-abhängig + SOC-abhängig + PV-abhängig",
-      "aktiv": false,
+      "aktiv": true,
       "prioritaet": 2,
       "beschreibung": "Laderate dynamisch begrenzen abhängig von Temp, SOC-Bereich und aktueller PV-Leistung",
       "parameter": {
@@ -592,7 +602,7 @@
     },
     "wattpilot_battschutz": {
       "_doc": "Batterieschutz bei WattPilot-Ladung: Entladerate drosseln, SOC_MIN anheben, Nutzerhinweis",
-      "aktiv": false,
+      "aktiv": true,
       "prioritaet": 1,
       "beschreibung": "Schützt Batterie vor Tiefentladung durch EV-Ladung (bis 22kW)",
       "parameter": {
@@ -663,7 +673,7 @@
     },
     "heizpatrone": {
       "_doc": "Heizpatrone (HP, 2kW) via Fritz!DECT-Steckdose — prognosegesteuerte Burst-Strategie. Trigger: Batterie-Ladeleistung + Forecast. Siehe STRATEGIEN.md §2.6",
-      "aktiv": false,
+      "aktiv": true,
       "prioritaet": 2,
       "beschreibung": "HP-Burst wenn Batterie kräftig lädt und Prognose genug Restertrag zeigt",
       "parameter": {

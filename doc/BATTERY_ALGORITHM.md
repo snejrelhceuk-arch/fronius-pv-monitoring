@@ -615,7 +615,7 @@ protokolliert. Felder: `ts`, `aktor`, `kommando`, `wert_vorher`, `wert_nachher`,
 | Schritt | Beschreibung | Status |
 |---------|-------------|--------|
 | 1 | Config-Datei `config/battery_control.json` | ✅ |
-| 2 | Batterie-Algorithmus (jetzt in 11 Regelkreisen der Engine) | ✅ |
+| 2 | Batterie-Algorithmus (jetzt in 12 Regelkreisen der Engine) | ✅ |
 | 3 | DB-Tabelle `automation_log` (ersetzt `battery_control_log`) | ✅ |
 | 4 | `pv-automation.service` (systemd, Score-basiert) | ✅ |
 | 5 | Zellausgleich-Logik (1× monatlich, prognosegesteuert) | ✅ |

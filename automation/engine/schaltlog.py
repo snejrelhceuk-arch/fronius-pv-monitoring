@@ -2,12 +2,17 @@
 schaltlog.py — Zentrales Schaltlog für ALLE Schaltvorgänge
 
 Registriert in einer einzigen Logdatei:
-  • Engine-Aktionen (exakter Zeitstempel)
-  • Extern erkannte Änderungen (≈ ungefährer Zeitpunkt)
-  • SOC-Änderungen, HP-Schaltungen, Batterie-Modi
+  * Engine-Aktionen (exakter Zeitstempel)
+  * Extern erkannte Änderungen (~ ungefährer Zeitpunkt)
+  * SOC-Änderungen, HP-Schaltungen, Batterie-Modi
+
+Wiederholungs-Zusammenfassung:
+  Identische aufeinanderfolgende Einträge werden NICHT einzeln geschrieben,
+  sondern zu Zeitbereichen zusammengefasst:
+    " 2026-03-06, 01:07 bis 01:55  ENGINE  batterie  stop_discharge  OK  (49x)"
+  Signatur für Gleichheit: quelle + aktor + kommando + wert + ergebnis
 
 Datei: logs/schaltlog.txt (max. MAX_ZEILEN, älteste werden abgeschnitten)
-
 Zugriff: pv-config.py → Menüpunkt "Schalt-Logbuch"
 """
 
@@ -26,6 +31,30 @@ SCHALTLOG_PATH = os.path.join(_PROJECT_ROOT, 'logs', 'schaltlog.txt')
 MAX_ZEILEN = 2000
 
 _lock = threading.Lock()
+
+
+# ── Wiederholungs-Zusammenfassung ────────────────────────────
+
+class _PendingEntry:
+    """Gepufferter Eintrag für Zusammenfassung identischer Wiederholungen."""
+    __slots__ = ('key', 'quelle', 'aktor', 'kommando', 'wert',
+                 'ergebnis', 'grund', 'ungefaehr',
+                 'start_ts', 'end_ts', 'count')
+
+    def __init__(self):
+        self.key: Optional[tuple] = None
+        self.quelle = ''
+        self.aktor = ''
+        self.kommando = ''
+        self.wert = ''
+        self.ergebnis = ''
+        self.grund = ''
+        self.ungefaehr = False
+        self.start_ts: Optional[datetime] = None
+        self.end_ts: Optional[datetime] = None
+        self.count = 0
+
+_pending = _PendingEntry()
 
 
 def _ensure_dir():
@@ -49,11 +78,82 @@ def _truncate_if_needed():
         LOG.warning(f'Schaltlog Truncate fehlgeschlagen: {e}')
 
 
+def _format_zeile(p: _PendingEntry) -> str:
+    """Formatiere einen (ggf. zusammengefassten) Eintrag als Log-Zeile."""
+    s = p.start_ts
+    e = p.end_ts
+
+    wert_str = f'={p.wert}' if p.wert else ''
+    cmd_str = f'{p.kommando}{wert_str}'
+
+    # Zeitstempel: Einzeln oder Bereich
+    if p.count <= 1 or e is None or s is None:
+        # Einzelner Eintrag
+        if p.ungefaehr:
+            ts_str = f'~{s.strftime("%Y-%m-%d, %H:%M")}'
+        else:
+            ts_str = f' {s.strftime("%Y-%m-%d, %H:%M:%S")}'
+    else:
+        # Zeitbereich (zusammengefasst)
+        prefix = '~' if p.ungefaehr else ' '
+        if s.date() == e.date():
+            # Gleicher Tag: "2026-03-06, 01:07 bis 01:55"
+            ts_str = (f'{prefix}{s.strftime("%Y-%m-%d, %H:%M")} '
+                      f'bis {e.strftime("%H:%M")}')
+        else:
+            # Tagesübergreifend: "2026-03-05, 23:50 bis 03-06, 00:15"
+            ts_str = (f'{prefix}{s.strftime("%Y-%m-%d, %H:%M")} '
+                      f'bis {e.strftime("%m-%d, %H:%M")}')
+
+    # Zeile zusammenbauen
+    zeile = (f'{ts_str}  {p.quelle:<7s}  {p.aktor:<11s}  '
+             f'{cmd_str:<28s}  {p.ergebnis:<7s}')
+    if p.grund:
+        zeile += f'  {p.grund[:72]}'
+    if p.count > 1:
+        zeile += f'  ({p.count}x)'
+    zeile += '\n'
+    return zeile
+
+
+def _write_pending():
+    """Schreibe den gepufferten Eintrag in die Datei (falls vorhanden)."""
+    if _pending.key is None:
+        return
+    try:
+        _ensure_dir()
+        zeile = _format_zeile(_pending)
+
+        if _pending.count <= 1:
+            # Erster Eintrag: einfach anhängen
+            with open(SCHALTLOG_PATH, 'a') as f:
+                f.write(zeile)
+        else:
+            # Wiederholung: letzte Zeile ersetzen
+            if os.path.exists(SCHALTLOG_PATH):
+                with open(SCHALTLOG_PATH, 'r') as f:
+                    lines = f.readlines()
+                if lines:
+                    lines[-1] = zeile
+                with open(SCHALTLOG_PATH, 'w') as f:
+                    f.writelines(lines)
+            else:
+                with open(SCHALTLOG_PATH, 'a') as f:
+                    f.write(zeile)
+
+        _truncate_if_needed()
+    except Exception as e:
+        LOG.error(f'Schaltlog Schreibfehler: {e}')
+
+
 def logge(quelle: str, aktor: str, kommando: str,
           wert: str = '', ergebnis: str = '', grund: str = '',
           zeitpunkt: Optional[datetime] = None,
           ungefaehr: bool = False):
     """Einen Schaltvorgang ins zentrale Log schreiben.
+
+    Identische aufeinanderfolgende Einträge werden zu Zeitbereichen
+    zusammengefasst. Signatur: (quelle, aktor, kommando, wert, ergebnis).
 
     Args:
         quelle:    'ENGINE' | 'EXTERN' | 'MANUELL'
@@ -63,36 +163,36 @@ def logge(quelle: str, aktor: str, kommando: str,
         ergebnis:  'OK' | 'FEHLER' | 'DRY-RUN' | '--' (für extern)
         grund:     Menschenlesbare Begründung
         zeitpunkt: Zeitstempel (default: jetzt)
-        ungefaehr: True → Zeitstempel wird mit '~' markiert (für extern erkannte)
+        ungefaehr: True → Zeitstempel wird mit '~' markiert
     """
     now = zeitpunkt or datetime.now()
-
-    if ungefaehr:
-        ts_str = f'~{now.strftime("%Y-%m-%d %H:%M")}'
-    else:
-        ts_str = f' {now.strftime("%Y-%m-%d %H:%M:%S")}'
-
-    # Kompaktes Wert-Format
-    wert_str = f'={wert}' if wert else ''
-    cmd_str = f'{kommando}{wert_str}'
-
-    # Zeile zusammenbauen (feste Spaltenbreiten für Lesbarkeit)
-    # Format: TS  QUELLE  AKTOR  KOMMANDO=WERT  ERG  GRUND
-    zeile = (f'{ts_str}  {quelle:<7s}  {aktor:<11s}  '
-             f'{cmd_str:<28s}  {ergebnis:<7s}')
-    if grund:
-        # Grund kürzen wenn nötig
-        zeile += f'  {grund[:80]}'
-    zeile += '\n'
+    key = (quelle, aktor, kommando, wert, ergebnis)
 
     with _lock:
-        try:
-            _ensure_dir()
-            with open(SCHALTLOG_PATH, 'a') as f:
-                f.write(zeile)
-            _truncate_if_needed()
-        except Exception as e:
-            LOG.error(f'Schaltlog Schreibfehler: {e}')
+        if key == _pending.key:
+            # Gleicher Eintrag wie vorher → Zeitbereich erweitern
+            _pending.end_ts = now
+            _pending.count += 1
+            # Grund aktualisieren (neuester)
+            if grund:
+                _pending.grund = grund
+            _write_pending()
+        else:
+            # Neuer Eintrag → alten abschließen, neuen starten
+            # Alten wurde bereits beim letzten Aufruf geschrieben.
+            # Jetzt neuen Eintrag puffern und sofort schreiben.
+            _pending.key = key
+            _pending.quelle = quelle
+            _pending.aktor = aktor
+            _pending.kommando = kommando
+            _pending.wert = wert
+            _pending.ergebnis = ergebnis
+            _pending.grund = grund
+            _pending.ungefaehr = ungefaehr
+            _pending.start_ts = now
+            _pending.end_ts = now
+            _pending.count = 1
+            _write_pending()
 
 
 def logge_engine(aktor: str, kommando: str, wert: str = '',
@@ -103,7 +203,7 @@ def logge_engine(aktor: str, kommando: str, wert: str = '',
 
 
 def logge_extern(aktor: str, beschreibung: str, grund: str = ''):
-    """Kurzform für extern erkannte Schaltvorgänge (≈ ungefähr).
+    """Kurzform für extern erkannte Schaltvorgänge (~ ungefähr).
 
     Args:
         aktor:         z.B. 'batterie', 'fritzdect'

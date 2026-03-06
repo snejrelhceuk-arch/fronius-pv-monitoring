@@ -44,6 +44,7 @@ from automation.engine.obs_state import (
 from automation.engine.collectors import DataCollector, Tier1Checker, ForecastCollector
 from automation.engine.actuator import Actuator
 from automation.engine.engine import Engine
+from automation.engine.event_notifier import EventNotifier
 from automation.engine.param_matrix import DEFAULT_MATRIX_PATH
 
 LOG = logging.getLogger('automation_daemon')
@@ -86,6 +87,7 @@ class AutomationDaemon:
         self._tier1 = None
         self._actuator = None
         self._engine = None
+        self._notifier = None
         self._forecast_thread = None
 
         # Timing
@@ -126,6 +128,14 @@ class AutomationDaemon:
             dry_run=self.dry_run,
             matrix_path=DEFAULT_MATRIX_PATH,
         )
+
+        # Event-Notifier (E-Mail bei kritischen Events)
+        self._notifier = EventNotifier()
+        if self._notifier.aktive_events:
+            LOG.info(f"  Event-Notifier: {len(self._notifier.aktive_events)} Events aktiv "
+                     f"→ {getattr(app_config, 'NOTIFICATION_EMAIL', '?')}")
+        else:
+            LOG.info("  Event-Notifier: keine Events konfiguriert")
 
         # Morgen-Vorlauf aus Parametermatrix an ForecastCollector übergeben
         from automation.engine.param_matrix import get_param
@@ -264,6 +274,16 @@ class AutomationDaemon:
                     self._actuator.ausfuehren(action)
                 else:
                     LOG.info(f"  [DRY-RUN] {action}")
+
+        # 4b. Event-Benachrichtigungen prüfen (1× pro Event pro Tag)
+        if self._notifier:
+            try:
+                with self._obs_lock:
+                    ausgeloest = self._notifier.prüfe_und_melde(self._obs)
+                if ausgeloest:
+                    LOG.info(f"Event-Benachrichtigung: {', '.join(ausgeloest)}")
+            except Exception as e:
+                LOG.error(f"Event-Notifier Fehler: {e}")
 
         # 5. Engine fast-Zyklus (alle 60 s)
         if now - self._last_fast >= FAST_INTERVAL:

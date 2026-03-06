@@ -563,7 +563,7 @@
 
             <!-- Battery Detail -->
             <div class="battery-detail" id="batteryDetail">
-                <span>SOH: <span class="bd-val" id="bd-soh">--</span>%</span>
+                <span>SOH: <span class="bd-val" id="bd-soh">--</span>%<span id="bd-soh-source" style="font-size:9px;opacity:0.4;margin-left:2px"></span></span>
                 <span class="bd-sep">|</span>
                 <span>Ladung: <span class="bd-val" id="bd-charge">--</span> kWh</span>
                 <span class="bd-sep">|</span>
@@ -572,6 +572,15 @@
                 <span>SOC: <span class="bd-val" id="bd-soc-range">--</span></span>
                 <span class="bd-sep">|</span>
                 <span>Temp: <span class="bd-val" id="bd-temp">--</span> °C</span>
+            </div>
+            <div class="battery-detail" id="batteryDetail2" style="padding-top:0;font-size:11px;opacity:0.7;">
+                <span>Kap: <span class="bd-val" id="bd-cap-est">--</span>/<span class="bd-val" id="bd-cap-max">--</span> kWh</span>
+                <span class="bd-sep">|</span>
+                <span>Zyklen: <span class="bd-val" id="bd-cycles">--</span></span>
+                <span class="bd-sep">|</span>
+                <span>Lifetime: <span class="bd-val" id="bd-lt-charge">--</span>/<span class="bd-val" id="bd-lt-discharge">--</span> MWh</span>
+                <span class="bd-sep">|</span>
+                <span>FW: <span class="bd-val" id="bd-firmware">--</span></span>
             </div>
             <!-- Batt-Automation: einheitliche Phasen-Tabelle -->
             <table class="batt-auto-table" id="battAutoTable">
@@ -1098,6 +1107,13 @@
             if (!r.ok) return;
             const d = await r.json();
             document.getElementById('bd-soh').textContent = d.soh != null ? d.soh : '--';
+            // SOH-Quellen-Indikator
+            const sohSrcEl = document.getElementById('bd-soh-source');
+            if (sohSrcEl) {
+                if (d.soh_source === 'bms_live') sohSrcEl.textContent = '(BMS)';
+                else if (d.soh_source === 'config_fallback') sohSrcEl.textContent = '(cfg)';
+                else sohSrcEl.textContent = '';
+            }
             document.getElementById('bd-charge').textContent = d.batt_charge_kwh != null ? d.batt_charge_kwh : '--';
             document.getElementById('bd-discharge').textContent = d.batt_discharge_kwh != null ? d.batt_discharge_kwh : '--';
             const sMin = d.soc_min != null ? d.soc_min : '?';
@@ -1124,6 +1140,13 @@
             document.getElementById('it-f2-intern').textContent = d.f2_temp_intern != null ? d.f2_temp_intern : '--';
             document.getElementById('it-f2-ac').textContent = d.f2_temp_ac != null ? d.f2_temp_ac : '--';
             document.getElementById('it-f2-dc').textContent = d.f2_temp_dc != null ? d.f2_temp_dc : '--';
+            // ── BMS-Detail-Zeile (Kapazität, Zyklen, Lifetime, Firmware) ──
+            document.getElementById('bd-cap-est').textContent = d.bms_est_capacity_kwh != null ? d.bms_est_capacity_kwh : '--';
+            document.getElementById('bd-cap-max').textContent = d.bms_max_capacity_kwh != null ? d.bms_max_capacity_kwh : '--';
+            document.getElementById('bd-cycles').textContent = d.bms_full_cycles != null ? Math.round(d.bms_full_cycles) : '--';
+            document.getElementById('bd-lt-charge').textContent = d.bms_lifetime_charged_kwh != null ? (d.bms_lifetime_charged_kwh / 1000).toFixed(1) : '--';
+            document.getElementById('bd-lt-discharge').textContent = d.bms_lifetime_discharged_kwh != null ? (d.bms_lifetime_discharged_kwh / 1000).toFixed(1) : '--';
+            document.getElementById('bd-firmware').textContent = d.bms_firmware != null ? d.bms_firmware : '--';
             // ── Batt-Automation Phasen-Tabelle ──────────────────────
             const phasen = d.automation_phasen || {};
             const sched = d.scheduler || {};

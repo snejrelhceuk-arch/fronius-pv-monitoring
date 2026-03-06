@@ -5,7 +5,7 @@
 **Hardware:**
 - Fronius Gen24 12 kW (F1) — Firmware PS: 1.6.1-30738, PS2: 3.5.6-23416
 - 2× BYD Battery-Box Premium HVS 20,48 kWh (LFP-Chemie, parallel seit März 2026)
-- SOH: 92%, Zelltemp: 15–18 °C, Systemspannung: ~418 V
+- SOH: 96% (BMS-Live), Zelltemp: 15–25 °C, Systemspannung: ~430 V
 
 **Steuerungskanäle:**
 
@@ -30,8 +30,8 @@ MinRsvPct:          25%
 RvrtTms:            0 (KEIN Auto-Revert!)
 ```
 
-**Scheduler:** **`pv-automation.service`** (systemd, Score-basierte Engine mit 11 Regelkreisen)
-**Config:** `config/soc_param_matrix.json` (11 Regelkreise, 50+ Parameter)
+**Scheduler:** **`pv-automation.service`** (systemd, Score-basierte Engine mit 12 Regelkreisen)
+**Config:** `config/soc_param_matrix.json` (12 Regelkreise, 50+ Parameter)
 **State:** `config/battery_scheduler_state.json` (Legacy)
 
 ---
@@ -154,7 +154,7 @@ python3 battery_control.py --auto               # Automatik
 
 ## Status (2026-03-01)
 
-- [x] Engine produktiv (`pv-automation.service`, systemd, 11 Regelkreise)
+- [x] Engine produktiv (`pv-automation.service`, systemd, 12 Regelkreise)
 - [x] PV-Prognose via Geometrie-Engine (`solar_geometry` / `solar_forecast`)
 - [x] Tages-Reset mit Komfort-Defaults (SOC + Modbus)
 - [x] Score-basierte Entscheidungen mit Cascade-Mechanismus
