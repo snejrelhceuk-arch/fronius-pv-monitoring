@@ -165,11 +165,13 @@ class ForecastCollector:
 
             yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
             conn = _sql.connect(app_config.DB_PATH, timeout=3.0)
-            row = conn.execute(
-                "SELECT sunrise, sunset FROM forecast_daily WHERE date = ?",
-                (yesterday,)
-            ).fetchone()
-            conn.close()
+            try:
+                row = conn.execute(
+                    "SELECT sunrise, sunset FROM forecast_daily WHERE date = ?",
+                    (yesterday,)
+                ).fetchone()
+            finally:
+                conn.close()
 
             if row and row[0] and row[1]:
                 # Sunrise/Sunset sind ISO-Strings wie "2026-02-27T06:54"
@@ -404,32 +406,34 @@ class ForecastCollector:
                     cloud_avg = round(sum(clouds) / len(clouds), 1)
 
             conn = _sql.connect(app_config.DB_PATH, timeout=5.0)
-            conn.execute("""
-                INSERT OR REPLACE INTO forecast_daily
-                (date, expected_kwh, quality, weather_text, weather_code,
-                 sunrise, sunset, sunshine_hours, temp_min, temp_max,
-                 cloud_cover_avg, precipitation_mm,
-                 hourly_profile, forecast_method, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                today_str,
-                day_fc.get('expected_kwh'),
-                day_fc.get('quality'),
-                day_fc.get('weather_text'),
-                day_fc.get('weather_code'),
-                day_fc.get('sunrise'),
-                day_fc.get('sunset'),
-                day_fc.get('sunshine_hours'),
-                day_fc.get('temp_min'),
-                day_fc.get('temp_max'),
-                cloud_avg,
-                day_fc.get('precipitation_mm'),
-                hourly_json,
-                'geometry' if power_hourly else 'ghi_factor',
-                time.time(),
-            ))
-            conn.commit()
-            conn.close()
+            try:
+                conn.execute("""
+                    INSERT OR REPLACE INTO forecast_daily
+                    (date, expected_kwh, quality, weather_text, weather_code,
+                     sunrise, sunset, sunshine_hours, temp_min, temp_max,
+                     cloud_cover_avg, precipitation_mm,
+                     hourly_profile, forecast_method, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    today_str,
+                    day_fc.get('expected_kwh'),
+                    day_fc.get('quality'),
+                    day_fc.get('weather_text'),
+                    day_fc.get('weather_code'),
+                    day_fc.get('sunrise'),
+                    day_fc.get('sunset'),
+                    day_fc.get('sunshine_hours'),
+                    day_fc.get('temp_min'),
+                    day_fc.get('temp_max'),
+                    cloud_avg,
+                    day_fc.get('precipitation_mm'),
+                    hourly_json,
+                    'geometry' if power_hourly else 'ghi_factor',
+                    time.time(),
+                ))
+                conn.commit()
+            finally:
+                conn.close()
             LOG.info(f"  forecast_daily geschrieben: {today_str} "
                      f"→ {day_fc.get('expected_kwh', '?')} kWh")
         except Exception as e:

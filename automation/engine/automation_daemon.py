@@ -319,15 +319,17 @@ class AutomationDaemon:
                 LOG.error(f"Engine strategic-Zyklus: {e}")
 
         # 7. Sunset-Erkennung → Tagesbericht senden
-        if self._notifier and self._obs.is_day is not None:
-            if self._war_tag is True and self._obs.is_day is False:
+        with self._obs_lock:
+            is_day_now = self._obs.is_day
+        if self._notifier and is_day_now is not None:
+            if self._war_tag is True and is_day_now is False:
                 LOG.info("Sunset erkannt → Tagesbericht wird gesendet")
                 try:
                     with self._obs_lock:
                         self._notifier.sende_sunset_bericht(self._obs)
                 except Exception as e:
                     LOG.error(f"Sunset-Tagesbericht Fehler: {e}")
-            self._war_tag = self._obs.is_day
+            self._war_tag = is_day_now
 
         # Heartbeat-Log (alle 5 min)
         if self._cycle_count % (300 // OBS_COLLECT_INTERVAL) == 0:
@@ -470,8 +472,8 @@ def engine_vorausschau() -> list[dict]:
                             'hinweis': a.get('hinweis', ''),
                         } for a in aktionen],
                     })
-            except Exception:
-                pass
+            except Exception as e:
+                LOG.debug(f"Vorausschau {regel.name}: {e}")
 
         vorschau.sort(key=lambda x: x['score'], reverse=True)
         return vorschau

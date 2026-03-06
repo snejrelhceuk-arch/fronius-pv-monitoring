@@ -428,6 +428,16 @@ class RegelHeizpatrone(Regel):
             if p_batt > min_lade_morgens:
                 return score
 
+        # Phase 2+3 Vorbereitungen (hier berechnet, damit Phase 1b sie nutzen kann)
+        min_lade = self._min_lade_nach_potenzial(potenzial, matrix)
+        min_rest = get_param(matrix, self.regelkreis, 'min_rest_kwh', 12.0)
+        reserve = get_param(matrix, self.regelkreis, 'batt_reserve_kwh', 2.0)
+
+        if rest_h < 3.0:
+            reserve = get_param(matrix, self.regelkreis, 'batt_reserve_nachmittag_kwh', 3.0)
+
+        parallel_ok = self._hp_parallel_erlaubt(potenzial, wp_aktiv, ev_aktiv)
+
         # Phase 1b: Nulleinspeiser-Überschuss — PV wird gedrosselt
         #   SOC ≈ SOC_MAX, Batterie idle, Grid ≈ 0 → Nulleinspeiser drosselt PV.
         #   pv_total_w zeigt nur gedrosselte AC-Leistung (≈ Haushalt), NICHT
@@ -453,14 +463,6 @@ class RegelHeizpatrone(Regel):
                 return score
 
         # Phase 2+3: Mittags/Nachmittags
-        min_lade = self._min_lade_nach_potenzial(potenzial, matrix)
-        min_rest = get_param(matrix, self.regelkreis, 'min_rest_kwh', 12.0)
-        reserve = get_param(matrix, self.regelkreis, 'batt_reserve_kwh', 2.0)
-
-        if rest_h < 3.0:
-            reserve = get_param(matrix, self.regelkreis, 'batt_reserve_nachmittag_kwh', 3.0)
-
-        parallel_ok = self._hp_parallel_erlaubt(potenzial, wp_aktiv, ev_aktiv)
 
         if p_batt > min_lade and parallel_ok:
             if rest_kwh > batt_rest_kwh + reserve:
