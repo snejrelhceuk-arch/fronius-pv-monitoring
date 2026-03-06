@@ -540,7 +540,7 @@ def test_regel_abend_entladerate():
         score3 = regel.bewerte(obs_krit, matrix)
         assert score3 == 65, f"Erwarte Score 65 bei SOC-Notbremse, got {score3}"
         aktionen3 = regel.erzeuge_aktionen(obs_krit, matrix)
-        assert aktionen3[0]['kommando'] == 'hold'
+        assert aktionen3[0]['kommando'] == 'stop_discharge'
         LOG.info(f"✓ SOC 7%: {aktionen3[0]['kommando']} ({aktionen3[0]['grund']})")
 
     return True

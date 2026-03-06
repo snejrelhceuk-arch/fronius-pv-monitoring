@@ -44,4 +44,4 @@
  2026-03-06, 17:57 bis 17:58  ENGINE   batterie     auto                          OK       Komfort-Reset 17:58: Modbus StorCtl_Mod 1→0 (Limits aufheben)  (2x)
  2026-03-06, 17:57 bis 18:02  ENGINE   batterie     auto                          OK       Komfort-Reset 18:02: Modbus StorCtl_Mod 1→0 (Limits aufheben)  (6x)
  2026-03-06, 17:57 bis 18:13  ENGINE   batterie     auto                          OK       Komfort-Reset 18:13: Modbus StorCtl_Mod 1→0 (Limits aufheben)  (17x)
- 2026-03-06, 17:57 bis 23:09  ENGINE   batterie     auto                          OK       Komfort-Reset 23:09: Modbus StorCtl_Mod 1→0 (Limits aufheben)  (304x)
+ 2026-03-06, 17:57 bis 23:33  ENGINE   batterie     auto                          OK       Komfort-Reset 23:33: Modbus StorCtl_Mod 1→0 (Limits aufheben)  (328x)
