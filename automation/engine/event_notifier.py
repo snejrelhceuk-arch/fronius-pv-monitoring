@@ -165,11 +165,16 @@ class EventNotifier:
                 if self._smtp_port == 587:
                     smtp.starttls()
 
-            if self._smtp_user and smtp_pass:
-                smtp.login(self._smtp_user, smtp_pass)
+            try:
+                if self._smtp_user and smtp_pass:
+                    smtp.login(self._smtp_user, smtp_pass)
 
-            smtp.sendmail(self._from, [self._email], msg.as_string())
-            smtp.quit()
+                smtp.sendmail(self._from, [self._email], msg.as_string())
+            finally:
+                try:
+                    smtp.quit()
+                except Exception:
+                    pass
 
             LOG.info(f"Event-Mail gesendet: {event_key} → {self._email} "
                      f"({text}, {feld}={wert})")
@@ -422,8 +427,13 @@ class EventNotifier:
             if self._smtp_port == 587:
                 smtp.starttls()
 
-        if self._smtp_user and smtp_pass:
-            smtp.login(self._smtp_user, smtp_pass)
+        try:
+            if self._smtp_user and smtp_pass:
+                smtp.login(self._smtp_user, smtp_pass)
 
-        smtp.sendmail(self._from, [self._email], msg.as_string())
-        smtp.quit()
+            smtp.sendmail(self._from, [self._email], msg.as_string())
+        finally:
+            try:
+                smtp.quit()
+            except Exception:
+                pass

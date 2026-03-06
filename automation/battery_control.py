@@ -173,6 +173,11 @@ class ModbusClient:
             return True
         except Exception as e:
             print(f"[FEHLER] Verbindung fehlgeschlagen: {e}")
+            if self.sock:
+                try:
+                    self.sock.close()
+                except Exception:
+                    pass
             self.sock = None
             return False
 

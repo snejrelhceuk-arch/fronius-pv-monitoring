@@ -28,7 +28,7 @@ LOG_FILE="${LOG_FILE:-/tmp/db_backup_gfs.log}"
 PI5_BACKUP_HOST="${PI5_BACKUP_HOST:-admin@192.0.2.195}"
 PI5_BACKUP_BASE="${PI5_BACKUP_BASE:-/srv/pv-system/backup/db}"
 
-STATE_DIR="${STATE_DIR:-/var/lib/pv-system}"
+STATE_DIR="${STATE_DIR:-${BASE}/.state}"
 SOHN_STAMP_FILE="${STATE_DIR}/backup_gfs_sohn_last_ts"
 SOHN_MIN_AGE_SEC=$((70 * 3600))
 
@@ -63,7 +63,7 @@ check_backup_integrity() {
     local gz_file="$1"
     local label="$2"
     local tmp_check
-    tmp_check=$(mktemp)
+    tmp_check=$(mktemp /dev/shm/backup_check_XXXXXX)
 
     if gunzip -c "$gz_file" > "$tmp_check" 2>/dev/null; then
         local integrity
