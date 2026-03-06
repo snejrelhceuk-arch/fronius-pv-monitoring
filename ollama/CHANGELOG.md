@@ -5,3 +5,6 @@ Geänderte Quellen: doc/BATTERIE_STRATEGIEN.md, doc/SCHUTZREGELN.md, doc/DB_SCHE
 
 ## 2026-03-04 07:19 (Hash: c937d1ccba5006db)
 Geänderte Quellen: config.py, doc/SYSTEM_ARCHITECTURE.md, aggregate.py, automation/engine/automation_daemon.py, README.md, automation/engine/engine.py, doc/AGGREGATION_PIPELINE.md, doc/SCHUTZREGELN.md, modbus_v3.py, doc/DB_SCHEMA.md
+
+## 2026-03-06 15:47 (Hash: 9b9d0f202baa4dff)
+Geänderte Quellen: doc/BATTERIE_STRATEGIEN.md, doc/SYSTEM_ARCHITECTURE.md, doc/SCHUTZREGELN.md, automation/engine/automation_daemon.py, config.py
