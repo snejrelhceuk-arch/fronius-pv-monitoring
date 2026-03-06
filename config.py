@@ -147,6 +147,25 @@ HEIZKOSTEN_ERSPARNIS = {
 # Heizperiode: Monate in denen Heizkosten anfallen
 HEIZPERIODE_MONATE = {10, 11, 12, 1, 2, 3}  # Okt–Mär (6 Monate)
 
+# --- E-Mail-Benachrichtigungen ---
+# Einmalige Meldung bei kritischen Events (Deduplizierung: 1× pro Event-Typ pro Tag)
+NOTIFICATION_EMAIL = 'failover-user@example.invalid'
+NOTIFICATION_SMTP_HOST = 'smtp.example.invalid'  # SMTP-Relay
+NOTIFICATION_SMTP_PORT = 465               # SSL (nicht 587/STARTTLS)
+NOTIFICATION_SMTP_USER = 'alerts@example.invalid'
+# SMTP-Passwort: NICHT hier — verschlüsselt in /etc/pv-system/smtp_pass.key
+# Setzen via: pv-config → Benachrichtigungen → SMTP-Passwort
+NOTIFICATION_FROM = 'alerts@example.invalid'
+# Meldbare Events — Keys müssen in EVENT_THRESHOLDS definiert sein
+NOTIFICATION_EVENTS = ['batt_temp_40', 'batt_soc_kritisch']
+# Schwellwerte für Events (obs_feld, operator, schwelle)
+EVENT_THRESHOLDS = {
+    'batt_temp_40':      {'obs_feld': 'batt_temp_max_c', 'op': '>=', 'schwelle': 40,  'text': 'Batterie-Temperatur ≥ 40°C'},
+    'batt_soc_kritisch': {'obs_feld': 'batt_soc_pct',    'op': '<',  'schwelle': 5,   'text': 'Batterie SOC < 5%'},
+    'batt_temp_45':      {'obs_feld': 'batt_temp_max_c', 'op': '>=', 'schwelle': 45,  'text': 'Batterie-Temperatur ≥ 45°C (ALARM)'},
+    'netz_ueberlast':    {'obs_feld': 'grid_power_w',    'op': '>=', 'schwelle': 24000,'text': 'Netz-Überlast ≥ 24 kW'},
+}
+
 def get_strompreis(year, month):
     """
     Gibt den Strompreis (EUR/kWh) für einen Monat zurück.

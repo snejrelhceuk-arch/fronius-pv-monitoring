@@ -41,6 +41,7 @@ class DataCollector:
     def __init__(self, db_path: str = None):
         self._db_path = db_path or app_config.DB_PATH
         self._modbus_client = None
+        self._modbus_last_poll: float = 0
 
     def _get_conn(self) -> Optional[sqlite3.Connection]:
         """Öffne read-only Verbindung zur Collector-DB."""
@@ -137,9 +138,18 @@ class DataCollector:
 
     _modbus_fail_count: int = 0
     _MODBUS_MAX_FAIL_LOG = 5  # Log-Flood-Schutz: nur alle 5 Fehler loggen
+    _MODBUS_POLL_INTERVAL = 30  # Sekunden — Steuerregister ändern sich selten
 
     def _collect_battery_modbus(self, obs: ObsState):
-        """StorCtl_Mod, OutWRte, InWRte direkt per Modbus M124 lesen."""
+        """StorCtl_Mod, OutWRte, InWRte direkt per Modbus M124 lesen.
+
+        Rate-Limited: alle 30s (statt bei jedem 10s-Zyklus).
+        Steuerregister ändern sich nur durch Schreibzugriffe.
+        """
+        now = time.time()
+        if now - self._modbus_last_poll < self._MODBUS_POLL_INTERVAL:
+            return
+        self._modbus_last_poll = now
         try:
             from automation.battery_control import (
                 ModbusClient, REG,

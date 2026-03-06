@@ -77,7 +77,7 @@ Das NNW-Fenster ist der kritischste Faktor für die Abend-Strategie.
 |---|---|
 | Typ | LFP (LiFePO₄) |
 | Nennkapazität | 20.48 kWh (2× 10.24 kWh parallel) |
-| SOH aktuell | ~92 % |
+| SOH aktuell | ~96 % (BMS-Live) |
 | Nutzbare Kapazität | ~9.4 kWh |
 | Max. Ladeleistung (DC) | 5 kW |
 | Max. Entladeleistung (DC) | 5 kW |

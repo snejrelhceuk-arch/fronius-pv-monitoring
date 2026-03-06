@@ -313,7 +313,7 @@ Volle Produktion: Collector, Aggregation, Battery-Steuerung, Web.
 | pv-collector | systemd (enabled) | modbus_v3.py (Poller + Persist-Thread) |
 | pv-wattpilot | systemd (enabled) | wattpilot_collector.py (WebSocket → raw_wattpilot) |
 | pv-web | systemd (enabled) | web_api.py (gunicorn, 3 Worker, Port 8000), After=pv-collector |
-| pv-automation | systemd (enabled) | automation_daemon.py (Score-basierte Engine, 11 Regelkreise, Batterie+Geräte-Steuerung) |
+| pv-automation | systemd (enabled) | automation_daemon.py (Score-basierte Engine, 12 Regelkreise, Batterie+Geräte-Steuerung) |
 | pv-backup-gfs.timer | systemd (enabled) | backup_db_gfs.sh täglich 03:00 (Sohn intern alle 3 Tage) |
 | Cron (5 Aggregations-Jobs) | crontab (admin) | aggregate_1min, aggregate, aggregate_daily, monthly, statistics |
 | Cron (Monitor-Scripts) | crontab (admin) | monitor_collector.sh, monitor_wattpilot.sh |
@@ -519,7 +519,7 @@ erfordert eine **Neuinstallation** (kein In-Place-Upgrade empfohlen):
 
 | Datei | Inhalt |
 |-------|--------|
-| config/soc_param_matrix.json | SOC-Parametermatrix für 11 Regelkreise (Prioritäten, Schwellen, Gewichte) |
+| config/soc_param_matrix.json | SOC-Parametermatrix für 12 Regelkreise (Prioritäten, Schwellen, Gewichte) |
 | config/battery_control.json | Batterie-Steuerungsregeln |
 | config/fritz_config.json | Fritz!DECT Smart-Plug-Konfiguration (Heizpatrone) |
 | config/color_config.json | Chart-Farbschema |

@@ -473,7 +473,7 @@ def _fetch_bms_counters(now, result):
 
 
 def _fetch_temperatures(result):
-    """WR-, Batterie- und F2-Temperaturen aus Fronius /components/readable."""
+    """WR-, Batterie- und F2-Temperaturen + BMS-Live-Daten aus Fronius /components/readable."""
     # F1 (GEN24)
     try:
         import requests as _req
@@ -492,7 +492,9 @@ def _fetch_temperatures(result):
                 if _t is not None:
                     result[attr] = round(_t, 1)
 
-            _batt_ch = _comp_data.get('Body', {}).get('Data', {}).get('16580608', {}).get('channels', {})
+            _batt_dev = _comp_data.get('Body', {}).get('Data', {}).get('16580608', {})
+            _batt_ch = _batt_dev.get('channels', {})
+            _batt_attr = _batt_dev.get('attributes', {})
             for attr, key in [
                 ('battery_temp',     'BAT_TEMPERATURE_CELL_F64'),
                 ('battery_temp_max', 'BAT_TEMPERATURE_CELL_MAX_F64'),
@@ -501,6 +503,44 @@ def _fetch_temperatures(result):
                 _t = _batt_ch.get(key)
                 if _t is not None:
                     result[attr] = round(_t, 1)
+
+            # ── BMS-Live-Daten (SOH, Kapazität, Lifetime, Firmware) ──
+            _soh = _batt_ch.get('BAT_VALUE_STATE_OF_HEALTH_RELATIVE_U16')
+            if _soh is not None:
+                result['soh'] = round(float(_soh), 1)
+                result['soh_source'] = 'bms_live'
+
+            # Kapazitäten (Ws → kWh)
+            _max_cap = _batt_ch.get('BAT_ENERGYACTIVE_MAX_CAPACITY_F64')
+            _est_cap = _batt_ch.get('BAT_ENERGYACTIVE_ESTIMATION_MAX_CAPACITY_F64')
+            if _max_cap is not None:
+                result['bms_max_capacity_kwh'] = round(float(_max_cap) / 3_600_000, 2)
+            if _est_cap is not None:
+                result['bms_est_capacity_kwh'] = round(float(_est_cap) / 3_600_000, 2)
+
+            # Lifetime Lade-/Entladeenergie (Ws → kWh)
+            _lt_chg = _batt_ch.get('BAT_ENERGYACTIVE_LIFETIME_CHARGED_F64')
+            _lt_dis = _batt_ch.get('BAT_ENERGYACTIVE_LIFETIME_DISCHARGED_F64')
+            if _lt_chg is not None:
+                result['bms_lifetime_charged_kwh'] = round(float(_lt_chg) / 3_600_000, 1)
+            if _lt_dis is not None:
+                result['bms_lifetime_discharged_kwh'] = round(float(_lt_dis) / 3_600_000, 1)
+
+            # Vollzyklen-Schätzung (Lifetime-Entladung / Nenn-Kapazität)
+            if _lt_dis is not None and _max_cap and float(_max_cap) > 0:
+                result['bms_full_cycles'] = round(float(_lt_dis) / float(_max_cap), 0)
+
+            # BMS-Firmware & Seriennummer
+            _serial = (_batt_attr.get('serial') or '').strip()
+            if _serial:
+                result['bms_serial'] = _serial
+            _sw = _batt_attr.get('sw_version')
+            if _sw:
+                result['bms_firmware'] = str(_sw)
+            _hw = _batt_attr.get('hw_version')
+            if _hw:
+                result['bms_hw_version'] = str(_hw)
+
     except Exception as e:
         logging.debug(f"F1 temperatures fetch: {e}")
 
@@ -617,7 +657,9 @@ def _fetch_hp_status(now, result):
 
 
 def _fetch_soh(result):
-    """SOH-Prozent aus battery_control.json."""
+    """SOH-Fallback aus battery_control.json (nur wenn BMS-Live nicht verfügbar)."""
+    if result.get('soh') is not None:
+        return  # BMS-Live-Wert bereits von _fetch_temperatures gesetzt
     try:
         import json as _json2
         _batt_cfg_path = os.path.join(
@@ -626,8 +668,10 @@ def _fetch_soh(result):
         with open(_batt_cfg_path, 'r') as _f:
             _batt_cfg = _json2.load(_f)
         result['soh'] = float(_batt_cfg.get('batterie', {}).get('soh_prozent', 92.0))
+        result['soh_source'] = 'config_fallback'
     except Exception:
         result['soh'] = 92.0
+        result['soh_source'] = 'default'
 
 # ═══════════════════════════════════════════════════════════════
 # SYSTEM INFO ENDPOINT

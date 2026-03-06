@@ -296,6 +296,9 @@ class ForecastCollector:
         # ── forecast_daily in DB schreiben (Kompatibilität) ─
         self._store_forecast_daily(sf, hourly, power_hourly)
 
+        # ── Morgen-Prognose holen (für Nachtlade-Entscheidung) ──
+        self._fetch_tomorrow_forecast(obs, sf)
+
     def _get_pv_at_hour(self, hourly, power_hourly, target_hour):
         """PV-Leistung [W] zu bestimmter Stunde aus Forecast-Daten."""
         # Versuch 1: power_hourly (stündlich, Feld 'total_ac')
@@ -336,6 +339,26 @@ class ForecastCollector:
                 return best_ghi * 37.59 * 0.15
 
         return None
+
+    def _fetch_tomorrow_forecast(self, obs: ObsState, sf):
+        """Morgen-Prognose für Nachtlade-Entscheidung holen.
+
+        Ruft die gleiche SolarForecast-API mit target_date=morgen auf.
+        Ergebnis in obs.forecast_tomorrow_kwh — wird vom komfort_reset
+        genutzt um erzwungene Nachladung zu vermeiden wenn morgen genug PV kommt.
+        """
+        try:
+            from datetime import date, timedelta
+            morgen = (date.today() + timedelta(days=1)).isoformat()
+            day_fc = sf.get_day_forecast(morgen)
+            if day_fc and day_fc.get('expected_kwh') is not None:
+                obs.forecast_tomorrow_kwh = round(day_fc['expected_kwh'], 1)
+                LOG.info(f"  Morgen-Prognose: {obs.forecast_tomorrow_kwh} kWh "
+                         f"(Qualität: {day_fc.get('quality', '?')})")
+            else:
+                LOG.debug("  Morgen-Prognose: keine Daten verfügbar")
+        except Exception as e:
+            LOG.warning(f"  Morgen-Prognose Fehler: {e}")
 
     def _store_forecast_daily(self, sf, hourly, power_hourly):
         """Schreibe aufbereitete Prognose in forecast_daily (Haupt-DB).

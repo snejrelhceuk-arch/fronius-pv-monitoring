@@ -59,13 +59,13 @@ Forecast) — jetzt fehlt die Auswertung und Zustellung.
 - [ ] Batterie-Anomalie: SOC-Sprünge >20% in einer Messung → Logfile-Warnung
 - [ ] Hitze-Warnung: Temperaturkoeffizient ist modelliert → "35°C morgen = 8% weniger"
 
-**Aktive Benachrichtigungen (Pushover/E-Mail):**
-- [ ] Kanal: Pushover (einfachste Integration, ~5 Zeilen Python)
-- [ ] Trigger: Inverter offline >30 min, Collector gestoppt, DB-Schreibfehler
+**Aktive Benachrichtigungen (E-Mail):**
+- [x] Kanal: E-Mail via SMTP/SSL — `EventNotifier` + `credential_store` (2026-03-06)
+- [x] Trigger: konfigurierbar in `config.py` NOTIFICATION_EVENTS (Inverter offline, Collector gestoppt, SOC-Schutz, Grid-Export, …)
 - [ ] Tageszusammenfassung abends: Ertrag, Autarkie, Auffälligkeiten
 
 **Forecast-getriebene Empfehlungen:**
-- [ ] "Morgen erwartet: X kWh (schlecht) → Eigenverbrauch priorisieren"
+- [x] "Morgen erwartet: X kWh" → `forecast_tomorrow_kwh` in obs_state, Nachtlade-Schwelle in soc_steuerung (2026-03-06)
 - [ ] "Guter Tag morgen → EV-Ladung auf Mittagszeit verschieben"
 - [ ] Wochenvorschau in der Web-Ansicht
 
