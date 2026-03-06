@@ -22,11 +22,20 @@
 | Feld | Wert |
 |---|---|
 | **Auslöser** | SOC < 5 % |
-| **Aktion** | Sofort-Ladung aus PV erzwingen (OutWRte = 0 %) |
-| **Zusatz** | SOC_MIN auf 10 % setzen (Modbus MinRsvPct) |
-| **Freigabe** | SOC > 20 % für > 5 min |
-| **Protokoll** | DB-Eintrag + Log: `protection_bat_low_soc` |
-| **Status** | ✅ Implementiert — `RegelSocSchutz` in `automation/engine/regeln/schutz.py` |
+| **Aktion** | Entladung stoppen: `stop_discharge` (StorCtl_Mod Bit 1 = Discharge-Limit, OutWRte = 0 %) |
+| **Freigabe** | SOC ≥ 10 % (Hysterese: 5 % Sperre → 10 % Recovery) |
+| **Hardware-Aware** | Prüft `StorCtl_Mod & 0x02` bei jedem Zyklus — erkennt Sperre auch nach Daemon-Neustart |
+| **Protokoll** | DB-Eintrag (`automation_log`) + Schaltlog: `stop_discharge` / `auto` |
+| **Status** | ✅ Implementiert — `Tier1Checker._check_batt_soc()` in `automation/engine/collectors/tier1_checker.py` |
+
+> **Design-Prinzip:** Wer sperrt, muss auch entsperren. Fronius RvrtTms=0 → geschriebene
+> Register bleiben permanent. Engine-Regeln können alle deaktiviert sein. Daemon kann
+> zwischendurch neustarten (RAM-Zustand verloren). Deshalb: Hardware-Register lesen,
+> nicht nur RAM-Flag prüfen.
+>
+> **Bug vom 2026-03-06:** SOC fiel auf 4.6%, `stop_discharge` gesetzt, Daemon
+> neugestartet, SOC stieg auf 99.5%, Batterie blieb gesperrt → 8 kW Netzbezug
+> trotz voller Batterie. Fix: Hardware-aware Recovery mit Hysterese.
 
 ### SR-BAT-02: Übertemperatur-Schutz
 

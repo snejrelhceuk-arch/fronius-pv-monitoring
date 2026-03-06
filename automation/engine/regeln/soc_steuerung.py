@@ -413,6 +413,42 @@ class RegelKomfortReset(Regel):
             return True
         return False
 
+    def _nachtladung_vermeidbar(self, obs: ObsState, matrix: dict) -> bool:
+        """Morgen-Prognose gut genug → keine erzwungene Nachtladung nötig.
+
+        Wenn die Batterie leer ist (SOC_MIN auf Stress) und morgen genug PV
+        kommt, ist ein SOC_MIN-Reset auf Komfort (25%) kontraproduktiv: Er
+        erzwingt sofortige Netzladung. Stattdessen bleibt SOC_MIN niedrig —
+        die PV morgen lädt die Batterie natürlich auf.
+
+        Bedingung:
+          - SOC_MIN aktuell auf Stress-Level (5%) → Morgen-Öffnung war aktiv
+          - forecast_tomorrow_kwh ≥ nachtlade_schwelle_kwh → PV morgen reicht
+
+        Returns:
+            True → SOC_MIN-Reset überspringen (morgen genug PV).
+        """
+        komfort_min = get_param(matrix, self.regelkreis, 'komfort_min_pct', 25)
+        if obs.soc_min is None or obs.soc_min >= komfort_min:
+            return False  # SOC_MIN bereits auf Komfort → kein Thema
+
+        schwelle = get_param(matrix, self.regelkreis, 'nachtlade_schwelle_kwh', 20.0)
+        morgen_kwh = obs.forecast_tomorrow_kwh
+
+        if morgen_kwh is not None and morgen_kwh >= schwelle:
+            LOG.info(f"komfort_reset: Morgen-Prognose {morgen_kwh:.1f} kWh "
+                     f"≥ {schwelle:.0f} kWh → SOC_MIN-Reset übersprungen "
+                     f"(keine erzwungene Nachtladung)")
+            return True
+
+        if morgen_kwh is not None:
+            LOG.debug(f"komfort_reset: Morgen-Prognose {morgen_kwh:.1f} kWh "
+                      f"< {schwelle:.0f} kWh → Nachtladung nötig")
+        else:
+            LOG.debug("komfort_reset: Morgen-Prognose nicht verfügbar "
+                      "→ sicherheitshalber Nachtladung")
+        return False
+
     def bewerte(self, obs: ObsState, matrix: dict) -> int:
         if not ist_aktiv(matrix, self.regelkreis):
             return 0
@@ -469,13 +505,22 @@ class RegelKomfortReset(Regel):
             return aktionen
 
         # Normaler Abend-Reset: alle Werte zurücksetzen
+        #
+        # SOC_MIN-Reset: Nur wenn morgen NICHT genug PV kommt.
+        # Ansonsten bleibt SOC_MIN niedrig → PV morgen lädt natürlich,
+        # statt einer sinnlosen Netzladung heute Nacht.
         if obs.soc_min is not None and obs.soc_min != komfort_min:
-            aktionen.append({
-                'tier': 2, 'aktor': 'batterie',
-                'kommando': 'set_soc_min', 'wert': komfort_min,
-                'grund': (f'Komfort-Reset {now_str}: SOC_MIN {obs.soc_min}%→{komfort_min}% '
-                          f'(Tagesende, LFP-Schonung)'),
-            })
+            if self._nachtladung_vermeidbar(obs, matrix):
+                morgen_str = f"{obs.forecast_tomorrow_kwh:.0f}" if obs.forecast_tomorrow_kwh is not None else "?"
+                LOG.info(f"Komfort-Reset {now_str}: SOC_MIN-Reset übersprungen "
+                         f"(Morgen-Prognose {morgen_str} kWh ausreichend)")
+            else:
+                aktionen.append({
+                    'tier': 2, 'aktor': 'batterie',
+                    'kommando': 'set_soc_min', 'wert': komfort_min,
+                    'grund': (f'Komfort-Reset {now_str}: SOC_MIN {obs.soc_min}%→{komfort_min}% '
+                              f'(Tagesende, LFP-Schonung)'),
+                })
 
         if obs.soc_max is not None and obs.soc_max != komfort_max:
             aktionen.append({

@@ -157,7 +157,7 @@ Stack: Raspbian Bullseye 11, Python 3.9.2, Flask 1.1.2, gunicorn 23.0.0,
 
 
 ═════════════════════════════════════════════════════════════════
-DYNAMISCHE UPDATES (Stand: 2026-03-05 04:00)
+DYNAMISCHE UPDATES (Stand: 2026-03-06 04:00)
 ═════════════════════════════════════════════════════════════════
 
 --- Aktuelle Config-Werte ---
@@ -200,14 +200,15 @@ DATA_MONTHLY_RETENTION_DAYS = 3650  # Monatl. techn. Aggregate (~10 Jahre)
 STROMTARIFE = [
 EINSPEISEVERGUETUNG = 0.000       # Nulleinspeiser — keine Vergütung
 STROM_GRUNDPREISE = [
-GESAMT_INVEST_PV = INVEST_PV_2022 + INVEST_PV_2024  # 32.000 EUR
-GESAMT_INVEST_HAUSHALT = GESAMT_INVEST_PV + INVEST_WP_2022  # 44.000 EUR
+GESAMT_INVEST_PV = INVEST_PV_2022 + INVEST_PV_2024 + INVEST_BATT_2026  # 35.000 EUR
+GESAMT_INVEST_HAUSHALT = GESAMT_INVEST_PV + INVEST_WP_2022  # 47.000 EUR
 HAUSHALT_BASIS_KWH = 3000        # kWh/Jahr Grundlast (Licht, Komfort, Lüftung)
 WP_BASIS = {
 HEIZKOSTEN_ERSPARNIS = {
 HEIZPERIODE_MONATE = {10, 11, 12, 1, 2, 3}  # Okt–Mär (6 Monate)
 
 --- Letzte Git-Commits ---
+403135c feat: 2× BYD HVS 20.48 kWh parallel — Batterie-Upgrade März 2026
 18f4bbf SOC-Extern-Toleranz + Morgen-Vorlauf + Docs
 ff8c768 Analyse-Ansichten: Navigation, Summen, Amortisation, Dark-Theme
 0adc07e Heizpatrone RegelGeraete, Failover-Tuning, Doku & Kalibrierung
@@ -217,9 +218,17 @@ f923b14 Aufräumen: sys.path-Hacks entfernt, system.py refactored, monitor_web_s
 b20fab8 Tiefenprüfung: 7 Fixes (P1-P3) + 21/21 Tests grün
 b443081 Refactor: engine + observer in Subpackages aufgeteilt
 3188b8a refactor: battery_control.py → automation/battery_control.py
-f04128b feat: RegelKomfortReset, SOC-HTTP-Collector, Dedup, DB-Fix, Scheduler archiviert
 
---- Kürzlich geänderte Module (1) ---
+--- Kürzlich geänderte Module (5) ---
+
+automation/engine/automation_daemon.py:
+  class AutomationDaemon:  # S4 Orchestrator: Observer + Engine + Actuator in einem Prozess.
+  def engine_vorausschau() -> list[dict]:  # Statische Funktion: Liest ObsState aus RAM-DB, führt Dry-Run aus.
+
+config.py:
+Zentrale Konfiguration für Fronius PV-Monitoring
+Alle gemeinsam genutzten Parameter an einer Stelle.
+  def load_secret(env_key, secrets_file=None):  # Lade ein Secret aus Umgebungsvariable oder .secrets-Datei.
 
 --- API-Endpunkte ---
   /                              → index  # Startseite: Redirect zu Flow-Chart

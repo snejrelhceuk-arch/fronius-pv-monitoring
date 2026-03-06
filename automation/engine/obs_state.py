@@ -94,6 +94,7 @@ class ObsState:
     forecast_ts: Optional[str] = None            # ISO-8601 wann Forecast zuletzt geholt
     clearsky_peak_h: Optional[float] = None      # Clear-Sky-Peak Dezimalstunde
     forecast_power_profile: Optional[list] = None # [{hour, total_ac_w}…] Stundenleistung
+    forecast_tomorrow_kwh: Optional[float] = None  # Prognose morgen [kWh] — für Nachtlade-Entscheidung
     # ── Zeit / Geometrie ─────────────────────────────────────
     sunrise: Optional[float] = None       # Dezimalstunde
     sunset: Optional[float] = None

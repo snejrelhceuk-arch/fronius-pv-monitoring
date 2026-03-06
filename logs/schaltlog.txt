@@ -1,0 +1,20 @@
+ 2026-03-06, 05:11 bis 07:18  ENGINE   batterie     stop_discharge                OK       SOC kritisch: 4.9% < 5%  (150x)
+~2026-03-06, 09:24  EX bis 12:16  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (143x)
+ 2026-03-06, 12:17:32  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Netzbezug Ø5107W > 200W (aktuell 12749W)
+ 2026-03-06, 12:17 bis 12:18  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Netzbezug Ø5490W > 200W (aktuell 959W)  (2x)
+ 2026-03-06, 12:17 bis 12:19  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Netzbezug Ø2933W > 200W (aktuell -115W)  (3x)
+~2026-03-06 12:19  EXT bis 12:36  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (15x)
+ 2026-03-06, 12:17 bis 12:38  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Netzbezug Ø884W > 200W (aktuell 2208W)  (4x)
+ 2026-03-06, 12:17 bis 12:40  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Netzbezug Ø450W > 200W (aktuell -12W)  (6x)
+~2026-03-06 12:40  EXT bis 14:16  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (81x)
+ 2026-03-06, 12:17 bis 14:18  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Netzbezug Ø397W > 200W (aktuell 940W)  (7x)
+ 2026-03-06, 12:17 bis 14:19  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Netzbezug Ø379W > 200W (aktuell 8W)  (8x)
+~2026-03-06 14:19  EXT bis 14:51  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (28x)
+ 2026-03-06, 12:17 bis 14:53  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Netzbezug Ø985W > 200W (aktuell 2461W)  (9x)
+~2026-03-06 14:53  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)
+ 2026-03-06, 15:31:14  ENGINE   batterie     set_discharge_rate=29         OK       ABEND-Phase: Entladerate auf 29%
+ 2026-03-06, 15:31:37  ENGINE   batterie     auto                          OK       SOC Recovery: 89.4% ≥ 10% → Entladesperre aufgehoben (StorCtl_Mod 2→0)
+ 2026-03-06, 15:31:37  ENGINE   batterie     set_charge_rate=100           OK       Laderate dynamisch: Stress-Bereich, PV ausreichend → Laderate 100%
+ 2026-03-06, 15:32 bis 15:45  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Burst 30 Min): Phase 2 (Mittag): P_Batt=7067W, rest_kwh=69.2, ba  (13x)
+ 2026-03-06, 15:46:21  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+~2026-03-06, 15:46  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)

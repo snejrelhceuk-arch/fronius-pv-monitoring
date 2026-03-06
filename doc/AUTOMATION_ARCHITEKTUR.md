@@ -148,7 +148,7 @@ def whiptail_menu(title, items):
 |-------|--------|-----------|
 | `config/battery_control.json` | Batterie SOC-Grenzen, Algorithmen | ✅ ja |
 | `config/fritz_config.json` | Fritz!Box-IP, AIN, HP-Leistung | ✅ ja |
-| `config/soc_param_matrix.json` | Regelkreis-Parameter (11 Kreise) | ✅ ja |
+| `config/soc_param_matrix.json` | Regelkreis-Parameter (12 Kreise) | ✅ ja |
 | `.secrets` | Credentials (FRITZ_USER/PASS, FRONIUS_PASS, etc.) | ✅ ja |
 
 ### Config-Schema (Beispiel für ein Device)
@@ -621,7 +621,7 @@ systemd → automation_observer.service
 
 ## 9. Regelkreise — Übersicht
 
-### 11 aktive Regeln in `automation/engine/regeln/`
+### 12 aktive Regeln in `automation/engine/regeln/`
 
 | # | Klasse | Modul | Zyklus | Priorität | Funktion |
 |---|--------|-------|--------|-----------|----------|
@@ -794,4 +794,4 @@ Die bestehende Tabelle `battery_control_log` ist Legacy und wird nicht mehr akti
 
 ---
 
-*Letzte Aktualisierung: 2026-03-04 (11 Regelkreise + SOC-Extern-Toleranz, Morgen-Vorlauf, Fritz!DECT produktiv, battery_scheduler archiviert)*
+*Letzte Aktualisierung: 2026-03-06 (12 Regelkreise, Tier-1 SOC-Recovery mit Hardware-Sync, BMS-Live-SOH, E-Mail-Benachrichtigungen, Schaltlog-Zusammenfassung)*
