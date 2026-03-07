@@ -24,6 +24,11 @@ DB_PATH = config.DB_PATH
 # Jeder höhere Wert ist ein Zähler-Artefakt (z.B. Fronius-Gateway-Init nach F1-Neustart)
 MAX_PV_DELTA_15MIN_WH = 6625
 
+# SmartMeter-Netz-Maximum pro 15-min-Slot (Wh)
+# Hausnetz max ~25A × 230V × 3 Phasen = 17.25 kW × 0.25h = 4313 Wh (großzügig gerundet)
+# Ein höherer Wert deutet auf Zähler-Reset nach Firmware-Update hin
+MAX_NETZ_DELTA_15MIN_WH = 5000
+
 def get_db():
     return get_db_connection()
 
@@ -151,8 +156,8 @@ def aggregate_15min():
                     ((MAX(W_DC1) + MAX(W_DC2)) - (MIN(W_DC1) + MIN(W_DC2))) + (MAX(NULLIF(W_Exp_F2,0)) - MIN(NULLIF(W_Exp_F2,0))) + (MAX(NULLIF(W_Exp_F3,0)) - MIN(NULLIF(W_Exp_F3,0))),
                     MAX(W_DC1) - MIN(W_DC1),
                     MAX(W_DC2) - MIN(W_DC2),
-                    MAX(W_Exp_Netz) - MIN(W_Exp_Netz),
-                    MAX(W_Imp_Netz) - MIN(W_Imp_Netz),
+                    MAX(NULLIF(W_Exp_Netz,0)) - MIN(NULLIF(W_Exp_Netz,0)),
+                    MAX(NULLIF(W_Imp_Netz,0)) - MIN(NULLIF(W_Imp_Netz,0)),
                     MAX(NULLIF(W_Exp_F2,0)) - MIN(NULLIF(W_Exp_F2,0)),
                     MAX(NULLIF(W_Imp_F2,0)) - MIN(NULLIF(W_Imp_F2,0)),
                     MAX(NULLIF(W_Exp_F3,0)) - MIN(NULLIF(W_Exp_F3,0)),
@@ -165,9 +170,9 @@ def aggregate_15min():
                     MAX(W_DC1),
                     MIN(W_DC2),
                     MAX(W_DC2),
-                    MIN(W_Exp_Netz),
+                    MIN(NULLIF(W_Exp_Netz,0)),
                     MAX(W_Exp_Netz),
-                    MIN(W_Imp_Netz),
+                    MIN(NULLIF(W_Imp_Netz,0)),
                     MAX(W_Imp_Netz),
                     MIN(NULLIF(W_Exp_F2,0)),
                     MAX(W_Exp_F2),
@@ -188,7 +193,7 @@ def aggregate_15min():
                 count += 1
                 # Plausibilitätsprüfung: Delta > physikalisches Maximum?
                 row = c.execute(
-                    "SELECT W_PV_total_delta FROM data_15min WHERE ts = ?",
+                    "SELECT W_PV_total_delta, W_Exp_Netz_delta, W_Imp_Netz_delta FROM data_15min WHERE ts = ?",
                     (ts_15min,)
                 ).fetchone()
                 if row and row[0] is not None and row[0] > MAX_PV_DELTA_15MIN_WH:
@@ -201,6 +206,21 @@ def aggregate_15min():
                         "UPDATE data_15min SET W_PV_total_delta = NULL WHERE ts = ?",
                         (ts_15min,)
                     )
+                # Netz-Plausibilitätsprüfung: SmartMeter-Reset nach Firmware-Update
+                for col_name, col_idx in [("W_Exp_Netz_delta", 1), ("W_Imp_Netz_delta", 2)]:
+                    if row and row[col_idx] is not None and row[col_idx] > MAX_NETZ_DELTA_15MIN_WH:
+                        logging.warning(
+                            f"⚠ Plausibilität: data_15min ts={ts_15min} "
+                            f"{col_name}={row[col_idx]:.0f} Wh > {MAX_NETZ_DELTA_15MIN_WH} Wh Maximum! "
+                            f"Vermutlich SmartMeter-Reset nach FW-Update. Setze auf NULL."
+                        )
+                        c.execute(
+                            f"UPDATE data_15min SET {col_name} = NULL, "
+                            f"{col_name.replace('_delta','_start')} = NULL, "
+                            f"{col_name.replace('_delta','_end')} = NULL "
+                            f"WHERE ts = ?",
+                            (ts_15min,)
+                        )
         
         conn.commit()
         
@@ -353,9 +373,9 @@ def aggregate_hourly():
                 MAX(0, SUM(W_PV_total_delta - W_Exp_Netz_delta) - SUM(CASE WHEN I_Batt_API_avg >= 0 THEN (I_Batt_API_avg * U_Batt_API_avg) * 0.25 ELSE 0 END)),
                 MIN(W_AC_Inv_start),
                 MAX(W_AC_Inv_end),
-                MIN(W_Exp_Netz_start),
+                MIN(NULLIF(W_Exp_Netz_start,0)),
                 MAX(W_Exp_Netz_end),
-                MIN(W_Imp_Netz_start),
+                MIN(NULLIF(W_Imp_Netz_start,0)),
                 MAX(W_Imp_Netz_end)
             FROM data_15min
             WHERE ts >= ? AND ts < ?

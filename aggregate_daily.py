@@ -194,15 +194,16 @@ def aggregate_daily():
              h_imp_start, h_imp_end) = row
 
             # ── 2. Counter End−Start aus data_1min (präziser, lückenresistent) ──
+            # NULLIF(x,0) auf Netz-Counter schützt vor SmartMeter-Reset nach FW-Update
             c.execute("""
                 SELECT
-                    MAX(W_Imp_Netz_end) - MIN(W_Imp_Netz_start),
-                    MAX(W_Exp_Netz_end) - MIN(W_Exp_Netz_start),
+                    MAX(W_Imp_Netz_end) - MIN(NULLIF(W_Imp_Netz_start,0)),
+                    MAX(W_Exp_Netz_end) - MIN(NULLIF(W_Exp_Netz_start,0)),
                     MAX(W_DC1_end)  - MIN(W_DC1_start),
                     MAX(W_DC2_end)  - MIN(W_DC2_start),
                     MAX(W_AC_Inv_end) - MIN(W_AC_Inv_start),
-                    MIN(W_Imp_Netz_start), MAX(W_Imp_Netz_end),
-                    MIN(W_Exp_Netz_start), MAX(W_Exp_Netz_end),
+                    MIN(NULLIF(W_Imp_Netz_start,0)), MAX(W_Imp_Netz_end),
+                    MIN(NULLIF(W_Exp_Netz_start,0)), MAX(W_Exp_Netz_end),
                     MIN(W_AC_Inv_start),   MAX(W_AC_Inv_end)
                 FROM data_1min
                 WHERE ts >= ? AND ts < ?
@@ -224,11 +225,12 @@ def aggregate_daily():
                 cnt_inv_start, cnt_inv_end = h_inv_start, h_inv_end
 
             # ── 3. F2/F3-Counter + Wärmepumpe-Counter aus raw_data (ab 12.02.) ──
+            # NULLIF(x,0) schützt vor Fronius-Gateway-Init (0.0 nach FW-Update/Neustart)
             c.execute("""
                 SELECT
-                    MAX(W_Exp_F2) - MIN(W_Exp_F2),
-                    MAX(W_Exp_F3) - MIN(W_Exp_F3),
-                    MAX(W_Imp_WP) - MIN(W_Imp_WP)
+                    MAX(NULLIF(W_Exp_F2,0)) - MIN(NULLIF(W_Exp_F2,0)),
+                    MAX(NULLIF(W_Exp_F3,0)) - MIN(NULLIF(W_Exp_F3,0)),
+                    MAX(NULLIF(W_Imp_WP,0)) - MIN(NULLIF(W_Imp_WP,0))
                 FROM raw_data
                 WHERE ts >= ? AND ts < ?
             """, (q_start, q_end))
