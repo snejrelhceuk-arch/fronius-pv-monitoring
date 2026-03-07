@@ -1,11 +1,17 @@
 """
 aktor_batterie.py — Batterie-Aktor-Plugin für die Automation-Engine
 
-Kapselt alle Batterie-Steuerungsbefehle (Laderate, Entladerate, Hold,
-Auto, SOC-Grenzen, Netzladung) hinter einem einheitlichen Plugin-Interface.
+Kapselt Batterie-Steuerungsbefehle (SOC-Grenzen, SOC-Mode, Netzladung)
+hinter einem einheitlichen Plugin-Interface.
 
 Eigenständig: Importiert battery_control.py und fronius_api.py aus dem
 Projekt-Root, keine direkte Abhängigkeit zum laufenden battery_scheduler.
+
+HINWEIS (2026-03-07): Laderate-/Entladerate-Kommandos (set_charge_rate,
+set_discharge_rate, hold, auto, stop_*) wurden entfernt. Der GEN24 12.0
+DC-DC-Wandler begrenzt den Batteriestrom auf ~22 A (≈9,5 kW).
+Software-Ratenlimits via InWRte/OutWRte/StorCtl_Mod waren wirkungslos.
+SOC_MIN/SOC_MAX via Fronius HTTP-API sind das korrekte Steuerungsinstrument.
 
 Siehe: doc/AUTOMATION_ARCHITEKTUR.md §6 (Aktoren)
 """
@@ -50,16 +56,13 @@ class AktorBatterie(AktorBase):
     """Batterie-Steuerung via Modbus TCP (Model 124) + Fronius HTTP API.
 
     Unterstützte Kommandos:
-      set_charge_rate     — Laderate [0-100%]
-      set_discharge_rate  — Entladerate [0-100%]
-      hold                — Batterie halten (0% Lade+Entlade)
-      auto                — Automatik (StorCtl_Mod=0)
       set_soc_min         — SOC_MIN via HTTP API
       set_soc_max         — SOC_MAX via HTTP API
       set_soc_mode        — SOC_MODE ('auto'/'manual') via HTTP API
-      stop_discharge      — Sofort: Entladerate=0%
-      stop_charge         — Sofort: Laderate=0%
-      grid_charge         — Netzladung ein/aus
+      grid_charge         — Netzladung ein/aus via Modbus
+
+    Entfernt (2026-03-07) — GEN24 HW-Limit macht SW-Ratenlimits wirkungslos:
+      set_charge_rate, set_discharge_rate, hold, auto, stop_discharge, stop_charge
     """
 
     name = 'batterie'
@@ -148,13 +151,9 @@ class AktorBatterie(AktorBase):
             LOG.info(f"  [DRY-RUN] Würde ausführen: {kommando}={wert}")
             return {'ok': True, 'kommando': kommando, 'detail': '[DRY-RUN]'}
 
+        # Entfernte Kommandos: set_charge_rate, set_discharge_rate, hold,
+        # auto, stop_discharge, stop_charge (GEN24 HW-Limit, 2026-03-07)
         handler = {
-            'set_charge_rate': self._cmd_set_charge_rate,
-            'set_discharge_rate': self._cmd_set_discharge_rate,
-            'hold': self._cmd_hold,
-            'auto': self._cmd_auto,
-            'stop_discharge': self._cmd_stop_discharge,
-            'stop_charge': self._cmd_stop_charge,
             'set_soc_min': self._cmd_set_soc_min,
             'set_soc_max': self._cmd_set_soc_max,
             'set_soc_mode': self._cmd_set_soc_mode,
@@ -173,55 +172,12 @@ class AktorBatterie(AktorBase):
             'detail': f"{'OK' if ok else 'FEHLER'}: {grund}",
         }
 
-    # ── Modbus-Kommandos ─────────────────────────────────────
-
-    def _cmd_set_charge_rate(self, percent) -> bool:
-        """Laderate setzen [0-100%]."""
-        from automation.battery_control import set_charge_rate
-        return self._retry(
-            f'Laderate={percent}%', self._get_modbus, '_modbus_client',
-            lambda c: set_charge_rate(c, percent)
-        )
-
-    def _cmd_set_discharge_rate(self, percent) -> bool:
-        """Entladerate setzen [0-100%]."""
-        from automation.battery_control import set_discharge_rate
-        return self._retry(
-            f'Entladerate={percent}%', self._get_modbus, '_modbus_client',
-            lambda c: set_discharge_rate(c, percent)
-        )
-
-    def _cmd_hold(self, _=None) -> bool:
-        """Batterie halten."""
-        from automation.battery_control import hold_battery
-        return self._retry(
-            'Hold', self._get_modbus, '_modbus_client',
-            lambda c: hold_battery(c)
-        )
-
-    def _cmd_auto(self, _=None) -> bool:
-        """Automatik (StorCtl_Mod=0)."""
-        from automation.battery_control import auto_battery
-        return self._retry(
-            'Auto', self._get_modbus, '_modbus_client',
-            lambda c: auto_battery(c)
-        )
-
-    def _cmd_stop_discharge(self, _=None) -> bool:
-        """Tier-1 Sofort-Aktion: Entladerate=0%."""
-        from automation.battery_control import set_discharge_rate
-        return self._retry(
-            'STOP-Entladung', self._get_modbus, '_modbus_client',
-            lambda c: set_discharge_rate(c, 0)
-        )
-
-    def _cmd_stop_charge(self, _=None) -> bool:
-        """Tier-1 Sofort-Aktion: Laderate=0%."""
-        from automation.battery_control import set_charge_rate
-        return self._retry(
-            'STOP-Ladung', self._get_modbus, '_modbus_client',
-            lambda c: set_charge_rate(c, 0)
-        )
+    # ── Entfernt (2026-03-07) ─────────────────────────────────────
+    # _cmd_set_charge_rate, _cmd_set_discharge_rate, _cmd_hold,
+    # _cmd_auto, _cmd_stop_discharge, _cmd_stop_charge
+    # Grund: GEN24 12.0 DC-DC-Wandler begrenzt Batteriestrom auf ~22 A.
+    # Software-Ratenlimits via InWRte/OutWRte/StorCtl_Mod wirkungslos.
+    # ─────────────────────────────────────────────────────────────
 
     # ── HTTP-API-Kommandos ───────────────────────────────────
 
@@ -272,32 +228,10 @@ class AktorBatterie(AktorBase):
             return {'ok': False, 'grund': 'Modbus nicht verbunden'}
 
         try:
-            from automation.battery_control import read_raw, read_int16_scaled, REG
-
-            if kommando in ('set_charge_rate', 'stop_charge'):
-                soll = wert if wert is not None else 0
-                ist, _, _ = read_int16_scaled(client, REG['InWRte'], REG['InOutWRte_SF'])
-                ok = ist is not None and abs(ist - soll) < 2
-                return {'ok': ok, 'ist': ist, 'soll': soll, 'register': 'InWRte'}
-
-            elif kommando in ('set_discharge_rate', 'stop_discharge'):
-                soll = wert if wert is not None else 0
-                ist, _, _ = read_int16_scaled(client, REG['OutWRte'], REG['InOutWRte_SF'])
-                ok = ist is not None and abs(ist - soll) < 2
-                return {'ok': ok, 'ist': ist, 'soll': soll, 'register': 'OutWRte'}
-
-            elif kommando == 'hold':
-                storctl = read_raw(client, REG['StorCtl_Mod'])
-                ok = storctl is not None and (storctl & 0x03) == 0x03
-                return {'ok': ok, 'ist': storctl, 'soll': 3, 'register': 'StorCtl_Mod'}
-
-            elif kommando == 'auto':
-                storctl = read_raw(client, REG['StorCtl_Mod'])
-                ok = storctl is not None and storctl == 0
-                return {'ok': ok, 'ist': storctl, 'soll': 0, 'register': 'StorCtl_Mod'}
-
-            else:
-                return {'ok': True, 'grund': f'Keine Verifikation für {kommando}'}
+            # Entfernt (2026-03-07): Verifikation für set_charge_rate,
+            # set_discharge_rate, hold, auto, stop_* — GEN24 HW-Limit.
+            # Verbleibende Kommandos nutzen HTTP API ohne Modbus-Readback.
+            return {'ok': True, 'grund': f'Keine Modbus-Verifikation für {kommando}'}
 
         except Exception as e:
             LOG.error(f"Verifikation fehlgeschlagen: {e}")
