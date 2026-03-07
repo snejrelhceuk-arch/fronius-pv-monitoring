@@ -32,10 +32,12 @@ LOG = logging.getLogger('engine')
 class RegelWattpilotBattSchutz(Regel):
     """Batterieschutz bei WattPilot-EV-Ladung.
 
-    Logik (3 Stufen):
-    1. SOC > drosselung_ab (50%): Wolke OK — kein Eingriff
-    2. SOC ≤ drosselung_ab (50%): Entladerate auf 0.3C (≈30%)
-    3. SOC ≤ SOC_MIN + puffer: SOC_MIN anheben → Netzladung erzwingen
+    Logik (2 Stufen):
+    1. SOC > soc_min + puffer: kein Eingriff
+    2. SOC ≤ SOC_MIN + puffer: SOC_MIN anheben → Netzladung erzwingen
+
+    Entfernt (2026-03-07): Stufe 2 (set_discharge_rate) — GEN24 DC-DC-Wandler
+    begrenzt Batteriestrom auf ~22 A; Modbus-Ratenlimits wirkungslos.
 
     Parametermatrix: regelkreise.wattpilot_battschutz
     """
@@ -68,26 +70,20 @@ class RegelWattpilotBattSchutz(Regel):
         if obs.batt_soc_pct is not None and obs.batt_soc_pct <= soc_min_eff + puffer:
             return int(score * 1.3)
 
-        drosselung = get_param(matrix, self.regelkreis, 'soc_drosselung_ab_pct', 50)
-        if obs.batt_soc_pct is not None and obs.batt_soc_pct <= drosselung:
-            return score
-
         return 0
 
     def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
         aktionen = []
 
-        drosselung = get_param(matrix, self.regelkreis, 'soc_drosselung_ab_pct', 50)
         puffer = get_param(matrix, self.regelkreis, 'soc_min_puffer_pct', 5)
         soc_min_eff = obs.soc_min if obs.soc_min is not None else 10
         soc = obs.batt_soc_pct if obs.batt_soc_pct is not None else 50
-        rate_red = get_param(matrix, self.regelkreis, 'entladerate_reduziert_pct', 30)
         soc_min_netz = get_param(matrix, self.regelkreis, 'soc_min_netz_pct', 25)
 
         eco_info = " (Eco-Modus)" if obs.ev_eco_mode else " (kein Eco → Schnellladung)"
         ev_w = obs.ev_power_w or 0
 
-        # ── Stufe 3: SOC nahe SOC_MIN → Netzbezug erzwingen ─
+        # ── SOC nahe SOC_MIN → Netzbezug erzwingen ──────────
         if soc <= soc_min_eff + puffer:
             if obs.soc_mode != 'manual':
                 aktionen.append({
@@ -104,18 +100,9 @@ class RegelWattpilotBattSchutz(Regel):
                 'hinweis': (f'WattPilot lädt mit {ev_w:.0f}W{eco_info} — '
                             f'Batterie geschützt, Ladung ab jetzt aus dem Netz'),
             })
-            return aktionen
 
-        # ── Stufe 2: Entladerate drosseln (0.3C) ────────────
-        if soc <= drosselung:
-            if obs.discharge_rate_pct is None or obs.discharge_rate_pct > rate_red + 5:
-                aktionen.append({
-                    'tier': 2, 'aktor': 'batterie',
-                    'kommando': 'set_discharge_rate',
-                    'wert': rate_red,
-                    'grund': (f'WattPilot-Schutz: SOC {soc:.0f}% ≤ {drosselung}% '
-                              f'→ Entladerate auf {rate_red}% (≈0.3C)'),
-                })
+        # Entfernt (2026-03-07): Stufe 2 (set_discharge_rate bei SOC ≤ drosselung)
+        # GEN24 DC-DC-Wandler begrenzt Batteriestrom auf ~22 A; Modbus wirkungslos.
 
         return aktionen
 

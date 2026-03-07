@@ -1,10 +1,12 @@
 """
 optimierung.py — Optimierungsregeln (P2-P3, mixed Zyklen)
 
-RegelAbendEntladerate   — Entladerate nach Tageszeit (fast)
 RegelZellausgleich      — Monatlicher BYD-Zellbalancing (strategic)
 RegelForecastPlausi     — Prognose an Realität anpassen (strategic)
-RegelLaderateDynamisch  — Laderate je nach WP/PV/SOC steuern (fast)
+
+Entfernt (2026-03-07) — GEN24 HW-Limit macht SW-Ratenlimits wirkungslos:
+  RegelAbendEntladerate   — Entladerate nach Tageszeit (via set_discharge_rate)
+  RegelLaderateDynamisch  — Laderate je nach WP/PV/SOC (via set_charge_rate)
 
 Siehe: doc/BATTERIE_STRATEGIEN.md, doc/PARAMETER_MATRIZEN.md
 """
@@ -30,85 +32,11 @@ LOG = logging.getLogger('engine')
 
 
 # ═════════════════════════════════════════════════════════════
-# ABEND-ENTLADERATE (P2 — Steuerung, fast)
+# ENTFERNT (2026-03-07): ABEND-ENTLADERATE
+# RegelAbendEntladerate nutzte set_discharge_rate/stop_discharge/auto.
+# GEN24 DC-DC-Wandler begrenzt Batteriestrom auf ~22 A; Modbus-Raten-
+# limits waren wirkungslos. SOC_MIN steuert Entlade-Erlaubnis implizit.
 # ═════════════════════════════════════════════════════════════
-
-class RegelAbendEntladerate(Regel):
-    """Entladerate nach Tageszeit begrenzen.
-
-    Abend: 29%, Nacht: 10%, Tag: auto.
-    SOC < kritisch → Entladung STOP (Laden bleibt erlaubt!).
-
-    Parametermatrix: regelkreise.abend_entladerate
-    """
-
-    name = 'abend_entladerate'
-    regelkreis = 'abend_entladerate'
-    engine_zyklus = 'fast'
-
-    def _get_phase(self, matrix: dict) -> tuple[Optional[str], Optional[int]]:
-        """Aktuelle Tagesphase bestimmen."""
-        now = datetime.now()
-        hr = now.hour + now.minute / 60.0
-
-        abend_ab = get_param(matrix, self.regelkreis, 'abend_start_h', 15)
-        abend_bis = get_param(matrix, self.regelkreis, 'abend_ende_h', 0)
-        nacht_ab = get_param(matrix, self.regelkreis, 'nacht_start_h', 0)
-        nacht_bis = get_param(matrix, self.regelkreis, 'nacht_ende_h', 6)
-        abend_rate = get_param(matrix, self.regelkreis, 'abend_rate_pct', 29)
-        nacht_rate = get_param(matrix, self.regelkreis, 'nacht_rate_pct', 10)
-
-        if hr >= abend_ab or (abend_bis > 0 and hr < abend_bis):
-            return 'abend', abend_rate
-        if nacht_ab <= hr < nacht_bis:
-            return 'nacht', nacht_rate
-        return None, None
-
-    def bewerte(self, obs: ObsState, matrix: dict) -> int:
-        if not ist_aktiv(matrix, self.regelkreis):
-            return 0
-
-        kritisch = get_param(matrix, self.regelkreis, 'kritisch_soc_pct', 10)
-        if obs.batt_soc_pct is not None and obs.batt_soc_pct < kritisch:
-            return get_score_gewicht(matrix, self.regelkreis)
-
-        phase, rate = self._get_phase(matrix)
-        if phase is not None:
-            return get_score_gewicht(matrix, self.regelkreis)
-
-        if obs.storctl_mod is not None and obs.storctl_mod != 0:
-            return int(get_score_gewicht(matrix, self.regelkreis) * 0.5)
-
-        return 0
-
-    def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
-        kritisch = get_param(matrix, self.regelkreis, 'kritisch_soc_pct', 10)
-
-        if obs.batt_soc_pct is not None and obs.batt_soc_pct < kritisch:
-            return [{
-                'tier': 2, 'aktor': 'batterie',
-                'kommando': 'stop_discharge',
-                'grund': f'SOC-Notbremse: {obs.batt_soc_pct:.1f}% < {kritisch}% → Entladung STOP (Laden erlaubt)',
-            }]
-
-        phase, rate = self._get_phase(matrix)
-        if phase is not None:
-            if obs.discharge_rate_pct is not None and abs(obs.discharge_rate_pct - rate) < 3:
-                return []
-            return [{
-                'tier': 2, 'aktor': 'batterie',
-                'kommando': 'set_discharge_rate',
-                'wert': rate,
-                'grund': f'{phase.upper()}-Phase: Entladerate auf {rate}%',
-            }]
-
-        if obs.storctl_mod is not None and obs.storctl_mod == 0:
-            return []
-        return [{
-            'tier': 2, 'aktor': 'batterie',
-            'kommando': 'auto',
-            'grund': 'TAG-Phase: Entladeraten-Limits aufheben',
-        }]
 
 
 # ═════════════════════════════════════════════════════════════
@@ -297,66 +225,7 @@ class RegelForecastPlausi(Regel):
 
 
 # ═════════════════════════════════════════════════════════════
-# LADERATE DYNAMISCH (P2 — Steuerung, fast)
+# ENTFERNT (2026-03-07): LADERATE DYNAMISCH
+# RegelLaderateDynamisch nutzte set_charge_rate. GEN24 DC-DC-Wandler
+# begrenzt Batteriestrom auf ~22 A; InWRte-Schreiben wirkungslos.
 # ═════════════════════════════════════════════════════════════
-
-class RegelLaderateDynamisch(Regel):
-    """Laderate dynamisch steuern: WP-Last, PV-Verfügbarkeit, SOC-Bereich.
-
-    Parametermatrix: regelkreise.laderate_dynamisch
-    """
-
-    name = 'laderate_dynamisch'
-    regelkreis = 'laderate_dynamisch'
-    engine_zyklus = 'fast'
-
-    def bewerte(self, obs: ObsState, matrix: dict) -> int:
-        if not ist_aktiv(matrix, self.regelkreis):
-            return 0
-
-        is_charging = False
-        if obs.cha_state is not None and obs.cha_state == 4:
-            is_charging = True
-        elif obs.batt_power_w is not None and obs.batt_power_w > 100:
-            is_charging = True
-
-        if not is_charging:
-            return 0
-
-        score = get_score_gewicht(matrix, self.regelkreis)
-
-        if obs.wp_active:
-            return int(score * 1.2)
-
-        return score
-
-    def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
-        komfort_rate = get_param(matrix, self.regelkreis, 'komfort_max_laderate_pct', 80)
-        stress_rate = get_param(matrix, self.regelkreis, 'stress_max_laderate_pct', 100)
-        wp_rate = get_param(matrix, self.regelkreis, 'wp_aktiv_reduktion_pct', 60)
-        min_pv = get_param(matrix, self.regelkreis, 'pv_min_fuer_vollladung_w', 5000)
-
-        rate = stress_rate
-
-        if obs.wp_active:
-            rate = min(rate, wp_rate)
-            grund_detail = f'WP aktiv ({obs.wp_power_w or 0:.0f}W) → Laderate auf {rate}%'
-        elif (obs.batt_soc_pct is not None and 25 <= obs.batt_soc_pct <= 75):
-            rate = min(rate, komfort_rate)
-            grund_detail = f'Komfort-Bereich (SOC {obs.batt_soc_pct:.0f}%) → Laderate {rate}%'
-        elif obs.pv_total_w is not None and obs.pv_total_w < min_pv:
-            pv_ratio = obs.pv_total_w / min_pv
-            rate = max(30, int(stress_rate * pv_ratio))
-            grund_detail = f'PV {obs.pv_total_w:.0f}W < {min_pv}W → Laderate {rate}%'
-        else:
-            grund_detail = f'Stress-Bereich, PV ausreichend → Laderate {rate}%'
-
-        if obs.charge_rate_pct is not None and abs(obs.charge_rate_pct - rate) < 5:
-            return []
-
-        return [{
-            'tier': 2, 'aktor': 'batterie',
-            'kommando': 'set_charge_rate',
-            'wert': rate,
-            'grund': f'Laderate dynamisch: {grund_detail}',
-        }]

@@ -30,15 +30,13 @@ from automation.engine.param_matrix import (
 
 from automation.engine.regeln import (          # noqa: E402
     Regel,
-    RegelSocSchutz,
-    RegelTempSchutz,
+    # Entfernt (2026-03-07): RegelSocSchutz, RegelTempSchutz,
+    # RegelAbendEntladerate, RegelLaderateDynamisch
     RegelKomfortReset,
-    RegelAbendEntladerate,
     RegelMorgenSocMin,
     RegelNachmittagSocMax,
     RegelZellausgleich,
     RegelForecastPlausi,
-    RegelLaderateDynamisch,
     RegelWattpilotBattSchutz,
     RegelHeizpatrone,
 )
@@ -61,8 +59,9 @@ class Engine:
       5. ActionPlan an Actuator dispatchen
 
     Zyklen:
-      fast (1 min)      — soc_schutz, temp_schutz, abend_entladerate
-      strategic (15 min) — morgen_soc_min, nachmittag_soc_max, zellausgleich
+      fast (1 min)      — wattpilot_battschutz, heizpatrone, komfort_reset
+      strategic (15 min) — morgen_soc_min, nachmittag_soc_max, zellausgleich,
+                           forecast_plausi
     """
 
     def __init__(self, actuator: Actuator, dry_run: bool = False,
@@ -93,15 +92,13 @@ class Engine:
     def _register_default_regeln(self):
         """Alle SOC-Regeln registrieren."""
         self._regeln = [
-            RegelSocSchutz(),
-            RegelTempSchutz(),
+            # Entfernt (2026-03-07): RegelSocSchutz(), RegelTempSchutz(),
+            # RegelAbendEntladerate(), RegelLaderateDynamisch()
             RegelKomfortReset(),
-            RegelAbendEntladerate(),
             RegelMorgenSocMin(),
             RegelNachmittagSocMax(),
             RegelZellausgleich(),
             RegelForecastPlausi(),
-            RegelLaderateDynamisch(),
             RegelWattpilotBattSchutz(),
             RegelHeizpatrone(),
         ]

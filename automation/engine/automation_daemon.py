@@ -440,18 +440,16 @@ def engine_vorausschau() -> list[dict]:
         matrix = lade_matrix(DEFAULT_MATRIX_PATH)
 
         from automation.engine.regeln import (
-            RegelSocSchutz, RegelTempSchutz, RegelKomfortReset,
-            RegelAbendEntladerate,
+            RegelKomfortReset,
             RegelMorgenSocMin, RegelNachmittagSocMax, RegelZellausgleich,
-            RegelForecastPlausi, RegelLaderateDynamisch, RegelWattpilotBattSchutz,
+            RegelForecastPlausi, RegelWattpilotBattSchutz,
             RegelHeizpatrone,
         )
 
         regeln = [
-            RegelSocSchutz(), RegelTempSchutz(), RegelKomfortReset(),
-            RegelAbendEntladerate(),
+            RegelKomfortReset(),
             RegelMorgenSocMin(), RegelNachmittagSocMax(), RegelZellausgleich(),
-            RegelForecastPlausi(), RegelLaderateDynamisch(), RegelWattpilotBattSchutz(),
+            RegelForecastPlausi(), RegelWattpilotBattSchutz(),
             RegelHeizpatrone(),
         ]
 
