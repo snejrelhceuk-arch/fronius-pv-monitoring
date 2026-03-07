@@ -215,6 +215,7 @@ NOTIFICATION_EVENTS = ['batt_temp_40', 'batt_soc_kritisch', 'netz_ueberlast', 's
 EVENT_THRESHOLDS = {
 
 --- Letzte Git-Commits ---
+5b34661 refactor: Entladerate/Laderate-Regeln entfernt — GEN24 HW-Limit
 94be85d fix: NULLIF(0)-Schutz für SmartMeter/F2/F3/WP-Counter nach FW-Update
 e09e373 fix: FritzDECT dry_run=True entfernt — HP-Schaltbefehle aktiv
 4575c34 fix: Tiefenprüfung v1.1.0 — 8 Bug-Fixes (2×CRITICAL, 4×HIGH, 2×Infra)
@@ -224,9 +225,17 @@ d32c8a1 feat: Sunset-Tagesbericht — tägliche 24h-Zusammenfassung per E-Mail
 18f4bbf SOC-Extern-Toleranz + Morgen-Vorlauf + Docs
 ff8c768 Analyse-Ansichten: Navigation, Summen, Amortisation, Dark-Theme
 0adc07e Heizpatrone RegelGeraete, Failover-Tuning, Doku & Kalibrierung
-b4bdfe6 Doku-Audit: 17 Dokumente mit Code-Realität abgeglichen
 
 --- Kürzlich geänderte Module (4) ---
+
+config.py:
+Zentrale Konfiguration für Fronius PV-Monitoring
+Alle gemeinsam genutzten Parameter an einer Stelle.
+  def load_secret(env_key, secrets_file=None):  # Lade ein Secret aus Umgebungsvariable oder .secrets-Datei.
+
+automation/engine/automation_daemon.py:
+  class AutomationDaemon:  # S4 Orchestrator: Observer + Engine + Actuator in einem Prozess.
+  def engine_vorausschau() -> list[dict]:  # Statische Funktion: Liest ObsState aus RAM-DB, führt Dry-Run aus.
 
 aggregate.py:
   def get_db():
@@ -237,15 +246,6 @@ automation/engine/engine.py:
 engine.py — Entscheidungs-Engine (Schicht S3)
 
 Liest ObsState aus RAM-DB und SOC-Parametermatrix aus
-
-automation/engine/automation_daemon.py:
-  class AutomationDaemon:  # S4 Orchestrator: Observer + Engine + Actuator in einem Prozess.
-  def engine_vorausschau() -> list[dict]:  # Statische Funktion: Liest ObsState aus RAM-DB, führt Dry-Run aus.
-
-config.py:
-Zentrale Konfiguration für Fronius PV-Monitoring
-Alle gemeinsam genutzten Parameter an einer Stelle.
-  def load_secret(env_key, secrets_file=None):  # Lade ein Secret aus Umgebungsvariable oder .secrets-Datei.
 
 --- API-Endpunkte ---
   /                              → index  # Startseite: Redirect zu Flow-Chart
