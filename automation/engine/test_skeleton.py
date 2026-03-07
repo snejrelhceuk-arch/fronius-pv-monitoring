@@ -35,9 +35,9 @@ from automation.engine.obs_state import (
 from automation.engine.observer import Tier1Checker
 from automation.engine.actuator import Actuator, init_persist_log
 from automation.engine.engine import (
-    Engine, RegelSocSchutz, RegelTempSchutz, RegelMorgenSocMin,
-    RegelNachmittagSocMax, RegelAbendEntladerate, RegelZellausgleich,
-    RegelForecastPlausi, RegelLaderateDynamisch,
+    Engine, RegelMorgenSocMin,
+    RegelNachmittagSocMax, RegelZellausgleich,
+    RegelForecastPlausi,
     RegelWattpilotBattSchutz,
 )
 from automation.engine.param_matrix import (
@@ -130,32 +130,26 @@ def test_tier1_normal():
 
 
 def test_tier1_temp_warn():
-    """Test 2b: Tier-1 Batterie-Temp WARNUNG (≥40°C → Laderate auf 30%)."""
+    """Test 2b: Tier-1 Batterie-Temp WARNUNG (≥40°C → Alarm-Flag, kein HW-Eingriff)."""
     _sep("2b. Tier-1: Batterie-Temp WARNUNG (40°C)")
 
     checker = Tier1Checker(schutz_cfg={
         'batt_temp_warn_c': 40,
         'batt_temp_alarm_c': 45,
-        'batt_temp_reduce_c_rate': 0.3,
-        'batt_kapazitaet_kwh': 20.48,
     })
 
     obs = ObsState(batt_temp_max_c=41.2, batt_soc_pct=80.0)
     actions = checker.check(obs)
 
     assert obs.alarm_batt_temp, "Alarm-Flag nicht gesetzt"
-    assert len(actions) >= 1, "Keine Aktion erzeugt"
-    a = actions[0]
-    assert a['kommando'] == 'set_charge_rate', f"Falsches Kommando: {a['kommando']}"
-    assert a['wert'] == 30, f"Falscher Wert: {a['wert']} (erwartet 30)"
+    assert len(actions) == 0, f"Erwarte keine Aktionen (HW-Eingriffe entfernt), got {actions}"
 
-    LOG.info(f"✓ Alarm: {a['grund']}")
-    LOG.info(f"  Kommando: {a['kommando']}={a['wert']}%")
+    LOG.info(f"✓ Alarm-Flag gesetzt, keine HW-Aktion (BMS regelt selbständig)")
     return True
 
 
 def test_tier1_temp_alarm():
-    """Test 2c: Tier-1 Batterie-Temp ALARM (≥45°C → Ladung STOP)."""
+    """Test 2c: Tier-1 Batterie-Temp ALARM (≥45°C → Alarm-Flag, kein HW-Eingriff)."""
     _sep("2c. Tier-1: Batterie-Temp ALARM (45°C)")
 
     checker = Tier1Checker(schutz_cfg={
@@ -167,50 +161,41 @@ def test_tier1_temp_alarm():
     actions = checker.check(obs)
 
     assert obs.alarm_batt_temp
-    assert len(actions) >= 1
-    a = actions[0]
-    assert a['kommando'] == 'set_charge_rate'
-    assert a['wert'] == 0, f"Falscher Wert: {a['wert']} (erwartet 0)"
+    assert len(actions) == 0, f"Erwarte keine Aktionen (HW-Eingriffe entfernt), got {actions}"
 
-    LOG.info(f"✓ ALARM: {a['grund']}")
+    LOG.info(f"✓ ALARM-Flag gesetzt, keine HW-Aktion (BMS regelt selbständig)")
     return True
 
 
 def test_tier1_temp_hysterese():
-    """Test 2d: Hysterese — Normalisierung erst bei <38°C."""
-    _sep("2d. Tier-1: Temp-Hysterese")
+    """Test 2d: Alarm-Flags setzen/löschen bei Temperaturänderung."""
+    _sep("2d. Tier-1: Temp-Alarm-Flags")
 
     checker = Tier1Checker(schutz_cfg={
         'batt_temp_warn_c': 40,
         'batt_temp_alarm_c': 45,
-        'batt_temp_reduce_c_rate': 0.3,
     })
 
     # Schritt 1: Alarm auslösen bei 42°C
     obs = ObsState(batt_temp_max_c=42.0)
     actions = checker.check(obs)
     assert obs.alarm_batt_temp
-    LOG.info(f"  42°C → Alarm aktiv, {len(actions)} Aktion(en)")
+    assert len(actions) == 0, "Keine HW-Aktionen erwartet"
+    LOG.info(f"  42°C → Alarm-Flag gesetzt")
 
-    # Schritt 2: 39°C — noch NICHT normalisiert (Hysterese-Band)
-    obs2 = ObsState(batt_temp_max_c=39.0)
+    # Schritt 2: 37°C — Alarm gelöst
+    obs2 = ObsState(batt_temp_max_c=37.0)
     actions2 = checker.check(obs2)
-    assert not actions2, f"Sollte keine Aktion bei 39°C geben (Hysterese): {actions2}"
-    LOG.info("  39°C → Noch begrenzt (Hysterese)")
+    assert not obs2.alarm_batt_temp
+    assert len(actions2) == 0
+    LOG.info("  37°C → Alarm-Flag gelöst")
 
-    # Schritt 3: 37°C — jetzt normalisiert
-    obs3 = ObsState(batt_temp_max_c=37.0)
-    actions3 = checker.check(obs3)
-    assert len(actions3) == 1, f"Erwarte 1 Normalisierungsaktion: {actions3}"
-    assert actions3[0]['wert'] == 100
-    LOG.info(f"  37°C → Normalisiert: {actions3[0]['grund']}")
-
-    LOG.info("✓ Hysterese korrekt: 40°C→Alarm, 39°C→Hält, 37°C→Normal")
+    LOG.info("✓ Alarm-Flags korrekt: 42°C→Alarm, 37°C→Normal")
     return True
 
 
 def test_tier1_soc_kritisch():
-    """Test 2e: Tier-1 SOC kritisch (<5%) → Entladung STOP."""
+    """Test 2e: Tier-1 SOC kritisch (<5%) → Alarm-Flag (kein HW-Eingriff)."""
     _sep("2e. Tier-1: SOC kritisch")
 
     checker = Tier1Checker(schutz_cfg={'batt_soc_kritisch': 5})
@@ -218,9 +203,8 @@ def test_tier1_soc_kritisch():
     actions = checker.check(obs)
 
     assert obs.alarm_batt_kritisch
-    soc_actions = [a for a in actions if a['kommando'] == 'stop_discharge']
-    assert len(soc_actions) == 1
-    LOG.info(f"✓ SOC kritisch: {soc_actions[0]['grund']}")
+    assert len(actions) == 0, f"Erwarte keine Aktionen (SOC_MIN steuert implizit), got {actions}"
+    LOG.info(f"✓ SOC kritisch: Alarm-Flag gesetzt, keine HW-Aktion")
     return True
 
 
@@ -233,9 +217,9 @@ def test_actuator_dry_run(persist_db_path: str):
     aktion = {
         'tier': 1,
         'aktor': 'batterie',
-        'kommando': 'set_charge_rate',
-        'wert': 30,
-        'grund': 'Test: Temp-Schutz 40°C',
+        'kommando': 'set_soc_min',
+        'wert': 10,
+        'grund': 'Test: SOC-Schutz',
     }
 
     ergebnis = actuator.ausfuehren(aktion)
@@ -335,74 +319,6 @@ def test_matrix_laden_validieren():
 # Regel-Level Tests (isoliert, ohne Engine)
 # ═════════════════════════════════════════════════════════════
 
-def test_regel_soc_schutz():
-    """Test 6a: RegelSocSchutz — SOC < 5% → stop_discharge, < 10% → drosseln."""
-    _sep("6a. RegelSocSchutz")
-
-    matrix = lade_matrix(DEFAULT_MATRIX_PATH)
-    regel = RegelSocSchutz()
-
-    # SOC 3% → Score 90, stop_discharge
-    obs_krit = ObsState(batt_soc_pct=3.0)
-    score = regel.bewerte(obs_krit, matrix)
-    assert score == 90, f"Erwarte Score 90 bei SOC 3%, got {score}"
-    aktionen = regel.erzeuge_aktionen(obs_krit, matrix)
-    assert len(aktionen) == 1
-    assert aktionen[0]['kommando'] == 'stop_discharge'
-    LOG.info(f"✓ SOC 3%: Score {score}, {aktionen[0]['kommando']}")
-
-    # SOC 8% → Score ~63 (70% von 90), set_discharge_rate
-    obs_niedrig = ObsState(batt_soc_pct=8.0)
-    score2 = regel.bewerte(obs_niedrig, matrix)
-    assert 50 <= score2 <= 70, f"Erwarte ~63 bei SOC 8%, got {score2}"
-    aktionen2 = regel.erzeuge_aktionen(obs_niedrig, matrix)
-    assert len(aktionen2) == 1
-    assert aktionen2[0]['kommando'] == 'set_discharge_rate'
-    LOG.info(f"✓ SOC 8%: Score {score2}, {aktionen2[0]['kommando']}={aktionen2[0]['wert']}%")
-
-    # SOC 50% → Score 0 (kein Schutz nötig)
-    obs_ok = ObsState(batt_soc_pct=50.0)
-    score3 = regel.bewerte(obs_ok, matrix)
-    assert score3 == 0, f"Erwarte Score 0 bei SOC 50%, got {score3}"
-    LOG.info(f"✓ SOC 50%: Score {score3} (inaktiv)")
-
-    return True
-
-
-def test_regel_temp_schutz():
-    """Test 6b: RegelTempSchutz — Stufenweise Laderate nach Temperatur."""
-    _sep("6b. RegelTempSchutz")
-
-    matrix = lade_matrix(DEFAULT_MATRIX_PATH)
-    regel = RegelTempSchutz()
-
-    # 42°C → Stufe 40°C → 50%
-    obs_hot = ObsState(batt_temp_max_c=42.0)
-    score = regel.bewerte(obs_hot, matrix)
-    assert score == 70, f"Erwarte Score 70, got {score}"
-    aktionen = regel.erzeuge_aktionen(obs_hot, matrix)
-    assert len(aktionen) == 1
-    assert aktionen[0]['kommando'] == 'set_charge_rate'
-    assert aktionen[0]['wert'] == 50
-    LOG.info(f"✓ 42°C: Score {score}, Laderate {aktionen[0]['wert']}%")
-
-    # 32°C → Stufe 30°C → 80%
-    obs_warm = ObsState(batt_temp_max_c=32.0)
-    score2 = regel.bewerte(obs_warm, matrix)
-    assert score2 == 70, f"Erwarte Score 70, got {score2}"
-    aktionen2 = regel.erzeuge_aktionen(obs_warm, matrix)
-    assert aktionen2[0]['wert'] == 80
-    LOG.info(f"✓ 32°C: Score {score2}, Laderate {aktionen2[0]['wert']}%")
-
-    # 24°C → Score 0 (unter 25°C)
-    obs_cool = ObsState(batt_temp_max_c=24.0)
-    score3 = regel.bewerte(obs_cool, matrix)
-    assert score3 == 0, f"Erwarte Score 0 bei 24°C, got {score3}"
-    LOG.info(f"✓ 24°C: Score {score3} (inaktiv, 25°C-Stufe hat 100%)")
-
-    return True
-
-
 def test_regel_morgen_soc_min():
     """Test 6c: RegelMorgenSocMin — SOC_MIN morgens öffnen."""
     _sep("6c. RegelMorgenSocMin")
@@ -494,54 +410,6 @@ def test_regel_nachmittag_soc_max():
         score2 = regel.bewerte(obs_voll, matrix)
         assert score2 == 0, f"Erwarte Score 0 wenn SOC_MAX schon 100%, got {score2}"
         LOG.info(f"✓ SOC_MAX=100%: Score {score2} (schon offen)")
-
-    return True
-
-
-def test_regel_abend_entladerate():
-    """Test 6e: RegelAbendEntladerate — Entladerate nach Tagesphase."""
-    _sep("6e. RegelAbendEntladerate")
-
-    matrix = lade_matrix(DEFAULT_MATRIX_PATH)
-    regel = RegelAbendEntladerate()
-
-    # 20:00 → Abend-Phase (abend_start_h=15) → 29%
-    fake_abend = datetime(2025, 6, 15, 20, 0)
-    with patch('automation.engine.regeln.optimierung.datetime') as mock_dt:
-        mock_dt.now.return_value = fake_abend
-        mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
-
-        obs = ObsState(batt_soc_pct=45.0, storctl_mod=0)
-        score = regel.bewerte(obs, matrix)
-        assert score == 65, f"Erwarte Score 65 abends, got {score}"
-        aktionen = regel.erzeuge_aktionen(obs, matrix)
-        assert len(aktionen) == 1
-        assert aktionen[0]['kommando'] == 'set_discharge_rate'
-        assert aktionen[0]['wert'] == 29
-        LOG.info(f"✓ 20:00: Score {score}, Entladerate {aktionen[0]['wert']}%")
-
-    # 3:00 → Nacht-Phase (nacht_start_h=0, nacht_ende_h=6) → 10%
-    fake_nacht = datetime(2025, 6, 15, 3, 0)
-    with patch('automation.engine.regeln.optimierung.datetime') as mock_dt:
-        mock_dt.now.return_value = fake_nacht
-        mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
-
-        aktionen2 = regel.erzeuge_aktionen(obs, matrix)
-        assert aktionen2[0]['kommando'] == 'set_discharge_rate'
-        assert aktionen2[0]['wert'] == 10
-        LOG.info(f"✓ 03:00: Nacht-Entladerate {aktionen2[0]['wert']}%")
-
-    # SOC-Notbremse: SOC 7% < kritisch_soc_pct=10 → Hold
-    obs_krit = ObsState(batt_soc_pct=7.0)
-    with patch('automation.engine.regeln.optimierung.datetime') as mock_dt:
-        mock_dt.now.return_value = fake_abend
-        mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
-
-        score3 = regel.bewerte(obs_krit, matrix)
-        assert score3 == 65, f"Erwarte Score 65 bei SOC-Notbremse, got {score3}"
-        aktionen3 = regel.erzeuge_aktionen(obs_krit, matrix)
-        assert aktionen3[0]['kommando'] == 'stop_discharge'
-        LOG.info(f"✓ SOC 7%: {aktionen3[0]['kommando']} ({aktionen3[0]['grund']})")
 
     return True
 
@@ -702,57 +570,6 @@ def test_regel_forecast_plausi():
     return True
 
 
-def test_regel_laderate_dynamisch():
-    """Test 6h: RegelLaderateDynamisch — Laderate abhängig von WP/PV/SOC."""
-    _sep("6h. RegelLaderateDynamisch")
-
-    matrix = lade_matrix(DEFAULT_MATRIX_PATH)
-    regel = RegelLaderateDynamisch()
-
-    # Fall 1: Batterie lädt + WP aktiv → Score 54 (45*1.2), Laderate 60%
-    obs_wp = ObsState(cha_state=4, batt_soc_pct=50.0, wp_active=True,
-                      wp_power_w=3500.0, pv_total_w=8000.0, charge_rate_pct=100)
-    score = regel.bewerte(obs_wp, matrix)
-    assert score == int(45 * 1.2), f"Erwarte {int(45*1.2)}, got {score}"
-    aktionen = regel.erzeuge_aktionen(obs_wp, matrix)
-    assert len(aktionen) == 1
-    assert aktionen[0]['kommando'] == 'set_charge_rate'
-    assert aktionen[0]['wert'] == 60
-    LOG.info(f"✓ WP aktiv: Score {score}, Laderate {aktionen[0]['wert']}%")
-
-    # Fall 2: Batterie lädt, Komfort-Bereich (SOC 50%), keine WP → Laderate 80%
-    obs_komfort = ObsState(cha_state=4, batt_soc_pct=50.0, wp_active=False,
-                           pv_total_w=8000.0, charge_rate_pct=100)
-    score2 = regel.bewerte(obs_komfort, matrix)
-    assert score2 == 45, f"Erwarte Score 45, got {score2}"
-    aktionen2 = regel.erzeuge_aktionen(obs_komfort, matrix)
-    assert aktionen2[0]['wert'] == 80
-    LOG.info(f"✓ Komfort-Bereich: Score {score2}, Laderate {aktionen2[0]['wert']}%")
-
-    # Fall 3: Batterie lädt, SOC 90% (Stress), PV 2500W (< 5000W) → proportional
-    obs_pv_schwach = ObsState(cha_state=4, batt_soc_pct=90.0, wp_active=False,
-                              pv_total_w=2500.0, charge_rate_pct=100)
-    aktionen3 = regel.erzeuge_aktionen(obs_pv_schwach, matrix)
-    # 2500/5000 = 0.5 → 100*0.5 = 50%
-    assert aktionen3[0]['wert'] == 50, f"Erwarte 50%, got {aktionen3[0]['wert']}"
-    LOG.info(f"✓ PV schwach: Laderate {aktionen3[0]['wert']}%")
-
-    # Fall 4: Batterie entlädt (cha_state ≠ 4, batt_power ≤ 100) → Score 0
-    obs_entlade = ObsState(cha_state=2, batt_power_w=-500.0, batt_soc_pct=50.0)
-    score4 = regel.bewerte(obs_entlade, matrix)
-    assert score4 == 0, f"Erwarte Score 0 (nicht laden), got {score4}"
-    LOG.info(f"✓ Entladen: Score {score4}")
-
-    # Fall 5: Rate schon korrekt (80% ± 5) → keine Aktion
-    obs_passt = ObsState(cha_state=4, batt_soc_pct=50.0, wp_active=False,
-                         pv_total_w=8000.0, charge_rate_pct=78)
-    aktionen5 = regel.erzeuge_aktionen(obs_passt, matrix)
-    assert len(aktionen5) == 0, f"Erwarte keine Aktion, got {len(aktionen5)}"
-    LOG.info(f"✓ Rate passt (78% ≈ 80%): keine Aktion")
-
-    return True
-
-
 def test_regel_wattpilot_battschutz():
     """Test 6i: RegelWattpilotBattSchutz — Batterieschutz bei EV-Ladung."""
     _sep("6i. RegelWattpilotBattSchutz")
@@ -760,28 +577,24 @@ def test_regel_wattpilot_battschutz():
     matrix = lade_matrix(DEFAULT_MATRIX_PATH)
     regel = RegelWattpilotBattSchutz()
 
-    # Fall 1: EV lädt, SOC 45% (< 50%), Batterie entlädt → Stufe 2: Score 60
-    obs_stufe2 = ObsState(
+    # Fall 1: EV lädt, SOC 45% (< 50%), Batterie entlädt → kein Eingriff (Stufe 2 entfernt)
+    obs_mitte = ObsState(
         ev_charging=True, ev_power_w=11000.0, ev_eco_mode=False,
         batt_soc_pct=45.0, batt_power_w=-8000.0,
         soc_min=10, discharge_rate_pct=100,
     )
-    score = regel.bewerte(obs_stufe2, matrix)
-    assert score == 60, f"Erwarte Score 60 (Stufe 2), got {score}"
-    aktionen = regel.erzeuge_aktionen(obs_stufe2, matrix)
-    assert len(aktionen) == 1
-    assert aktionen[0]['kommando'] == 'set_discharge_rate'
-    assert aktionen[0]['wert'] == 30
-    LOG.info(f"✓ Stufe 2 (SOC 45%): Score {score}, Entladerate {aktionen[0]['wert']}%")
+    score = regel.bewerte(obs_mitte, matrix)
+    assert score == 0, f"Erwarte Score 0 (SOC 45% > soc_min+puffer), got {score}"
+    LOG.info(f"✓ SOC 45%: Score {score} (kein Eingriff, Stufe 2 entfernt)")
 
-    # Fall 2: EV lädt, SOC 14% nahe SOC_MIN 10% (Puffer 5%) → Stufe 3: Score 78
+    # Fall 2: EV lädt, SOC 14% nahe SOC_MIN 10% (Puffer 5%) → SOC_MIN anheben
     obs_stufe3 = ObsState(
         ev_charging=True, ev_power_w=22000.0, ev_eco_mode=False,
         batt_soc_pct=14.0, batt_power_w=-10000.0,
         soc_min=10, soc_mode='auto',
     )
     score3 = regel.bewerte(obs_stufe3, matrix)
-    assert score3 == int(60 * 1.3), f"Erwarte Score {int(60*1.3)} (Stufe 3), got {score3}"
+    assert score3 == int(60 * 1.3), f"Erwarte Score {int(60*1.3)}, got {score3}"
     aktionen3 = regel.erzeuge_aktionen(obs_stufe3, matrix)
     assert len(aktionen3) == 2
     assert aktionen3[0]['kommando'] == 'set_soc_mode'
@@ -789,17 +602,17 @@ def test_regel_wattpilot_battschutz():
     assert aktionen3[1]['wert'] == 25
     assert 'hinweis' in aktionen3[1]
     assert 'Netz' in aktionen3[1]['hinweis']
-    LOG.info(f"✓ Stufe 3 (SOC 14%): Score {score3}, SOC_MIN → {aktionen3[1]['wert']}%")
+    LOG.info(f"✓ SOC 14%: Score {score3}, SOC_MIN → {aktionen3[1]['wert']}%")
     LOG.info(f"  Hinweis: {aktionen3[1]['hinweis']}")
 
-    # Fall 3: EV lädt, SOC 70% (> 50%) → Stufe 1: Score 0 (Wolke OK)
+    # Fall 3: EV lädt, SOC 70% (> 50%) → Score 0 (kein Eingriff)
     obs_stufe1 = ObsState(
         ev_charging=True, ev_power_w=15000.0,
         batt_soc_pct=70.0, batt_power_w=-3000.0,
     )
     score1 = regel.bewerte(obs_stufe1, matrix)
-    assert score1 == 0, f"Erwarte Score 0 (Stufe 1, SOC hoch), got {score1}"
-    LOG.info(f"✓ Stufe 1 (SOC 70%): Score {score1} (Wolke OK)")
+    assert score1 == 0, f"Erwarte Score 0 (SOC hoch), got {score1}"
+    LOG.info(f"✓ SOC 70%: Score {score1} (kein Eingriff)")
 
     # Fall 4: EV lädt, Batterie lädt auch (PV reicht) → Score 0
     obs_laden = ObsState(
@@ -818,16 +631,6 @@ def test_regel_wattpilot_battschutz():
     score5 = regel.bewerte(obs_kein_ev, matrix)
     assert score5 == 0, f"Erwarte Score 0 (kein EV), got {score5}"
     LOG.info(f"✓ Kein EV-Laden: Score {score5}")
-
-    # Fall 6: Stufe 2 — Rate schon niedrig genug → keine Aktion
-    obs_passt = ObsState(
-        ev_charging=True, ev_power_w=11000.0,
-        batt_soc_pct=45.0, batt_power_w=-3000.0,
-        soc_min=10, discharge_rate_pct=28,
-    )
-    aktionen6 = regel.erzeuge_aktionen(obs_passt, matrix)
-    assert len(aktionen6) == 0, f"Erwarte keine Aktion (Rate passt), got {len(aktionen6)}"
-    LOG.info(f"✓ Rate schon 28% (≈ 30%): keine Aktion")
 
     return True
 
@@ -933,15 +736,12 @@ def main():
             # Parametermatrix Tests (Phase 2)
             ('Matrix laden+validieren', test_matrix_laden_validieren),
             # Regel-Level Tests (Phase 2)
-            ('Regel: SOC-Schutz', test_regel_soc_schutz),
-            ('Regel: Temp-Schutz', test_regel_temp_schutz),
+            # Entfernt (2026-03-07): SOC-Schutz, Temp-Schutz, Abend-Entladerate, Laderate dynamisch
             ('Regel: Morgen SOC_MIN', test_regel_morgen_soc_min),
             ('Regel: Nachmittag SOC_MAX', test_regel_nachmittag_soc_max),
-            ('Regel: Abend-Entladerate', test_regel_abend_entladerate),
             ('Regel: Zellausgleich', test_regel_zellausgleich),
             ('Regel: Nachmittag+Forecast', test_regel_nachmittag_forecast_rest),
             ('Regel: Forecast-Plausi', test_regel_forecast_plausi),
-            ('Regel: Laderate dynamisch', test_regel_laderate_dynamisch),
             ('Regel: WattPilot BattSchutz', test_regel_wattpilot_battschutz),
             # Integration Tests (Phase 2)
             ('Engine Zyklus-Filter', lambda: test_engine_zyklusfilter(ram_db, persist_db)),

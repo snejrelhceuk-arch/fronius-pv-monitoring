@@ -1,7 +1,7 @@
 # PV-CONFIG Handbuch
 
 **Konfigurationsprogramm für die PV-Batterie-Automation**
-Version 1.3 — Stand: 1. März 2026
+Version 1.4 — Stand: 7. März 2026
 
 ---
 
@@ -15,11 +15,11 @@ Version 1.3 — Stand: 1. März 2026
    - [4.1 soc_schutz — Harte Schutzschwellen](#41-soc_schutz--harte-schutzschwellen-priorität-1)
    - [4.2 morgen_soc_min — Morgenöffnung](#42-morgen_soc_min--morgenöffnung-priorität-2)
    - [4.3 nachmittag_soc_max — Nachmittagsanhebung](#43-nachmittag_soc_max--nachmittagsanhebung-priorität-2)
-   - [4.4 abend_entladerate — Nachtrationierung](#44-abend_entladerate--nachtrationierung-priorität-2)
+   - [4.4 ~~abend_entladerate~~ — ENTFERNT](#44-abend_entladerate--entfernt)
    - [4.5 zellausgleich — Monatlicher Vollzyklus](#45-zellausgleich--monatlicher-vollzyklus-priorität-3)
-   - [4.6 temp_schutz — Temperaturschutz](#46-temp_schutz--temperaturschutz-priorität-1)
+   - [4.6 ~~temp_schutz~~ — ENTFERNT](#46-temp_schutz--entfernt)
    - [4.7 forecast_plausibilisierung — Prognosekorrektur](#47-forecast_plausibilisierung--prognosekorrektur-priorität-2)
-   - [4.8 laderate_dynamisch — Dynamische Laderate](#48-laderate_dynamisch--dynamische-laderate-priorität-2)
+   - [4.8 ~~laderate_dynamisch~~ — ENTFERNT](#48-laderate_dynamisch--entfernt)
    - [4.9 wattpilot_battschutz — EV-Ladeschutz](#49-wattpilot_battschutz--ev-ladeschutz-priorität-1)
    - [4.10 heizpatrone — HP-Burst-Steuerung](#410-heizpatrone--hp-burst-steuerung-priorität-2)
 5. [Menü 3: Batterie-Automation](#5-menü-3-batterie-automation)
@@ -73,9 +73,10 @@ Zeigt alle Regelkreise als Checkliste. Ein Regelkreis ist entweder **aktiv** (�
 - **P2 — STEUERUNG**: Optimierungs-Regeln, können einzeln deaktiviert werden.
 - **P3 — WARTUNG**: Periodische Aufgaben (z.B. Zellausgleich).
 
-**Score-Gewicht:** Bei Konflikten zwischen Regelkreisen gewinnt der höhere Score. Beispiel: `morgen_soc_min` (Score 72) hat Vorrang über `abend_entladerate` (Score 65).
+**Score-Gewicht:** Bei Konflikten zwischen Regelkreisen gewinnt der höhere Score. Beispiel: `morgen_soc_min` (Score 72) hat Vorrang über `wattpilot_battschutz` (Score 60).
 
-> **Warnung:** P1-Regeln (soc_schutz, temp_schutz, wattpilot_battschutz) sollten **niemals** deaktiviert werden. Sie verhindern Hardware-Schäden an der BYD HVS.
+> **Warnung:** Die P1-Regel `wattpilot_battschutz` sollte **niemals** deaktiviert werden. Sie verhindert Tiefentladung durch EV-Ladung.
+> *(Die ehemaligen P1-Regeln `soc_schutz` und `temp_schutz` wurden am 2026-03-07 entfernt — Lade-/Entladeraten-Begrenzung ist wirkungslos, da der GEN24 DC-DC-Konverter bei ~22 A HW-limitiert. Tier-1-Alarme bleiben aktiv.)*
 
 **Heizpatrone (P2) deaktivieren:** Wird der HP-Regelkreis deaktiviert, werden keine neuen Bursts/Drains mehr gestartet. Der **Notaus-Pfad bleibt immer aktiv** — eine manuell oder per Burst eingeschaltete HP wird beim nächsten Zyklus sicher abgeschaltet (Burst-Timer, Netzbezug, Entladung). Die HP bleibt also nicht "vergessen" eingeschaltet.
 
@@ -112,29 +113,28 @@ Die Einheit steht immer beim angezeigten Wert (z.B. `5%`, `100W`, `5.0kWh`).
 |-----------|----------|---------|--------|
 | extern_respekt | 1800 s | 0–7200 s | **Toleranzzeit bei extern geänderten SOC-Werten (30 Min).** Alle SOC-Steuerungsregeln (morgen_soc_min, nachmittag_soc_max, komfort_reset, forecast_plausi, zellausgleich) pausieren für diese Dauer. Schutzregeln (soc_schutz, temp_schutz) sind NICHT betroffen. 0 = deaktiviert. |
 
-**Sicherheit:** Schutzregeln (Tier-1, Modbus-basiert) wie `stop_discharge`, `stop_charge` wirken immer sofort — sie nutzen Modbus, nicht SOC HTTP API.
+**Sicherheit:** Tier-1-Checks (Temperatur, SOC) setzen weiterhin Alarm-Flags. Direkte Modbus-Aktionen (Lade-/Entladeraten) wurden am 2026-03-07 entfernt — der GEN24 DC-DC-Konverter begrenzt bei ~22 A hardwareseitig. Batterie-Schutz erfolgt über SOC_MIN/SOC_MAX (HTTP-API).
 
 **Erkennungsmechanik:** Der `SocExternTracker` (Singleton in `soc_extern.py`) vergleicht pro Engine-Zyklus SOC_MIN/SOC_MAX mit den vorherigen Werten. Änderungen werden als Engine-intern erkannt wenn die Engine kurz zuvor ein Kommando mit diesem Zielwert registriert hat (Grace-Window: 5 Min). Alle anderen Änderungen → extern → Toleranzperiode startet.
 
 ---
 
-### 4.1 soc_schutz — Harte Schutzschwellen (Priorität 1)
+### 4.1 soc_schutz — Tier-1-Alarmschwellen (ehem. Priorität 1)
 
-**Zweck:** Absolute SOC-Grenzen, die nie verletzt werden dürfen. Schützt die BYD-Zellen vor Tiefentladung und Überladung.
+**Zweck:** Absolute SOC-Grenzen für Tier-1-Alarme. Tier-1 setzt Alarm-Flags bei Schwellwert-Verletzung; der aktive Batterie-Schutz erfolgt über SOC_MIN/SOC_MAX der Steuerungsregeln.
 
-**Score:** 90 (höchster aller Regelkreise)
+> **Hinweis (2026-03-07):** Die Regel `RegelSocSchutz` (Score 90, Modbus-basierte Lade-/Entladeraten-Steuerung) wurde entfernt. Grund: GEN24 DC-DC ~22 A HW-Limit macht Software-Ratenlimits wirkungslos. Die Parameter `stop_entladung_unter` und `stop_ladung_ueber` werden weiterhin als Tier-1-Alarmschwellen genutzt. `drosselung_unter` wurde entfernt.
+
 **Zyklus:** fast (jede Minute geprüft)
 
 | Parameter | Standard | Bereich | Wirkung |
 |-----------|----------|---------|---------|
-| stop_entladung_unter | 7% | 0–20% | **Unter diesem SOC wird die Batterie-Entladung sofort gestoppt.** Das Haus bezieht dann komplett aus dem Netz. Schutz vor Tiefentladung bei LFP-Zellen. |
-| drosselung_unter | 10% | 5–30% | **Unter diesem SOC wird die Entladerate auf 50% gedrosselt.** Die Batterie gibt weniger ab, damit sie langsamer sinkt. Bildet einen Puffer vor dem harten Stopp. |
-| stop_ladung_ueber | 98% | 80–100% | **Über diesem SOC wird die Ladung gestoppt** (außer Zellausgleich). Schützt vor dauerhafter Vollladung, was bei LFP die Lebensdauer verlängert. |
+| stop_entladung_unter | 7% | 0–20% | **Unter diesem SOC wird ein Tier-1-Alarm gesetzt.** Steuerungsregeln (morgen_soc_min, komfort_reset) verwenden ihren eigenen SOC_MIN ≥ 5%, der die BYD vor Tiefentladung schützt. |
+| stop_ladung_ueber | 98% | 80–100% | **Über diesem SOC wird ein Tier-1-Alarm gesetzt** (außer Zellausgleich). Steuerungsregeln setzen SOC_MAX ≤ 100%. |
 
 **Empfehlungen:**
 - `stop_entladung_unter`: 5–10% sind sinnvoll. Unter 5% kann die BYD in den Notaus gehen.
-- `drosselung_unter`: Sollte 3–5% über `stop_entladung_unter` liegen.
-- `stop_ladung_ueber`: 95–100%. Bei 100% findet kein Schutz statt (nur bei Zellausgleich relevant).
+- `stop_ladung_ueber`: 95–100%. Bei 100% findet kein Alarm statt.
 
 ---
 
@@ -271,21 +271,11 @@ Score um 16:30h:     55  (Deadline, voller Score)
 
 ---
 
-### 4.6 temp_schutz — Temperaturschutz (Priorität 1)
+### 4.6 ~~temp_schutz~~ — ENTFERNT
 
-**Zweck:** Die Laderate stufenweise reduzieren, wenn die Batterie-Zelltemperatur steigt. Ergänzt den harten Tier-1-Interrupt (der ab 45°C die Ladung komplett stoppt).
-
-**Score:** 70
-**Zyklus:** fast
-
-| Parameter | Standard | Bereich | Wirkung |
-|-----------|----------|---------|---------|
-| stufe_25c | 100% | 80–100% | **Laderate bei ≥25°C.** Normal, volle Leistung. |
-| stufe_30c | 80% | 50–100% | **Laderate bei ≥30°C.** Leichte Drosselung. Realistisch an heißen Sommertagen, wenn die Batterie im gewärmten Technikraum steht. |
-| stufe_35c | 68% | 30–80% | **Laderate bei ≥35°C.** Deutliche Drosselung. Die Batterie wird langsamer geladen, PV-Überschuss geht ins Netz. |
-| stufe_40c | 50% | 20–70% | **Laderate bei ≥40°C (Tier-2).** Starke Drosselung. Der Tier-1-Interrupt greift ab 45°C und stoppt komplett. |
-
-**Hinweis:** Im Winter (Batterie bei 15–20°C) greift keine dieser Stufen. Relevant nur im Hochsommer.
+> **Entfernt am 2026-03-07.** Die Regel `RegelTempSchutz` (Score 70) wurde komplett entfernt.
+> **Grund:** Laderate-Begrenzung via SunSpec Model 124 (InWRte/StorCtl_Mod) ist wirkungslos — der GEN24 DC-DC-Konverter limitiert bei ~22 A hardwareseitig. Tier-1 überwacht weiterhin die Zelltemperatur und setzt **Alarm-Flags** bei Überschreitung (≥45 °C), führt aber keine Modbus-Aktionen mehr aus.
+> **Parameter:** `stufe_25c`, `stufe_30c`, `stufe_35c`, `stufe_40c` — alle deprecated in `battery_control.json`.
 
 ---
 
@@ -311,25 +301,19 @@ Score um 16:30h:     55  (Deadline, voller Score)
 
 ---
 
-### 4.8 laderate_dynamisch — Dynamische Laderate (Priorität 2)
+### 4.8 ~~laderate_dynamisch~~ — ENTFERNT
 
-**Zweck:** Die Laderate kontextabhängig begrenzen, um Netzüberlast zu vermeiden und die Batterie schonend zu laden.
-
-**Score:** 45
-**Zyklus:** fast
-
-| Parameter | Standard | Bereich | Wirkung |
-|-----------|----------|---------|---------|
-| komfort_max_laderate | 80% | 50–100% | **Maximale Laderate im Komfort-Bereich** (SOC 25–75%). LFP-schonend: Statt mit vollen 10 kW nur mit 8 kW laden. Verlängert Zellleben. |
-| stress_max_laderate | 100% | 80–100% | **Maximale Laderate im Stress-Bereich.** Wenn die Batterie schnell gefüllt werden muss (z.B. vor Sonnenuntergang), wird volle Leistung erlaubt. |
-| wp_aktiv_reduktion | 60% | 30–90% | **Laderate wenn Wärmepumpe gleichzeitig läuft.** Die WP zieht bis zu 3 kW. Um Netzüberlast zu vermeiden, wird die Batterie-Laderate auf 60% begrenzt: PV versorgt WP + Batterie gleichzeitig. |
-| pv_min_fuer_vollladung | 5000 W | 2000–10000 W | **Mindest-PV-Leistung für volle Laderate.** Unter 5000 W PV wird die Laderate proportional reduziert, damit nicht aus dem Netz geladen wird. |
+> **Entfernt am 2026-03-07.** Die Regel `RegelLaderateDynamisch` (Score 45) wurde komplett entfernt.
+> **Grund:** Laderate-Begrenzung via SunSpec Model 124 ist wirkungslos — der GEN24 DC-DC-Konverter limitiert bei ~22 A (~9,5 kW) hardwareseitig, was unter dem BMS-Nennwert von 1C (20,48 kW) liegt. Eine zusätzliche Software-Drosselung bringt keinen Nutzen.
+> **Parameter:** `komfort_max_laderate`, `stress_max_laderate`, `wp_aktiv_reduktion`, `pv_min_fuer_vollladung` — alle deprecated in `battery_control.json`.
 
 ---
 
 ### 4.9 wattpilot_battschutz — EV-Ladeschutz (Priorität 1)
 
-**Zweck:** Schützt die Batterie vor Tiefentladung durch EV-Ladung mit dem Fronius WattPilot (bis zu 22 kW). Ohne Schutz würde die Batterie versuchen, das E-Auto zu speisen und wäre in wenigen Minuten leer.
+**Zweck:** Schützt die Batterie vor Tiefentladung durch EV-Ladung mit dem Fronius WattPilot (bis zu 22 kW). Ohne Schutz würde die Batterie versuchen, das E-Auto zu speisen und wäre in wenigen Minuten leer. Schutz erfolgt ausschließlich über SOC_MIN-Anhebung (2 Stufen).
+
+> **Hinweis (2026-03-07):** Die ehemalige Stufe 2 (Entladeraten-Drosselung via `soc_drosselung_ab`/`entladerate_reduziert`) wurde entfernt — GEN24 DC-DC ~22 A HW-Limit macht Software-Ratenlimits wirkungslos. Die verbleibenden 2 Stufen arbeiten mit SOC_MIN-Anhebung.
 
 **Score:** 60
 **Zyklus:** fast
@@ -337,8 +321,6 @@ Score um 16:30h:     55  (Deadline, voller Score)
 | Parameter | Standard | Bereich | Wirkung |
 |-----------|----------|---------|---------|
 | ev_leistung_schwelle | 2000 W | 500–5000 W | **Mindest-EV-Leistung damit die Regel greift.** Erst ab 2 kW EV-Ladung wird die Batterie geschützt. Unter 2 kW ist die Last unkritisch. |
-| soc_drosselung_ab | 50% | 30–70% | **SOC-Schwelle für Drosselung.** Unter diesem SOC wird die Entladerate reduziert wenn ein EV lädt. Verhindert schnelle Tiefentladung. |
-| entladerate_reduziert | 30% | 10–50% | **Reduzierte Entladerate.** ≈ 0.3C bei 20.48 kWh → ca. 6 kW max. Die Batterie gibt nur Grundlast ab, das EV wird primär aus PV/Netz versorgt. |
 | soc_min_puffer | 5% | 3–15% | **SOC_MIN-Anhebung.** Wenn SOC innerhalb dieses Puffers über SOC_MIN liegt, wird SOC_MIN temporär angehoben. Verhindert Grenzwert-Oszillation. |
 | soc_min_netz | 25% | 15–40% | **SOC_MIN bei Netzumstellung.** Wenn die Batterie zu stark beansprucht wird, wird SOC_MIN auf diesen Wert gesetzt → Batterie hält 25% Reserve und das Haus bezieht aus dem Netz. |
 | wolken_toleranz | 300 s | 60–600 s | **Wolkentoleranz.** Kurze PV-Einbrüche (Wolkendurchgang) werden X Sekunden lang toleriert, bevor die Schutzregel greift. Verhindert Flip-Flop bei wechselnder Bewölkung. |
@@ -568,18 +550,18 @@ Bei gleichzeitig aktiven Regeln entscheidet der Score:
 
 | Regelkreis | Score | Priorität |
 |------------|-------|-----------|
-| soc_schutz | 90 | P1 Sicherheit |
+| ~~soc_schutz~~ | ~~90~~ | ~~P1~~ ENTFERNT (2026-03-07) |
 | morgen_soc_min | 72 | P2 Steuerung |
-| temp_schutz | 70 | P1 Sicherheit |
-| abend_entladerate | 65 | P2 Steuerung |
+| ~~temp_schutz~~ | ~~70~~ | ~~P1~~ ENTFERNT (2026-03-07) |
+| ~~abend_entladerate~~ | ~~65~~ | ~~P2~~ ENTFERNT (2026-03-07) |
 | wattpilot_battschutz | 60 | P1 Sicherheit |
 | nachmittag_soc_max | 55 | P2 Steuerung |
 | forecast_plausibilisierung | 50 | P2 Steuerung |
-| laderate_dynamisch | 45 | P2 Steuerung |
+| ~~laderate_dynamisch~~ | ~~45~~ | ~~P2~~ ENTFERNT (2026-03-07) |
 | heizpatrone | 40 | P2 Steuerung |
 | zellausgleich | 30 | P3 Wartung |
 
-**Beispiel:** Wenn `morgen_soc_min` (72) SOC_MIN auf 5% setzen will und `wattpilot_battschutz` (60) SOC_MIN auf 25% anheben will, gewinnt die Morgenöffnung — es sei denn, die EV-Ladung bringt den SOC unter die Schutzschwelle (Score 90).
+**Beispiel:** Wenn `morgen_soc_min` (72) SOC_MIN auf 5% setzen will und `wattpilot_battschutz` (60) SOC_MIN auf 25% anheben will, gewinnt die Morgenöffnung — die verbleibende SOC-Schutzgrenze kommt aus den Tier-1-Alarm-Schwellen und SOC_MIN-Steuerung der aktiven Regeln.
 
 ### Einheiten-Referenz
 
@@ -600,8 +582,8 @@ Bei gleichzeitig aktiven Regeln entscheidet der Score:
 |-----------|------|
 | Batterie | 2× BYD HVS parallel (LFP, BCU 2.0 Master) |
 | Kapazität | 20.48 kWh (2× 10.24 kWh) |
-| Max. Ladeleistung | 12 kW (WR-Limit, BMS erlaubt 20.48 kW) |
-| Max. Entladeleistung | 12 kW (WR-Limit, BMS erlaubt 20.48 kW) |
+| Max. Ladeleistung | ~9,5 kW effektiv (GEN24 DC-DC ~22 A HW-Limit; nominell 12 kW) |
+| Max. Entladeleistung | ~9,5 kW effektiv (GEN24 DC-DC ~22 A HW-Limit; nominell 12 kW) |
 | PV-Anlage | 37.59 kWp (3 Strings) |
 | WR-Limit | 26.5 kW (3× Fronius Gen24) |
 | Chemie | LiFePO₄ (LFP) |

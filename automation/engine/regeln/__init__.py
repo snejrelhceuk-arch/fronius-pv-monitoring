@@ -5,28 +5,26 @@ Exportiert alle Regel-Klassen für die Engine-Registrierung.
 
 Module:
   basis          — Regel-Basisklasse
-  schutz         — SOC-Schutz, Temp-Schutz (P1, fast)
+  schutz         — (entfernt 2026-03-07, GEN24 HW-Limit)
   soc_steuerung  — Morgen SOC_MIN, Nachmittag SOC_MAX, Komfort-Reset (P2, mixed)
-  optimierung    — Abend-Entladerate, Zellausgleich, Forecast-Plausi, Laderate (P2-P3, mixed)
+  optimierung    — Zellausgleich, Forecast-Plausi (P2-P3, strategic)
   geraete        — WattPilot-Battschutz, Heizpatrone (P1-P2, fast)
 """
 
 from automation.engine.regeln.basis import Regel
-from automation.engine.regeln.schutz import RegelSocSchutz, RegelTempSchutz
+# schutz.py: RegelSocSchutz, RegelTempSchutz entfernt (2026-03-07)
 from automation.engine.regeln.soc_steuerung import (
     RegelMorgenSocMin, RegelNachmittagSocMax, RegelKomfortReset,
 )
 from automation.engine.regeln.optimierung import (
-    RegelAbendEntladerate, RegelZellausgleich,
-    RegelForecastPlausi, RegelLaderateDynamisch,
+    RegelZellausgleich, RegelForecastPlausi,
 )
+# optimierung.py: RegelAbendEntladerate, RegelLaderateDynamisch entfernt (2026-03-07)
 from automation.engine.regeln.geraete import RegelWattpilotBattSchutz, RegelHeizpatrone
 
 __all__ = [
     'Regel',
-    'RegelSocSchutz', 'RegelTempSchutz',
     'RegelMorgenSocMin', 'RegelNachmittagSocMax', 'RegelKomfortReset',
-    'RegelAbendEntladerate', 'RegelZellausgleich',
-    'RegelForecastPlausi', 'RegelLaderateDynamisch',
+    'RegelZellausgleich', 'RegelForecastPlausi',
     'RegelWattpilotBattSchutz', 'RegelHeizpatrone',
 ]

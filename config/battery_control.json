@@ -1,6 +1,6 @@
 {
   "_doc": "Batterie-Steuerungs-Konfiguration — Fronius Gen24 + BYD HVS parallel",
-  "_updated": "2026-03-02",
+  "_updated": "2026-03-07",
   "batterie": {
     "_doc": "Hardware-Parameter der Batterie (selten ändern)",
     "kapazitaet_kwh": 20.48,
@@ -63,34 +63,24 @@
     "beschreibung": "Prüft täglich die PV-Prognose. Am ersten Tag im Monat mit genug Sonne (>=25 kWh) wird der Vollzyklus ausgelöst. Wenn bis zum 28. kein passender Tag kam, wird die Schwelle auf 15 kWh gesenkt. Absolute Obergrenze: 45 Tage ohne Ausgleich."
   },
   "leistungsbegrenzung": {
-    "_doc": "Lade-/Entladeraten-Begrenzung (Modbus Model 124)",
-    "laderate_sommer_prozent": 68,
-    "entladerate_abend_prozent": 29,
-    "entladerate_nacht_prozent": 10,
-    "temperatur_limits": {
-      "_doc": "Laderate [%] abhängig von Zelltemperatur [°C]",
-      "25": 100,
-      "30": 80,
-      "35": 68,
-      "40": 50
-    }
+    "_doc": "ENTFERNT (2026-03-07): GEN24 DC-DC-Wandler begrenzt Batteriestrom auf ~22A. Software-Ratenlimits via InWRte/OutWRte/StorCtl_Mod wirkungslos. Sektion bleibt als Dokumentation erhalten.",
+    "_status": "deprecated",
+    "_historisch_laderate_sommer_prozent": 68,
+    "_historisch_entladerate_abend_prozent": 29,
+    "_historisch_entladerate_nacht_prozent": 10
   },
   "zeitsteuerung": {
     "_doc": "Prüfintervall und Strategie-Zeitfenster",
     "pruef_intervall_minuten": 15,
     "mitternacht_reset": false,
-    "abend_entladelimit_ab": 15,
-    "abend_entladelimit_bis": 0,
-    "nacht_entladelimit_ab": 0,
-    "nacht_entladelimit_bis": 6
+    "_entfernt_2026_03_07": "abend_entladelimit_ab/bis und nacht_entladelimit_ab/bis entfernt (GEN24 HW-Limit)"
   },
   "sicherheit": {
     "_doc": "Fail-Safe-Werte bei Scheduler-Ausfall oder Fehler",
     "netzladung_immer_an": true,
     "failsafe_soc_min": 25,
     "failsafe_soc_max": 100,
-    "failsafe_lade_prozent": 100,
-    "failsafe_entlade_prozent": 100,
+    "_entfernt_2026_03_07": "failsafe_lade_prozent/failsafe_entlade_prozent entfernt (GEN24 HW-Limit)",
     "watchdog_timeout_sekunden": 300
   },
   "logging": {

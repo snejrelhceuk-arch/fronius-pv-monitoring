@@ -530,13 +530,9 @@ class RegelKomfortReset(Regel):
                           f'(Tagesende, LFP-Schonung)'),
             })
 
-        if obs.storctl_mod is not None and obs.storctl_mod != 0:
-            aktionen.append({
-                'tier': 2, 'aktor': 'batterie',
-                'kommando': 'auto',
-                'grund': (f'Komfort-Reset {now_str}: Modbus StorCtl_Mod '
-                          f'{obs.storctl_mod}→0 (Limits aufheben)'),
-            })
+        # Entfernt (2026-03-07): Komfort-Reset für StorCtl_Mod → auto
+        # GEN24 DC-DC-Wandler begrenzt Batteriestrom auf ~22 A; Modbus-
+        # Ratenlimits (InWRte/OutWRte/StorCtl_Mod) waren wirkungslos.
 
         if aktionen:
             LOG.info(f"Komfort-Reset: {len(aktionen)} Aktion(en) — "
