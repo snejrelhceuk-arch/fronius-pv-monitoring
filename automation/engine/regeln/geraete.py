@@ -269,24 +269,10 @@ class RegelHeizpatrone(Regel):
         p_batt = obs.batt_power_w
         score = get_score_gewicht(matrix, self.regelkreis)
 
-        # ── Extern-Erkennung ──
-        # HP wurde EIN, aber nicht durch Engine (kein Burst/Drain aktiv)
-        # _letzter_hp_zustand is None beim ersten Zyklus → Startup, kein EXTERN
-        if (obs.heizpatrone_aktiv and self._letzter_hp_zustand is not None
-                and not self._letzter_hp_zustand):
-            if self._burst_ende == 0 and not self._drain_modus:
-                self._extern_ein_ts = time.time()
-                if not self._vorausschau:
-                    LOG.info('HP extern eingeschaltet erkannt → Hysterese aktiv')
-                    logge_extern('fritzdect', 'HP extern EIN',
-                                 'Manuell eingeschaltet (nicht durch Engine)')
-        if not obs.heizpatrone_aktiv:
-            self._extern_ein_ts = 0
-        self._letzter_hp_zustand = obs.heizpatrone_aktiv
-
-        extern_respekt = get_param(matrix, self.regelkreis, 'extern_respekt_s', 3600)
+        # ── Extern-Erkennung (State-Update + Log in erzeuge_aktionen, ABC-konform) ──
         ist_extern = (self._extern_ein_ts > 0
-                      and (time.time() - self._extern_ein_ts) < extern_respekt)
+                      and (time.time() - self._extern_ein_ts)
+                      < get_param(matrix, self.regelkreis, 'extern_respekt_s', 3600))
 
         # ── Notaus-Pfad: IMMER aktiv ──
         if obs.heizpatrone_aktiv:
@@ -315,19 +301,17 @@ class RegelHeizpatrone(Regel):
 
                 # Drain-Modus hat eigene Schutzlogik
                 if self._drain_modus:
-                    drain_min_soc = get_param(matrix, self.regelkreis, 'drain_min_soc_pct', 10)
+                    drain_stop_soc = get_param(matrix, self.regelkreis, 'drain_stop_soc_pct', 15)
                     soc_now = obs.batt_soc_pct or 0
-                    if soc_now <= drain_min_soc:
+                    if soc_now <= drain_stop_soc:
+                        return int(score * 1.5)
+                    # PV lädt nicht → Drain sinnlos
+                    if p_batt is not None and p_batt <= 0:
                         return int(score * 1.5)
                     d_haus = get_param(matrix, self.regelkreis, 'drain_max_haushalt_w', 700)
                     d_wp = get_param(matrix, self.regelkreis, 'drain_max_wp_w', 500)
                     d_ev = get_param(matrix, self.regelkreis, 'drain_max_ev_w', 1000)
-                    # HP-Eigenverbrauch abziehen, sonst schaltet sich die HP
-                    # selbst ab (house_load enthält die ~2 kW der HP)
-                    haus_netto = (obs.house_load_w or 0)
-                    if obs.heizpatrone_aktiv:
-                        haus_netto = max(0, haus_netto - self.HP_NENN_W)
-                    if (haus_netto >= d_haus * 1.2
+                    if ((obs.house_load_w or 0) >= d_haus * 1.2
                             or (obs.wp_power_w or 0) >= d_wp
                             or (obs.ev_power_w or 0) >= d_ev):
                         return int(score * 1.5)
@@ -386,11 +370,11 @@ class RegelHeizpatrone(Regel):
         wp_aktiv, ev_aktiv = self._verbraucher_aktiv(obs, matrix)
 
         # Phase 0: Morgen-Drain — HP um Batterie schneller zu leeren
-        #   Bedingungen: vor PV-Produktion, niedrige Verbraucher,
-        #   SOC > Schwelle, gute/mittlere Prognose, Prognose > 4 kW
+        #   NUR wenn PV bereits lädt (p_batt > 0 → nach Sonnenaufgang)
+        #   und SOC > drain_start_soc (20%)
         drain_fenster = get_param(matrix, self.regelkreis, 'drain_fenster_ende_h', 10.0)
-        if now_h < drain_fenster and (p_batt is None or p_batt < 500):
-            drain_min_soc = get_param(matrix, self.regelkreis, 'drain_min_soc_pct', 10)
+        drain_start_soc = get_param(matrix, self.regelkreis, 'drain_start_soc_pct', 20)
+        if now_h < drain_fenster and p_batt is not None and p_batt > 0:
             d_haus = get_param(matrix, self.regelkreis, 'drain_max_haushalt_w', 700)
             d_wp = get_param(matrix, self.regelkreis, 'drain_max_wp_w', 500)
             d_ev = get_param(matrix, self.regelkreis, 'drain_max_ev_w', 1000)
@@ -399,8 +383,8 @@ class RegelHeizpatrone(Regel):
             haushalt_ok = (obs.house_load_w or 0) < d_haus
             wp_ok = (obs.wp_power_w or 0) < d_wp
             ev_ok = (obs.ev_power_w or 0) < d_ev
-            soc_ok = soc > drain_min_soc
-            forecast_ok = obs.forecast_quality in ('gut', 'mittel')
+            soc_ok = soc > drain_start_soc
+            forecast_ok = (obs.forecast_quality or '') in ('gut', 'mittel')
 
             # Prognose zeigt ≥ drain_min_prognose_kw in kommenden Stunden
             prognose_stark = False
@@ -479,6 +463,18 @@ class RegelHeizpatrone(Regel):
         soc = obs.batt_soc_pct if obs.batt_soc_pct is not None else 50
         soc_max_eff = obs.soc_max if obs.soc_max is not None else 75
 
+        # ── Extern-Erkennung (Side-Effect hier, nicht in bewerte() — ABC-konform) ──
+        if (obs.heizpatrone_aktiv and self._letzter_hp_zustand is not None
+                and not self._letzter_hp_zustand):
+            if self._burst_ende == 0 and not self._drain_modus:
+                self._extern_ein_ts = time.time()
+                LOG.info('HP extern eingeschaltet erkannt → Hysterese aktiv')
+                logge_extern('fritzdect', 'HP extern EIN',
+                             'Manuell eingeschaltet (nicht durch Engine)')
+        if not obs.heizpatrone_aktiv:
+            self._extern_ein_ts = 0
+        self._letzter_hp_zustand = obs.heizpatrone_aktiv
+
         # ── HP ist EIN → Notaus prüfen ──
         if obs.heizpatrone_aktiv:
             notaus_grund = None
@@ -510,24 +506,23 @@ class RegelHeizpatrone(Regel):
 
                 if self._drain_modus:
                     # Drain: Entladung gewollt — Drain-Schutzgrenzen prüfen
-                    drain_min_soc = get_param(matrix, self.regelkreis, 'drain_min_soc_pct', 10)
-                    if soc <= drain_min_soc:
+                    drain_stop_soc = get_param(matrix, self.regelkreis, 'drain_stop_soc_pct', 15)
+                    if soc <= drain_stop_soc:
                         notaus_grund = (f'Drain-Ende: SOC {soc:.0f}% ≤ '
-                                        f'drain_min {drain_min_soc}%')
+                                        f'drain_stop {drain_stop_soc}%')
+                    elif p_batt <= 0:
+                        # PV lädt nicht mehr → Drain sinnlos
+                        notaus_grund = (f'Drain-Ende: PV lädt nicht '
+                                        f'(P_Batt={p_batt:.0f}W)')
                     else:
                         d_haus = get_param(matrix, self.regelkreis, 'drain_max_haushalt_w', 700)
                         d_wp = get_param(matrix, self.regelkreis, 'drain_max_wp_w', 500)
                         d_ev = get_param(matrix, self.regelkreis, 'drain_max_ev_w', 1000)
                         house_w = obs.house_load_w or 0
-                        # HP-Eigenverbrauch abziehen — house_load enthält HP
-                        house_netto = house_w
-                        if obs.heizpatrone_aktiv:
-                            house_netto = max(0, house_w - self.HP_NENN_W)
                         wp_w = obs.wp_power_w or 0
                         ev_w = obs.ev_power_w or 0
-                        if house_netto >= d_haus * 1.2:
-                            notaus_grund = (f'Drain-Ende: Haushalt {house_netto:.0f}W '
-                                            f'(netto, brutto {house_w:.0f}W) '
+                        if house_w >= d_haus * 1.2:
+                            notaus_grund = (f'Drain-Ende: Haushalt {house_w:.0f}W '
                                             f'≥ {d_haus}×1.2')
                         elif wp_w >= d_wp:
                             notaus_grund = f'Drain-Ende: WP {wp_w:.0f}W ≥ {d_wp}W'
@@ -581,10 +576,13 @@ class RegelHeizpatrone(Regel):
         burst_dauer = 0
         grund = ''
 
-        # Phase 0: Morgen-Drain — Batterie mit HP schneller leeren
+        # Phase 0: Morgen-Drain — Batterie mit HP leeren WÄHREND PV lädt
+        #   Voraussetzung: PV lädt Batterie (p_batt > 0 → nach Sonnenaufgang),
+        #   SOC > 20%, gute Prognose. HP zieht ~2kW aus dem Netto-Überschuss.
+        #   Sinn: Batterie schneller leermachen, damit PV-Kapazität frei wird.
         drain_fenster = get_param(matrix, self.regelkreis, 'drain_fenster_ende_h', 10.0)
-        if now_h < drain_fenster and p_batt < 500:
-            drain_min_soc = get_param(matrix, self.regelkreis, 'drain_min_soc_pct', 10)
+        drain_start_soc = get_param(matrix, self.regelkreis, 'drain_start_soc_pct', 20)
+        if now_h < drain_fenster and p_batt > 0:  # PV lädt → nach Sunrise
             d_haus = get_param(matrix, self.regelkreis, 'drain_max_haushalt_w', 700)
             d_wp = get_param(matrix, self.regelkreis, 'drain_max_wp_w', 500)
             d_ev = get_param(matrix, self.regelkreis, 'drain_max_ev_w', 1000)
@@ -594,7 +592,7 @@ class RegelHeizpatrone(Regel):
             haushalt_ok = (obs.house_load_w or 0) < d_haus
             wp_ok = (obs.wp_power_w or 0) < d_wp
             ev_ok = (obs.ev_power_w or 0) < d_ev
-            soc_ok = soc > drain_min_soc
+            soc_ok = soc > drain_start_soc
             forecast_ok = (obs.forecast_quality or '') in ('gut', 'mittel')
 
             prognose_stark = False
@@ -615,6 +613,7 @@ class RegelHeizpatrone(Regel):
                     'kommando': 'hp_ein',
                     'grund': (f'HP EIN (Drain {drain_burst // 60:.0f} Min): '
                               f'Phase 0 (Morgen-Drain) SOC={soc:.0f}%, '
+                              f'P_Batt={p_batt:.0f}W, '
                               f'Haus={obs.house_load_w or 0:.0f}W, '
                               f'Prognose={obs.forecast_quality}'),
                 }]
