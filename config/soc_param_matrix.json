@@ -20,7 +20,8 @@
     },
     "soc_schutz": {
       "_doc": "Sicherheitshalber: SOC-Grenzen nie verletzen",
-      "aktiv": true,
+      "_entfernt": "2026-03-07: GEN24 DC-DC-Wandler begrenzt Batteriestrom auf ~22A; SOC_MIN via HTTP-API steuert Entlade-Erlaubnis implizit",
+      "aktiv": false,
       "prioritaet": 1,
       "beschreibung": "SOC-Untergrenze/Obergrenze als harte Schutzschwelle",
       "parameter": {
@@ -63,24 +64,30 @@
       "engine_zyklus": "fast"
     },
     "sls_schutz": {
-      "_doc": "SLS-Sicherungsschutz: 35A je Phase am Zählerplatz F1 (SmartMeter Netz). Gesamt ≈ √3×400V×35A ≈ 24kW. SLS ist träge, löst ohne Vorwarnung aus. Phasenströme I_L1_Netz, I_L2_Netz, I_L3_Netz aus raw_data.",
+      "_doc": "SLS-Sicherungsschutz: Konfigurierbare Phasenstrombegrenzung am Zählerplatz F1 (SmartMeter Netz). Standard 35A, mittelfristig 50A nach Anschlussänderung. Proportionale Wattpilot-Abregelung um Überschreitungsbetrag + Sicherheitsmarge.",
       "aktiv": true,
       "prioritaet": 1,
-      "beschreibung": "SLS 35A/Phase Netzschutz — Phasenstrom-Überwachung, HP aus + Wattpilot dimmen + E-Mail",
+      "beschreibung": "SLS Netzschutz — Phasenstrom-Überwachung, HP aus + Wattpilot proportional reduzieren",
       "parameter": {
         "sls_strom_max_a": {
           "wert": 35.0,
-          "bereich": [25, 40],
+          "bereich": [30, 63],
           "einheit": "A",
           "obs_feld": "i_l1_netz_a, i_l2_netz_a, i_l3_netz_a",
-          "beschreibung": "SLS-Auslösestrom je Phase (L1N, L2N, L3N). SLS ist träge — 35A exakt reicht."
+          "beschreibung": "SLS-Auslösestrom je Phase (L1/L2/L3). Bei Anschlussänderung an neuen SLS anpassen (z.B. 50A)."
         },
         "sls_leistung_max_w": {
           "wert": 24000,
-          "bereich": [18000, 26000],
+          "bereich": [18000, 43000],
           "einheit": "W",
           "obs_feld": "grid_power_w",
-          "beschreibung": "Fallback Gesamtleistung (√3×400V×35A ≈ 24kW) wenn Phasenströme nicht verfügbar"
+          "beschreibung": "Fallback Gesamtleistung wenn Phasenströme nicht verfügbar. Formel: √3×400V×SLS_A"
+        },
+        "sls_sicherheitsmarge_a": {
+          "wert": 2.0,
+          "bereich": [1, 5],
+          "einheit": "A",
+          "beschreibung": "Sicherheitspuffer bei Stromreduktion. Wattpilot wird um Überschreitung + Marge reduziert."
         }
       },
       "score_gewicht": 95,
@@ -195,10 +202,10 @@
           "beschreibung": "Absolut frühester Start (Minimum). Öffnung nie vor dieser Stunde, auch bei schwachem Tag."
         },
         "oeffnungsschwelle_kw": {
-          "wert": 7,
+          "wert": 14,
           "bereich": [
             3,
-            15
+            20
           ],
           "einheit": "kW",
           "beschreibung": "Ab Clear-Sky-Peak vorwärts: SOC_MAX öffnen wenn Prognoseleistung unter diesen Wert sinkt"
@@ -293,6 +300,15 @@
           "obs_feld": "forecast_rest_kwh",
           "beschreibung": "Prognose-Rest ≥ Schwelle → nachhaltige Ladung möglich (z.B. nach Gewitter), kein Früh-Reset"
         },
+        "erholung_hysterese_kwh": {
+          "wert": 2.0,
+          "bereich": [
+            1,
+            5
+          ],
+          "einheit": "kWh",
+          "beschreibung": "Hysterese für Früh-Reset: Aufhebung erst bei erholung_schwelle + hysterese (K4 — Anti-Flicker)"
+        },
         "nachtlade_schwelle_kwh": {
           "wert": 20.0,
           "bereich": [
@@ -309,7 +325,8 @@
     },
     "abend_entladerate": {
       "_doc": "Entladerate nach Tageszeit begrenzen — Spitzenlasten ans Netz",
-      "aktiv": true,
+      "_entfernt": "2026-03-07: GEN24 DC-DC-Wandler begrenzt Batteriestrom auf ~22A; Modbus-Ratenlimits (OutWRte) wirkungslos",
+      "aktiv": false,
       "prioritaet": 2,
       "beschreibung": "Abends/nachts Entladerate reduzieren, damit Batterie für Grundlast reicht",
       "parameter": {
@@ -462,7 +479,8 @@
     },
     "temp_schutz": {
       "_doc": "Gradueller Laderate-Schutz nach Zelltemperatur (Tier-2, ergänzt Tier-1 Interrupt)",
-      "aktiv": true,
+      "_entfernt": "2026-03-07: BMS regelt Temperatur-Schutz selbständig (LFP-Zellchemie); InWRte-Schreiben wirkungslos",
+      "aktiv": false,
       "prioritaet": 1,
       "beschreibung": "Laderate stufenweise reduzieren bei steigender Batterie-Temperatur",
       "parameter": {
@@ -573,7 +591,8 @@
     },
     "laderate_dynamisch": {
       "_doc": "Laderate aktiv steuern: temp-abhängig + SOC-abhängig + PV-abhängig",
-      "aktiv": true,
+      "_entfernt": "2026-03-07: GEN24 DC-DC-Wandler begrenzt Batteriestrom auf ~22A; InWRte-Schreiben wirkungslos",
+      "aktiv": false,
       "prioritaet": 2,
       "beschreibung": "Laderate dynamisch begrenzen abhängig von Temp, SOC-Bereich und aktueller PV-Leistung",
       "parameter": {
@@ -817,7 +836,7 @@
           "beschreibung": "Nachmittags spät: größere Reserve für sichere Batterie-Volladung"
         },
         "notaus_netzbezug_w": {
-          "wert": 200,
+          "wert": 400,
           "bereich": [
             0,
             500
@@ -825,7 +844,7 @@
           "einheit": "W",
           "obs_feld": "grid_power_w",
           "aktor_kommando": "hp_aus",
-          "beschreibung": "Netzbezug > dieser Wert (Ø5 Min Durchschnitt) → HP AUS"
+          "beschreibung": "Netzbezug > dieser Wert (Ø7 Min Durchschnitt) → HP AUS"
         },
         "speicher_temp_max_c": {
           "wert": 78,
@@ -932,7 +951,7 @@
             7200
           ],
           "einheit": "s",
-          "beschreibung": "Hysterese bei externem Einschalten (1h): WEICHE Notaus-Kriterien pausieren, HARTE (Temp, SOC-abs, rest_h) wirken sofort. 0 = deaktiviert."
+          "beschreibung": "Hysterese bei externem Schalten (1h): Bei EIN pausieren WEICHE Notaus-Kriterien, HARTE wirken sofort. Bei AUS wird hp_ein für diese Dauer gesperrt. 0 = deaktiviert."
         },
         "potenzial_gut_kwh": {
           "wert": 30.0,
@@ -1082,11 +1101,11 @@
   },
   "hardware": {
     "_doc": "Unveränderliche Hardware-Referenz (read-only, aus battery_control.json gespiegelt)",
-    "kapazitaet_kwh": 10.24,
+    "kapazitaet_kwh": 20.48,
     "chemie": "LFP",
-    "modell": "BYD HVS 10.2",
-    "max_lade_w": 10240,
-    "max_entlade_w": 10240
+    "modell": "BYD HVS 2×10.2 (parallel)",
+    "max_lade_w": 12000,
+    "max_entlade_w": 12000
   },
   "meta": {
     "komfort_bereich": "25–75% SOC (LFP-optimal, ~3000 Zyklen bis 90% Kap.)",

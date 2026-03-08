@@ -19,7 +19,7 @@
                           │ Überschuss
                           ▼
               ┌───────────────────────┐
-              │  Batterie (10,24 kWh) │  ← Priorität 2 (Winter: hoch)
+              │  Batterie (20,48 kWh) │  ← Priorität 2 (Winter: hoch)
               └───────────┬───────────┘
                           │ Überschuss
                           ▼
@@ -167,14 +167,6 @@ ABENDS:
 
 ÜBERSTEUERUNG: Speicher_oben > 78°C → Heizpatrone SOFORT AUS
 ```
-    → Dauer: Minimum laut Hersteller (10–15 Min?)
-
-ABENDS:
-    → Heizpatrone AUS wenn Speicher_oben > 60°C
-    → Batterie übernimmt Nacht-Hausverbrauch
-
-ÜBERSTEUERUNG: Speicher_oben > 78°C → Heizpatrone SOFORT AUS
-```
 
 ### 2.6 Heizpatrone (HP) — Prognosegesteuerte Burst-Strategie (via Fritz!DECT)
 
@@ -230,7 +222,7 @@ HP_aktiv      = Fritz!DECT-Status (ein/aus, via getswitchstate)
 HP_letzte_aus = Zeitpunkt letztes Ausschalten
 rest_kwh      = get_remaining_pv_surplus_kwh()  # Prognose Restertrag
 rest_h        = Stunden bis Sonnenuntergang (aus solar_geometry)
-batt_rest_kwh = (SOC_MAX - SOC) * 10.24 / 100  # kWh bis Batterie voll
+batt_rest_kwh = (SOC_MAX - SOC) * 20.48 / 100  # kWh bis Batterie voll
 sunrise       = Sonnenaufgang (Dezimalstunde, aus solar_geometry)
 
 # ── Phase 0: Morgen-Drain (ab sunrise−1h, prognosegetrieben) ───────
@@ -327,7 +319,7 @@ die Regelung des Nulleinspeisers braucht bis zu 30 s zum Nachregeln.
 -1000 W Toleranz bei hohem SOC vermeidet unnötige Abschaltungen.
 
 > **Warum P_Batt > 5 kW als Schwelle?**
-> Die Batterie (BYD HVS 10.24 kWh) kann mit max. ~5 kW laden.
+> Die Batterie (BYD HVS 2×10.24 kWh parallel, 20.48 kWh netto) kann mit max. ~5 kW laden.
 > Wenn sie bereits mit >5 kW lädt, bedeutet das: Die PV-Anlage produziert
 > deutlich mehr als Haus + Batterie brauchen. Die 2 kW HP passen problemlos
 > dazu. Die Abregelung des Nulleinspeisers wird sogar reduziert.
@@ -404,76 +396,11 @@ die Regelung des Nulleinspeisers braucht bis zu 30 s zum Nachregeln.
 
 ---
 
-## 3. Sicherheitsregeln (IMMER aktiv, nicht overridebar)
+## 3. Sicherheitsregeln
 
-| Regel | Bedingung | Aktion |
-|-------|-----------|--------|
-| **Übertemperaturschutz** | Speicher_oben ≥ 80°C | Heizpatrone AUS, Alarm |
-| **Hysterese** | Speicher_oben ≥ 78°C | Heizpatrone AUS (Einschalten erst wieder < 70°C) |
-| **Mindestpause** | Heizpatrone war < 5 Min aus | Nicht wieder einschalten |
-| **Frostschutz** | Außentemp < -5°C | Lüftung auf Minimum, Brandschutzklappen ZU |
-| **WP-Schmierung** | WP heute 0 Laufzeit | Pflichtlauf erzwingen |
-| **Watchdog** | Software-Absturz | Hardware-WDT → TRIACs AUS (Fail-Safe) |
-
----
-
-## 4. Temperatur-Schwellwerte (konfigurierbar)
-
-```python
-# config/automation_config.json
-{
-    "speicher": {
-        "temp_max": 80,           # Absolute Grenze (°C)
-        "temp_hysterese_aus": 78,  # Heizpatrone AUS
-        "temp_hysterese_ein": 70,  # Heizpatrone darf wieder EIN
-        "temp_ziel_sommer": 65,    # Zieltemperatur Sommer
-        "temp_ziel_winter": 55,    # Zieltemperatur Winter
-        "temp_min_warmwasser": 45  # Minimum für Legionellenschutz
-    },
-    "heizpatrone": {
-        "min_ueberschuss_kw": 2.0,   # Mindest-PV-Überschuss zum Einschalten
-        "min_pausenzeit_s": 300,      # 5 Min Mindestpause
-        "min_laufzeit_s": 300         # 5 Min Mindestlaufzeit
-    },
-    "wp": {
-        "pflichtlauf_dauer_min": 15,  # Minuten
-        "pflichtlauf_zeit": "12:00",  # Bevorzugte Uhrzeit (PV-Maximum)
-    },
-    "lueftung": {
-        "frostgrenze_c": -5,
-        "grundlueftung_stufe": 1
-    }
-}
-```
-
----
-
-## 5. Entscheidungsbaum (vereinfacht)
-
-```
-Alle 30 Sekunden:
-│
-├── Temperaturen lesen (MEGA-BAS IN1–IN4)
-├── PV-Daten holen (collector.py / Modbus)
-├── Batterie-SOC holen
-├── Wattpilot-Status holen
-│
-├── SICHERHEITSCHECK:
-│   ├── Speicher_oben ≥ 80°C? → Heizpatrone SOFORT AUS, ALARM
-│   ├── Außentemp < -5°C? → Frostschutz aktivieren
-│   └── WP heute gelaufen? → Nein → Queue Pflichtlauf
-│
-├── ÜBERSCHUSS BERECHNEN:
-│   │  PV_Überschuss = PV_Erzeugung - Hausverbrauch
-│   │                  - Batterie_Ladung - Wallbox_Ladung
-│   │
-│   ├── Überschuss > min_ueberschuss_kw?
-│   │   ├── Speicher kalt genug? → Heizpatrone EIN
-│   │   ├── E-Auto da und SOC < 80%? → Wallbox erhöhen
-│   │   └── Beides nicht möglich? → Batterie laden
-│   │
-│   └── Kein Überschuss:
-│       └── Heizpatrone AUS (wenn Pausenzeit eingehalten)
-│
-└── Status loggen → DB + Dashboard
-```
+> **Kanonische Quelle:** [SCHUTZREGELN.md](SCHUTZREGELN.md)
+>
+> Alle Schutzregeln (Batterie, SLS, Heizpatrone, WP) sind dort
+> vollständig spezifiziert — inklusive Schwellwerte, Hysteresen,
+> Implementierungsstatus und Datenflüsse. Hier nicht wiederholt,
+> um Divergenz zu vermeiden.

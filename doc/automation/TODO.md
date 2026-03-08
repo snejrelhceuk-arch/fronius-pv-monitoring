@@ -1,6 +1,21 @@
 # TODO — Automation Projekt
 
-> Stand: 2026-03-01
+> Stand: 2026-03-08
+
+---
+
+## Nächstes Projekt: MEGA-BAS HAT
+
+**Ziel:** I2C-HAT für Pi4 Primary mit analogen Eingängen + Relais-Ausgängen.
+
+| Einsatzzweck | Sensor/Aktor | MEGA-BAS Kanal | Status |
+|---|---|---|---|
+| **WW-Speicher Temperatur** | 10K NTC Thermistoren (oben/mitte/unten) | IN1–IN3 | Geplant |
+| **HP-Grenztemperatur** | WW-Speicher ≥ 78°C → HP AUS | IN1 + RegelHeizpatrone | Geplant |
+| **WP-Steuerung** | Dimplex SIK 11 TES via Modbus RTU | RS485 (LWPM 410) | LWPM bestellt |
+| **Außentemperatur** | 10K NTC | IN4 | Geplant |
+
+Details in den Phasen unten.
 
 ---
 
@@ -86,9 +101,9 @@
 
 ## Phase 6: Software-Integration
 
-> **Hinweis (2026-03-01):** Die Automation-Engine ist produktiv (`pv-automation.service`).
-> 4-Schichten-Architektur in `automation/engine/`, 11 Regelkreise, 3 Aktoren.
-> Details: `doc/AUTOMATION_ARCHITEKTUR.md`
+> **Hinweis (2026-03-08):** Die Automation-Engine ist produktiv (`pv-automation.service`).
+> 4-Schichten-Architektur in `automation/engine/`, 8 aktive Regelkreise, 3 Aktoren.
+> Details: `doc/automation/AUTOMATION_ARCHITEKTUR.md`
 
 - [x] Zentraler Steuerungsdaemon (`pv-automation.service`)
 - [x] Anbindung an RAM-DB (`/dev/shm/automation_obs.db`, 5 Tabellen)

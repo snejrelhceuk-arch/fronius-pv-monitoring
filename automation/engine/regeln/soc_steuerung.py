@@ -145,9 +145,7 @@ class RegelMorgenSocMin(Regel):
                           f'(LFP-Schonung)'),
             })
 
-        # Engine-Aktionen registrieren (Extern-Erkennung)
-        for a in aktionen:
-            soc_extern_tracker.registriere_aktion(a.get('kommando', ''), a.get('wert'))
+        # Hinweis: registriere_aktion() erfolgt NACH Actuator-Erfolg in engine.py (K2)
 
         return aktionen
 
@@ -314,9 +312,7 @@ class RegelNachmittagSocMax(Regel):
                       f'{peak_str}, Öffnung ab {dyn_start:.1f}h'),
         })
 
-        # Engine-Aktionen registrieren (Extern-Erkennung)
-        for a in aktionen:
-            soc_extern_tracker.registriere_aktion(a.get('kommando', ''), a.get('wert'))
+        # Hinweis: registriere_aktion() erfolgt NACH Actuator-Erfolg in engine.py (K2)
 
         return aktionen
 
@@ -343,6 +339,9 @@ class RegelKomfortReset(Regel):
     name = 'komfort_reset'
     regelkreis = 'komfort_reset'
     engine_zyklus = 'fast'
+
+    def __init__(self):
+        self._frueh_reset_aktiv = False  # Hysterese-State für Früh-Reset (K4)
 
     def _im_reset_fenster(self, obs: ObsState, matrix: dict) -> bool:
         """Prüfe ob aktuelle Uhrzeit im Abend-Reset-Fenster liegt."""
@@ -371,12 +370,15 @@ class RegelKomfortReset(Regel):
           3. forecast_rest_kwh < erholung_schwelle_kwh
              → Zu wenig PV-Ertrag erwartet → sofort auf 25%
 
-        Ausnahme: forecast_rest_kwh ≥ Schwelle → Nachhaltige
-        Ladung noch möglich (z.B. nach Gewitter), bei 5% bleiben.
+        Hysterese (K4): Verwendet zwei Schwellen um Flickern zu vermeiden:
+          - ON:  forecast_rest < erholung_schwelle_kwh (10 kWh)
+          - OFF: forecast_rest >= erholung_schwelle_kwh + hysterese_kwh (12 kWh)
+          Sobald Früh-Reset aktiv, wird er erst ab höherer Schwelle aufgehoben.
         """
         # Nur relevant wenn SOC_MIN noch auf Stress-Level
         komfort_min = get_param(matrix, self.regelkreis, 'komfort_min_pct', 25)
         if obs.soc_min is None or obs.soc_min >= komfort_min:
+            self._frueh_reset_aktiv = False  # Reset-State bei Komfort-Level
             return False
 
         # Zeitprüfung: erst ab nachmittags, vor Sunset
@@ -386,19 +388,37 @@ class RegelKomfortReset(Regel):
         if now_h < ab_h or now_h > sunset:
             return False
 
-        # Erholung möglich? Genug Prognose-Rest → bei 5% bleiben
+        # Hysterese-Schwellen (K4)
         erholung = get_param(matrix, self.regelkreis, 'erholung_schwelle_kwh', 10.0)
+        hysterese = get_param(matrix, self.regelkreis, 'erholung_hysterese_kwh', 2.0)
         rest_kwh = obs.forecast_rest_kwh
-        if rest_kwh is not None and rest_kwh >= erholung:
-            LOG.debug(f"komfort_reset: forecast_rest={rest_kwh:.1f} kWh "
-                      f"≥ {erholung:.0f} kWh → Erholung möglich, kein Früh-Reset")
-            return False
 
-        # Prognose-Rest < Schwelle → Früh-Reset
-        LOG.info(f"komfort_reset FRÜH-RESET: forecast_rest="
-                 f"{rest_kwh or 0:.1f} kWh < {erholung:.0f} kWh "
-                 f"→ SOC_MIN jetzt auf {komfort_min}%")
-        return True
+        if self._frueh_reset_aktiv:
+            # Bereits im Früh-Reset → nur aufheben wenn ÜBER obere Schwelle
+            obere_schwelle = erholung + hysterese
+            if rest_kwh is not None and rest_kwh >= obere_schwelle:
+                LOG.info(f"komfort_reset: Früh-Reset AUFGEHOBEN — forecast_rest="
+                         f"{rest_kwh:.1f} kWh ≥ {obere_schwelle:.0f} kWh "
+                         f"(Hysterese-Schwelle überschritten)")
+                self._frueh_reset_aktiv = False
+                return False
+            # Unter oberer Schwelle → Früh-Reset bleibt aktiv
+            LOG.debug(f"komfort_reset: Früh-Reset bleibt aktiv — forecast_rest="
+                      f"{rest_kwh or 0:.1f} kWh < {obere_schwelle:.0f} kWh")
+            return True
+        else:
+            # Noch kein Früh-Reset → erst auslösen wenn UNTER untere Schwelle
+            if rest_kwh is not None and rest_kwh >= erholung:
+                LOG.debug(f"komfort_reset: forecast_rest={rest_kwh:.1f} kWh "
+                          f"≥ {erholung:.0f} kWh → Erholung möglich, kein Früh-Reset")
+                return False
+
+            # Prognose-Rest < Schwelle → Früh-Reset aktivieren
+            LOG.info(f"komfort_reset FRÜH-RESET: forecast_rest="
+                     f"{rest_kwh or 0:.1f} kWh < {erholung:.0f} kWh "
+                     f"→ SOC_MIN jetzt auf {komfort_min}%")
+            self._frueh_reset_aktiv = True
+            return True
 
     def _soc_weicht_ab(self, obs: ObsState, matrix: dict) -> bool:
         """Prüfe ob SOC-Werte vom Komfort-Bereich abweichen."""

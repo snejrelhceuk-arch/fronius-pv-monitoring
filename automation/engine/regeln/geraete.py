@@ -158,11 +158,12 @@ class RegelHeizpatrone(Regel):
         self._letzte_aus: float = 0
         self._drain_modus: bool = False
         self._letzte_phase: str = ''       # Letzte Burst-Phase (für Wiedereintritt)
-        # Extern-Erkennung: HP wurde außerhalb der Engine eingeschaltet
-        self._extern_ein_ts: float = 0       # Zeitpunkt der Extern-Erkennung
+        # Extern-Erkennung: HP wurde außerhalb der Engine ein-/ausgeschaltet
+        self._extern_ein_ts: float = 0       # Zeitpunkt der Extern-EIN-Erkennung
+        self._extern_aus_ts: float = 0       # Zeitpunkt der Extern-AUS-Erkennung
         self._letzter_hp_zustand: Optional[bool] = None  # None = erster Zyklus (kein EXTERN)
-        # Glättung: Netzbezug-Historie für 5-Min-Durchschnitt (Engine-Zyklus ~60s)
-        self._grid_history: deque = deque(maxlen=5)
+        # Glättung: Netzbezug-Historie für 7-Min-Durchschnitt (Engine-Zyklus ~60s)
+        self._grid_history: deque = deque(maxlen=7)
         # Probe-Logik: Nulleinspeiser-Erkennung durch Testpuls
         self._probe_modus: bool = False       # Probe-Burst aktiv (kurzer Testpuls)
         self._probe_start_pv_w: float = 0     # PV-Leistung bei Probe-Start
@@ -235,9 +236,10 @@ class RegelHeizpatrone(Regel):
         return basis
 
     def _grid_avg(self, obs: ObsState) -> float:
-        """Geglätteter Netzbezug (5-Zyklen-Durchschnitt ≈ 5 Min).
+        """Geglätteter Netzbezug (7-Zyklen-Durchschnitt ≈ 7 Min).
 
-        Verhindert Notaus durch kurzzeitige Leistungssprünge (±10kW).
+        Verhindert Notaus durch kurzzeitige Leistungssprünge (±10kW)
+        und Haushaltslast-Schaltspitzen (Waschmaschine, Trockner etc.).
         Nur positive Werte (Bezug) werden gemittelt; Einspeisung = 0.
         """
         gw = obs.grid_power_w
@@ -278,10 +280,45 @@ class RegelHeizpatrone(Regel):
         p_batt = obs.batt_power_w
         score = get_score_gewicht(matrix, self.regelkreis)
 
-        # ── Extern-Erkennung (State-Update + Log in erzeuge_aktionen, ABC-konform) ──
+        # ── Extern-Erkennung (in bewerte(), da immer aufgerufen) ──
+        extern_respekt = get_param(matrix, self.regelkreis, 'extern_respekt_s', 3600)
+
+        # Erster Zyklus nach (Neu-)Start: kein State → min_pause als Schutz
+        if self._letzter_hp_zustand is None and not obs.heizpatrone_aktiv:
+            # HP ist beim Start AUS → kurze Sperre damit Engine nicht sofort einschaltet
+            if self._letzte_aus == 0:
+                self._letzte_aus = time.time()
+                LOG.info('Erster Zyklus: HP AUS vorgefunden → min_pause-Schutz aktiv')
+
+        # Extern-EIN: HP ging AUS→EIN ohne laufenden Burst/Drain
+        if (obs.heizpatrone_aktiv and self._letzter_hp_zustand is not None
+                and not self._letzter_hp_zustand):
+            if self._burst_ende == 0 and not self._drain_modus:
+                self._extern_ein_ts = time.time()
+                LOG.info('HP extern eingeschaltet erkannt → Hysterese aktiv')
+                logge_extern('fritzdect', 'HP extern EIN',
+                             'Manuell eingeschaltet (nicht durch Engine)')
+
+        # Extern-AUS: HP ging EIN→AUS ohne Engine-hp_aus
+        if (not obs.heizpatrone_aktiv and self._letzter_hp_zustand is not None
+                and self._letzter_hp_zustand):
+            engine_hat_ausgeschaltet = (self._letzte_aus > 0
+                                        and (time.time() - self._letzte_aus) < 5)
+            if not engine_hat_ausgeschaltet:
+                self._extern_aus_ts = time.time()
+                self._burst_ende = 0
+                self._burst_start = 0
+                self._drain_modus = False
+                LOG.info('HP extern ausgeschaltet erkannt → EIN-Sperre aktiv')
+                logge_extern('fritzdect', 'HP extern AUS',
+                             'Manuell ausgeschaltet (nicht durch Engine) → EIN-Sperre aktiv')
+
+        if not obs.heizpatrone_aktiv:
+            self._extern_ein_ts = 0
+        self._letzter_hp_zustand = obs.heizpatrone_aktiv
+
         ist_extern = (self._extern_ein_ts > 0
-                      and (time.time() - self._extern_ein_ts)
-                      < get_param(matrix, self.regelkreis, 'extern_respekt_s', 3600))
+                      and (time.time() - self._extern_ein_ts) < extern_respekt)
 
         # ── Notaus-Pfad: IMMER aktiv ──
         if obs.heizpatrone_aktiv:
@@ -341,7 +378,11 @@ class RegelHeizpatrone(Regel):
                     d_haus = get_param(matrix, self.regelkreis, 'drain_max_haushalt_w', 700)
                     d_wp = get_param(matrix, self.regelkreis, 'drain_max_wp_w', 500)
                     d_ev = get_param(matrix, self.regelkreis, 'drain_max_ev_w', 1000)
-                    if ((obs.house_load_w or 0) >= d_haus * 1.2
+                    # HP-Eigenverbrauch herausrechnen (Selbstreferenz-Fix)
+                    haus_netto = (obs.house_load_w or 0)
+                    if obs.heizpatrone_aktiv:
+                        haus_netto = max(0, haus_netto - self.HP_NENN_W)
+                    if (haus_netto >= d_haus * 1.2
                             or (obs.wp_power_w or 0) >= d_wp
                             or (obs.ev_power_w or 0) >= d_ev):
                         return int(score * 1.5)
@@ -392,6 +433,14 @@ class RegelHeizpatrone(Regel):
                 and (time.time() - self._letzte_aus) < min_pause):
             return 0
 
+        # Extern-AUS respektieren: HP wurde manuell ausgeschaltet → Sperre
+        extern_respekt = get_param(matrix, self.regelkreis, 'extern_respekt_s', 3600)
+        if (self._extern_aus_ts > 0
+                and (time.time() - self._extern_aus_ts) < extern_respekt):
+            verbleibend = int(extern_respekt - (time.time() - self._extern_aus_ts))
+            LOG.debug(f'HP extern AUS → EIN-Sperre noch {verbleibend}s')
+            return 0
+
         batt_rest_kwh = max(0, (soc_max_eff - soc) * config.PV_BATTERY_KWH / 100)
 
         forecast_kwh = obs.forecast_kwh or 0
@@ -412,7 +461,11 @@ class RegelHeizpatrone(Regel):
             d_ev = get_param(matrix, self.regelkreis, 'drain_max_ev_w', 1000)
             d_prognose_kw = get_param(matrix, self.regelkreis, 'drain_min_prognose_kw', 4.0)
 
-            haushalt_ok = (obs.house_load_w or 0) < d_haus
+            # HP-Eigenverbrauch herausrechnen (Selbstreferenz-Fix)
+            haus_netto = (obs.house_load_w or 0)
+            if obs.heizpatrone_aktiv:
+                haus_netto = max(0, haus_netto - self.HP_NENN_W)
+            haushalt_ok = haus_netto < d_haus
             wp_ok = (obs.wp_power_w or 0) < d_wp
             ev_ok = (obs.ev_power_w or 0) < d_ev
             soc_ok = soc > drain_start_soc
@@ -523,17 +576,7 @@ class RegelHeizpatrone(Regel):
         soc = obs.batt_soc_pct if obs.batt_soc_pct is not None else 50
         soc_max_eff = obs.soc_max if obs.soc_max is not None else 75
 
-        # ── Extern-Erkennung (Side-Effect hier, nicht in bewerte() — ABC-konform) ──
-        if (obs.heizpatrone_aktiv and self._letzter_hp_zustand is not None
-                and not self._letzter_hp_zustand):
-            if self._burst_ende == 0 and not self._drain_modus:
-                self._extern_ein_ts = time.time()
-                LOG.info('HP extern eingeschaltet erkannt → Hysterese aktiv')
-                logge_extern('fritzdect', 'HP extern EIN',
-                             'Manuell eingeschaltet (nicht durch Engine)')
-        if not obs.heizpatrone_aktiv:
-            self._extern_ein_ts = 0
-        self._letzter_hp_zustand = obs.heizpatrone_aktiv
+        # ── Extern-Erkennung läuft jetzt in bewerte() ──
 
         # ── HP ist EIN → Notaus prüfen ──
         if obs.heizpatrone_aktiv:
@@ -606,7 +649,10 @@ class RegelHeizpatrone(Regel):
                             d_haus = get_param(matrix, self.regelkreis, 'drain_max_haushalt_w', 700)
                             d_wp = get_param(matrix, self.regelkreis, 'drain_max_wp_w', 500)
                             d_ev = get_param(matrix, self.regelkreis, 'drain_max_ev_w', 1000)
+                            # HP-Eigenverbrauch herausrechnen (Selbstreferenz-Fix)
                             house_w = obs.house_load_w or 0
+                            if obs.heizpatrone_aktiv:
+                                house_w = max(0, house_w - self.HP_NENN_W)
                             wp_w = obs.wp_power_w or 0
                             ev_w = obs.ev_power_w or 0
                             if house_w >= d_haus * 1.2:
@@ -628,7 +674,7 @@ class RegelHeizpatrone(Regel):
                         notaus_grund = (f'Verbraucher-Konkurrenz: Potenzial={potenzial}, '
                                         f'WP={wp_aktiv}, EV={ev_aktiv}')
 
-                    # Netzbezug (5-Min-Durchschnitt gegen Leistungssprünge)
+                    # Netzbezug (7-Min-Durchschnitt gegen Leistungssprünge/Haushaltslast)
                     if not notaus_grund:
                         notaus_netz = get_param(matrix, self.regelkreis, 'notaus_netzbezug_w', 200)
                         grid_avg = self._grid_avg(obs)

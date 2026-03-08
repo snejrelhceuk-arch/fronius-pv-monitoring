@@ -42,10 +42,14 @@ LOG = logging.getLogger('engine')
 class RegelSlsSchutz(Regel):
     """SLS-Sicherungsschutz: Phasenströme am Netz-SmartMeter (F1) überwachen.
 
-    Der SLS (Selektiver Leitungsschutzschalter) am Zählerplatz ist 35A/3-phasig.
-    Maximale Gesamtleistung: √3 × 400V × 35A ≈ 24 kW.
-    Der SLS ist träge — 35A je Phase als Schwelle ist ausreichend.
-    Er löst OHNE Vorwarnung aus.
+    Der SLS (Selektiver Leitungsschutzschalter) am Zählerplatz ist konfigurierbar
+    (Standard 35A/3-phasig, mittelfristig 50A nach Anschlussänderung).
+    Maximale Gesamtleistung: √3 × 400V × I_SLS.
+    Der SLS ist träge — exakte Schwelle reicht, plus kleine Sicherheitsmarge.
+
+    Szenario: 2 EVs laden mit WattPilot (bis 32A), dazu Haushaltslasten
+    (WP, HP, Backofen etc.) → Summe kann SLS-Grenze pro Phase überschreiten.
+    Die WattPiloten managen ihre 32A intern, aber nicht die Summe mit Haushalt.
 
     Messung:
       Phasenströme I_L1_Netz, I_L2_Netz, I_L3_Netz aus dem Fronius SmartMeter
@@ -53,14 +57,19 @@ class RegelSlsSchutz(Regel):
       DataCollector → ObsState.i_l1_netz_a/i_l2_netz_a/i_l3_netz_a bereitgestellt.
 
     Auslösung:
-      max(I_L1, I_L2, I_L3) > sls_strom_max_a (35A) → sofort schützen.
-      Fallback: grid_power_w > sls_leistung_max_w (24000W) wenn Phasenströme
+      max(I_L1, I_L2, I_L3) > sls_strom_max_a → proportional reduzieren.
+      Fallback: grid_power_w > sls_leistung_max_w wenn Phasenströme
       nicht verfügbar (z.B. SmartMeter-Ausfall).
 
-    Aktionen:
+    Aktionen (proportional, nicht pauschal):
       1. HP AUS (falls wider Erwarten noch an) — via fritzdect
-      2. Wattpilot auf Minimum dimmen — via wattpilot
-      3. E-Mail-Benachrichtigung via EventNotifier
+      2. Wattpilot-Strom um (Überschreitung + Sicherheitsmarge) reduzieren
+         Beispiel: I_L1=38A, Grenze=35A, Marge=2A → Reduktion um 5A
+
+    Konfigurierbare Parameter (via pv-config TUI):
+      sls_strom_max_a         — SLS-Grenze pro Phase [30–63A], Default 35A
+      sls_leistung_max_w      — Fallback Gesamtleistung [W]
+      sls_sicherheitsmarge_a  — Sicherheitspuffer [1–5A], Default 2A
 
     Harte Schutzregel: immer aktiv, nicht deaktivierbar.
     Name enthält 'schutz' → Engine führt sie immer parallel aus.
@@ -122,29 +131,44 @@ class RegelSlsSchutz(Regel):
         return 0
 
     def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
-        """Lastbegrenzung bei SLS-Überstrom.
+        """Proportionale Lastbegrenzung bei SLS-Überstrom.
+
+        Strategie: Nicht pauschale Abregelung auf Minimum, sondern nur um den
+        Überlastungsstrom + Sicherheitsmarge reduzieren.
+
+        sls_sicherheitsmarge_a (Default 2A) sorgt für kleinen Puffer.
 
         Kaskade:
           1. HP AUS (falls an) — via fritzdect
-          2. Wattpilot auf Minimum dimmen — via wattpilot
+          2. Wattpilot proportional reduzieren — via wattpilot (reduce_current)
+             Ziel-Ampere = aktuell_amp - (i_max - sls_grenze) - sicherheitsmarge
         """
         sls_a = get_param(matrix, self.regelkreis, 'sls_strom_max_a', 35.0)
         sls_w = get_param(matrix, self.regelkreis, 'sls_leistung_max_w', 24000)
+        marge_a = get_param(matrix, self.regelkreis, 'sls_sicherheitsmarge_a', 2.0)
         aktionen = []
 
-        # Bestimme Auslöse-Grund
+        # Bestimme Auslöse-Grund und Überschreitungsbetrag
         i_max, phase = self._phase_max(obs)
         gw = obs.grid_power_w or 0
+        ueberschreitung_a = 0.0
 
         if i_max is not None and i_max > sls_a:
+            ueberschreitung_a = i_max - sls_a
             grund_text = (f'SLS: {phase}={i_max:.1f}A > {sls_a:.0f}A '
                           f'(L1={obs.i_l1_netz_a or 0:.1f}A, '
                           f'L2={obs.i_l2_netz_a or 0:.1f}A, '
                           f'L3={obs.i_l3_netz_a or 0:.1f}A, '
                           f'P_Netz={gw:.0f}W)')
         else:
+            # Fallback: Leistungsbasierte Schätzung
+            if gw > sls_w:
+                ueberschreitung_a = (gw - sls_w) / 230.0  # grobe Näherung
             grund_text = (f'SLS Fallback: P_Netz={gw:.0f}W > {sls_w}W '
                           f'(≈{gw / 400 / 1.73:.0f}A, keine Phasendaten)')
+
+        # Reduktionsbetrag = Überschreitung + Sicherheitsmarge
+        reduktion_a = ueberschreitung_a + marge_a
 
         # HP aus (Sicherheitshalber — ist typischerweise schon aus)
         if obs.heizpatrone_aktiv:
@@ -154,13 +178,21 @@ class RegelSlsSchutz(Regel):
                 'grund': f'{grund_text} → HP AUS',
             })
 
-        # Wattpilot dimmen
+        # Wattpilot proportional reduzieren (nur wenn EV lädt)
         ev_w = obs.ev_power_w or 0
-        if ev_w > 1500:
+        if ev_w > 500:
+            # Ziel-Ampere berechnen: aktuell minus Reduktion
+            # ev_power_w / (phases × 230V) ≈ aktueller EV-Strom
+            ev_phases = 3  # Annahme 3-phasig (konservativ)
+            ev_strom_geschaetzt_a = ev_w / (ev_phases * 230)
+            ziel_a = max(6, int(ev_strom_geschaetzt_a - reduktion_a))
+
             aktionen.append({
                 'tier': 1, 'aktor': 'wattpilot',
-                'kommando': 'reduce_power',
-                'grund': f'{grund_text} → Wattpilot auf Minimum',
+                'kommando': 'reduce_current',
+                'parameter': {'ampere': ziel_a},
+                'grund': (f'{grund_text} → Wattpilot {ev_strom_geschaetzt_a:.0f}A→{ziel_a}A '
+                          f'(Reduktion {reduktion_a:.1f}A inkl. {marge_a:.0f}A Marge)'),
             })
 
         # Log-Throttle (nicht bei jedem 60s-Zyklus loggen)

@@ -149,6 +149,12 @@ class AutomationDaemon:
 
         self._running = True
 
+        # ── HP-Startup-Schutz ──────────────────────────────────
+        # Wenn der Daemon nach einem Crash neu startet und die HP noch
+        # ein ist (Fritz!DECT-Steckdose behält Zustand), sofort abschalten.
+        # Siehe: doc/TIEFENPRUEFUNG_2026-03-08.md §7.3
+        self._hp_startup_check()
+
         # Tier-3: Forecast-Thread (trigger-basiert, prüft alle 30s)
         if not self.once:
             self._forecast_thread = threading.Thread(
@@ -183,6 +189,55 @@ class AutomationDaemon:
         except Exception as e:
             LOG.warning(f"Schutz-Config: {e} → Defaults")
             return {}
+
+    # ── HP-Startup-Schutz ───────────────────────────────────
+
+    def _hp_startup_check(self):
+        """Prüfe HP-Status beim Start und schalte ggf. ab.
+
+        Wenn der Daemon nach einem Crash neu startet, kann die HP noch
+        ein sein (Fritz!DECT-Steckdose behält Zustand). Hier wird der
+        Status geprüft und bei Bedarf sofort abgeschaltet.
+        """
+        try:
+            from automation.engine.aktoren.aktor_fritzdect import (
+                _load_fritz_config, _get_session_id, _aha_device_info
+            )
+            cfg = _load_fritz_config()
+            host = cfg.get('fritz_ip', '192.168.178.1')
+            ain = cfg.get('ain', '')
+            user = cfg.get('fritz_user', '')
+            pw = cfg.get('fritz_password', '')
+            if not (ain and user and pw):
+                LOG.debug("HP-Startup-Check: Fritz!DECT nicht konfiguriert")
+                return
+
+            sid = _get_session_id(host, user, pw)
+            if not sid:
+                LOG.warning("HP-Startup-Check: Fritz!Box nicht erreichbar")
+                return
+
+            info = _aha_device_info(host, ain, sid)
+            if not info:
+                LOG.warning("HP-Startup-Check: Gerät nicht gefunden")
+                return
+
+            if str(info.get('state', '0')).strip() == '1':
+                LOG.warning("HP-Startup-Check: HP war EIN beim Daemon-Start → schalte AUS")
+                if not self.dry_run:
+                    self._actuator.ausfuehren({
+                        'tier': 1,
+                        'aktor': 'fritzdect',
+                        'kommando': 'hp_aus',
+                        'grund': 'HP-Startup-Schutz: HP war EIN nach Daemon-(Neu-)Start',
+                    })
+                else:
+                    LOG.info("  [DRY-RUN] Würde HP abschalten")
+            else:
+                LOG.info("HP-Startup-Check: HP ist AUS — OK")
+
+        except Exception as e:
+            LOG.warning(f"HP-Startup-Check fehlgeschlagen: {e}")
 
     # ── Tier-3 Forecast ─────────────────────────────────────
 
@@ -440,6 +495,7 @@ def engine_vorausschau() -> list[dict]:
         matrix = lade_matrix(DEFAULT_MATRIX_PATH)
 
         from automation.engine.regeln import (
+            RegelSlsSchutz,
             RegelKomfortReset,
             RegelMorgenSocMin, RegelNachmittagSocMax, RegelZellausgleich,
             RegelForecastPlausi, RegelWattpilotBattSchutz,
@@ -447,6 +503,7 @@ def engine_vorausschau() -> list[dict]:
         )
 
         regeln = [
+            RegelSlsSchutz(),
             RegelKomfortReset(),
             RegelMorgenSocMin(), RegelNachmittagSocMax(), RegelZellausgleich(),
             RegelForecastPlausi(), RegelWattpilotBattSchutz(),
