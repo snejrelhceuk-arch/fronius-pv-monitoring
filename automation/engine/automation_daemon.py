@@ -453,6 +453,10 @@ def engine_vorausschau() -> list[dict]:
             RegelHeizpatrone(),
         ]
 
+        # Vorausschau: Keine Side-Effects (logge_extern etc.)
+        for r in regeln:
+            r._vorausschau = True
+
         vorschau = []
         for regel in regeln:
             try:

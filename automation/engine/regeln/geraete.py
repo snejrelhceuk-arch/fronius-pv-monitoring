@@ -156,7 +156,7 @@ class RegelHeizpatrone(Regel):
         self._drain_modus: bool = False
         # Extern-Erkennung: HP wurde außerhalb der Engine eingeschaltet
         self._extern_ein_ts: float = 0       # Zeitpunkt der Extern-Erkennung
-        self._letzter_hp_zustand: bool = False  # HP-Zustand im vorherigen Zyklus
+        self._letzter_hp_zustand: Optional[bool] = None  # None = erster Zyklus (kein EXTERN)
         # Glättung: Netzbezug-Historie für 5-Min-Durchschnitt (Engine-Zyklus ~60s)
         self._grid_history: deque = deque(maxlen=5)
 
@@ -271,12 +271,15 @@ class RegelHeizpatrone(Regel):
 
         # ── Extern-Erkennung ──
         # HP wurde EIN, aber nicht durch Engine (kein Burst/Drain aktiv)
-        if obs.heizpatrone_aktiv and not self._letzter_hp_zustand:
+        # _letzter_hp_zustand is None beim ersten Zyklus → Startup, kein EXTERN
+        if (obs.heizpatrone_aktiv and self._letzter_hp_zustand is not None
+                and not self._letzter_hp_zustand):
             if self._burst_ende == 0 and not self._drain_modus:
                 self._extern_ein_ts = time.time()
-                LOG.info('HP extern eingeschaltet erkannt → Hysterese aktiv')
-                logge_extern('fritzdect', 'HP extern EIN',
-                             'Manuell eingeschaltet (nicht durch Engine)')
+                if not self._vorausschau:
+                    LOG.info('HP extern eingeschaltet erkannt → Hysterese aktiv')
+                    logge_extern('fritzdect', 'HP extern EIN',
+                                 'Manuell eingeschaltet (nicht durch Engine)')
         if not obs.heizpatrone_aktiv:
             self._extern_ein_ts = 0
         self._letzter_hp_zustand = obs.heizpatrone_aktiv
