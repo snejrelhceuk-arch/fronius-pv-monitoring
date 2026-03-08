@@ -32,6 +32,7 @@ class Regel:
     beschreibung: str = ''
     aktor: str = 'batterie'
     engine_zyklus: str = 'fast'    # 'fast' oder 'strategic'
+    _vorausschau: bool = False     # True → bewerte() ohne Side-Effects (kein logge_extern)
 
     def bewerte(self, obs: ObsState, matrix: dict) -> int:
         """Score 0..100, höher = dringender. 0 = nicht anwendbar."""
