@@ -74,6 +74,10 @@ class ObsState:
     grid_power_w: Optional[float] = None  # positiv=Bezug, negativ=Einspeisung
     grid_freq_hz: Optional[float] = None
     grid_volt_v: Optional[float] = None
+    i_l1_netz_a: Optional[float] = None   # Phasenstrom L1 [A] (SmartMeter Netz)
+    i_l2_netz_a: Optional[float] = None   # Phasenstrom L2 [A]
+    i_l3_netz_a: Optional[float] = None   # Phasenstrom L3 [A]
+    i_max_netz_a: Optional[float] = None  # max(L1,L2,L3) [A] für SLS-Schutz
 
     # ── Verbraucher ──────────────────────────────────────────
     house_load_w: Optional[float] = None  # Hausverbrauch [W]
