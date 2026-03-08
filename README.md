@@ -103,14 +103,14 @@ sqlite3 data.db "SELECT COUNT(*) FROM raw_data;"
 ## Wartung
 
 ```bash
-# Production-Version wiederherstellen
-git checkout v1.0-production
-
-# Entwicklungsversion
-git checkout development
+# Single-Branch Workflow (nur main)
+git pull origin main
 
 # Datenbank-Backup
 cp data.db data_backup_$(date +%Y%m%d_%H%M).db
+
+# 3-Host-Sync: Pi4 (primary), Pi4 (failover), Laptop (dev)
+# Siehe doc/system/GIT_WORKFLOW.md
 ```
 
 ## Cron-Jobs
@@ -154,10 +154,11 @@ Vor externer Veröffentlichung gilt die Checkliste in
 
 ## Hardware
 
-- **Inverter:** Fronius Symo Hybrid (192.168.2.122:502)
-- **Units:** 1=Inv, 2=Netz, 3=F2, 4=WP, 6=F3
-- **Battery:** BYD (via Fronius Storage API)
-- **Protokoll:** SunSpec Modbus TCP
+- **Inverter:** Fronius GEN24 12.0 (192.168.2.122:502)
+- **PV:** 37.59 kWp (3 Strings: S1 Süd30°, S2 Nord15°, S3 Süd10°)
+- **Battery:** BYD HVS 2×10.24 kWh parallel (20.48 kWh netto, LFP)
+- **Protokoll:** SunSpec Modbus TCP + Fronius HTTP-API
+- **Verbraucher:** WattPilot 22 kW, Heizpatrone 2 kW (Fritz!DECT), Dimplex WP (geplant)
 
 ## Troubleshooting
 
@@ -183,12 +184,7 @@ cd /home/admin/Dokumente/PVAnlage/pv-system && python3 aggregate.py
 
 ## Version
 
-- **v6.1.0** (19.02.2026) - Solarweb-Import, Counter-Strategie, Frequenz-Infozeile, Scroll-Legende
-- **v6.0.0** (16.02.2026) - Workspace-Cleanup, Solar-Forecast-Scaffold-Dokumentation
-- **v5.0.0** (14.02.2026) - UI-Redesign, minimalistisches Design, Analysen
-- **v4.0.0** - Batterie-Management, Aggregation-Pipeline
-- **v3.0.0** - Blueprint-Refactoring, Wattpilot-Integration
-- **v1.0-production** (30.12.2025) - Initial Production
+Siehe [CHANGELOG.md](CHANGELOG.md) für die vollständige Versionshistorie.
 
 ## Urheberschaft & KI-Einsatz
 

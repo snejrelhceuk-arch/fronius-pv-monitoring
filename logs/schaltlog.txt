@@ -44,4 +44,265 @@
  2026-03-06, 17:57 bis 17:58  ENGINE   batterie     auto                          OK       Komfort-Reset 17:58: Modbus StorCtl_Mod 1→0 (Limits aufheben)  (2x)
  2026-03-06, 17:57 bis 18:02  ENGINE   batterie     auto                          OK       Komfort-Reset 18:02: Modbus StorCtl_Mod 1→0 (Limits aufheben)  (6x)
  2026-03-06, 17:57 bis 18:13  ENGINE   batterie     auto                          OK       Komfort-Reset 18:13: Modbus StorCtl_Mod 1→0 (Limits aufheben)  (17x)
- 2026-03-06, 17:57 bis 23:33  ENGINE   batterie     auto                          OK       Komfort-Reset 23:33: Modbus StorCtl_Mod 1→0 (Limits aufheben)  (328x)
+ 2026-03-07, 18:12 bis 23:59  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%  (24x)
+ 2026-03-08, 00:00:45  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=44%, Haus=333W, Progno
+~2026-03-07, 17:59 bis 03-08, 00:01  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (2x)
+ 2026-03-08, 00:06:57  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=44%, Haus=285W, Progno
+ 2026-03-08, 00:08:00  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Drain-Ende: Haushalt 2496W ≥ 700×1.2
+~2026-03-08, 00:08  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)
+ 2026-03-08, 00:13:08  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=43%, Haus=328W, Progno
+ 2026-03-08, 00:14:02  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 00:14:14  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Drain-Ende: Haushalt 2586W ≥ 700×1.2
+ 2026-03-08, 00:19:22  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=43%, Haus=289W, Progno
+ 2026-03-08, 00:20:25  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Drain-Ende: Haushalt 2547W ≥ 700×1.2
+~2026-03-08, 00:20  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)
+ 2026-03-08, 00:25:35  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=42%, Haus=291W, Progno
+~2026-03-08, 00:20 bis 00:26  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (2x)
+ 2026-03-08, 00:29:03  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+~2026-03-08, 00:08 bis 00:32  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (2x)
+~2026-03-08, 00:08 bis 00:33  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (3x)
+ 2026-03-08, 00:38:02  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=42%, Haus=246W, Progno
+ 2026-03-08, 00:39:05  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Drain-Ende: Haushalt 1743W ≥ 700×1.2
+ 2026-03-08, 00:44:13  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=41%, Haus=326W, Progno
+~2026-03-08, 00:20 bis 00:45  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (3x)
+ 2026-03-08, 00:50:24  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=41%, Haus=289W, Progno
+~2026-03-08, 00:20 bis 00:51  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (4x)
+ 2026-03-08, 00:56:37  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=40%, Haus=332W, Progno
+~2026-03-08, 00:20 bis 00:57  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (5x)
+ 2026-03-08, 00:59:14  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 01:02:51  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=40%, Haus=333W, Progno
+~2026-03-08, 00:08 bis 01:04  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (4x)
+ 2026-03-08, 01:09:04  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=40%, Haus=285W, Progno
+~2026-03-08, 00:20 bis 01:10  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (6x)
+ 2026-03-08, 01:14:16  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 01:15:18  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=39%, Haus=413W, Progno
+~2026-03-08, 00:08 bis 01:16  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (5x)
+ 2026-03-08, 01:21:29  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=39%, Haus=413W, Progno
+~2026-03-08, 00:08 bis 01:22  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (6x)
+ 2026-03-08, 01:27:41  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=38%, Haus=371W, Progno
+~2026-03-08, 00:08 bis 01:28  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (7x)
+ 2026-03-08, 01:29:17  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 01:33:55  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=38%, Haus=376W, Progno
+~2026-03-07, 17:59 bis 03-08, 01:35  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (3x)
+ 2026-03-08, 01:40:07  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=37%, Haus=372W, Progno
+~2026-03-08, 00:08 bis 01:41  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (8x)
+ 2026-03-08, 01:44:27  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 01:46:21  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=37%, Haus=381W, Progno
+~2026-03-07, 17:59 bis 03-08, 01:47  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (4x)
+ 2026-03-08, 01:52:32  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=36%, Haus=409W, Progno
+~2026-03-08, 00:20 bis 01:53  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (7x)
+ 2026-03-08, 01:58:45  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=36%, Haus=330W, Progno
+~2026-03-08, 00:08 bis 01:59  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (9x)
+~2026-03-07, 17:59 bis 03-08, 02:00  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (5x)
+ 2026-03-08, 02:05:00  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=36%, Haus=285W, Progno
+ 2026-03-08, 02:06:02  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Drain-Ende: Haushalt 2485W ≥ 700×1.2
+ 2026-03-08, 02:11:12  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=35%, Haus=341W, Progno
+~2026-03-08, 00:20 bis 02:12  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (8x)
+ 2026-03-08, 02:14:31  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 02:17:26  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=35%, Haus=162W, Progno
+ 2026-03-08, 02:18:29  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Drain-Ende: Haushalt 1478W ≥ 700×1.2
+~2026-03-08, 00:20 bis 02:24  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (9x)
+~2026-03-07, 17:59 bis 03-08, 02:25  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (6x)
+ 2026-03-08, 02:29:39  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 02:30:53  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=34%, Haus=206W, Progno
+~2026-03-08, 00:08 bis 02:32  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (10x)
+ 2026-03-08, 02:37:05  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=33%, Haus=490W, Progno
+~2026-03-07, 17:59 bis 03-08, 02:38  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (7x)
+ 2026-03-08, 02:43:17  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=33%, Haus=408W, Progno
+ 2026-03-08, 02:44:20  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Drain-Ende: Haushalt 2569W ≥ 700×1.2
+ 2026-03-08, 02:44:43  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 02:49:31  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=32%, Haus=291W, Progno
+~2026-03-07, 17:59 bis 03-08, 02:50  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (8x)
+ 2026-03-08, 02:55:42  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=32%, Haus=456W, Progno
+~2026-03-07, 17:59 bis 03-08, 02:56  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (9x)
+ 2026-03-08, 02:59:53  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 03:01:57  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=32%, Haus=299W, Progno
+~2026-03-07, 17:59 bis 03-08, 03:03  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (10x)
+ 2026-03-08, 03:08:09  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=31%, Haus=332W, Progno
+~2026-03-08, 00:20 bis 03:09  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (10x)
+ 2026-03-08, 03:14:21  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=31%, Haus=521W, Progno
+ 2026-03-08, 03:14:54  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+~2026-03-07, 17:59 bis 03-08, 03:15  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (11x)
+ 2026-03-08, 03:20:35  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=30%, Haus=501W, Progno
+~2026-03-08, 00:20 bis 03:21  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (11x)
+ 2026-03-08, 03:26:47  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=30%, Haus=378W, Progno
+~2026-03-07, 17:59 bis 03-08, 03:28  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (12x)
+ 2026-03-08, 03:29:59  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 03:33:05  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=29%, Haus=538W, Progno
+ 2026-03-08, 03:34:09  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Drain-Ende: Haushalt 2729W ≥ 700×1.2
+ 2026-03-08, 03:39:17  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=29%, Haus=417W, Progno
+ 2026-03-08, 03:40:20  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Drain-Ende: Haushalt 2671W ≥ 700×1.2
+ 2026-03-08, 03:45:00  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 03:45:32  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=28%, Haus=448W, Progno
+ 2026-03-08, 03:46:35  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Drain-Ende: Haushalt 3273W ≥ 700×1.2
+ 2026-03-08, 03:51:43  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=28%, Haus=411W, Progno
+ 2026-03-08, 03:52:46  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Drain-Ende: Haushalt 2996W ≥ 700×1.2
+ 2026-03-08, 03:57:55  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=28%, Haus=390W, Progno
+~2026-03-08, 00:08 bis 03:59  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (11x)
+ 2026-03-08, 04:00:04  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 04:04:11  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=27%, Haus=326W, Progno
+~2026-03-08, 00:08 bis 04:05  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (12x)
+ 2026-03-08, 04:10:22  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=27%, Haus=326W, Progno
+ 2026-03-08, 04:11:25  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Drain-Ende: Haushalt 2483W ≥ 700×1.2
+ 2026-03-08, 04:15:03  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 04:16:39  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=26%, Haus=332W, Progno
+~2026-03-07, 17:59 bis 03-08, 04:17  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (13x)
+ 2026-03-08, 04:22:50  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=26%, Haus=332W, Progno
+~2026-03-08, 00:08 bis 04:24  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (13x)
+ 2026-03-08, 04:29:02  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=26%, Haus=377W, Progno
+ 2026-03-08, 04:30:04  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Drain-Ende: Haushalt 2539W ≥ 700×1.2
+~2026-03-08, 00:20 bis 04:30  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (13x)
+ 2026-03-08, 04:35:17  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=25%, Haus=371W, Progno
+~2026-03-08, 00:08 bis 04:36  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (14x)
+ 2026-03-08, 04:41:28  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=25%, Haus=329W, Progno
+~2026-03-08, 00:08 bis 04:42  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (15x)
+ 2026-03-08, 04:45:07  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 04:47:43  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=24%, Haus=377W, Progno
+~2026-03-07, 17:59 bis 03-08, 04:48  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (14x)
+ 2026-03-08, 04:53:55  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=24%, Haus=374W, Progno
+~2026-03-07, 17:59 bis 03-08, 04:55  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (15x)
+ 2026-03-08, 05:00:06  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=24%, Haus=370W, Progno
+~2026-03-08, 00:08 bis 05:01  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (16x)
+ 2026-03-08, 05:15:11  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 05:21:42  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=18%, Haus=523W, Progno
+~2026-03-08, 00:20 bis 05:22  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (14x)
+ 2026-03-08, 05:27:55  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=17%, Haus=408W, Progno
+~2026-03-07, 17:59 bis 03-08, 05:29  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (16x)
+ 2026-03-08, 05:30:13  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+~2026-03-08, 00:08 bis 05:35  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (17x)
+~2026-03-07, 17:59 bis 03-08, 05:36  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (17x)
+ 2026-03-08, 05:41:24  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=16%, Haus=413W, Progno
+~2026-03-08, 00:08 bis 05:42  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (18x)
+ 2026-03-08, 05:45:23  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 05:47:39  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=16%, Haus=496W, Progno
+~2026-03-08, 00:20 bis 05:48  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (15x)
+ 2026-03-08, 05:53:51  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=16%, Haus=412W, Progno
+~2026-03-08, 00:20 bis 05:55  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (16x)
+ 2026-03-08, 06:00:02  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=15%, Haus=415W, Progno
+ 2026-03-08, 06:01:05  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Drain-Ende: Haushalt 2494W ≥ 700×1.2
+ 2026-03-08, 06:06:13  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=15%, Haus=325W, Progno
+~2026-03-08, 00:20 bis 06:07  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (17x)
+ 2026-03-08, 06:12:25  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=15%, Haus=364W, Progno
+~2026-03-07, 17:59 bis 03-08, 06:13  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (18x)
+ 2026-03-08, 06:15:34  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 06:18:40  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=14%, Haus=368W, Progno
+ 2026-03-08, 06:19:43  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Drain-Ende: Haushalt 2482W ≥ 700×1.2
+ 2026-03-08, 06:24:52  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=14%, Haus=360W, Progno
+~2026-03-07, 17:59 bis 03-08, 06:26  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (19x)
+ 2026-03-08, 06:30:43  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 06:31:07  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=13%, Haus=327W, Progno
+~2026-03-08, 00:20 bis 06:32  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (18x)
+~2026-03-08, 00:08 bis 06:40  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (19x)
+ 2026-03-08, 06:41:26  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Drain-Ende: Haushalt 2537W ≥ 700×1.2
+ 2026-03-08, 06:45:45  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 06:46:39  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Drain 45 Min): Phase 0 (Morgen-Drain) SOC=12%, Haus=428W, Progno
+ 2026-03-08, 06:47:42  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Drain-Ende: Haushalt 2540W ≥ 700×1.2
+~2026-03-08, 00:20 bis 07:09  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (22x)
+~2026-03-08, 07:10  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)
+~2026-03-08, 00:08 bis 07:22  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (27x)
+~2026-03-08, 07:23  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)
+~2026-03-07, 17:59 bis 03-08, 07:25  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (28x)
+~2026-03-08, 00:20 bis 07:56  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (35x)
+ 2026-03-08, 07:58 bis 08:13  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%  (2x)
+~2026-03-08, 00:20 bis 08:27  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (37x)
+~2026-03-08, 00:20 bis 08:55  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (43x)
+ 2026-03-08, 08:56:11  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Burst-Timer abgelaufen (30 Min)
+ 2026-03-08, 08:58 bis 09:14  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%  (2x)
+~2026-03-07, 17:59 bis 03-08, 09:28  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (52x)
+~2026-03-08, 00:20 bis 09:52  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (53x)
+~2026-03-08, 00:08 bis 09:58  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (54x)
+~2026-03-08, 00:20 bis 10:20  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (66x)
+~2026-03-08, 00:08 bis 10:21  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (59x)
+ 2026-03-08, 10:29:26  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 10:33:56  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Burst 30 Min): Phase 2 (Mittag): P_Batt=2904W, rest_kwh=93.3, ba
+~2026-03-08, 00:08 bis 10:43  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (61x)
+~2026-03-08, 00:20 bis 10:45  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (67x)
+~2026-03-07, 17:59 bis 03-08, 10:46  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (67x)
+ 2026-03-08, 10:51:28  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Burst 30 Min): Phase 1 (Vormittag): P_Batt=6929W, rest_kwh=93.3,
+~2026-03-08, 00:08 bis 10:52  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (62x)
+ 2026-03-08, 10:57:40  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Burst 30 Min): Phase 1 (Vormittag): P_Batt=8240W, rest_kwh=93.3,
+~2026-03-08, 00:20 bis 10:58  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (68x)
+ 2026-03-08, 10:59:36  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+~2026-03-08, 00:20 bis 11:13  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (71x)
+~2026-03-07, 17:59 bis 03-08, 11:33  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (75x)
+~2026-03-08, 00:08 bis 11:43  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (72x)
+~2026-03-07, 17:59 bis 03-08, 11:51  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (79x)
+~2026-03-08, 00:08 bis 11:53  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (75x)
+ 2026-03-08, 11:58:21  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Burst 30 Min): Phase 1b (Nulleinspeiser): SOC=75%≈MAX(75%), Fore
+~2026-03-08, 00:08 bis 11:59  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (76x)
+ 2026-03-08, 11:59:57  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 12:05:38  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Burst 30 Min): Phase 1b (Nulleinspeiser): SOC=75%≈MAX(75%), Fore
+~2026-03-08, 00:20 bis 12:06  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (83x)
+~2026-03-08, 00:08 bis 12:12  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (77x)
+ 2026-03-08, 12:12:52  ENGINE   fritzdect    hp_aus                        OK       HP AUS: Netzbezug Ø411W > 200W (aktuell 575W)
+ 2026-03-08, 12:14:58  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+~2026-03-08, 00:20 bis 12:29  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (88x)
+~2026-03-08, 00:08 bis 13:28  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (95x)
+~2026-03-07, 17:59 bis 03-08, 13:29  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (101x)
+ 2026-03-08, 13:30:28  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 13:34:15  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Burst 30 Min): Phase 1b (Nulleinspeiser): SOC=75%≈MAX(75%), Fore
+~2026-03-08, 00:08 bis 13:44  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (97x)
+~2026-03-08, 00:08 bis 13:58  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (102x)
+~2026-03-07, 17:59 bis 03-08, 14:02  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (108x)
+~2026-03-08, 14:03  EXTERN   batterie     SOC_MAX 75%→100%              --       Toleranz 1800s
+~2026-03-08, 14:03  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)
+~2026-03-08, 14:04  EXTERN   batterie     SOC_MAX 75%→100%              --       Toleranz 1800s
+~2026-03-07, 17:59 bis 03-08, 14:08  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (111x)
+~2026-03-07, 17:59 bis 03-08, 14:09  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (112x)
+~2026-03-08, 14:10:30  EXTERN   batterie     SOC_MIN 5%→25%                --       Toleranz 1800s
+ 2026-03-08, 14:10:32  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Burst 30 Min): Phase 2 (Mittag): P_Batt=3427W, rest_kwh=77.1, batt_rest=4.6, Potenzial=gut, 
+~2026-03-08, 14:10  EXTERN   batterie     SOC_MIN 5%→25%                --       Toleranz 1800s
+~2026-03-08, 14:11  EXTERN   batterie     SOC_MIN 5%→25%                --       Toleranz 1800s
+~2026-03-08, 14:11  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)
+~2026-03-08, 14:12  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)
+~2026-03-08, 14:13  EXTERN   batterie     SOC_MIN 5%→25%                --       Toleranz 1800s
+~2026-03-08, 14:13  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)
+~2026-03-08, 14:11 bis 14:17  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)  (2x)
+ 2026-03-08, 14:19:46  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Burst 30 Min): Phase 2 (Mittag): P_Batt=5072W, rest_kwh=77.1, batt_rest=3.9, Potenzial=gut, 
+ 2026-03-08, 14:20:24  ENGINE   batterie     set_soc_min=5                 OK       Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 14:20:28  ENGINE   batterie     set_soc_max=100               FEHLER   Zellausgleich: SOC_MAX → 100% (Vollladung)
+ 2026-03-08, 14:21:31  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Burst 30 Min): Phase 2 (Mittag): P_Batt=6276W, rest_kwh=75.8, batt_rest=3.7, Potenzial=gut, 
+~2026-03-08, 14:21  EXTERN   batterie     SOC_MIN 25%→5%                --       Toleranz 1800s
+ 2026-03-08, 14:22:35  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Burst 30 Min): Phase 2 (Mittag): P_Batt=5917W, rest_kwh=75.8, batt_rest=3.6, Potenzial=gut, 
+~2026-03-08, 14:22  EXTERN   batterie     SOC_MIN 25%→5%                --       Toleranz 1800s
+ 2026-03-08, 14:23:38  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Burst 30 Min): Phase 2 (Mittag): P_Batt=6705W, rest_kwh=75.8, batt_rest=3.5, Potenzial=gut, 
+~2026-03-08, 14:23  EXTERN   batterie     SOC_MIN 25%→5%                --       Toleranz 1800s
+~2026-03-08, 14:24  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)
+ 2026-03-08, 14:25:43  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Burst 30 Min): Phase 2 (Mittag): P_Batt=5164W, rest_kwh=75.8, batt_rest=3.3, Potenzial=gut, 
+ 2026-03-08, 14:27:03  ENGINE   batterie     set_soc_min=25                OK       Früh-Reset 14:27: SOC=85%, Prognose-Rest=? kWh reicht nicht für Ladung auf 25% → SOC_MIN 5%→25%
+~2026-03-08, 14:27  EXTERN   batterie     SOC_MIN 5%→25%                --       Toleranz 1800s
+~2026-03-08, 14:28:04  EXTERN   batterie     SOC_MIN 5%→25%                --       Toleranz 1800s
+ 2026-03-08, 14:28:06  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Burst 30 Min): Phase 2 (Mittag): P_Batt=3796W, rest_kwh=74.8, batt_rest=2.9, Potenzial=gut, 
+~2026-03-08, 14:28  EXTERN   batterie     SOC_MIN 5%→25%                --       Toleranz 1800s
+ 2026-03-08, 14:29:09  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Burst 30 Min): Phase 2 (Mittag): P_Batt=3839W, rest_kwh=74.6, batt_rest=2.7, Potenzial=gut, 
+~2026-03-08, 14:29  EXTERN   batterie     SOC_MIN 5%→25%                --       Toleranz 1800s
+ 2026-03-08, 14:30:12  ENGINE   fritzdect    hp_ein                        OK       HP EIN (Burst 30 Min): Phase 2 (Mittag): P_Batt=4053W, rest_kwh=74.6, batt_rest=2.7, Potenzial=gut, 
+~2026-03-08, 14:31  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)
+~2026-03-08, 14:33  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)
+~2026-03-08, 14:34  EXTERN   fritzdect    HP extern EIN                 --       Manuell eingeschaltet (nicht durch Engine)
+ 2026-03-08, 14:35:31  ENGINE   batterie     set_soc_min=5                 OK       Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 14:35:34  ENGINE   batterie     set_soc_max=100               FEHLER   Zellausgleich: SOC_MAX → 100% (Vollladung)
+~2026-03-08, 14:36  EXTERN   batterie     SOC_MIN 25%→5%                --       Toleranz 1800s
+~2026-03-08, 14:37  EXTERN   batterie     SOC_MIN 25%→5%                --       Toleranz 1800s
+~2026-03-08, 14:41  EXTERN   batterie     SOC_MIN 25%→5%                --       Toleranz 1800s
+ 2026-03-08, 14:50:37  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 15:05:43  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 15:20:46  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 15:35:49  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 15:50:53  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 16:05:57  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 16:20:59  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 16:36:04  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 16:51:06  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 17:06:09  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 17:21:12  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 17:36:16  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 17:51:19  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 18:00:55  ENGINE   batterie     set_soc_max=75                OK       Komfort-Reset 18:00: SOC_MAX 100%→75% (Tagesende, LFP-Schonung)
+~2026-03-08, 18:02  EXTERN   batterie     SOC_MAX 100%→75%              --       Toleranz 1800s
+~2026-03-08, 18:05  EXTERN   batterie     SOC_MAX 100%→75%              --       Toleranz 1800s
+ 2026-03-08, 18:06:25  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+~2026-03-08, 18:07  EXTERN   batterie     SOC_MAX 100%→75%              --       Toleranz 1800s
+ 2026-03-08, 18:21:29  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 18:36:31  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 18:51:34  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%

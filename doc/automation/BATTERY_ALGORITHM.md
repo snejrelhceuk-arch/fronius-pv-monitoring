@@ -626,3 +626,47 @@ protokolliert. Felder: `ts`, `aktor`, `kommando`, `wert_vorher`, `wert_nachher`,
 > Die Batterie-Steuerung läuft seit 2026-02-28 über `pv-automation.service`.
 > Alle Regelkreise sind in `automation/engine/regeln/` implementiert.
 > Parametrierung: `config/soc_param_matrix.json` via `pv-config.py`.
+
+---
+
+## 11. Fronius HTTP-API Authentifizierung
+
+Die Fronius Gen24 interne API verwendet eine **nicht-standard HTTP Digest Auth**:
+
+```
+Server-Challenge:  X-WWW-Authenticate (nicht WWW-Authenticate!)
+Algorithmus:       SHA256 für Response-Hash
+HA1:               MD5(username:realm:password)  ← technicianHashingVersion=1
+HA2:               SHA256(METHOD:URI)
+Response:          SHA256(HA1:nonce:nc:cnonce:qop:HA2)
+Realm:             "Webinterface area"
+User:              "technician"
+```
+
+**Hybrid-Schema** — HA1 mit MD5, Rest mit SHA256.
+Standard-Clients (curl --digest, requests.HTTPDigestAuth) scheitern.
+Implementierung: `fronius_api.py`, Klasse `FroniusAuth`.
+
+---
+
+## 12. CLI-Referenz (fronius_api.py / battery_control.py)
+
+```bash
+# Lesen
+python3 fronius_api.py --read
+python3 fronius_api.py --json
+
+# SOC-Grenzen setzen
+python3 fronius_api.py --set-soc-min 5 --confirm
+python3 fronius_api.py --set-soc-max 80 --confirm
+python3 fronius_api.py --set-soc-mode auto --confirm
+
+# Modbus (Rate-Limits — GEN24 DC-DC-Limit: wirkungslos, nur diagnostisch)
+python3 battery_control.py                      # Status lesen
+python3 battery_control.py --hold               # Batterie halten
+python3 battery_control.py --auto               # Automatik
+```
+
+**Wichtig:** `RvrtTms = 0` — Gesetzte Modbus-Limits werden NICHT automatisch
+zurückgesetzt. Bei Scheduler-Crash bleiben Limits aktiv!
+→ Mitigierung: Tages-Reset auf Komfort-Defaults (SOC_MIN=25%, SOC_MAX=75%).

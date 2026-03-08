@@ -157,7 +157,7 @@ Stack: Raspbian Bullseye 11, Python 3.9.2, Flask 1.1.2, gunicorn 23.0.0,
 
 
 ═════════════════════════════════════════════════════════════════
-DYNAMISCHE UPDATES (Stand: 2026-03-07 19:14)
+DYNAMISCHE UPDATES (Stand: 2026-03-08 11:35)
 ═════════════════════════════════════════════════════════════════
 
 --- Aktuelle Config-Werte ---
@@ -211,27 +211,27 @@ NOTIFICATION_SMTP_HOST = 'smtp.strato.de'  # Strato SMTP-Relay
 NOTIFICATION_SMTP_PORT = 465               # SSL (nicht 587/STARTTLS)
 NOTIFICATION_SMTP_USER = 'navigator@hekabe.de'
 NOTIFICATION_FROM = 'navigator@hekabe.de'
-NOTIFICATION_EVENTS = ['batt_temp_40', 'batt_soc_kritisch', 'netz_ueberlast', 'sunset_tagesbericht']
+NOTIFICATION_EVENTS = ['batt_temp_40', 'batt_soc_kritisch', 'netz_ueberlast', 'sls_ueberlast', 'sunset_tagesbericht']
 EVENT_THRESHOLDS = {
 
 --- Letzte Git-Commits ---
+6fd032d SLS 35A/Phase Netzschutz, HP 6-Phasen-Logik, Dokumentation
+0d61ed0 fix: Drain nur bei PV-Ladung + ABC-Policy durchsetzen
+e15d23e fix: Falsche EXTERN-Erkennung durch engine_vorausschau() und Daemon-Restart
+3eebf33 fix: Drain-Selbstoszillation — HP-Eigenverbrauch von house_load abziehen
+fb2541b chore: Ollama-Kontextdatei aktualisiert (Auto-Sync)
 5b34661 refactor: Entladerate/Laderate-Regeln entfernt — GEN24 HW-Limit
 94be85d fix: NULLIF(0)-Schutz für SmartMeter/F2/F3/WP-Counter nach FW-Update
 e09e373 fix: FritzDECT dry_run=True entfernt — HP-Schaltbefehle aktiv
 4575c34 fix: Tiefenprüfung v1.1.0 — 8 Bug-Fixes (2×CRITICAL, 4×HIGH, 2×Infra)
 d32c8a1 feat: Sunset-Tagesbericht — tägliche 24h-Zusammenfassung per E-Mail
-47cb477 fix: Tier-1 SOC Recovery + feat: BMS-Live, E-Mail, Forecast
-403135c feat: 2× BYD HVS 20.48 kWh parallel — Batterie-Upgrade März 2026
-18f4bbf SOC-Extern-Toleranz + Morgen-Vorlauf + Docs
-ff8c768 Analyse-Ansichten: Navigation, Summen, Amortisation, Dark-Theme
-0adc07e Heizpatrone RegelGeraete, Failover-Tuning, Doku & Kalibrierung
 
---- Kürzlich geänderte Module (4) ---
+--- Kürzlich geänderte Module (6) ---
 
-config.py:
-Zentrale Konfiguration für Fronius PV-Monitoring
-Alle gemeinsam genutzten Parameter an einer Stelle.
-  def load_secret(env_key, secrets_file=None):  # Lade ein Secret aus Umgebungsvariable oder .secrets-Datei.
+automation/engine/engine.py:
+engine.py — Entscheidungs-Engine (Schicht S3)
+
+Liest ObsState aus RAM-DB und SOC-Parametermatrix aus
 
 automation/engine/automation_daemon.py:
   class AutomationDaemon:  # S4 Orchestrator: Observer + Engine + Actuator in einem Prozess.
@@ -242,10 +242,10 @@ aggregate.py:
     return get_db_connection()
 
 
-automation/engine/engine.py:
-engine.py — Entscheidungs-Engine (Schicht S3)
-
-Liest ObsState aus RAM-DB und SOC-Parametermatrix aus
+config.py:
+Zentrale Konfiguration für Fronius PV-Monitoring
+Alle gemeinsam genutzten Parameter an einer Stelle.
+  def load_secret(env_key, secrets_file=None):  # Lade ein Secret aus Umgebungsvariable oder .secrets-Datei.
 
 --- API-Endpunkte ---
   /                              → index  # Startseite: Redirect zu Flow-Chart

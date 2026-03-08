@@ -27,6 +27,7 @@ from automation.engine.actuator import Actuator
 from automation.engine.param_matrix import (
     lade_matrix, get_score_gewicht, DEFAULT_MATRIX_PATH,
 )
+from automation.engine.regeln.soc_extern import soc_extern_tracker
 
 from automation.engine.regeln import (          # noqa: E402
     Regel,
@@ -48,6 +49,21 @@ LOG = logging.getLogger('engine')
 # ═════════════════════════════════════════════════════════════
 # Engine
 # ═════════════════════════════════════════════════════════════
+
+def _registriere_erfolgreiche_soc_aktionen(aktionen: list[dict],
+                                            ergebnisse: list[dict]) -> None:
+    """SOC-Aktionen beim SocExternTracker registrieren — NUR nach Actuator-Erfolg.
+
+    Korrektur K2: Vorher wurden Aktionen in erzeuge_aktionen() registriert
+    (vor Ausführung). Jetzt nur nach bestätigtem ok=True.
+    """
+    for aktion, ergebnis in zip(aktionen, ergebnisse):
+        if not ergebnis.get('ok'):
+            continue
+        kommando = aktion.get('kommando', '')
+        if kommando in ('set_soc_min', 'set_soc_max'):
+            soc_extern_tracker.registriere_aktion(kommando, aktion.get('wert'))
+
 
 class Engine:
     """Score-basierte Entscheidungs-Engine.
@@ -195,6 +211,7 @@ class Engine:
                 aktionen = regel.erzeuge_aktionen(obs, self._matrix)
                 if aktionen:
                     teil_ergebnisse = self.actuator.ausfuehren_plan(aktionen)
+                    _registriere_erfolgreiche_soc_aktionen(aktionen, teil_ergebnisse)
                     for e in teil_ergebnisse:
                         LOG.info(f"  → {e.get('kommando')} = {'OK' if e.get('ok') else 'FEHLER'}")
                     ergebnisse.extend(teil_ergebnisse)
@@ -221,6 +238,7 @@ class Engine:
                 if aktionen:
                     # 6. An Actuator dispatchen
                     teil_ergebnisse = self.actuator.ausfuehren_plan(aktionen)
+                    _registriere_erfolgreiche_soc_aktionen(aktionen, teil_ergebnisse)
                     for e in teil_ergebnisse:
                         LOG.info(f"  → {e.get('kommando')} = {'OK' if e.get('ok') else 'FEHLER'}")
                     ergebnisse.extend(teil_ergebnisse)

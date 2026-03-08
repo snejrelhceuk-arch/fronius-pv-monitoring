@@ -1,0 +1,174 @@
+# Changelog — PV-System Erlau
+
+Alle wesentlichen Änderungen am System, chronologisch absteigend.
+Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/).
+
+---
+
+## [Unreleased] — 2026-03-09
+
+### Dokumentation
+- **Doc-Restrukturierung:** 43 Markdown-Dateien in 6 thematische Unterordner sortiert (`system/`, `automation/`, `collector/`, `web/`, `meta/`, `archive/`)
+- **SYSTEM_BRIEFING.md:** LLM-Onboarding-Dokument für neue Chat-Sessions erstellt
+- **Batterie-Docs konsolidiert:** Auth + CLI-Referenz aus BATTERIE_STRATEGIEN in BATTERY_ALGORITHM.md übernommen, Original archiviert
+- **Sachfehler korrigiert:** Kapazität 10.24→20.48 kWh (3 Stellen), HP-Status, Modellname, Git-Branch-Infos
+- **Duplikate entfernt:** STRATEGIEN §3 Sicherheitsregeln → Querverweis auf SCHUTZREGELN.md
+
+### Fixes (Tiefenprüfung 2026-03-08)
+- **S1:** HP-Startup-Schutz — `_hp_startup_check()` fragt Fritz!DECT beim Daemon-Start
+- **K1:** `RegelSlsSchutz` in `engine_vorausschau()` ergänzt
+- **K2:** SOC-Extern-Registrierung erst nach Aktor-Bestätigung (nicht vorher)
+- **K4:** Früh-Reset-Hysterese mit ON/OFF-Schwellen (10/12 kWh), neuer Param `erholung_hysterese_kwh`
+- **W3:** Toten Modbus-Code aus `AktorBatterie.verifiziere()` entfernt
+- **W4:** DataCollector: Klassen- zu Instanzvariablen für Cache-Timestamps
+- **W5:** Magic Number `37.59 * 0.15` durch `_PV_KWP * _GHI_EFF` aus Config ersetzt
+
+### Config
+- **S2:** 4 entfernte Regelkreise auf `aktiv: false` gesetzt (GEN24 HW-Limit)
+- **S3:** Hardware-Kapazität 10.24→20.48 kWh korrigiert
+
+---
+
+## 2026-03-08
+
+### Features
+- **SLS-Netzschutz:** `RegelSlsSchutz` — 35A/Phase-Überwachung mit Fritz!DECT + Wattpilot-Dimmung (`6fd032d`)
+- **HP 6-Phasen-Logik:** Differenziertes Heizpatronen-Verhalten nach Tageszeit und SOC
+
+### Fixes
+- Drain nur bei PV-Ladung + ABC-Policy durchsetzen (`0d61ed0`)
+- Falsche EXTERN-Erkennung durch `engine_vorausschau()` und Daemon-Restart (`e15d23e`)
+- Drain-Selbstoszillation — HP-Eigenverbrauch von `house_load` abziehen (`3eebf33`)
+
+---
+
+## 2026-03-07
+
+### Refactoring
+- **Entladerate/Laderate-Regeln entfernt** — GEN24 DC-DC HW-Limit macht sie obsolet (`5b34661`)
+
+### Fixes
+- NULLIF(0)-Schutz für SmartMeter/F2/F3/WP-Counter nach FW-Update (`94be85d`)
+- Fritz!DECT `dry_run=True` entfernt — HP-Schaltbefehle aktiv (`e09e373`)
+
+---
+
+## 2026-03-06
+
+### Features
+- **Sunset-Tagesbericht:** Tägliche 24h-Zusammenfassung per E-Mail (`d32c8a1`)
+- **BMS-Live + E-Mail:** Tier-1 SOC Recovery, BMS-Zustandsanzeige, Forecast-Verbesserungen (`47cb477`)
+
+### Fixes
+- Tiefenprüfung v1.1.0 — 8 Bug-Fixes (2×CRITICAL, 4×HIGH, 2×Infra) (`4575c34`)
+
+---
+
+## 2026-03-05
+
+### Features
+- **Batterie-Upgrade:** 2× BYD HVS 20.48 kWh parallel — Kapazität verdoppelt (`403135c`)
+
+---
+
+## 2026-03-04
+
+- SOC-Extern-Toleranz + Morgen-Vorlauf + Docs (`18f4bbf`)
+
+---
+
+## 2026-03-02
+
+### Features
+- **Analyse-Ansichten:** Navigation, Tages-/Monatssummen, Amortisationsrechner, Dark-Theme (`ff8c768`)
+
+---
+
+## 2026-03-01
+
+### Features
+- **Heizpatrone:** RegelGeraete-Integration, Failover-Tuning, Kalibrierung (`0adc07e`)
+
+### Dokumentation
+- Doku-Audit: 17 Dokumente mit Code-Realität abgeglichen (`b4bdfe6`)
+
+### Refactoring
+- `sys.path`-Hacks entfernt, `system.py` refactored, `monitor_web_service.sh` gelöscht (`f923b14`)
+
+---
+
+## 2026-02-28
+
+### Features
+- **HP-Automation via Fritz!DECT** — Komplett-Implementation (`85ef2b3`)
+- **RegelKomfortReset**, SOC-HTTP-Collector, DB-Fix, Scheduler archiviert (`f04128b`)
+- **ForecastCollector (Tier-3)** — Trigger-basierte Prognose (`0414f74`)
+- **Observer:** systemd-Service + SQLite `check_same_thread` Fix (`0ce4f72`)
+
+### Refactoring
+- **Engine + Observer** in Subpackages aufgeteilt (`b443081`)
+- `battery_control.py` → `automation/battery_control.py` (`3188b8a`)
+- Morgen-Algo: PV-Rampe statt Tagesprognose, Sunrise-Start statt 05:00, radikal vereinfacht (`172bf00`, `6610328`, `f9c07e9`)
+- Morgen-Schwelle 500→1500 W (Haushaltslast berücksichtigen) (`fd4031b`)
+
+### Fixes
+- Tiefenprüfung: 12 Fixes (K1-K3 kritisch, H1-H7 hoch, M5-M8 mittel) (`0ee2301`)
+- Tiefenprüfung: 7 Fixes (P1-P3) + 21/21 Tests grün (`b20fab8`)
+- Morgen-Algo Regel B: falsche Untergrenze 25%→5 % (`10afa9a`)
+- ForecastCollector: Sunrise-Fallback auf Vortageswerte (`0ebb751`)
+
+---
+
+## 2026-02-27
+
+### Features
+- **pv-config.py** + Windows-Terminal Zugang (`93ef251`)
+
+### Fixes
+- SOC-Schutz blockierte Laden — `hold_battery()` durch `set_discharge_rate(0)` (`7665d66`)
+- Windows: BAT-Dateien ASCII, FAT32-kompatible Dateinamen (`4d64e75`, `3e4140d`)
+
+---
+
+## 2026-02-25 – 2026-02-26
+
+### Features
+- **Automation-Engine:** Sunrise-basierte Morgen-Regel + Nachmittag-Dynamik (`d677a6d`)
+
+### Fixes
+- Simulation entfernt, Konsistenz-Check Richtungslogik (`2b18f46`)
+
+---
+
+## 2026-02-20 – 2026-02-22
+
+### Features
+- **Dual-Host Failover:** Role-Guard, `host_role.py`, Mirror-Standby (`6d93295`, `ffed876`)
+- **Flow-View:** Failover-Status-Badge (Safe: Live/Host/Down), Backup-Badge (`eb10a92`, `67705bc`)
+- **Simulation-Modus**, Favicon, Scheduler-Bar + 4 neue Dokus (`926140d`)
+
+### Fixes
+- Aggregations-Pipeline und Verlustanalyse (`d21913e`)
+- Failover: Reboot-Resilienz, SD-Fallback-DB, Safe-Badge via SSH (`89e0087`, `33e9f50`)
+- `geschützte Tage` (SolarWeb-Korrektur) nicht überschreiben (`40f263f`)
+
+### Dokumentation
+- SYSTEM_ARCHITECTURE + DUAL_HOST auf 3-Host-Topologie aktualisiert (`647f427`)
+- Compliance-Checkliste in PRs, Governance-Referenzen (`21abd73`, `0526c5f`)
+
+---
+
+## v6.1.0 — 2026-02-19
+
+### Features
+- **SolarWeb-Import**, Counter-Strategie, Frequenz-Infozeile, Scroll-Legende (`6a99bce`)
+- **Batterie-Energie:** I×U-Integration statt Proxy-Formel + BMS-Fixpunkte (`b938786`)
+- Update-Strategie dokumentiert, Dependencies gepinnt (`476e040`)
+
+---
+
+## v6.0.0 — 2026-02-16
+
+### Initial Release
+- **Fronius PV-Monitoring System** — Erstversion mit Collector, Web-API (Flask/Gunicorn), Flow-View (`65ba369`)
+- Mobile-Optimierung: kompakte Achsen, Flow ohne Sub-Kreise (`3ffc10c`)

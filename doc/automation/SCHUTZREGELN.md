@@ -37,17 +37,16 @@
 > neugestartet, SOC stieg auf 99.5%, Batterie blieb gesperrt → 8 kW Netzbezug
 > trotz voller Batterie. Fix: Hardware-aware Recovery mit Hysterese.
 
-### SR-BAT-02: Übertemperatur-Schutz
+### SR-BAT-02: Übertemperatur-Alarm
 
 | Feld | Wert |
 |---|---|
-| **Auslöser** | Batterie-Temperatur > 40 °C |
-| **Aktion** | Laderate auf 50 % reduzieren (InWRte = 50 %) |
-| **Auslöser 2** | Temp > 45 °C |
-| **Aktion 2** | Laden komplett stoppen (InWRte = 0 %) |
-| **Freigabe** | Temp < 38 °C |
+| **Auslöser Stufe 1** | Batterie-Temperatur ≥ 40 °C |
+| **Aktion Stufe 1** | Alarm-Mail via EventNotifier (`bat_overtemp_warn`) |
+| **Auslöser Stufe 2** | Batterie-Temperatur ≥ 45 °C |
+| **Aktion Stufe 2** | Alarm-Mail via EventNotifier (`bat_overtemp_critical`) |
 | **Protokoll** | `protection_bat_overtemp` |
-| **Status** | ✅ Implementiert — `RegelTempSchutz` in `automation/engine/regeln/schutz.py` (stufenweise Reduktion bei 25/30/35/40°C) |
+| **Status** | ⚠️ Alarm-Mail noch zu implementieren |
 
 ### SR-BAT-03: RvrtTms = 0 — Dauerhafte Modbus-Werte
 

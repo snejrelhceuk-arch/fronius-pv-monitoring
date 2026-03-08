@@ -219,23 +219,18 @@ class AktorBatterie(AktorBase):
 
         Returns:
             dict mit 'ok': bool, 'ist': <tatsächl. Wert>, 'soll': <Zielwert>
+
+        TODO W3: HTTP-API Read-Back implementieren für set_soc_min/set_soc_max.
+          → BatteryConfig.get_values() nach 0.5s Pause aufrufen und mit
+            aktion['wert'] vergleichen. Analog für set_soc_mode.
+          Modbus-basierte Verifikation (Rate-Limits) wurde 2026-03-07 entfernt
+          da GEN24 DC-DC-Wandler die Werte ignoriert.
         """
         kommando = aktion.get('kommando', '')
         wert = aktion.get('wert')
-        client = self._get_modbus()
 
-        if not client:
-            return {'ok': False, 'grund': 'Modbus nicht verbunden'}
-
-        try:
-            # Entfernt (2026-03-07): Verifikation für set_charge_rate,
-            # set_discharge_rate, hold, auto, stop_* — GEN24 HW-Limit.
-            # Verbleibende Kommandos nutzen HTTP API ohne Modbus-Readback.
-            return {'ok': True, 'grund': f'Keine Modbus-Verifikation für {kommando}'}
-
-        except Exception as e:
-            LOG.error(f"Verifikation fehlgeschlagen: {e}")
-            return {'ok': False, 'grund': str(e)}
+        # Aktuell: Keine echte Verifikation — HTTP-API read-back ausstehend (W3)
+        return {'ok': True, 'grund': f'Keine Verifikation für {kommando} (TODO: W3 HTTP read-back)'}
 
     # ── Cleanup ──────────────────────────────────────────────
 

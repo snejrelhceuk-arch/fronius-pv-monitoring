@@ -243,7 +243,219 @@ class WattpilotClient:
         except RuntimeError:
             # Kein Event Loop vorhanden
             return asyncio.run(self._read_async())
-    
+
+    # ── Schreibzugriff (setValue) ─────────────────────────────
+
+    async def _set_value_async(self, key: str, value, timeout_ack: float = 5.0):
+        """Einzelnen Wattpilot-Parameter per WebSocket setzen.
+
+        Protokoll (Secured):
+          1. Verbinden + Auth
+          2. fullStatus abwarten (für hashed_password + secured-Flag)
+          3. securedMsg mit HMAC-SHA256 senden (oder plain setValue wenn unsecured)
+          4. Auf 'response' mit success=true warten
+
+        Args:
+            key:   API-Key (z.B. 'amp', 'psm', 'frc')
+            value: Zielwert (int/float/bool)
+            timeout_ack: Max. Wartezeit auf Response [s]
+
+        Returns:
+            dict: {'ok': True/False, 'key': key, 'value': value, 'detail': ...}
+        """
+        import hmac as hmac_mod
+        try:
+            import websockets
+        except ImportError:
+            raise ImportError("websockets nicht installiert: pip3 install websockets")
+
+        uri = f"ws://{self.ip}/ws"
+        logger.info(f"Wattpilot setValue: {key}={value} via {uri}")
+
+        try:
+            async with websockets.connect(uri, open_timeout=self.timeout) as ws:
+                # 1) Hello
+                raw = await asyncio.wait_for(ws.recv(), timeout=self.timeout)
+                hello = json.loads(raw)
+                if hello.get('type') != 'hello':
+                    return {'ok': False, 'key': key, 'detail': f'Kein hello: {hello.get("type")}'}
+                serial = hello.get('serial', '')
+                secured = hello.get('secured', 0)
+
+                # 2) AuthRequired
+                raw = await asyncio.wait_for(ws.recv(), timeout=self.timeout)
+                auth_req = json.loads(raw)
+                if auth_req.get('type') != 'authRequired':
+                    return {'ok': False, 'key': key, 'detail': f'Kein authRequired: {auth_req.get("type")}'}
+
+                # 3) Auth senden + hashed_password berechnen (für HMAC)
+                password = self._get_password()
+                token3, auth_hash = _compute_auth(serial, password, auth_req['token1'], auth_req['token2'])
+                await ws.send(json.dumps({"type": "auth", "token3": token3, "hash": auth_hash}))
+
+                # Hashed Password für securedMsg (gleiche PBKDF2 wie in _compute_auth)
+                dk = hashlib.pbkdf2_hmac('sha512', password.encode(), serial.encode(), 100000, 256)
+                hashed_pw = base64.b64encode(dk)[:32]  # 32 Bytes
+
+                # 4) Auth-Ergebnis + fullStatus abwarten
+                auth_ok = False
+                while True:
+                    try:
+                        raw = await asyncio.wait_for(ws.recv(), timeout=self.timeout)
+                    except asyncio.TimeoutError:
+                        break
+                    msg = json.loads(raw)
+                    mtype = msg.get('type', '')
+                    if mtype == 'authError':
+                        return {'ok': False, 'key': key, 'detail': f'Auth fehlgeschlagen: {msg}'}
+                    if mtype == 'authSuccess':
+                        auth_ok = True
+                    if mtype == 'fullStatus' and not msg.get('partial', True):
+                        break
+
+                if not auth_ok:
+                    return {'ok': False, 'key': key, 'detail': 'Auth nicht bestätigt'}
+
+                # 5) setValue senden (secured oder plain)
+                req_id = int(time.time() * 1000) % 100000
+                inner_msg = {
+                    "type": "setValue",
+                    "requestId": req_id,
+                    "key": key,
+                    "value": value
+                }
+
+                if secured and secured > 0:
+                    # SecuredMsg: HMAC-SHA256 über JSON-Payload, Key = hashed_password
+                    payload = json.dumps(inner_msg)
+                    h = hmac_mod.new(
+                        bytearray(hashed_pw),
+                        bytearray(payload.encode()),
+                        hashlib.sha256
+                    )
+                    outer_msg = {
+                        "type": "securedMsg",
+                        "data": payload,
+                        "requestId": f"{req_id}sm",
+                        "hmac": h.hexdigest()
+                    }
+                    await ws.send(json.dumps(outer_msg))
+                    logger.info(f"Wattpilot securedMsg gesendet: {key}={value} (reqId={req_id})")
+                else:
+                    await ws.send(json.dumps(inner_msg))
+                    logger.info(f"Wattpilot setValue gesendet: {key}={value} (reqId={req_id})")
+
+                # 6) Response abwarten (type=response mit success=true/false)
+                deadline = time.time() + timeout_ack
+                try:
+                    while time.time() < deadline:
+                        remaining = max(0.1, deadline - time.time())
+                        raw = await asyncio.wait_for(ws.recv(), timeout=remaining)
+                        msg = json.loads(raw)
+                        # Direkte Response auf unseren Request
+                        if msg.get('type') == 'response':
+                            success = msg.get('success', False)
+                            resp_msg = msg.get('message', '')
+                            if success:
+                                logger.info(f"Wattpilot bestätigt: {key}={value}")
+                                return {'ok': True, 'key': key,
+                                        'value': value,
+                                        'detail': f'Bestätigt: {key}={value}'}
+                            else:
+                                logger.error(f"Wattpilot abgelehnt: {key}={value}: {resp_msg}")
+                                return {'ok': False, 'key': key,
+                                        'value': value,
+                                        'detail': f'Abgelehnt: {resp_msg}'}
+                        # deltaStatus mit unserem Key = auch eine Bestätigung
+                        if msg.get('type') == 'deltaStatus':
+                            st = msg.get('status', {})
+                            if key in st:
+                                ist_wert = st[key]
+                                logger.info(f"Wattpilot deltaStatus bestätigt: {key}={ist_wert}")
+                                return {'ok': True, 'key': key,
+                                        'value': value, 'ist': ist_wert,
+                                        'detail': f'Bestätigt via deltaStatus: {key}={ist_wert}'}
+                except asyncio.TimeoutError:
+                    pass
+                # Kein Response erhalten
+                logger.warning(f"Wattpilot setValue {key}={value}: Gesendet (kein Response innerhalb {timeout_ack}s)")
+                return {'ok': True, 'key': key, 'value': value,
+                        'detail': f'Gesendet, kein Response innerhalb {timeout_ack}s'}
+
+        except ConnectionRefusedError:
+            return {'ok': False, 'key': key, 'detail': f'WebSocket {uri} verweigert (App aktiv?)'}
+        except ConnectionResetError:
+            return {'ok': False, 'key': key, 'detail': f'WebSocket {uri} zurückgesetzt'}
+        except Exception as e:
+            return {'ok': False, 'key': key, 'detail': f'Fehler: {e}'}
+
+    def _run_async(self, coro):
+        """Async-Coroutine synchron ausführen (Event-Loop-sicher)."""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    future = pool.submit(asyncio.run, coro)
+                    return future.result(timeout=self.timeout + 10)
+            else:
+                return loop.run_until_complete(coro)
+        except RuntimeError:
+            return asyncio.run(coro)
+
+    def set_value(self, key: str, value) -> dict:
+        """Wattpilot-Parameter setzen (synchroner Aufruf mit Retry).
+
+        Unterstützte Keys:
+          amp  — Ladestrom [6–32 A]
+          psm  — Phasenmodus (1=1-phasig, 2=3-phasig)
+          frc  — Force State (0=neutral, 1=aus, 2=ein)
+          lmo  — Lademodus (3=Default, 4=Eco, 5=NextTrip)
+
+        Bei WebSocket-Kollision (Collector oder externe App belegt die
+        einzige erlaubte Verbindung) wird automatisch bis zu N× wiederholt.
+        Konfiguration: WATTPILOT_WRITE_RETRIES / WATTPILOT_WRITE_RETRY_PAUSE
+
+        Returns:
+            dict: {'ok': bool, 'key': str, 'value': ..., 'detail': str}
+        """
+        try:
+            import config as cfg
+            max_retries = getattr(cfg, 'WATTPILOT_WRITE_RETRIES', 3)
+            retry_pause = getattr(cfg, 'WATTPILOT_WRITE_RETRY_PAUSE', 3)
+        except ImportError:
+            max_retries = 3
+            retry_pause = 3
+
+        last_result = None
+        for attempt in range(1, max_retries + 1):
+            result = self._run_async(self._set_value_async(key, value))
+            last_result = result
+
+            if result.get('ok'):
+                if attempt > 1:
+                    logger.info(f"Wattpilot set_value({key}={value}) erfolgreich "
+                                f"nach {attempt} Versuchen")
+                return result
+
+            # Retry-fähige Fehler: WebSocket belegt (Collector/App)
+            detail = result.get('detail', '')
+            retriable = ('hello' in detail.lower()
+                         or 'refused' in detail.lower()
+                         or 'reset' in detail.lower()
+                         or 'timeout' in detail.lower())
+
+            if not retriable or attempt >= max_retries:
+                break
+
+            logger.warning(f"Wattpilot set_value({key}={value}) Versuch {attempt}/{max_retries} "
+                           f"fehlgeschlagen: {detail} → Retry in {retry_pause}s")
+            time.sleep(retry_pause)
+
+        logger.error(f"Wattpilot set_value({key}={value}) endgültig fehlgeschlagen "
+                     f"nach {max_retries} Versuchen: {last_result.get('detail')}")
+        return last_result
+
     def get_energy_total_wh(self):
         """
         Liest den Gesamt-Zählerstand in Wh.

@@ -261,7 +261,7 @@ MEGA-BAS RS485 [B] ──► LWPM 410 RS485 [B]
 > die komplette Stromversorgung (sonst Verlust der Einstellungen bei jedem
 > Schaltvorgang).
 
-### 2.5 Fritz!DECT-Steckdosen (optional, Übergangslösung)
+### 2.5 Fritz!DECT-Steckdosen (produktiv seit 2026-02-28)
 
 | Vorteil | Nachteil |
 |---------|----------|

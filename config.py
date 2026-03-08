@@ -64,9 +64,11 @@ FAILOVER_PV_BASE = '/home/jk/Dokumente/PVAnlage/pv-system'
 # --- Wattpilot (Wallbox) ---
 WATTPILOT_IP = '192.168.2.197'
 WATTPILOT_TIMEOUT = 10             # WebSocket Timeout (Sek.)
-WATTPILOT_POLL_INTERVAL = 10       # Zählerstand-Abfrage alle 10 Sekunden (synchron mit Flow-Chart)
+WATTPILOT_POLL_INTERVAL = 30       # Zählerstand-Abfrage alle 30s (WebSocket-Belegung ~8%)
 WATTPILOT_RETRY_INTERVAL = 5       # Sekunden bis Retry bei WebSocket-Konflikt (App, Netzwerk)
 WATTPILOT_MAX_RETRIES = 2          # Max. Wiederholungen pro Zyklus (0=kein Retry)
+WATTPILOT_WRITE_RETRIES = 3        # Retry-Versuche für set_value (Notfall-Schreiben)
+WATTPILOT_WRITE_RETRY_PAUSE = 3    # Sekunden Pause zwischen Schreib-Retries
 WATTPILOT_READINGS_RETENTION_DAYS = 90   # Einzelmessungen (90 Tage)
 WATTPILOT_DAILY_RETENTION_DAYS = 3650    # Tagesaggregate (~10 Jahre)
 

@@ -29,6 +29,13 @@ from automation.engine.obs_state import ObsState
 
 LOG = logging.getLogger('forecast_collector')
 
+# W5: Anlagenkonstanten aus config.py statt Magic Numbers
+try:
+    from config import PV_KWP_TOTAL as _PV_KWP
+except ImportError:
+    _PV_KWP = 37.59
+_GHI_EFF = 0.15  # GHI→PV Grob-Effizienz (kWp × GHI [W/m²] × Eff ≈ W)
+
 
 class ForecastCollector:
     """Holt Solar-Prognose zu definierten Tageszeitpunkten.
@@ -323,7 +330,7 @@ class ForecastCollector:
                 return best_ac
 
         # Versuch 2: hourly (Open-Meteo roh, Feld 'shortwave_radiation')
-        # → Grobe Schätzung: GHI [W/m²] × 37.59 kWp × 0.15 Eff ≈ PV [W]
+        # → Grobe Schätzung: GHI [W/m²] × kWp × Effizienz ≈ PV [W]
         if hourly:
             best_ghi = None
             best_diff = 999
@@ -338,7 +345,7 @@ class ForecastCollector:
                     best_diff = diff
                     best_ghi = h.get('shortwave_radiation', 0)
             if best_ghi is not None and best_diff < 0.75:
-                return best_ghi * 37.59 * 0.15
+                return best_ghi * _PV_KWP * _GHI_EFF
 
         return None
 

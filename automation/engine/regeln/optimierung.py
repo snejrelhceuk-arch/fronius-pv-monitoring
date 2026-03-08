@@ -131,9 +131,7 @@ class RegelZellausgleich(Regel):
                 'grund': f'Zellausgleich: SOC_MAX → {soc_max}% (Vollladung)',
             },
         ]
-        # Engine-Aktionen registrieren (Extern-Erkennung)
-        for a in aktionen:
-            soc_extern_tracker.registriere_aktion(a.get('kommando', ''), a.get('wert'))
+        # Hinweis: registriere_aktion() erfolgt NACH Actuator-Erfolg in engine.py (K2)
         return aktionen
 
 
@@ -217,9 +215,7 @@ class RegelForecastPlausi(Regel):
         else:
             LOG.info(f"Forecast-Plausi: IST/SOLL {ist_pct:.0f}%, Rest {rest_korrigiert} kWh — keine Aktion")
 
-        # Engine-Aktionen registrieren (Extern-Erkennung)
-        for a in aktionen:
-            soc_extern_tracker.registriere_aktion(a.get('kommando', ''), a.get('wert'))
+        # Hinweis: registriere_aktion() erfolgt NACH Actuator-Erfolg in engine.py (K2)
 
         return aktionen
 
