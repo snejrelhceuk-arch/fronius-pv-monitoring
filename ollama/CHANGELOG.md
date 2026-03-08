@@ -11,3 +11,6 @@ Geänderte Quellen: doc/BATTERIE_STRATEGIEN.md, doc/SYSTEM_ARCHITECTURE.md, doc/
 
 ## 2026-03-08 11:35 (Hash: ea2ef95a2fa07168)
 Geänderte Quellen: automation/engine/engine.py, doc/FELDNAMEN_REFERENZ.md, doc/SCHUTZREGELN.md, automation/engine/automation_daemon.py, aggregate.py, config.py
+
+## 2026-03-08 19:04 (Hash: 621fff7714a74995)
+Geänderte Quellen: wattpilot_collector.py, config.py, README.md, automation/engine/automation_daemon.py, automation/engine/engine.py
