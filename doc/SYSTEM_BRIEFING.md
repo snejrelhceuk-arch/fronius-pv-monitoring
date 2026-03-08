@@ -153,7 +153,7 @@ pv-system/
 - **Param-Matrix:** `config/soc_param_matrix.json` ist die Single Source of Truth
   für alle Regelkreis-Parameter (Schwellen, Zeiten, Scores)
 - **Git:** Single-Branch (`main`), 2 Hosts (Pi4 primary, Pi4 failover) + Online-Repo
-- **Logging:** Python `logging` → journald, Rotation via `logrotate.sh`
+- **Logging:** Alles nach `/tmp/*.log` (tmpfs) — Details siehe **§9 Logging-Konvention**
 - **.role-Datei:** Im Workspace-Root, steuert ob Host `primary` oder `failover` ist
 - **Dedup-Sperre:** Actuator verhindert identische Befehle innerhalb 45 s
 - **Extern-Erkennung:** SocExternTracker erkennt manuelle SOC-Änderungen → 30 min Toleranz
@@ -196,7 +196,48 @@ Schreibzugriffe verwenden `securedMsg` (HMAC-SHA256). Bei WebSocket-Kollision au
 
 ---
 
-## 9. Bekannte Einschränkungen / TODOs
+## 9. Logging-Konvention (tmpfs)
+
+### Grundregel
+
+**Alle Logdateien → `/tmp/*.log`** (tmpfs, 256 MB, geteilt mit DBs auf `/dev/shm`).
+
+Es gibt **keinen zentralen Mechanismus**, der neue Komponenten automatisch nach `/tmp` loggen lässt. Jede Komponente muss ihre Log-Ausgabe **explizit** konfigurieren — über eine der drei Methoden unten.
+
+### Drei Log-Methoden
+
+| Methode | Beispiel | Wann |
+|---------|----------|------|
+| **systemd → journald** | `logging.basicConfig()` → stdout → journald | Python-Services (`collector.py`, `wattpilot_collector.py`, `automation_daemon.py`) |
+| **Cron-Redirect** | `>> /tmp/aggregate.log 2>&1` | Crontab-Einträge für Aggregation, Forecast, Backup |
+| **Shell LOG_FILE** | `LOG_FILE="/tmp/collector_monitor.log"` | Monitor-Scripts, Bash-Hilfsskripte |
+
+### Checkliste für neue Komponenten
+
+1. **Python-Service (systemd):** `logging.basicConfig()` reicht — journald rotiert selbst (7 Tage).
+2. **Cron-Job:** Output nach `/tmp/<name>.log` umleiten: `>> /tmp/<name>.log 2>&1`
+3. **Shell-Script:** `LOG_FILE="/tmp/<name>.log"` setzen — **nicht** auf SD (`${BASE_DIR}/`).
+4. **Dateiendung:** Immer `.log` verwenden — `logrotate.sh` erkennt Dateien per Glob `${LOG_DIR}/*.log`.
+
+### Automatische Rotation
+
+`logrotate.sh` (Cron 02:30) erkennt **alle** `/tmp/*.log` dynamisch (Glob, keine Liste).
+
+| Trigger | Schwelle |
+|---------|----------|
+| Größe | ≥ 10 MB → rotieren + gzip |
+| Alter | ≥ 7 Tage (>100 Bytes) → rotieren + gzip |
+| Archiv-Löschung | `.gz` älter 7 Tage → löschen |
+| Gunicorn | USR1-Signal nach Rotation (FD-Reopen) |
+| tmpfs-Warnung | >80% Belegung → Log-Warnung |
+
+### Nicht auf tmpfs loggen
+
+- `schaltlog.txt` (SD, `logs/`) — bewusste Ausnahme (persistentes Schaltprotokoll, eigene Truncate-Logik >10k Zeilen)
+
+---
+
+## 10. Bekannte Einschränkungen / TODOs
 
 | Bereich | Status | Detail |
 |---|---|---|
@@ -207,7 +248,7 @@ Schreibzugriffe verwenden `securedMsg` (HMAC-SHA256). Bei WebSocket-Kollision au
 
 ---
 
-## 10. Quick-Reference: Häufige Aufgaben
+## 11. Quick-Reference: Häufige Aufgaben
 
 | Aufgabe | Befehl / Datei |
 |---|---|
@@ -223,7 +264,7 @@ Schreibzugriffe verwenden `securedMsg` (HMAC-SHA256). Bei WebSocket-Kollision au
 
 ---
 
-## 11. Dokumentations-Struktur
+## 12. Dokumentations-Struktur
 
 | Ordner | Inhalt | Wichtigste Dateien |
 |---|---|---|

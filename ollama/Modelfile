@@ -157,7 +157,7 @@ Stack: Raspbian Bullseye 11, Python 3.9.2, Flask 1.1.2, gunicorn 23.0.0,
 
 
 ═════════════════════════════════════════════════════════════════
-DYNAMISCHE UPDATES (Stand: 2026-03-08 11:35)
+DYNAMISCHE UPDATES (Stand: 2026-03-08 19:04)
 ═════════════════════════════════════════════════════════════════
 
 --- Aktuelle Config-Werte ---
@@ -184,9 +184,11 @@ FAILOVER_USER = 'jk'
 FAILOVER_PV_BASE = '/home/jk/Dokumente/PVAnlage/pv-system'
 WATTPILOT_IP = '192.168.2.197'
 WATTPILOT_TIMEOUT = 10             # WebSocket Timeout (Sek.)
-WATTPILOT_POLL_INTERVAL = 10       # Zählerstand-Abfrage alle 10 Sekunden (synchron mit Flow-Chart)
+WATTPILOT_POLL_INTERVAL = 30       # Zählerstand-Abfrage alle 30s (WebSocket-Belegung ~8%)
 WATTPILOT_RETRY_INTERVAL = 5       # Sekunden bis Retry bei WebSocket-Konflikt (App, Netzwerk)
 WATTPILOT_MAX_RETRIES = 2          # Max. Wiederholungen pro Zyklus (0=kein Retry)
+WATTPILOT_WRITE_RETRIES = 3        # Retry-Versuche für set_value (Notfall-Schreiben)
+WATTPILOT_WRITE_RETRY_PAUSE = 3    # Sekunden Pause zwischen Schreib-Retries
 WATTPILOT_READINGS_RETENTION_DAYS = 90   # Einzelmessungen (90 Tage)
 WATTPILOT_DAILY_RETENTION_DAYS = 3650    # Tagesaggregate (~10 Jahre)
 POLL_INTERVAL = 3          # Sekunden zwischen Modbus-Abfragen
@@ -215,6 +217,7 @@ NOTIFICATION_EVENTS = ['batt_temp_40', 'batt_soc_kritisch', 'netz_ueberlast', 's
 EVENT_THRESHOLDS = {
 
 --- Letzte Git-Commits ---
+88f91a1 feat(wattpilot): securedMsg HMAC-Schreibzugriff, SLS-Schutz, Retry-Logik
 6fd032d SLS 35A/Phase Netzschutz, HP 6-Phasen-Logik, Dokumentation
 0d61ed0 fix: Drain nur bei PV-Ladung + ABC-Policy durchsetzen
 e15d23e fix: Falsche EXTERN-Erkennung durch engine_vorausschau() und Daemon-Restart
@@ -224,28 +227,27 @@ fb2541b chore: Ollama-Kontextdatei aktualisiert (Auto-Sync)
 94be85d fix: NULLIF(0)-Schutz für SmartMeter/F2/F3/WP-Counter nach FW-Update
 e09e373 fix: FritzDECT dry_run=True entfernt — HP-Schaltbefehle aktiv
 4575c34 fix: Tiefenprüfung v1.1.0 — 8 Bug-Fixes (2×CRITICAL, 4×HIGH, 2×Infra)
-d32c8a1 feat: Sunset-Tagesbericht — tägliche 24h-Zusammenfassung per E-Mail
 
---- Kürzlich geänderte Module (6) ---
+--- Kürzlich geänderte Module (5) ---
 
-automation/engine/engine.py:
-engine.py — Entscheidungs-Engine (Schicht S3)
-
-Liest ObsState aus RAM-DB und SOC-Parametermatrix aus
-
-automation/engine/automation_daemon.py:
-  class AutomationDaemon:  # S4 Orchestrator: Observer + Engine + Actuator in einem Prozess.
-  def engine_vorausschau() -> list[dict]:  # Statische Funktion: Liest ObsState aus RAM-DB, führt Dry-Run aus.
-
-aggregate.py:
-  def get_db():
-    return get_db_connection()
-
+wattpilot_collector.py:
+  def create_pid_file():  # Erstellt PID-File und prüft auf laufende Instanz.
+  def remove_pid_file():  # Entfernt PID-File beim sauberen Beenden.
+  def init_db():  # Erstelle Wattpilot-Tabellen falls nicht vorhanden.
 
 config.py:
 Zentrale Konfiguration für Fronius PV-Monitoring
 Alle gemeinsam genutzten Parameter an einer Stelle.
   def load_secret(env_key, secrets_file=None):  # Lade ein Secret aus Umgebungsvariable oder .secrets-Datei.
+
+automation/engine/automation_daemon.py:
+  class AutomationDaemon:  # S4 Orchestrator: Observer + Engine + Actuator in einem Prozess.
+  def engine_vorausschau() -> list[dict]:  # Statische Funktion: Liest ObsState aus RAM-DB, führt Dry-Run aus.
+
+automation/engine/engine.py:
+engine.py — Entscheidungs-Engine (Schicht S3)
+
+Liest ObsState aus RAM-DB und SOC-Parametermatrix aus
 
 --- API-Endpunkte ---
   /                              → index  # Startseite: Redirect zu Flow-Chart

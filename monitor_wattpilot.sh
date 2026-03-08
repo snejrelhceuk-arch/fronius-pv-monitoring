@@ -12,7 +12,7 @@ BASE_DIR="/home/admin/Dokumente/PVAnlage/pv-system"
 # --- Role Guard: Auf Failover-Host nichts tun ---
 source "${BASE_DIR}/scripts/role_guard.sh" 2>/dev/null || exit 0
 
-LOG_FILE="${BASE_DIR}/wattpilot_monitor.log"
+LOG_FILE="/tmp/wattpilot_monitor.log"
 DB_PATH="/dev/shm/fronius_data.db"
 SERVICE_NAME="pv-wattpilot.service"
 MAX_DATA_AGE=300  # Maximal 5 Minuten alte Daten akzeptabel

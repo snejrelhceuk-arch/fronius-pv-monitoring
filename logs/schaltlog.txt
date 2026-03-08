@@ -306,3 +306,5 @@
  2026-03-08, 18:21:29  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
  2026-03-08, 18:36:31  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
  2026-03-08, 18:51:34  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 19:06:56  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%
+ 2026-03-08, 19:21:41  ENGINE   batterie     set_soc_min=5                 FEHLER   Zellausgleich: SOC_MIN → 5%

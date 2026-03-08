@@ -5,7 +5,7 @@
 # --- Role Guard: Auf Failover-Host nichts tun ---
 source /home/admin/Dokumente/PVAnlage/pv-system/scripts/role_guard.sh 2>/dev/null || exit 0
 
-LOG_FILE="/home/admin/Dokumente/PVAnlage/pv-system/collector_monitor.log"
+LOG_FILE="/tmp/collector_monitor.log"
 # Nur collector.py zählen, NICHT wattpilot_collector.py
 # Pattern: 'python3 ' gefolgt von optionalem Pfad + 'collector.py' (kein _ davor)
 PROCESS_COUNT=$(pgrep -fc "python3 (./)?collector\.py" || true)
