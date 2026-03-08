@@ -42,6 +42,10 @@ class DataCollector:
         self._db_path = db_path or app_config.DB_PATH
         self._modbus_client = None
         self._modbus_last_poll: float = 0
+        # W4: Cache-Variablen als Instanzvariablen (nicht class-level)
+        self._soc_config_cache_ts: float = 0
+        self._fritzdect_cache_ts: float = 0
+        self._fritzdect_cache_data: dict = None
 
     def _get_conn(self) -> Optional[sqlite3.Connection]:
         """Öffne read-only Verbindung zur Collector-DB."""
@@ -212,13 +216,12 @@ class DataCollector:
 
     # ── SOC_MIN/MAX/MODE aus Fronius HTTP API ────────────────
 
-    _soc_config_cache_ts: float = 0
     _SOC_CONFIG_INTERVAL = 30
 
     def _collect_battery_soc_config(self, obs: ObsState):
         """SOC_MIN, SOC_MAX, SOC_MODE aus Fronius Batterie-Config API."""
         now = time.time()
-        if now - DataCollector._soc_config_cache_ts < self._SOC_CONFIG_INTERVAL:
+        if now - self._soc_config_cache_ts < self._SOC_CONFIG_INTERVAL:
             return
 
         try:
@@ -237,7 +240,7 @@ class DataCollector:
             if soc_mode_val is not None:
                 obs.soc_mode = str(soc_mode_val).lower()
 
-            DataCollector._soc_config_cache_ts = now
+            self._soc_config_cache_ts = now
 
         except Exception as e:
             LOG.debug(f"SOC-Config API: {e}")
@@ -339,8 +342,6 @@ class DataCollector:
 
     # ── Fritz!DECT: Heizpatrone Live-Status ──────────────────
 
-    _fritzdect_cache_ts: float = 0
-    _fritzdect_cache_data: dict = None
     _FRITZDECT_POLL_INTERVAL = 60
 
     def _collect_fritzdect(self, obs: ObsState):
@@ -367,8 +368,8 @@ class DataCollector:
             except Exception as e:
                 LOG.debug(f"Fritz!DECT collect: {e}")
 
-            DataCollector._fritzdect_cache_ts = now
-            DataCollector._fritzdect_cache_data = info
+            self._fritzdect_cache_ts = now
+            self._fritzdect_cache_data = info
 
         if info and info.get('state') is not None:
             obs.heizpatrone_aktiv = str(info['state']).strip() == '1'

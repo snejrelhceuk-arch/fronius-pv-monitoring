@@ -2,7 +2,7 @@
 """
 wattpilot_collector.py — Periodische Wattpilot-Zählerstanderfassung
 ====================================================================
-Liest alle 10 Sekunden den Zählerstand (eto) und Live-Daten vom Wattpilot
+Liest alle 30 Sekunden den Zählerstand (eto) und Live-Daten vom Wattpilot
 und speichert sie in die Datenbank (wattpilot_readings).
 Bei Fehler (z.B. WebSocket-Konflikt durch mobile App) wird nach 5s erneut versucht.
 
@@ -334,11 +334,11 @@ def run_daemon():
                 consecutive_failures = 0
                 
                 # Tagesaggregate alle 15 Minuten neu berechnen
-                if tick % 90 == 0:  # 90 × 10s = 900s = 15min
+                if tick % 30 == 0:  # 30 × 30s = 900s = 15min
                     aggregate_daily_wattpilot()
                 
                 # Cleanup einmal täglich
-                if tick % 8640 == 0:  # 8640 × 10s = 86400s = 24h
+                if tick % 2880 == 0:  # 2880 × 30s = 86400s = 24h
                     cleanup_old_readings()
                 
                 tick += 1

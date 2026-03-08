@@ -98,7 +98,7 @@ if [ "$GUNICORN_PROCESSES" -ge 1 ]; then
         echo -e "${YELLOW}⚠ Collector läuft nicht! Ggf. mit 'nohup python3 collector.py &' starten${NC}"
     fi
     echo ""
-    echo "Web-Interface: http://localhost:5000"
+    echo "Web-Interface: http://localhost:8000"
     echo "========================================="
     exit 0
 else

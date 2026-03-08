@@ -134,7 +134,7 @@ Ungenau durch Ladeverluste (~15–18 %), Kalibrierung aus Solarweb-Daten möglic
 |---|---|---|---|---|---|
 | Wattpilot E-Auto | 1.4–22 kW | WebSocket CMD | < 2 s | sehr hoch | ✅ aktiv |
 | Dimplex WP SIK 11 | 2.1–4.3 kW | Modbus RTU (SG-Ready) | ~30 s | mittel | ⚠️ nicht integriert |
-| Heizpatrone (geplant) | 2–4 kW | Fritz!DECT / Relais | < 5 s | hoch | ❌ nicht vorhanden |
+| Heizpatrone (2 kW) | 2 kW | Fritz!DECT 200 (AHA-HTTP-API) | < 5 s | hoch | ✅ produktiv seit 2026-03 |
 | Klimaanlage (falls) | 0.5–2 kW | — | — | mittel | ❌ nicht vorhanden |
 
 ---

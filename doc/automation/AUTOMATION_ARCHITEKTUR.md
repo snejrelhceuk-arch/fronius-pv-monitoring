@@ -624,21 +624,23 @@ systemd → automation_observer.service
 
 ## 9. Regelkreise — Übersicht
 
-### 12 aktive Regeln in `automation/engine/regeln/`
+### 8 aktive Regeln in `automation/engine/regeln/` (Stand: 2026-03-08)
 
 | # | Klasse | Modul | Zyklus | Priorität | Funktion |
 |---|--------|-------|--------|-----------|----------|
-| 1 | `RegelSocSchutz` | schutz.py | fast | P1 Sicherheit | Tiefentladeschutz: Stop <5%, Drosselung <10% |
-| 2 | `RegelTempSchutz` | schutz.py | fast | P1 Sicherheit | Stufenweise Laderate-Reduktion bei Zelltemperatur 25–40°C |
-| 3 | `RegelKomfortReset` | soc_steuerung.py | mixed | P2 Steuerung | Täglicher Reset auf 25–75% SOC-Bereich, Early-Reset bei schlechter Prognose |
-| 4 | `RegelMorgenSocMin` | soc_steuerung.py | mixed | P2 Steuerung | SOC_MIN-Öffnung basierend auf Sunrise+1h PV-Prognose, Hold-Mode, konfigurierbarer Vorlauf |
-| 5 | `RegelNachmittagSocMax` | soc_steuerung.py | mixed | P2 Steuerung | SOC_MAX→100% via Clear-Sky-Peak + Power-Threshold |
-| 6 | `RegelAbendEntladerate` | optimierung.py | mixed | P2 Steuerung | Tageszeit-abhängige Entladerate: Abend 29%, Nacht 10%, Tag auto |
-| 7 | `RegelZellausgleich` | optimierung.py | strategic | P3 Wartung | Monatlicher BYD-Zellausgleich (Vollzykus) |
-| 8 | `RegelForecastPlausi` | optimierung.py | strategic | P3 Optimierung | IST/SOLL-Abweichung >30% → SOC-Strategie anpassen |
-| 9 | `RegelLaderateDynamisch` | optimierung.py | mixed | P2 Steuerung | Dynamische Laderate basierend auf WP-Last, PV-Verfügbarkeit, SOC |
-| 10 | `RegelWattpilotBattSchutz` | geraete.py | fast | P1 Sicherheit | 3-stufiger Batterieschutz während EV-Ladung |
-| 11 | `RegelHeizpatrone` | geraete.py | fast | P2 Steuerung | 4-Phasen Forecast-gesteuerte Burst-Strategie für 2 kW HP via Fritz!DECT |
+| 1 | `RegelSlsSchutz` | schutz.py | fast | P1 Sicherheit | SLS-Überstromschutz: 3×35A/Phase Überwachung |
+| 2 | `RegelKomfortReset` | soc_steuerung.py | mixed | P2 Steuerung | Täglicher Reset auf 25–75% SOC-Bereich, Früh-Reset mit Hysterese (K4) |
+| 3 | `RegelMorgenSocMin` | soc_steuerung.py | mixed | P2 Steuerung | SOC_MIN-Öffnung basierend auf Sunrise+1h PV-Prognose, Hold-Mode, konfigurierbarer Vorlauf |
+| 4 | `RegelNachmittagSocMax` | soc_steuerung.py | mixed | P2 Steuerung | SOC_MAX→100% via Clear-Sky-Peak + Power-Threshold |
+| 5 | `RegelZellausgleich` | optimierung.py | strategic | P3 Wartung | Monatlicher BYD-Zellausgleich (Vollzyklus) |
+| 6 | `RegelForecastPlausi` | optimierung.py | strategic | P3 Optimierung | IST/SOLL-Abweichung >30% → SOC-Strategie anpassen |
+| 7 | `RegelWattpilotBattSchutz` | geraete.py | fast | P1 Sicherheit | 3-stufiger Batterieschutz während EV-Ladung |
+| 8 | `RegelHeizpatrone` | geraete.py | fast | P2 Steuerung | 6-Phasen Forecast-gesteuerte Burst-Strategie für 2 kW HP via Fritz!DECT |
+
+**Entfernt (2026-03-07, GEN24 DC-DC HW-Limit):**
+`RegelSocSchutz`, `RegelTempSchutz`, `RegelAbendEntladerate`, `RegelLaderateDynamisch`
+→ Software-Ratenlimits (InWRte/OutWRte/StorCtl_Mod) waren wirkungslos. Steuerung
+erfolgt jetzt ausschließlich über SOC_MIN/SOC_MAX via Fronius HTTP-API.
 
 ### Collector-Subsystem in `automation/engine/collectors/`
 
@@ -649,11 +651,13 @@ systemd → automation_observer.service
 | `ForecastCollector` | forecast_collector.py | Trigger-basierte Solarprognose |
 | `Tier1Checker` | tier1_checker.py | Deterministische Schwellenprüfungen (Safety-Bypass) |
 
-### Querschnitts-Module in `automation/engine/regeln/`
+### Querschnitts-Module in `automation/engine/`
 
 | Modul | Funktion |
 |-------|----------|
-| `soc_extern.py` | SOC-Extern-Toleranz: Erkennt manuell geänderte SOC-Werte (Fronius App) und stellt 30-min Toleranzperiode bereit |
+| `regeln/soc_extern.py` | SOC-Extern-Toleranz: Erkennt manuell geänderte SOC-Werte (Fronius App) und stellt 30-min Toleranzperiode bereit. Registrierung erfolgt nach Actuator-Erfolg (K2). |
+| `event_notifier.py` | Täglicher Sunset-Bericht per E-Mail, Alarm-Benachrichtigungen. Integriert in `automation_daemon.py` als Observer-Callback. |
+| `schaltlog.py` | Einheitliches Schalt-/Extern-Logging für alle Regeln → `automation_log` in Persist-DB. |
 
 ---
 
