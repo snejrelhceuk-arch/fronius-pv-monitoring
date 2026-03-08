@@ -100,6 +100,18 @@ class DataCollector:
             # ── Netz ──
             p_netz = d.get('P_Netz', 0) or 0
             obs.grid_power_w = round(p_netz, 0)
+            # Phasenströme für SLS-Schutz (35A je Phase)
+            phase_vals = []
+            for attr, col in [('i_l1_netz_a', 'I_L1_Netz'),
+                              ('i_l2_netz_a', 'I_L2_Netz'),
+                              ('i_l3_netz_a', 'I_L3_Netz')]:
+                val = d.get(col)
+                if val is not None:
+                    setattr(obs, attr, round(val, 2))
+                    if val > 0:  # Nur Bezug zählt
+                        phase_vals.append(val)
+            if phase_vals:
+                obs.i_max_netz_a = round(max(phase_vals), 2)
 
             # ── Batterie (Strom/Spannung aus API) ──
             i_batt = d.get('I_Batt_API', 0) or 0

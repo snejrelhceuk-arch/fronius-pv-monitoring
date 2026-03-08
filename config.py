@@ -158,13 +158,14 @@ NOTIFICATION_SMTP_USER = 'navigator@hekabe.de'
 NOTIFICATION_FROM = 'navigator@hekabe.de'
 # Meldbare Events — Keys müssen in EVENT_THRESHOLDS definiert sein
 # Sonder-Event 'sunset_tagesbericht': 24h-Zusammenfassung bei Sonnenuntergang
-NOTIFICATION_EVENTS = ['batt_temp_40', 'batt_soc_kritisch', 'netz_ueberlast', 'sunset_tagesbericht']
+NOTIFICATION_EVENTS = ['batt_temp_40', 'batt_soc_kritisch', 'netz_ueberlast', 'sls_ueberlast', 'sunset_tagesbericht']
 # Schwellwerte für Events (obs_feld, operator, schwelle)
 EVENT_THRESHOLDS = {
     'batt_temp_40':      {'obs_feld': 'batt_temp_max_c', 'op': '>=', 'schwelle': 40,  'text': 'Batterie-Temperatur ≥ 40°C'},
     'batt_soc_kritisch': {'obs_feld': 'batt_soc_pct',    'op': '<',  'schwelle': 5,   'text': 'Batterie SOC < 5%'},
     'batt_temp_45':      {'obs_feld': 'batt_temp_max_c', 'op': '>=', 'schwelle': 45,  'text': 'Batterie-Temperatur ≥ 45°C (ALARM)'},
     'netz_ueberlast':    {'obs_feld': 'grid_power_w',    'op': '>=', 'schwelle': 24000,'text': 'Netz-Überlast ≥ 24 kW'},
+    'sls_ueberlast':     {'obs_feld': 'i_max_netz_a',   'op': '>=', 'schwelle': 35,   'text': 'SLS-Grenze: Phasenstrom ≥ 35A'},
 }
 
 def get_strompreis(year, month):

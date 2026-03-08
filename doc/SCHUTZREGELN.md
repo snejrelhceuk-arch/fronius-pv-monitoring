@@ -92,18 +92,52 @@
 | **Grund** | BMS-Kommunikation, Fahrzeug-Eigensteuerung braucht Zeit |
 | **Status** | Geplant |
 
-### SR-EV-03: Überlastschutz Hauptsicherung
+### SR-EV-03: Überlastschutz Hauptsicherung (→ abgelöst durch SR-SLS-01)
 
 | Feld | Wert |
 |---|---|
-| **Auslöser** | Netz-Bezug > 24 kW |
-| **Aktion 1** | Wattpilot auf max. 16 A (= 11 kW) drosseln |
-| **Auslöser 2** | Netz-Bezug > 26 kW |
-| **Aktion 2** | Wattpilot auf 6 A (= 1.4 kW) = Minimum |
-| **Freigabe** | Netz-Bezug < 20 kW für > 2 min |
-| **Protokoll** | `protection_grid_overload` |
-| **Hintergrund** | Hauptsicherung 3 × 40 A = 27.6 kW. WP (4.3) + EV (22) + Haushalt (2) = 28.3 kW → Überlast möglich! |
-| **Status** | Geplant |
+| **Status** | ⚠️ **Abgelöst** durch SR-SLS-01 (Phasenstrom-basiert). Die alte gesamtleistungsbasierte Logik (24 kW / 26 kW Stufen) wurde durch exakte Phasenstrom-Überwachung ersetzt. Siehe §4a. |
+
+---
+
+## 4a. SLS-Schutz (Netz-Phasenströme)
+
+### SR-SLS-01: SLS-Sicherungsschutz 35A je Phase
+
+| Feld | Wert |
+|---|---|
+| **Auslöser (primär)** | max(I_L1_Netz, I_L2_Netz, I_L3_Netz) > 35 A |
+| **Auslöser (Fallback)** | grid_power_w > 24.000 W (wenn Phasenströme nicht verfügbar) |
+| **Aktion 1** | HP AUS (fritzdect) |
+| **Aktion 2** | Wattpilot auf Minimum dimmen (wattpilot) |
+| **Aktion 3** | E-Mail-Benachrichtigung (`sls_ueberlast`) |
+| **Freigabe** | max(Phasenströme) < 35 A |
+| **Hintergrund** | SLS (Selektiver Leitungsschutzschalter) am Zählerplatz: **35A / 3-phasig**. Maximale Gesamtleistung: √3 × 400V × 35A ≈ 24 kW. **SLS ist träge — 35A je Phase als Schwelle reicht.** Er löst **ohne Vorwarnung** aus → keine Warn-/Alarm-Stufen nötig. |
+| **Messung** | SmartMeter Netz (F1): I_L1_Netz, I_L2_Netz, I_L3_Netz → raw_data → DataCollector → ObsState |
+| **Protokoll** | Log (5-min-Throttle) + E-Mail (1×/Tag via EventNotifier) |
+| **Implementierung** | `RegelSlsSchutz` in `automation/engine/regeln/schutz.py` |
+| **Score** | 95 × 1.5 = 142 bei Auslösung (höchster aller Regeln) |
+| **Status** | ✅ Implementiert (2026-03-08) |
+
+> **Design-Entscheidung: Per-Phase statt Gesamt.**
+> Der SLS löst je Phase aus, nicht summiert. Eine asymmetrische Last
+> (z.B. HP auf L1, EV auf L2) kann eine einzelne Phase überlasten,
+> obwohl die Gesamtleistung unter 24 kW liegt.
+>
+> **Design-Entscheidung: Keine Warnstufen.**
+> Der SLS ist ein träger Schutzschalter — er löst hart aus, ohne
+> vorher zu warnen. Deshalb gibt es nur eine Schwelle (35A), keine
+> gestufte Warn-/Alarm-Logik.
+>
+> **Datenfluss Phasenströme:**
+> `modbus_v3.py` → `raw_data.I_L1_Netz / I_L2_Netz / I_L3_Netz`
+> → `DataCollector._collect_raw_data()` → `ObsState.i_l1_netz_a / i_l2_netz_a / i_l3_netz_a`
+> → `obs.i_max_netz_a = max(positive Werte)` → `RegelSlsSchutz.bewerte()`
+>
+> **Fallback:** Wenn Phasenströme nicht verfügbar sind (SmartMeter-Ausfall),
+> wird die Gesamtleistung grid_power_w > 24.000 W als Ersatzindikator verwendet.
+>
+> Siehe: [STEUERUNGSPHILOSOPHIE.md](STEUERUNGSPHILOSOPHIE.md) §2 „Phasenströme statt Gesamtleistung"
 
 ---
 
@@ -247,7 +281,7 @@
 ## Prioritäten-Hierarchie
 
 ```
-1. SR-EV-03  Hauptsicherung (Hardware-Limit — sofortige Aktion)
+1. SR-SLS-01 SLS 35A/Phase Netzschutz (Hardware-Limit — sofortige Aktion)
 2. SR-BAT-02 Batterietemperatur (Brandschutz)
 3. SR-FO-01  Doppel-Collector-Schutz (Modbus-Konflikt)
 4. SR-FO-02  Failover-Scripts NIE auf Primary
@@ -266,8 +300,9 @@
 
 | Regel | Priorität | Status |
 |---|---|---|
-| SR-BAT-01 | Hoch | ✅ Implementiert (`RegelSocSchutz`) |
-| SR-BAT-02 | Kritisch | ✅ Implementiert (`RegelTempSchutz`) |
+| SR-SLS-01 | Kritisch | ✅ Implementiert (`RegelSlsSchutz` — 35A/Phase, 2026-03-08) |
+| SR-BAT-01 | Hoch | ✅ Implementiert (`Tier1Checker` SOC < 5%) |
+| SR-BAT-02 | Kritisch | ✅ Implementiert (Tier-1 Alarm-Flags, HW-Schutz via BMS) |
 | SR-BAT-03 | Hoch | ✅ Implementiert |
 | SR-BAT-04 | Mittel | ✅ Implementiert (Engine-Konsistenzprüfung) |
 | SR-MODBUS-02 | Mittel | ✅ Implementiert (Actuator Read-Back) |
@@ -276,9 +311,9 @@
 | SR-FO-03 | Hoch | ⚠️ Organisatorisch |
 | SR-FO-04 | Mittel | ✅ Implementiert |
 | SR-FO-05 | Mittel | ✅ Implementiert |
-| SR-HP-01 | Hoch | ✅ Implementiert (`RegelHeizpatrone` Notaus: SOC-abhängig) |
+| SR-HP-01 | Hoch | ✅ Implementiert (`RegelHeizpatrone` Notaus: SOC ≤ 5%, Temp ≥ 78°C) |
 | SR-EV-BATT | Hoch | ✅ Implementiert (`RegelWattpilotBattSchutz`) |
-| SR-EV-03 | Kritisch | 🔲 Geplant (AktorWattpilot ist Stub) |
+| SR-EV-03 | — | ⚠️ Abgelöst durch SR-SLS-01 |
 | SR-EV-01 | Mittel | 🔲 Geplant |
 | SR-EV-02 | Niedrig | 🔲 Geplant |
 | SR-WP-01 | Kritisch | 🔲 Geplant (WP-Modbus fehlt) |
@@ -290,5 +325,5 @@
 
 ---
 
-*Letzte Aktualisierung: 2026-03-01*  
-*Verwandte Dokumente:* [PARAMETER_MATRIZEN.md](PARAMETER_MATRIZEN.md) · [BEOBACHTUNGSKONZEPT.md](BEOBACHTUNGSKONZEPT.md) · [FRONIUS_SOC_MODUS.md](FRONIUS_SOC_MODUS.md) · [BATTERY_ALGORITHM.md](BATTERY_ALGORITHM.md) · [DUAL_HOST_ARCHITECTURE.md](DUAL_HOST_ARCHITECTURE.md)
+*Letzte Aktualisierung: 2026-03-08*  
+*Verwandte Dokumente:* [PARAMETER_MATRIZEN.md](PARAMETER_MATRIZEN.md) · [BEOBACHTUNGSKONZEPT.md](BEOBACHTUNGSKONZEPT.md) · [FRONIUS_SOC_MODUS.md](FRONIUS_SOC_MODUS.md) · [BATTERY_ALGORITHM.md](BATTERY_ALGORITHM.md) · [DUAL_HOST_ARCHITECTURE.md](DUAL_HOST_ARCHITECTURE.md) · [STEUERUNGSPHILOSOPHIE.md](STEUERUNGSPHILOSOPHIE.md)

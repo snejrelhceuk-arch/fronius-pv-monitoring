@@ -1,7 +1,7 @@
 # PV-CONFIG Handbuch
 
 **Konfigurationsprogramm für die PV-Batterie-Automation**
-Version 1.4 — Stand: 7. März 2026
+Version 1.5 — Stand: 8. März 2026
 
 ---
 
@@ -13,6 +13,7 @@ Version 1.4 — Stand: 7. März 2026
 4. [Menü 2: Parameter-Matrix](#4-menü-2-parameter-matrix)
    - [4.0 soc_extern — SOC-Extern-Toleranz](#40-soc_extern--soc-extern-toleranz)
    - [4.1 soc_schutz — Harte Schutzschwellen](#41-soc_schutz--harte-schutzschwellen-priorität-1)
+   - [4.1a sls_schutz — SLS-Netzschutz 35A/Phase](#41a-sls_schutz--sls-netzschutz-35aphase-priorität-1)
    - [4.2 morgen_soc_min — Morgenöffnung](#42-morgen_soc_min--morgenöffnung-priorität-2)
    - [4.3 nachmittag_soc_max — Nachmittagsanhebung](#43-nachmittag_soc_max--nachmittagsanhebung-priorität-2)
    - [4.4 ~~abend_entladerate~~ — ENTFERNT](#44-abend_entladerate--entfernt)
@@ -135,6 +136,36 @@ Die Einheit steht immer beim angezeigten Wert (z.B. `5%`, `100W`, `5.0kWh`).
 **Empfehlungen:**
 - `stop_entladung_unter`: 5–10% sind sinnvoll. Unter 5% kann die BYD in den Notaus gehen.
 - `stop_ladung_ueber`: 95–100%. Bei 100% findet kein Alarm statt.
+
+---
+
+### 4.1a sls_schutz — SLS-Netzschutz 35A/Phase (Priorität 1)
+
+**Zweck:** Überwacht die Phasenströme am Netz-SmartMeter (F1) und schützt vor Auslösung des SLS (Selektiver Leitungsschutzschalter) am Zählerplatz.
+
+**Hintergrund:** Der SLS ist 35A/3-phasig. Maximale Gesamtleistung: √3 × 400V × 35A ≈ 24 kW. Der SLS ist **träge** — 35A je Phase als Schwelle reicht aus. Er löst **ohne Vorwarnung** aus.
+
+**Score:** 95 (× 1.5 = 142 bei Auslösung — höchster Score aller Regeln)
+**Zyklus:** fast
+**Implementierung:** `RegelSlsSchutz` in `automation/engine/regeln/schutz.py`
+
+> **Hinweis:** Diese Regel ist als Schutzregel (`'schutz'` im Namen) immer aktiv und wird parallel zu allen anderen Regeln ausgeführt. Sie kann **nicht deaktiviert** werden.
+
+| Parameter | Standard | Bereich | Wirkung |
+|-----------|----------|---------|---------|
+| sls_strom_max | 35.0 A | 25–40 A | **SLS-Auslösestrom je Phase** (L1N, L2N, L3N). Primärer Trigger: max(I_L1, I_L2, I_L3) > 35A. SLS ist träge — 35A exakt reicht. |
+| sls_leistung_max | 24000 W | 18000–26000 W | **Fallback-Gesamtleistung** (√3 × 400V × 35A ≈ 24 kW). Wird nur verwendet wenn Phasenströme nicht verfügbar sind (SmartMeter-Ausfall). |
+
+**Messung:** Phasenströme I_L1_Netz, I_L2_Netz, I_L3_Netz aus dem Fronius SmartMeter (Netz, am Zählerplatz F1). Datenfluss: raw_data → DataCollector → ObsState.i_l1_netz_a / i_l2_netz_a / i_l3_netz_a → RegelSlsSchutz.
+
+**Aktionen bei Auslösung:**
+1. HP AUS (fritzdect) — Sicherheitshalber, falls wider Erwarten noch an
+2. Wattpilot auf Minimum dimmen (wattpilot) — bei EV > 1500W
+3. E-Mail-Benachrichtigung (`sls_ueberlast`) — 1×/Tag via EventNotifier
+
+**Warum per-Phase und nicht Gesamt?** Der SLS löst je Phase aus. Eine asymmetrische Last (HP auf L1, EV auf L2) kann eine Phase überlasten, obwohl die Gesamt-leistung unter 24 kW liegt. Siehe [STEUERUNGSPHILOSOPHIE.md](STEUERUNGSPHILOSOPHIE.md) §2.
+
+**Empfehlung:** Diesen Wert nicht ändern, solange kein SLS-Austausch stattfindet.
 
 ---
 
@@ -340,15 +371,16 @@ Score um 16:30h:     55  (Deadline, voller Score)
 - **SOC_MAX ≈ 75%:** Die Batterie wird aus Langlebigkeitsgründen selten über 75% geladen. SOC ≥ 90% ist praktisch unerreichbar.
 - **Batterie-Ladeleistung (`batt_power_w`)** ist der zuverlässige Indikator: Wenn die Batterie mit >5 kW lädt, hat die Anlage echten Überschuss.
 
-**5-Phasen-Logik:**
+**6-Phasen-Logik:**
 
 | Phase | Bedingung | Burst-Dauer | Zweck |
 |-------|-----------|-------------|-------|
-| **0 — Morgen-Drain** | Uhr < 10h, wenig Verbrauch, SOC > 10%, Prognose gut/mittel, Forecast ≥ 4 kW | 45 Min. | Batterie schneller leeren wenn SOC_MIN geöffnet — Warmwasser als Senke |
-| **1 — Vormittag** | rest_h > 5, rest_kwh > 20, P_Batt > 3 kW | 30 Min. | Langer Tag, großzügig Warmwasser machen |
-| **2 — Mittags** | P_Batt > 5 kW, rest_kwh deckt Batt + Reserve | 30 Min. | Hauptphase bei Batterie-Sättigung |
-| **3 — Nachmittags** | rest_h < 3, konservativ | 15 Min. | Kurze Restzeit → nur kurze Bursts |
-| **4 — HARD BLOCK** | rest_h < 2 | — | Batterie-Volladung hat Vorrang |
+| **0 — Morgen-Drain** | ab sunrise−1h, SOC > 20%, Prognose gut, Forecast ≥ 4 kW | 45 Min. | Batterie gezielt leeren — Warmwasser als Senke |
+| **1 — Vormittag** | rest_h > 5, rest_kwh > 20, P_Batt > 3 kW (initial) / > 1 kW (Wiedereintritt) | 30 Min. | Langer Tag, großzügig Warmwasser machen |
+| **1b — Nulleinspeiser-Probe** | SOC ≈ MAX, Batt idle, Forecast ≥ HP-Last | 120 s (Probe) → 30 Min. bei Erfolg | WR-Drosselung erkennen, stille PV-Kapazität nutzen |
+| **2 — Mittags** | P_Batt > min_lade, rest_kwh deckt Batt + Reserve | 30 Min. | Hauptphase bei Batterie-Sättigung |
+| **3 — Nachmittags** | rest_h < 3 und ≥ 2, konservativ | 15 Min. | Kurze Restzeit → nur kurze Bursts |
+| **4 — Abend** | rest_h < 2, SOC ≈ MAX, PV ≥ 1500W | 15 Min. (kurz) | Nachladezyklus: EIN/AUS nach SOC-Nähe zu MAX |
 
 **Phase 0 (Morgen-Drain) im Detail:**
 
@@ -371,9 +403,9 @@ Wenn `morgen_soc_min` den SOC_MIN früh auf 5% öffnet, entlädt sich die Batter
 
 | # | Kriterium | Typ | Extern-Hysterese | Wirkung |
 |---|-----------|-----|------------------|--------|
-| 1 | `rest_h < min_rest_h` (2h vor Sunset) | **HART** | Sofort | Batterie muss für die Nacht voll werden |
+| 1 | `rest_h < min_rest_h` (2h vor Sunset) | **DIFFERENZIERT** | — | Phase 4 Abend-Zyklus: SOC ≈ MAX + PV ok → HP erlaubt; sonst AUS |
 | 2 | WW-Temperatur ≥ 78 °C | **HART** | Sofort | Verbrühungs-/Überdruckschutz |
-| 3 | SOC ≤ `stop_entladung_unter` (7%) | **HART** | Sofort | Absoluter Tiefentladeschutz (aus soc_schutz) |
+| 3 | SOC ≤ `stop_entladung_unter` (5%) | **HART** | Sofort | Absoluter Tiefentladeschutz (aus soc_schutz) |
 | 4 | Batterie entlädt — potenzialabhängig | **KONTEXT** | Pausiert 1h | Abhängig von Potenzial und SOC_MAX (s.u.) |
 | 5 | Verbraucher-Konkurrenz (WP/EV) | **KONTEXT** | Pausiert 1h | Abhängig von Potenzial-Stufe (s.u.) |
 | 6 | Netzbezug > 200 W | **KONTEXT** | Pausiert 1h | Kurzzeitig normal bei HP-Zuschalten |
@@ -409,7 +441,7 @@ SOC_MAX auf 100% geht (Nachmittag) wird die Batterie-Entladung strenger bewertet
 | min_ladeleistung_morgens | 3000 W | 1000–8000 W | **Vormittags-Schwelle.** Bei guter Tagesprognose (>20 kWh) reichen 3 kW Ladeleistung, weil genug Sonne für Batterie+HP erwartet wird. |
 | min_rest_kwh | 12.0 kWh | 5–30 kWh | **Mindest-Restprognose.** HP-Burst nur wenn die Rest-Tagesprognose genug kWh zeigt, um Batterie voll zu laden UND HP zu versorgen. |
 | min_rest_kwh_morgens | 20.0 kWh | 10–40 kWh | **Vormittags-Mindestprognose.** Lang genug Sonne erwartet für HP + Batterie + eventuelle EV-Ladung. |
-| min_rest_h | 2.0 h | 1–4 h | **Hard Block unter diese Reststunden.** Wenn weniger als 2 h PV bis Sonnenuntergang → keine HP, damit die Batterie voll wird. |
+| min_rest_h | 2.0 h | 1–4 h | **Schwelle für Phase 4 (Abend-Nachladezyklus).** Unter 2 h PV bis Sonnenuntergang → kein normaler Burst. Stattdessen Phase 4: HP nur wenn SOC ≈ MAX und PV noch ausreicht. |
 | min_rest_h_morgens | 5.0 h | 3–8 h | **Vormittag-Minimum.** Nur bei >5 h Restsonne wird die lockere Morgenschwelle angewendet. |
 | burst_dauer_lang | 1800 s | 600–3600 s | **Burst-Dauer bei guter Prognose (30 Min).** HP läuft maximal diese Zeit, dann aus und Pause. |
 | burst_dauer_kurz | 900 s | 300–1800 s | **Burst-Dauer bei mäßiger Prognose (15 Min).** Kürzere Einschaltzeit bei weniger Reserven. |
@@ -422,37 +454,48 @@ SOC_MAX auf 100% geht (Nachmittag) wird die Batterie-Entladung strenger bewertet
 | potenzial_gut_kwh | 30.0 kWh | 15–60 kWh | **Tagesprognose für Potenzial "gut".** Ab hier: HP + WP + EV alle parallel, Batterie-Entladung immer toleriert. |
 | potenzial_ausreichend_kwh | 20.0 kWh | 10–40 kWh | **Tagesprognose für "ausreichend".** HP + WP parallel (kein EV). Entladung toleriert wenn SOC_MAX ≤ 75%. |
 | potenzial_maessig_kwh | 15.0 kWh | 5–30 kWh | **Tagesprognose für "mäßig".** HP nur solo (kein WP/EV). Entladung toleriert wenn SOC_MAX ≤ 75%. Unter diesem Wert → "niedrig": HP nur bei explizitem Burst, keine Entladung toleriert. |
-| drain_min_soc | 10% | 5–30% | **Drain-SOC-Untergrenze.** Phase 0 nur wenn SOC über diesem Wert. Drain-Notaus schaltet HP aus wenn SOC diesen Wert erreicht. |
+| drain_fruehstart_vor_sunrise_h | 1.0 h | 0–3 h | **Drain-Frühstart vor Sonnenaufgang.** Phase 0 startet ab `sunrise − dieser_Wert`. |
+| drain_start_soc_pct | 20% | 10–50% | **Drain-SOC-Startschwelle.** Phase 0 nur wenn SOC über diesem Wert. |
+| drain_stop_soc_pct | 15% | 5–30% | **Drain-SOC-Untergrenze.** Drain-Notaus schaltet HP aus wenn SOC diesen Wert erreicht. |
 | drain_max_haushalt | 700 W | 200–2000 W | **Max. Hausverbrauch für Drain.** HP-Drain nur bei niedrigem Haushalt — sonst leert die Batterie schon schnell genug. |
 | drain_max_wp | 500 W | 100–2000 W | **Max. WP-Leistung für Drain.** Wenn WP läuft, braucht die Batterie keinen zusätzlichen Drain. |
 | drain_max_ev | 1000 W | 200–5000 W | **Max. EV-Ladung für Drain.** EV verbraucht bereits genug Batterie. |
 | drain_min_prognose | 4.0 kW | 2–10 kW | **Mindest-Prognoseleistung.** Forecast muss in den kommenden Stunden ≥ diesen Wert in kW zeigen. Stellt sicher, dass PV die Batterie später wieder füllt. |
 | drain_fenster_ende | 10.0 h | 8–12 h | **Drain nur vor dieser Uhrzeit.** Standard 10:00 — danach produziert PV und Phase 1–3 übernehmen. |
 | drain_burst_dauer | 2700 s | 900–5400 s | **Drain-Burst Maximaldauer (45 Min).** Sicherheits-Backstop — Drain-Notaus (SOC, Verbraucher) beendet den Drain meist früher. |
+| abend_soc_ein_unter_max_pct | 2% | 1–5% | **Abend-Zyklus EIN-Schwelle.** HP darf an wenn SOC ≥ SOC_MAX − diesen Wert. |
+| abend_soc_aus_unter_max_pct | 10% | 5–20% | **Abend-Zyklus AUS-Schwelle.** HP muss aus wenn SOC < SOC_MAX − diesen Wert. |
+| abend_max_entladung_w | 1000 W | 0–3000 W | **Max Entladeleistung im Abend-Zyklus.** HP aus wenn Batterie stärker entlädt. |
+| abend_min_pv_w | 1500 W | 500–5000 W | **Mindest-PV für Abend-Zyklus.** PV muss noch genug liefern, damit Phase 4 überhaupt anspringt. |
+| probe_dauer_s | 120 s | 30–300 s | **Probe-Burst-Dauer (Phase 1b).** HP wird kurz eingeschaltet um WR-Drosselung zu erkennen. |
+| probe_cooldown_s | 600 s | 120–1800 s | **Probe-Wartezeit.** Nach gescheiterter Probe kein neuer Versuch für diese Dauer. |
+| probe_pv_delta_min_w | 500 W | 100–2000 W | **Mindest-PV-Anstieg.** Probe gilt als Erfolg wenn PV um ≥ diesen Wert steigt. |
+| probe_grid_max_w | 300 W | 0–1000 W | **Max. Netzbezug nach Probe.** Probe gilt als gescheitert wenn Netzbezug über diesem Wert. |
 | extern_respekt | 3600 s | 0–7200 s | **Extern-Hysterese.** Wenn HP außerhalb der Engine eingeschaltet wird, pausieren WEICHE Notaus-Kriterien für diese Dauer. HARTE Kriterien (Temp, SOC-abs, Sunset) wirken immer sofort. 0 = deaktiviert (Notaus greift sofort wie bisher). |
 
 **Rechenbeispiel (sonniger Märztag, ≈ 45 kWh Prognose):**
 ```
-08:00 — SOC = 40%, SOC_MAX = 75%, P_Batt = −200W (Haushalt)
-  Potenzial: 45 kWh → "gut" (≥ 30 kWh)
-  Phase 0 Drain prüft: Prognose gut, Verbraucher niedrig, SOC > 10%
-  → HP EIN (Drain 45 Min) — Batterie absichtlich leeren
+06:30 — Sunrise 07:30, SOC = 25%
+  Phase 0: sunrise−1h = 06:30 ✓, SOC 25% > 20% ✓, Prognose gut ✓
+  → HP EIN (Drain 45 Min.) — Batterie gezielt leeren
 
-10:30 — SOC = 25%, P_Batt = +3.5 kW, Forecast_rest = 38 kWh
-  Potenzial: "gut" → WP+EV parallel erlaubt
+10:30 — SOC = 15% (Drain-Stop), P_Batt = +3.5 kW, Forecast_rest = 38 kWh
   Phase 1: rest_h = 7.5 > 5 ✓, rest_kwh = 38 > 20 ✓, P_Batt > 3 kW ✓
   → HP EIN (Burst 30 Min.)
 
-12:00 — SOC = 73% (≈ SOC_MAX), P_Batt = +3.2 kW, WP = 2.5 kW
-  Potenzial: "gut" → min_lade = 5000×50% = 2500W
-  Phase 2: P_Batt 3200 > 2500 ✓, HP + WP parallel OK ✓
-  → HP EIN (Burst 30 Min.)  ← mit alter 5000W-Schwelle wäre HP AUS geblieben!
+12:00 — SOC = 98% (≈ SOC_MAX), P_Batt ≈ 0, WR drosselt
+  Phase 1b Probe: SOC ≥ MAX−2% ✓, Batt idle ✓, Forecast ok ✓
+  → HP EIN (Probe 120 s) — PV steigt um 1.2 kW, Netzbezug 50W
+  → Probe Erfolg → Probe → Burst lang (30 Min.)
 
 14:00 — SOC = 85%, SOC_MAX = 100%, P_Batt = −1.5 kW (Wolke)
-  Potenzial: "gut" → Entladung immer toleriert ✓
-  HP bleibt an (laufender Burst respektiert)
+  Potenzial: "gut" → Entladung toleriert ✓
+  Phase 2: HP bleibt an (laufender Burst respektiert)
 
-15:30 — rest_h = 1.8 < 2.0 → HART → HP sofort AUS, kein neuer Burst
+16:00 — rest_h = 1.5 < 2.0, SOC = 97%, SOC_MAX = 100%, PV = 2.1 kW
+  Phase 4: SOC ≥ MAX−2% ✓, PV ≥ 1500W ✓, Entladung < 1000W ✓
+  → HP EIN (Abend-Zyklus 15 Min.)
+  SOC sinkt auf 89% → SOC < MAX−10% → HP AUS → Batterie lädt nach
 ```
 
 > **Erstinbetriebnahme:** Der Regelkreis wird mit `aktiv: false` ausgeliefert. Vor dem Einschalten: `.secrets` mit `FRITZ_USER`/`FRITZ_PASSWORD` füllen, AIN prüfen (Menü 6 → Verbindungstest), dann im Menü 1 (Regelkreise) aktivieren. Die Schwellwerte sollten an echten Sonnentagen kalibriert werden.
@@ -550,6 +593,7 @@ Bei gleichzeitig aktiven Regeln entscheidet der Score:
 
 | Regelkreis | Score | Priorität |
 |------------|-------|-----------|
+| **sls_schutz** | **95** | **P1 Sicherheit** |
 | ~~soc_schutz~~ | ~~90~~ | ~~P1~~ ENTFERNT (2026-03-07) |
 | morgen_soc_min | 72 | P2 Steuerung |
 | ~~temp_schutz~~ | ~~70~~ | ~~P1~~ ENTFERNT (2026-03-07) |
