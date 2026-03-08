@@ -146,6 +146,7 @@ class RegelHeizpatrone(Regel):
     regelkreis = 'heizpatrone'
     aktor = 'fritzdect'
     engine_zyklus = 'fast'
+    HP_NENN_W = 2000   # Nennleistung Heizpatrone ~2 kW
 
     def __init__(self):
         super().__init__()
@@ -318,7 +319,12 @@ class RegelHeizpatrone(Regel):
                     d_haus = get_param(matrix, self.regelkreis, 'drain_max_haushalt_w', 700)
                     d_wp = get_param(matrix, self.regelkreis, 'drain_max_wp_w', 500)
                     d_ev = get_param(matrix, self.regelkreis, 'drain_max_ev_w', 1000)
-                    if ((obs.house_load_w or 0) >= d_haus * 1.2
+                    # HP-Eigenverbrauch abziehen, sonst schaltet sich die HP
+                    # selbst ab (house_load enthält die ~2 kW der HP)
+                    haus_netto = (obs.house_load_w or 0)
+                    if obs.heizpatrone_aktiv:
+                        haus_netto = max(0, haus_netto - self.HP_NENN_W)
+                    if (haus_netto >= d_haus * 1.2
                             or (obs.wp_power_w or 0) >= d_wp
                             or (obs.ev_power_w or 0) >= d_ev):
                         return int(score * 1.5)
@@ -430,7 +436,7 @@ class RegelHeizpatrone(Regel):
         #   pv_total_w zeigt nur gedrosselte AC-Leistung (≈ Haushalt), NICHT
         #   was die Module könnten. Daher Forecast-Profil als Proxy nutzen.
         #   HP einschalten erzeugt Nachfrage → WR lässt PV hochfahren.
-        hp_last = 2000  # HP-Nennleistung ~2kW
+        hp_last = self.HP_NENN_W
         soc_nah_max = soc >= (soc_max_eff - 2)
         batt_idle = abs(p_batt) < 500
         grid_ok = abs(obs.grid_power_w or 0) < 300
@@ -510,10 +516,15 @@ class RegelHeizpatrone(Regel):
                         d_wp = get_param(matrix, self.regelkreis, 'drain_max_wp_w', 500)
                         d_ev = get_param(matrix, self.regelkreis, 'drain_max_ev_w', 1000)
                         house_w = obs.house_load_w or 0
+                        # HP-Eigenverbrauch abziehen — house_load enthält HP
+                        house_netto = house_w
+                        if obs.heizpatrone_aktiv:
+                            house_netto = max(0, house_w - self.HP_NENN_W)
                         wp_w = obs.wp_power_w or 0
                         ev_w = obs.ev_power_w or 0
-                        if house_w >= d_haus * 1.2:
-                            notaus_grund = (f'Drain-Ende: Haushalt {house_w:.0f}W '
+                        if house_netto >= d_haus * 1.2:
+                            notaus_grund = (f'Drain-Ende: Haushalt {house_netto:.0f}W '
+                                            f'(netto, brutto {house_w:.0f}W) '
                                             f'≥ {d_haus}×1.2')
                         elif wp_w >= d_wp:
                             notaus_grund = f'Drain-Ende: WP {wp_w:.0f}W ≥ {d_wp}W'
@@ -620,7 +631,7 @@ class RegelHeizpatrone(Regel):
         parallel_ok = self._hp_parallel_erlaubt(potenzial, wp_aktiv, ev_aktiv)
 
         if not burst_dauer:
-            hp_last = 2000
+            hp_last = self.HP_NENN_W
             soc_nah_max = soc >= (soc_max_eff - 2)
             batt_idle = abs(p_batt) < 500
             grid_ok = abs(obs.grid_power_w or 0) < 300
