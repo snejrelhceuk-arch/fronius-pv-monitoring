@@ -32,6 +32,7 @@ from automation.engine.regeln import (          # noqa: E402
     Regel,
     # Entfernt (2026-03-07): RegelSocSchutz, RegelTempSchutz,
     # RegelAbendEntladerate, RegelLaderateDynamisch
+    RegelSlsSchutz,
     RegelKomfortReset,
     RegelMorgenSocMin,
     RegelNachmittagSocMax,
@@ -94,6 +95,7 @@ class Engine:
         self._regeln = [
             # Entfernt (2026-03-07): RegelSocSchutz(), RegelTempSchutz(),
             # RegelAbendEntladerate(), RegelLaderateDynamisch()
+            RegelSlsSchutz(),
             RegelKomfortReset(),
             RegelMorgenSocMin(),
             RegelNachmittagSocMax(),

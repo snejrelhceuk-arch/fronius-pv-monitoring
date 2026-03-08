@@ -181,6 +181,10 @@ ObsState = {
     'grid_power_w':    float,   # positiv=Bezug, negativ=Einspeisung
     'grid_freq_hz':    float,
     'grid_volt_v':     float,
+    'i_l1_netz_a':     float,   # Phasenstrom L1 SmartMeter Netz [A]
+    'i_l2_netz_a':     float,   # Phasenstrom L2 SmartMeter Netz [A]
+    'i_l3_netz_a':     float,   # Phasenstrom L3 SmartMeter Netz [A]
+    'i_max_netz_a':    float,   # max(L1,L2,L3) — für SLS-Schutz
 
     # Verbraucher
     'house_load_w':    float,   # Hausverbrauch [W] (inkl. WP, ohne Wattpilot)
@@ -215,9 +219,9 @@ Fehlende Werte werden als `None` übergeben — Regeln müssen `None`-sicher sei
 | 2 | WW-Speicher Temperatur | Notwendig für WP-Schutzregel (Überhitzung) |
 | 3 | E-Auto SOC (Schätzung) | Urgency-Score für Ladepriorisierung |
 | 4 | Raumtemperatur | Komfort-Daten für WP-Steuerung |
-| 5 | Netz Phasenströme F1/F2/F3 | Asymmetrie-Erkennung, Überlastschutz |
+| ~~5~~ | ~~Netz Phasenströme F1/F2/F3~~ | ✅ Implementiert (2026-03-08): `i_l1/l2/l3_netz_a`, `i_max_netz_a` in ObsState. Genutzt von `RegelSlsSchutz` (35A/Phase). |
 
 ---
 
-*Letzte Aktualisierung: 2026-03-01*  
+*Letzte Aktualisierung: 2026-03-08*  
 *Verwandte Dokumente:* [PARAMETER_MATRIZEN.md](PARAMETER_MATRIZEN.md) · [SCHUTZREGELN.md](SCHUTZREGELN.md) · [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md)

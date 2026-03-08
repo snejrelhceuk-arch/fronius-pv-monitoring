@@ -12,7 +12,7 @@ Module:
 """
 
 from automation.engine.regeln.basis import Regel
-# schutz.py: RegelSocSchutz, RegelTempSchutz entfernt (2026-03-07)
+from automation.engine.regeln.schutz import RegelSlsSchutz
 from automation.engine.regeln.soc_steuerung import (
     RegelMorgenSocMin, RegelNachmittagSocMax, RegelKomfortReset,
 )
@@ -24,6 +24,7 @@ from automation.engine.regeln.geraete import RegelWattpilotBattSchutz, RegelHeiz
 
 __all__ = [
     'Regel',
+    'RegelSlsSchutz',
     'RegelMorgenSocMin', 'RegelNachmittagSocMax', 'RegelKomfortReset',
     'RegelZellausgleich', 'RegelForecastPlausi',
     'RegelWattpilotBattSchutz', 'RegelHeizpatrone',

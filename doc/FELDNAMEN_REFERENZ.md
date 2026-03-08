@@ -173,8 +173,32 @@ W_delta = (P_avg * 60) / 3600  # Wh pro Minute
 
 ---
 
+## Automation-Felder (ObsState)
+
+Die Automation-Engine verwendet `ObsState` als zentrales Beobachtungsobjekt.
+Folgende Felder werden aus `raw_data` gelesen und in ObsState abgebildet:
+
+### Netz-Phasenströme (ab 2026-03-08)
+
+| raw_data-Feld | ObsState-Feld | Einheit | Quelle | Beschreibung |
+|---------------|---------------|---------|--------|--------------|
+| `I_L1_Netz` | `i_l1_netz_a` | A | SmartMeter Netz (F1) | Phasenstrom L1 (positiv=Bezug) |
+| `I_L2_Netz` | `i_l2_netz_a` | A | SmartMeter Netz (F1) | Phasenstrom L2 |
+| `I_L3_Netz` | `i_l3_netz_a` | A | SmartMeter Netz (F1) | Phasenstrom L3 |
+| — | `i_max_netz_a` | A | berechnet | `max(I_L1, I_L2, I_L3)` — für SLS-Schutz (35A/Phase) |
+
+**Verwendung:** `RegelSlsSchutz` prüft `i_max_netz_a >= 35A` als primäre
+Überlastbedingung. Fallback bei fehlenden Phasenströmen: `grid_power_w > 24000W`.
+
+> **Hinweis:** Die Felder `I_L1_Netz`, `I_L2_Netz`, `I_L3_Netz` werden von
+> `modbus_v3.py` über Modbus TCP vom SmartMeter gelesen und in `raw_data`
+> gespeichert. Die Werte sind vorzeichenbehaftet (positiv=Bezug, negativ=Einspeisung).
+
+---
+
 ## Änderungshistorie
 
+- **8. Mär 2026**: Netz-Phasenströme (I_L1/L2/L3_Netz) und Automation-ObsState-Felder dokumentiert
 - **8. Feb 2026**: Dokument erstellt nach Systemcheck
 - **6. Feb 2026**: Power-Integration für F2/F3 und Netz implementiert
 - **5. Feb 2026**: Power-Integration für W_DC1/W_DC2 implementiert
