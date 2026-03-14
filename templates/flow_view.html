@@ -157,118 +157,82 @@
         .battery-detail .bd-sep {
             color: rgba(255,255,255,0.15);
         }
-        /* ══════ Batt-Automation Tabelle ══════ */
-        .batt-auto-table {
-            width: 100%;
-            border-collapse: collapse;
+        /* ══════ Automation Info-Blöcke ══════ */
+        .auto-section {
             margin: 4px 0 2px 0;
-            border-bottom: 1px solid rgba(16,185,129,0.2);
             font-size: 11px;
-            font-weight: 500;
             color: rgba(255,255,255,0.5);
         }
-        .batt-auto-table .ba-header {
-            text-align: left;
+        .auto-section .auto-header {
             padding: 3px 8px;
-            color: #10b981;
             font-weight: 700;
             font-size: 11.5px;
-            border-bottom: 1px solid rgba(16,185,129,0.2);
             letter-spacing: 0.5px;
+            border-bottom: 1px solid rgba(16,185,129,0.2);
         }
-        .batt-auto-table td {
-            padding: 2px 6px;
-            vertical-align: top;
-            white-space: nowrap;
+        .auto-section .auto-header.batt { color: #10b981; }
+        .auto-section .auto-header.hp   { color: #fb923c; border-bottom-color: rgba(251,146,60,0.2); }
+        .auto-phase {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            padding: 3px 8px 2px 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            line-height: 1.4;
         }
-        .batt-auto-table .ba-phase {
-            color: rgba(255,255,255,0.6);
-            font-weight: 600;
-            width: 80px;
-        }
-        .batt-auto-table .ba-zeit {
-            color: rgba(255,255,255,0.4);
-            width: 42px;
-            text-align: right;
-            font-variant-numeric: tabular-nums;
-        }
-        .batt-auto-table .ba-mode {
-            width: 36px;
-            text-align: center;
-        }
-        .batt-auto-table .ba-aktion {
-            color: #10b981;
-            font-weight: 600;
-            white-space: normal;
-            word-break: break-word;
-        }
-        .batt-auto-table .ba-grund {
-            color: rgba(255,255,255,0.35);
-            font-weight: 400;
-            font-size: 10px;
-            white-space: normal;
-            word-break: break-word;
-            max-width: 280px;
-        }
-        /* Status-Farben */
-        .batt-auto-table .ba-done .ba-aktion { color: #10b981; }
-        .batt-auto-table .ba-active .ba-aktion { color: #10b981; }
-        .batt-auto-table .ba-pending .ba-phase { color: rgba(255,255,255,0.35); }
-        .batt-auto-table .ba-pending .ba-aktion { color: #fbbf24; font-weight: 500; }
-        .batt-auto-table .ba-skipped .ba-aktion { color: rgba(255,255,255,0.25); font-weight: 400; }
-        .batt-auto-table .ba-mode-auto { color: rgba(16,185,129,0.6); }
-        .batt-auto-table .ba-mode-man  { color: #fbbf24; }
-        /* Status-Icon */
-        .ba-status-icon {
-            display: inline-block;
+        .auto-phase:last-child { border-bottom: none; }
+        .auto-phase .ap-icon {
+            flex-shrink: 0;
             width: 14px;
             text-align: center;
             font-size: 10px;
         }
-        .ba-done .ba-status-icon { color: #10b981; }
-        .ba-active .ba-status-icon { color: #10b981; }
-        .ba-pending .ba-status-icon { color: #fbbf24; }
-        .ba-skipped .ba-status-icon { color: rgba(255,255,255,0.25); }
-        /* ══════ HP-Automation Zeile ══════ */
-        .hp-auto-row {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 3px 8px;
-            font-size: 11px;
-            font-weight: 500;
-            color: rgba(255,255,255,0.5);
-            border-bottom: 1px solid rgba(251,146,60,0.15);
-        }
-        .hp-auto-row .hp-header {
-            color: #fb923c;
-            font-weight: 700;
-            font-size: 11.5px;
-            letter-spacing: 0.5px;
-            white-space: nowrap;
-        }
-        .hp-auto-row .hp-state {
+        .auto-phase .ap-label {
+            flex-shrink: 0;
+            width: 72px;
             font-weight: 600;
-            white-space: nowrap;
+            color: rgba(255,255,255,0.6);
         }
-        .hp-auto-row .hp-state-ein { color: #fb923c; }
-        .hp-auto-row .hp-state-aus { color: rgba(255,255,255,0.35); }
-        .hp-auto-row .hp-detail {
-            color: rgba(255,255,255,0.40);
-            font-size: 10px;
+        .auto-phase .ap-text {
+            flex: 1;
+            font-weight: 400;
+            color: rgba(255,255,255,0.55);
             white-space: normal;
             word-break: break-word;
-            flex: 1;
         }
-        .hp-auto-row .hp-bursts {
-            color: rgba(251,146,60,0.6);
+        .auto-phase .ap-text .ap-val {
+            color: #10b981;
+            font-weight: 600;
+        }
+        .auto-phase .ap-text .ap-zeit {
+            color: rgba(255,255,255,0.35);
             font-variant-numeric: tabular-nums;
-            white-space: nowrap;
         }
-        .hp-auto-row .hp-engine {
+        /* Status-Varianten */
+        .auto-phase.done .ap-icon  { color: #10b981; }
+        .auto-phase.done .ap-label { color: rgba(255,255,255,0.5); }
+        .auto-phase.done .ap-val   { color: #10b981; }
+        .auto-phase.active .ap-icon  { color: #10b981; }
+        .auto-phase.active .ap-val   { color: #10b981; }
+        .auto-phase.pending .ap-icon  { color: #fbbf24; }
+        .auto-phase.pending .ap-label { color: rgba(255,255,255,0.35); }
+        .auto-phase.pending .ap-val   { color: #fbbf24; }
+        .auto-phase.skipped .ap-icon  { color: rgba(255,255,255,0.2); }
+        .auto-phase.skipped .ap-label { color: rgba(255,255,255,0.25); }
+        .auto-phase.skipped .ap-text  { color: rgba(255,255,255,0.25); }
+        .auto-phase.skipped .ap-val   { color: rgba(255,255,255,0.3); }
+        /* HP-spezifisch */
+        .auto-phase.hp-ein .ap-icon { color: #fb923c; }
+        .auto-phase.hp-ein .ap-val  { color: #fb923c; }
+        .auto-phase.hp-aus .ap-icon { color: rgba(255,255,255,0.3); }
+        .hp-timeline-row {
+            padding: 2px 8px 4px 22px;
             font-size: 10px;
+            color: rgba(255,255,255,0.35);
             white-space: nowrap;
+            overflow-x: auto;
         }
+        /* (HP styles moved into .auto-section / .auto-phase) */
         .inverter-temps {
             display: flex;
             justify-content: center;
@@ -572,6 +536,10 @@
                 <span>SOC: <span class="bd-val" id="bd-soc-range">--</span></span>
                 <span class="bd-sep">|</span>
                 <span>Temp: <span class="bd-val" id="bd-temp">--</span> °C</span>
+                <span class="bd-sep">|</span>
+                <span>WR: <span class="bd-val" id="bd-storctl">--</span></span>
+                <span class="bd-sep">|</span>
+                <span>Bat: <span class="bd-val" id="bd-chast">--</span></span>
             </div>
             <div class="battery-detail" id="batteryDetail2" style="padding-top:0;font-size:11px;opacity:0.7;">
                 <span>Kap: <span class="bd-val" id="bd-cap-est">--</span>/<span class="bd-val" id="bd-cap-max">--</span> kWh</span>
@@ -582,42 +550,28 @@
                 <span class="bd-sep">|</span>
                 <span>FW: <span class="bd-val" id="bd-firmware">--</span></span>
             </div>
-            <!-- Batt-Automation: einheitliche Phasen-Tabelle -->
-            <table class="batt-auto-table" id="battAutoTable">
-                <thead>
-                    <tr><th class="ba-header" colspan="6">⚡ Batt-Automation</th></tr>
-                </thead>
-                <tbody id="battAutoBody">
-                    <tr class="ba-pending">
-                        <td class="ba-phase"><span class="ba-status-icon">○</span> Morgens</td>
-                        <td class="ba-zeit">—</td>
-                        <td class="ba-mode">—</td>
-                        <td class="ba-aktion">—</td>
-                        <td class="ba-grund"></td>
-                    </tr>
-                    <tr class="ba-pending">
-                        <td class="ba-phase"><span class="ba-status-icon">○</span> Nachmittag</td>
-                        <td class="ba-zeit">—</td>
-                        <td class="ba-mode">—</td>
-                        <td class="ba-aktion">—</td>
-                        <td class="ba-grund"></td>
-                    </tr>
-                    <tr class="ba-pending">
-                        <td class="ba-phase"><span class="ba-status-icon">○</span> Abend</td>
-                        <td class="ba-zeit">—</td>
-                        <td class="ba-mode">—</td>
-                        <td class="ba-aktion">—</td>
-                        <td class="ba-grund"></td>
-                    </tr>
-                </tbody>
-            </table>
-            <!-- HP-Automation: Heizpatrone Status -->
-            <div class="hp-auto-row" id="hpAutoRow">
-                <span class="hp-header">🔥 HP</span>
-                <span class="hp-state hp-state-aus" id="hpState">AUS</span>
-                <span class="hp-detail" id="hpDetail">—</span>
-                <span class="hp-bursts" id="hpBursts"></span>
-                <span class="hp-engine" id="hpEngine"></span>
+            <!-- Batt-Automation: Beschreibungsblöcke -->
+            <div class="auto-section" id="battAutoSection">
+                <div class="auto-header batt">⚡ Batterie-Automation</div>
+                <div id="battAutoBody">
+                    <div class="auto-phase pending">
+                        <span class="ap-icon">⏳</span>
+                        <span class="ap-label">Morgens</span>
+                        <span class="ap-text">—</span>
+                    </div>
+                </div>
+            </div>
+            <!-- HP-Automation: Heizpatrone -->
+            <div class="auto-section" id="hpAutoSection">
+                <div class="auto-header hp">🔥 Heizpatrone</div>
+                <div id="hpAutoBody">
+                    <div class="auto-phase hp-aus">
+                        <span class="ap-icon">○</span>
+                        <span class="ap-label">Status</span>
+                        <span class="ap-text">—</span>
+                    </div>
+                </div>
+                <div class="hp-timeline-row" id="hpTimeline"></div>
             </div>
             <div class="inverter-temps" id="inverterTemps">
                 <span class="it-label">F1</span>
@@ -1131,6 +1085,30 @@
             }
             document.getElementById('bd-soc-range').textContent = socRangeText;
             document.getElementById('bd-temp').textContent = d.battery_temp != null ? d.battery_temp : '--';
+            // StorCtl_Mod + ChaSt (SunSpec Model 124)
+            const storEl = document.getElementById('bd-storctl');
+            if (storEl) {
+                const sct = d.storctl_mod;
+                const sctText = d.storctl_mod_text || '';
+                if (sct != null) {
+                    const sctColor = sct === 0 ? '#4ade80' : '#fbbf24';
+                    storEl.innerHTML = `<span style="color:${sctColor}">${sctText}</span>`;
+                } else {
+                    storEl.textContent = '--';
+                }
+            }
+            const chaEl = document.getElementById('bd-chast');
+            if (chaEl) {
+                const ch = d.cha_state;
+                const chText = d.cha_state_text || '--';
+                if (ch != null) {
+                    const chColors = {1:'#6b7280',2:'#f87171',3:'#fbbf24',4:'#22d3ee',5:'#4ade80',6:'#a78bfa',7:'#9ca3af'};
+                    const chColor = chColors[ch] || '#9ca3af';
+                    chaEl.innerHTML = `<span style="color:${chColor}">${chText}</span>`;
+                } else {
+                    chaEl.textContent = '--';
+                }
+            }
             // WR-Temperaturen
             document.getElementById('it-intern').textContent = d.wr_temp_intern != null ? d.wr_temp_intern : '--';
             document.getElementById('it-ac').textContent = d.wr_temp_ac != null ? d.wr_temp_ac : '--';
@@ -1147,133 +1125,99 @@
             document.getElementById('bd-lt-charge').textContent = d.bms_lifetime_charged_kwh != null ? (d.bms_lifetime_charged_kwh / 1000).toFixed(1) : '--';
             document.getElementById('bd-lt-discharge').textContent = d.bms_lifetime_discharged_kwh != null ? (d.bms_lifetime_discharged_kwh / 1000).toFixed(1) : '--';
             document.getElementById('bd-firmware').textContent = d.bms_firmware != null ? d.bms_firmware : '--';
-            // ── Batt-Automation Phasen-Tabelle ──────────────────────
+            // ── Batt-Automation: Beschreibungsblöcke ────────────────
             const phasen = d.automation_phasen || {};
-            const sched = d.scheduler || {};
-            const tbody = document.getElementById('battAutoBody');
-
-            // Phase-Definitionen: Key, Label, Pending-Text
-            const phaseDefs = [
-                {key: 'morgen',      label: 'Morgens',     pendingText: 'SOC_MIN → 5%',      doneFlag: 'morning_done'},
-                {key: 'nachmittag',  label: 'Nachmittag',  pendingText: 'SOC_MAX → 100%',    doneFlag: 'afternoon_done'},
-                {key: 'abend',       label: 'Abend',       pendingText: 'Entladerate-Limit', doneFlag: null},
-                {key: 'reset',       label: 'Reset',       pendingText: 'SOC → Komfort',     doneFlag: null},
-            ];
+            const battBody = document.getElementById('battAutoBody');
 
             const statusIcons = {
-                done:    '✓', active: '●', pending: '⏳',
-                skipped: '—', waiting: '⏳',
+                done: '✓', active: '●', pending: '⏳',
+                skipped: '–', waiting: '⏳',
             };
+            const phaseKeys = [
+                {key: 'morgen',      label: 'Morgens'},
+                {key: 'nachmittag',  label: 'Nachmittag'},
+                {key: 'komfort',     label: 'Komfort'},
+            ];
 
-            let rows = '';
-            for (const pd of phaseDefs) {
+            let battHtml = '';
+            for (const pd of phaseKeys) {
                 const p = phasen[pd.key];
-                let status, zeit, mode, aktion, grund;
-
-                if (p) {
-                    status = p.status || 'pending';
-                    zeit = p.zeit || '—';
-                    mode = p.manuell ? 'man.' : 'auto';
-                    aktion = p.aktion || '—';
-                    grund = p.grund || '';
-                } else {
-                    // Keine Log-Daten: aus Scheduler-Flags ableiten
-                    const isDone = pd.doneFlag ? sched[pd.doneFlag] : false;
-                    status = isDone ? 'done' : 'pending';
-                    zeit = '—';
-                    mode = '—';
-                    aktion = isDone ? '(erledigt)' : pd.pendingText;
-                    grund = '';
-                }
-
-                const cssClass = 'ba-' + status;
-                const icon = statusIcons[status] || '○';
-                const modeClass = mode === 'man.' ? 'ba-mode-man' : (mode === 'auto' ? 'ba-mode-auto' : '');
-                const grundHtml = grund ? `<span class="ba-grund">${grund.substring(0, 70)}</span>` : '';
-
-                rows += `<tr class="${cssClass}">
-                    <td class="ba-phase"><span class="ba-status-icon">${icon}</span> ${pd.label}</td>
-                    <td class="ba-zeit">${zeit}</td>
-                    <td class="ba-mode ${modeClass}">${mode}</td>
-                    <td class="ba-aktion">${aktion}</td>
-                    <td>${grundHtml}</td>
-                </tr>`;
+                if (!p) continue;
+                const st = p.status || 'pending';
+                const icon = statusIcons[st] || '○';
+                const zeit = p.zeit ? `<span class="ap-zeit">${p.zeit}</span> ` : '';
+                // Beschreibungstext: aktion + grund als Fließtext
+                let desc = '';
+                if (p.aktion) desc += `<span class="ap-val">${p.aktion}</span>`;
+                if (p.grund) desc += ` — ${p.grund}`;
+                if (!desc) desc = '—';
+                battHtml += `<div class="auto-phase ${st}">
+                    <span class="ap-icon">${icon}</span>
+                    <span class="ap-label">${pd.label}</span>
+                    <span class="ap-text">${zeit}${desc}</span>
+                </div>`;
             }
 
-            // Engine-Vorausschau als Zusatzzeile (wenn verfügbar)
-            const vorausschau = d.vorausschau || [];
-            if (vorausschau.length > 0) {
-                const top = vorausschau[0];
-                const scoreColor = top.score >= 60 ? '#f87171' : top.score >= 40 ? '#fbbf24' : '#4ade80';
-                const cmds = (top.aktionen || []).map(a => {
-                    const labels = {'set_soc_min':'SOC_MIN','set_soc_max':'SOC_MAX',
-                                    'set_discharge_rate':'Entladerate','hold':'Halten'};
-                    const cl = labels[a.kommando] || a.kommando;
-                    return a.wert != null ? `${cl}→${a.wert}` : cl;
-                }).join(', ');
-                const grundText = (top.aktionen && top.aktionen[0] && top.aktionen[0].grund)
-                    ? top.aktionen[0].grund.substring(0, 50) : '';
-                rows += `<tr class="ba-pending">
-                    <td class="ba-phase" style="color:rgba(255,255,255,0.35)"><span class="ba-status-icon" style="color:${scoreColor}">⚙</span> Engine</td>
-                    <td class="ba-zeit" style="color:${scoreColor}">[${top.score}]</td>
-                    <td class="ba-mode"></td>
-                    <td class="ba-aktion" style="color:${scoreColor}">${top.regel}: ${cmds}</td>
-                    <td><span class="ba-grund">${grundText}</span></td>
-                </tr>`;
-            }
+            battBody.innerHTML = battHtml || '<div class="auto-phase pending"><span class="ap-icon">⏳</span><span class="ap-label">—</span><span class="ap-text">Keine Daten</span></div>';
 
-            tbody.innerHTML = rows;
-
-            // ── HP-Automation (Heizpatrone via Fritz!DECT) ───────
+            // ── HP-Automation: Heizpatrone ───────────────────────
             const hpStatus = d.hp_status || {};
             const hpAktionen = d.hp_aktionen || [];
             const hpBursts = d.hp_bursts_heute || 0;
-            const hpState = document.getElementById('hpState');
-            const hpDetail = document.getElementById('hpDetail');
-            const hpBurstsEl = document.getElementById('hpBursts');
-            const hpEngine = document.getElementById('hpEngine');
+            const hpBody = document.getElementById('hpAutoBody');
 
-            if (hpStatus.zustand === 'EIN') {
-                const pw = hpStatus.power_w != null ? ` ${hpStatus.power_w} W` : '';
-                hpState.textContent = `EIN${pw}`;
-                hpState.className = 'hp-state hp-state-ein';
-            } else if (hpStatus.zustand === 'AUS') {
-                hpState.textContent = 'AUS';
-                hpState.className = 'hp-state hp-state-aus';
-            } else {
-                hpState.textContent = hpStatus.zustand || '?';
-                hpState.className = 'hp-state hp-state-aus';
-            }
+            let hpHtml = '';
 
-            // Detail: letzter Schaltvorgang + Grund
+            // Zeile 1: Aktueller Zustand
+            const isEin = hpStatus.zustand === 'EIN';
+            const stClass = isEin ? 'hp-ein' : 'hp-aus';
+            const stIcon = isEin ? '●' : '○';
+            const pw = (isEin && hpStatus.power_w != null) ? ` ${hpStatus.power_w} W` : '';
+            const energyKwh = hpStatus.energy_wh != null ? ` · Σ ${(hpStatus.energy_wh / 1000).toFixed(1)} kWh` : '';
+            const burstInfo = hpBursts > 0 ? ` · ${hpBursts}× EIN heute` : '';
+            const liveTag = hpStatus.live ? '' : ' <span class="ap-zeit">(kein Live)</span>';
+
+            hpHtml += `<div class="auto-phase ${stClass}">
+                <span class="ap-icon">${stIcon}</span>
+                <span class="ap-label">Status</span>
+                <span class="ap-text"><span class="ap-val">${hpStatus.zustand || '?'}${pw}</span>${energyKwh}${burstInfo}${liveTag}</span>
+            </div>`;
+
+            // Zeile 2: Letzter Schaltvorgang + Grund
             if (hpAktionen.length > 0) {
                 const last = hpAktionen[0];
                 const cmdLabel = last.kommando === 'hp_ein' ? 'EIN' : 'AUS';
-                const grundShort = (last.grund || '').substring(0, 80);
-                hpDetail.textContent = `${last.ts} → ${cmdLabel}${grundShort ? ' · ' + grundShort : ''}`;
+                const cmdClass = last.kommando === 'hp_ein' ? 'hp-ein' : 'hp-aus';
+                const cmdIcon = last.kommando === 'hp_ein' ? '▲' : '▼';
+                const grundText = last.grund ? ` — ${last.grund}` : '';
+                hpHtml += `<div class="auto-phase ${cmdClass}">
+                    <span class="ap-icon">${cmdIcon}</span>
+                    <span class="ap-label">Letzte</span>
+                    <span class="ap-text"><span class="ap-zeit">${last.ts || '?'}</span> <span class="ap-val">${cmdLabel}</span>${grundText}</span>
+                </div>`;
             } else {
-                hpDetail.textContent = 'Keine Schaltvorgänge (24h)';
+                hpHtml += `<div class="auto-phase hp-aus">
+                    <span class="ap-icon">–</span>
+                    <span class="ap-label">Letzte</span>
+                    <span class="ap-text">Keine Schaltvorgänge (24 h)</span>
+                </div>`;
             }
 
-            // Burst-Counter
-            hpBurstsEl.textContent = hpBursts > 0 ? `${hpBursts}× Burst` : '';
+            hpBody.innerHTML = hpHtml;
 
-            // Engine-Vorausschau: nächste HP-Aktion
-            const hpVorschau = (vorausschau || []).find(v => v.regel === 'heizpatrone');
-            if (hpVorschau) {
-                const hpCmds = (hpVorschau.aktionen || []).map(a => {
-                    const cl = a.kommando === 'hp_ein' ? 'EIN' : a.kommando === 'hp_aus' ? 'AUS' : a.kommando;
-                    return cl;
-                }).join(', ');
-                const hpGrund = (hpVorschau.aktionen && hpVorschau.aktionen[0])
-                    ? (hpVorschau.aktionen[0].grund || '').substring(0, 50) : '';
-                const scoreColor = hpVorschau.score >= 50 ? '#fb923c' : '#fbbf24';
-                hpEngine.innerHTML = `<span style="color:${scoreColor}">[${hpVorschau.score}] ${hpCmds}</span>`;
-                if (hpGrund && !hpDetail.textContent.includes(hpGrund.substring(0, 20))) {
-                    hpDetail.textContent += ` ⏭ ${hpGrund}`;
-                }
-            } else {
-                hpEngine.textContent = '';
+            // HP-Timeline
+            const hpTL = document.getElementById('hpTimeline');
+            if (hpTL && hpAktionen.length > 1) {
+                const entries = hpAktionen.slice().reverse().map(a => {
+                    const zeit = a.ts ? a.ts.substring(11, 16) : '?';
+                    const aIsEin = a.kommando === 'hp_ein';
+                    const color = aIsEin ? '#fb923c' : '#6b7280';
+                    const symbol = aIsEin ? '▲' : '▼';
+                    return `<span style="color:${color}" title="${a.grund || ''}">${zeit}${symbol}</span>`;
+                });
+                hpTL.innerHTML = entries.join(' › ');
+            } else if (hpTL) {
+                hpTL.innerHTML = '';
             }
 
         } catch(e) { console.warn('BatteryDetail:', e); }

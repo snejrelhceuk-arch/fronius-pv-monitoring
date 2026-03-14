@@ -170,7 +170,7 @@ ABENDS:
 
 ### 2.6 Heizpatrone (HP) — Prognosegesteuerte Burst-Strategie (via Fritz!DECT)
 
-> Stand: 2026-03-08 — **Produktiv** seit 2026-02-28 (`RegelHeizpatrone` + `AktorFritzDECT`)
+> Stand: 2026-03-14 — **Produktiv** seit 2026-02-28 (`RegelHeizpatrone` + `AktorFritzDECT`)
 > Siehe: [STEUERUNGSPHILOSOPHIE.md](../doc/STEUERUNGSPHILOSOPHIE.md) für Designprinzipien
 
 **Abkürzungen:** HP = Heizpatrone (2 kW, Fritz!DECT-Steckdose), WP = Wärmepumpe
@@ -224,12 +224,21 @@ rest_kwh      = get_remaining_pv_surplus_kwh()  # Prognose Restertrag
 rest_h        = Stunden bis Sonnenuntergang (aus solar_geometry)
 batt_rest_kwh = (SOC_MAX - SOC) * 20.48 / 100  # kWh bis Batterie voll
 sunrise       = Sonnenaufgang (Dezimalstunde, aus solar_geometry)
+sunshine_h    = prognostizierte Sonnenstunden heute [h] (aus Wetter-API)
+
+# ── Grundprinzip (seit 2026-03-14): HP = Überlaufventil ───────────
+#   Die HP soll NUR dann laufen, wenn die Batterie am SOC_MAX-Deckel
+#   anschlägt und PV abgeregelt wird. Nicht Batteriereserven verbrennen!
+#   Phase 1/2/3 erfordern SOC ≈ SOC_MAX (innerhalb 5%).
+#   Phase 0 erfordert Mindest-Sonnenstunden (kein Drain bei Regen).
 
 # ── Phase 0: Morgen-Drain (ab sunrise−1h, prognosegetrieben) ───────
 #   Batterie gezielt leeren BEVOR PV produziert. Sunrise-basiert,
 #   NICHT P_Batt-abhängig (P_Batt > 0 bei erzwungener Netzladung!).
+#   Sonnenstunden-Guard: kein Drain bei < 5h prognostizierter Sonne.
 #   Drain-Notaus prüft PV < 500W und Netzbezug Ø > 200W.
 WENN now_h >= (sunrise - 1h) UND now_h < 10:00:
+    UND sunshine_h >= 5.0:          ← NEU: Sonnenstunden-Guard
     UND SOC > 20%:
     UND Verbraucher niedrig (Haus < 700W, WP < 500W, EV < 1000W):
     UND forecast_quality = gut|mittel:
@@ -237,10 +246,12 @@ WENN now_h >= (sunrise - 1h) UND now_h < 10:00:
     → HP EIN (Drain 45 Min) — Batterie gezielt leeren
     → Stop bei SOC ≤ 15% (drain_stop_soc)
 
-# ── Phase 1: Vormittags (gute Prognose, Wiedereintritt-fähig) ──────
-#   Bei Wiedereintritt nach Burst-Pause: Schwelle um HP_NENN_W reduziert,
-#   da P_Batt nach HP-AUS erst wieder hochfahren muss.
+# ── Phase 1: Vormittags (SOC ≈ MAX + gute Prognose) ───────────────
+#   SOC muss nahe SOC_MAX sein (Überlaufventil-Prinzip: erst Batterie
+#   füllen, dann HP als Senke). Bei Wiedereintritt nach Burst-Pause:
+#   Schwelle um HP_NENN_W reduziert.
 WENN rest_h > 5 UND rest_kwh > 20:
+    UND SOC >= SOC_MAX - 5%:        ← NEU: SOC≈MAX erforderlich
     UND P_Batt > Schwelle (3000W initial, 1000W bei Wiedereintritt):
     → HP EIN (Burst: 30 Min)
 
@@ -254,14 +265,17 @@ WENN SOC ≥ SOC_MAX - 2% UND |P_Batt| < 500W UND |Grid| < 300W:
     UND Probe-Cooldown abgelaufen:
     → HP EIN (Probe 120s → Auswertung → Verlängern oder AUS)
 
-# ── Phase 2: Mittags (Batterie lädt kräftig) ──────────────────────
+# ── Phase 2: Mittags (SOC ≈ MAX + Batterie lädt kräftig) ──────────
+#   Batterie muss nahe SOC_MAX sein — HP als Überlaufventil.
 WENN rest_h ≥ 2.0:
+    UND SOC >= SOC_MAX - 5%:        ← NEU: SOC≈MAX erforderlich
     UND P_Batt > min_lade (potenzialabhängig):
     UND rest_kwh > batt_rest_kwh + Reserve:
     → HP EIN (Burst: 30 Min)
 
-# ── Phase 3: Nachmittags spät (konservativ) ──────────────────────
+# ── Phase 3: Nachmittags spät (SOC ≈ MAX, konservativ) ────────────
 WENN rest_h ≥ 2.0 UND rest_h < 3.0:
+    UND SOC >= SOC_MAX - 5%:        ← NEU: SOC≈MAX erforderlich
     UND P_Batt > min_lade:
     UND rest_kwh > batt_rest_kwh + reserve_nachmittag:
     → HP EIN (Burst: 15 Min, konservativ)
@@ -284,7 +298,15 @@ WENN rest_h < 2.0 UND rest_h > 0:
 SOC-SCHUTZ:      SOC ≤ 5% → HP SOFORT AUS (nicht 7%!)
 NETZBEZUG:       P_Netz > 200 W (Ø5 Min) → HP SOFORT AUS
 ENTLADESCHUTZ:   SOC-abhängig (siehe unten)
-```
+# ── Autoritätsschaltung (manuelles Schalten) ─────────────────────
+# Manuell EIN: Engine respektiert für `extern_respekt_s` (30 Min, 15–120 Min).
+#   ALLE weichen Kriterien + Phase 4 pausiert. Nur Übertemp, SOC ≤ 5%
+#   und SOC ≤ `extern_notaus_soc_pct` (15%) überstimmen sofort.
+# Manuell AUS: Engine sperrt hp_ein für `extern_respekt_s`.
+WENN HP extern EIN UND SOC ≤ extern_notaus_soc_pct (15%):
+  → HP SOFORT AUS ("Extern-Override: SOC zu niedrig")
+WENN HP extern AUS:
+  → EIN-Sperre für extern_respekt_s```
 
 #### SOC-abhängiger Entladeschutz (Notaus)
 
@@ -324,39 +346,54 @@ die Regelung des Nulleinspeisers braucht bis zu 30 s zum Nachregeln.
 > deutlich mehr als Haus + Batterie brauchen. Die 2 kW HP passen problemlos
 > dazu. Die Abregelung des Nulleinspeisers wird sogar reduziert.
 
-#### Rechenbeispiel (8. März, wolkenlos, SOC_MAX=75%)
+#### Rechenbeispiel (14. März, wolkenlos, 9h Sonne, SOC_MAX=75%)
 
 ```
 05:30 — Sunrise 06:30, drain_fruehstart = 1h → Fenster offen ab 05:30
-  SOC=40%, Prognose 45 kWh ("gut"), Haus=350W, WP=0
-  Phase 0: sunrise-1h ✓, SOC>20% ✓, Verbraucher niedrig ✓
+  SOC=40%, Prognose 45 kWh ("gut"), Haus=350W, WP=0, Sonnenstunden=9h
+  Phase 0: sunrise-1h ✓, sunshine_h=9 ≥ 5 ✓, SOC>20% ✓, Verbr. niedrig ✓
   → HP EIN (Drain 45 Min) — Batterie gezielt leeren
 
-09:30 — SOC=18%, P_Batt=+3.5kW, rest_kwh=38
-  Phase 1: rest_h=8 > 5 ✓, rest_kwh=38 > 20 ✓, P_Batt>3kW ✓
-  → HP EIN (Burst 30 Min)
+  Gegenbeispiel (Regentag, 14. März): sunshine_h=3.5 < 5.0
+  → Phase 0 BLOCKIERT (Batterie-Energie wird für Haushalt gebraucht)
 
-10:00 — Burst-Timer → HP AUS
+09:30 — SOC=18%, P_Batt=+3.5kW, rest_kwh=38
+  Phase 1: rest_h=8 > 5 ✓, rest_kwh=38 > 20 ✓
+  SOC=18% vs. SOC_MAX(75%)-5=70% → SOC 18% < 70% ✗
+  → Phase 1 BLOCKIERT (Batterie erst füllen!)
+
+10:45 — SOC=71% (≈SOC_MAX 75%-5=70%), P_Batt=+3.8kW
+  Phase 1: rest_h=6.5 > 5 ✓, rest_kwh=32 > 20 ✓, SOC 71% ≥ 70% ✓,
+  P_Batt > 3kW ✓
+  → HP EIN (Burst 30 Min) — Batterie am Deckel, HP als Überlaufventil
+
+11:15 — Burst-Timer → HP AUS
   _letzte_phase = 'phase1', _letzte_aus = jetzt
 
-10:08 — P_Batt=2.5kW (erholt sich nach HP-AUS)
+11:23 — P_Batt=2.5kW (erholt sich nach HP-AUS), SOC=72%
   Phase 1 Wiedereintritt: Schwelle = max(1000, 3000-2000) = 1000W
-  P_Batt 2500 > 1000 ✓ → HP EIN (Burst 30 Min)
+  SOC 72% ≥ 70% ✓, P_Batt 2500 > 1000 ✓ → HP EIN (Burst 30 Min)
 
 12:00 — SOC=73% (≈SOC_MAX 75%), P_Batt=+200W, Grid≈0
-  Phase 1b: SOC nahe MAX ✓, Batt idle ✓, Forecast 8kW ✓
+  Phase 1b: SOC nahe MAX (73% ≥ 73%) ✓, Batt idle ✓, Forecast 8kW ✓
   → HP EIN (Probe 120s) — PV-Start=4500W, Grid-Start=50W
 
 12:02 — Probe-Auswertung: PV jetzt=5200W (ΔPV=700W ≥ 500W), Grid=80W ≤ 300W
   Probe ERFOLGREICH → Burst verlängern um 30 Min
   (WR hatte gedrosselt, jetzt voll aufgeregelt)
 
-14:00 — SOC=85%, SOC_MAX=100% (Nachmittag angehoben), P_Batt=−1.5kW
-  Potenzial: "gut" → Entladung toleriert ✓
-  HP bleibt an (laufender Burst)
+13:30 — SOC=74%, SOC_MAX=75%, P_Batt=+4.2kW
+  Phase 2: SOC 74% ≥ 70% (MAX-5) ✓, P_Batt > min_lade ✓,
+  rest_kwh=25 > batt_rest_kwh(0.2)+reserve(2) ✓
+  → HP EIN (Burst 30 Min) — Überlaufventil aktiv
 
-15:30 — rest_h=1.8 < 2.0 → Phase 4 (Abend)
-  SOC=96% ≈ SOC_MAX(100%)−2% → EIN-Schwelle erfüllt
+14:00 — SOC=85%, SOC_MAX=100% (Nachmittag angehoben), P_Batt=+5.1kW
+  Phase 2: SOC 85% ≥ 95% (MAX-5)? 85% < 95% ✗
+  → Phase 2 BLOCKIERT (SOC erst auf 95% bringen, dann HP)
+  Batterie füllt Richtung 100%...
+
+15:30 — rest_h=1.8 < 2.0, SOC=96% ≈ SOC_MAX(100%)−2%
+  Phase 4: SOC 96% ≥ 98% → EIN-Schwelle erfüllt
   PV=2100W ≥ 1500W ✓, P_Batt=+300W ≥ 0 ✓
   → HP EIN (Burst kurz 15 Min)
 
@@ -370,6 +407,12 @@ die Regelung des Nulleinspeisers braucht bis zu 30 s zum Nachregeln.
 16:30 — PV sinkt unter 1500W → HP AUS (endgültig, Sonnenuntergang naht)
 ```
 
+> **Kernprinzip (seit 2026-03-14):** HP = Überlaufventil. Die Batterie wird
+> ZUERST auf SOC_MAX geladen. Erst wenn SOC den Deckel erreicht (innerhalb 5%
+> bei Phase 1/2/3, innerhalb 2% bei Phase 1b/4) und PV abgeregelt wird, darf
+> die HP als Senke einspringen. Das verhindert, dass die HP Batteriereserven
+> verbrennt, die der Haushalt abends braucht.
+
 #### Implementierungsplan
 
 | Komponente | Datei | Status |
@@ -382,7 +425,8 @@ die Regelung des Nulleinspeisers braucht bis zu 30 s zum Nachregeln.
 | Probe-Logik (Nulleinspeiser) | in `geraete.py` Phase 1b | ✅ Produktiv (2026-03-08) |
 | Abend-Nachladezyklus | in `geraete.py` Phase 4 | ✅ Produktiv (2026-03-08) |
 | Phasenströme Pipeline | `data_collector.py → obs_state.py` | ✅ Produktiv (2026-03-08) |
-| Parametermatrix (28+ Param.) | `config/soc_param_matrix.json` | ✅ Produktiv |
+| Autoritätsschaltung (Extern) | in `geraete.py` + `extern_notaus_soc_pct` | ✅ Produktiv (2026-03-14) |
+| Parametermatrix (30+ Param.) | `config/soc_param_matrix.json` | ✅ Produktiv |
 | Registrierung in `actuator.py` | 3 Aktoren: batterie, wattpilot, fritzdect | ✅ Produktiv |
 | pv-config.py Menü 6 | HP-Status, Config, Test, manuell Ein/Aus | ✅ Produktiv |
 | Config | `config/fritz_config.json` (IP, AIN), `.secrets` (Creds) | ✅ Produktiv |

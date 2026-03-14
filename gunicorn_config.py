@@ -2,11 +2,16 @@
 Gunicorn-Konfiguration für PV-System Web-API
 Produktions-Setup: Multi-Worker, Timeouts, Logging
 
-Nutzung:
-  gunicorn -c gunicorn_config.py web_api:app
+WICHTIG: Nur via systemd starten (pv-web.service)!
+  sudo systemctl restart pv-web.service
+  ./restart_webserver.sh
+
+Manueller Start (nohup gunicorn ...) ist NICHT erlaubt —
+führt zu Port-Konflikten mit dem systemd-Service.
 """
 import multiprocessing
 import os
+import sys
 from host_role import is_failover
 
 # --- Binding ---
@@ -37,11 +42,27 @@ daemon = False  # systemd managt den Lifecycle
 def on_starting(server):
     """Wird einmal beim Gunicorn-Master-Start ausgeführt.
     
+    Guard: Blockiert Start wenn nicht via systemd gestartet —
+    verhindert Port-Konflikte durch manuelle nohup-Starts.
+    
     Primary: Kopiert data.db (SD) → tmpfs falls tmpfs leer (nach Reboot).
     Failover: tmpfs wird per Mirror-Sync befüllt — hier nur prüfen ob da.
               Falls tmpfs noch leer (erster Start nach Reboot), einmalig
               aus SD-Kopie (data.db) laden als Fallback.
     """
+    import subprocess
+    
+    # --- Guard: Nur systemd darf Gunicorn starten ---
+    if not os.environ.get("INVOCATION_ID"):
+        # INVOCATION_ID wird von systemd automatisch gesetzt
+        server.log.error(
+            "⚠ ABBRUCH: Gunicorn darf nur via systemd gestartet werden!\n"
+            "  Korrekt:  sudo systemctl restart pv-web.service\n"
+            "  Oder:     ./restart_webserver.sh\n"
+            "  Manueller Start (nohup gunicorn ...) ist nicht erlaubt."
+        )
+        raise SystemExit(1)
+    
     import db_init
     import config
     

@@ -33,7 +33,7 @@ def api_battery_status():
     """
     Aktuelle Batterie-Konfiguration vom Fronius GEN24.
     Liefert SOC_MIN, SOC_MAX, Modus, Netzladung, Notstrom-Reserve.
-    Plus: Scheduler-Status (Entladerate, Phasen-Flags).
+    Plus: Scheduler-Status (Phasen-Flags), StorCtl_Mod/ChaSt (SunSpec).
     Cache: 60 Sekunden (Werte ändern sich selten).
     """
     now = time.time()
@@ -68,10 +68,23 @@ def api_battery_status():
 
 # ── Hilfsfunktionen für api_battery_status ────────────────────────────────────────
 
+# SunSpec Model 124 StorCtl_Mod + ChaSt Bezeichner
+STORCTL_LABELS = {
+    0: 'Automatik',
+    1: 'Ladebegrenzung',
+    2: 'Entladebegrenzung',
+    3: 'Lade+Entladebegrenzung',
+}
+CHAST_LABELS = {
+    1: 'Deaktiviert', 2: 'Leer', 3: 'Entladen',
+    4: 'Laden', 5: 'Voll', 6: 'Bereitschaft', 7: 'Selbsttest',
+}
+
+
 def _fetch_fronius_base(api):
-    """Basis-Werte vom Fronius GEN24 (SOC_MIN/MAX, Modus etc.)."""
+    """Basis-Werte vom Fronius GEN24 (SOC_MIN/MAX, Modus etc.) + Modbus-Register."""
     values = api.get_values()
-    return {
+    result = {
         'soc_min': values.get('BAT_M0_SOC_MIN'),
         'soc_max': values.get('BAT_M0_SOC_MAX'),
         'soc_mode': values.get('BAT_M0_SOC_MODE'),
@@ -83,6 +96,25 @@ def _fetch_fronius_base(api):
         'em_mode': values.get('HYB_EM_MODE'),
         'batt_energy_method': 'integration_ui_with_counter_fallback',
     }
+
+    # StorCtl_Mod + ChaSt aus ObsState (RAM-DB, aktuell)
+    try:
+        import json as _json_obs
+        _obs_db = '/dev/shm/automation_obs.db'
+        with sqlite3.connect(_obs_db) as _odb:
+            _orow = _odb.execute('SELECT state_json FROM obs_state LIMIT 1').fetchone()
+            if _orow:
+                _obs = _json_obs.loads(_orow[0])
+                storctl = _obs.get('storctl_mod')
+                chast = _obs.get('cha_state')
+                result['storctl_mod'] = storctl
+                result['storctl_mod_text'] = STORCTL_LABELS.get(storctl, f'Unbekannt ({storctl})')
+                result['cha_state'] = chast
+                result['cha_state_text'] = CHAST_LABELS.get(chast, f'Unbekannt ({chast})')
+    except Exception as _oe:
+        logging.debug(f"ObsState StorCtl/ChaSt: {_oe}")
+
+    return result
 
 
 def _fetch_automation_state(now, result):
@@ -204,46 +236,116 @@ def _build_automation_phasen(now, result):
                     'aktion': f'SOC_MAX → {_wert}%' if _wert else 'SOC_MAX erhöht',
                     'grund': _grund, 'manuell': False,
                 }
-            elif _cmd == 'set_discharge_rate':
-                _phase_log['abend'] = {
-                    'zeit': _zeit, 'status': 'active',
-                    'aktion': f'Entladerate {_wert}%' if _wert else 'Entladerate-Limit',
-                    'grund': _grund, 'manuell': False,
-                }
             elif _cmd in ('auto',) and 'TAG-Phase' in _grund:
-                _phase_log['abend'] = {
+                _phase_log['komfort'] = {
                     'zeit': _zeit, 'status': 'done',
                     'aktion': 'Limits aufgehoben',
                     'grund': _grund, 'manuell': False,
                 }
             elif _cmd in ('set_soc_min', 'set_soc_max') and 'Komfort-Reset' in _grund:
-                _phase_log['reset'] = {
+                _phase_log['komfort'] = {
                     'zeit': _zeit, 'status': 'done',
                     'aktion': 'Komfort-Reset',
                     'grund': _grund, 'manuell': False,
                 }
 
-        # Fehlende Phasen mit Defaults auffüllen
-        if 'morgen' not in _phase_log:
-            _phase_log['morgen'] = {
-                'status': 'pending', 'zeit': None,
-                'aktion': 'SOC_MIN → 5%',
-                'grund': 'Morgen-Öffnung (automatisch)', 'manuell': False,
-            }
-        if 'nachmittag' not in _phase_log:
-            _phase_log['nachmittag'] = {
-                'status': 'pending', 'zeit': None,
-                'aktion': 'SOC_MAX → 100%',
-                'grund': 'Nachmittag-Erhöhung', 'manuell': False,
-            }
-        if 'abend' not in _phase_log:
-            _phase_log['abend'] = {
-                'status': 'pending', 'zeit': None,
-                'aktion': 'Entladerate-Limit',
-                'grund': 'Abend/Nacht-Drosselung', 'manuell': False,
-            }
+        # ── Kontextreiche Defaults für fehlende Phasen ──
+        # ObsState lesen für aktuelle Werte + Prognose
+        _obs_soc_min = result.get('soc_min')
+        _obs_soc_max = result.get('soc_max')
 
-        # Reset-Phase: Komfort-Bereich wiederherstellen
+        # SOC-Grenz-Zeitpunkte aus letzten Switches rekonstruieren
+        _soc_switches = result.get('soc_switches', [])
+        _last_soc_min_ts = None
+        _last_soc_max_ts = None
+        for _sw in _soc_switches:
+            if _sw.get('kommando') == 'set_soc_min' and _sw.get('ergebnis') == 'OK' and not _last_soc_min_ts:
+                _last_soc_min_ts = _sw.get('ts', '')[:16].replace('T', ' ')
+            if _sw.get('kommando') == 'set_soc_max' and _sw.get('ergebnis') == 'OK' and not _last_soc_max_ts:
+                _last_soc_max_ts = _sw.get('ts', '')[:16].replace('T', ' ')
+
+        # Nachmittag-Prognose: wann wird SOC_MAX auf 100% gesetzt?
+        _nachmittag_prognose = ''
+        _sunrise_h = None
+        _sunset_h = None
+        _clearsky_peak = None
+        try:
+            import json as _json_nmp
+            _obs_db_np = '/dev/shm/automation_obs.db'
+            with sqlite3.connect(_obs_db_np) as _odb_np:
+                _orow_np = _odb_np.execute('SELECT state_json FROM obs_state LIMIT 1').fetchone()
+                if _orow_np:
+                    _obs_np = _json_nmp.loads(_orow_np[0])
+                    _clearsky_peak = _obs_np.get('clearsky_peak_h')
+                    _sunrise_h = _obs_np.get('sunrise')
+                    _sunset_h = _obs_np.get('sunset')
+                    _forecast_kwh = _obs_np.get('forecast_kwh', 0) or 0
+                    if _clearsky_peak and _obs_soc_max and _obs_soc_max < 100:
+                        _nachmittag_prognose = f'voraussichtlich ~{int(_clearsky_peak)}:00'
+        except Exception:
+            pass
+
+        def _h_to_hhmm(h):
+            """Dezimalstunde → 'HH:MM' String."""
+            if h is None:
+                return None
+            hh = int(h)
+            mm = int((h - hh) * 60)
+            return f'{hh:02d}:{mm:02d}'
+
+        if 'morgen' not in _phase_log:
+            _morgen_zeit_est = _h_to_hhmm(_sunrise_h - 0.5) if _sunrise_h else None
+            if _obs_soc_min is not None and _obs_soc_min <= 5:
+                _morgen_grund = f'SOC_MIN = {_obs_soc_min}%'
+                if _last_soc_min_ts:
+                    _morgen_grund += f' seit {_last_soc_min_ts[5:]}'
+                else:
+                    _morgen_grund += ' (gestern gesetzt)'
+                _morgen_grund += ' — Batterie entleeren vor PV-Übernahme'
+                _phase_log['morgen'] = {
+                    'status': 'done', 'zeit': _last_soc_min_ts[11:16] if _last_soc_min_ts else None,
+                    'aktion': f'SOC_MIN = {_obs_soc_min}%',
+                    'grund': _morgen_grund, 'manuell': False,
+                }
+            elif _obs_soc_min is not None and _obs_soc_min >= 25:
+                _phase_log['morgen'] = {
+                    'status': 'skipped', 'zeit': None,
+                    'aktion': f'SOC_MIN bleibt {_obs_soc_min}%',
+                    'grund': 'Batterie reicht über die Nacht, kein Öffnen nötig',
+                    'manuell': False,
+                }
+            else:
+                _phase_log['morgen'] = {
+                    'status': 'pending', 'zeit': f'~{_morgen_zeit_est}' if _morgen_zeit_est else None,
+                    'aktion': 'SOC_MIN → 5%',
+                    'grund': 'Wartet auf PV-Übernahme-Prognose', 'manuell': False,
+                }
+
+        if 'nachmittag' not in _phase_log:
+            _nm_zeit_est = _h_to_hhmm(_clearsky_peak) if _clearsky_peak else None
+            if _obs_soc_max is not None and _obs_soc_max >= 100:
+                _nm_grund = 'SOC_MAX = 100%'
+                if _last_soc_max_ts:
+                    _nm_grund += f' seit {_last_soc_max_ts[5:]}'
+                _phase_log['nachmittag'] = {
+                    'status': 'done', 'zeit': _last_soc_max_ts[11:16] if _last_soc_max_ts else None,
+                    'aktion': 'SOC_MAX = 100%',
+                    'grund': _nm_grund, 'manuell': False,
+                }
+            else:
+                _nm_aktion = f'SOC_MAX {_obs_soc_max}% → 100%'
+                _nm_grund = f'SOC_MAX aktuell {_obs_soc_max}%'
+                if _nachmittag_prognose:
+                    _nm_grund += f', Öffnung {_nachmittag_prognose}'
+                else:
+                    _nm_grund += ', wartet auf Clear-Sky-Peak'
+                _phase_log['nachmittag'] = {
+                    'status': 'pending', 'zeit': f'~{_nm_zeit_est}' if _nm_zeit_est else None,
+                    'aktion': _nm_aktion,
+                    'grund': _nm_grund, 'manuell': False,
+                }
+
+        # Komfort-Grenzen aus battery_control.json
         try:
             import json as _json_cfg
             _cfg_path = Path(__file__).resolve().parent.parent / 'config' / 'battery_control.json'
@@ -253,13 +355,27 @@ def _build_automation_phasen(now, result):
             _k_max = _bcfg.get('soc_grenzen', {}).get('komfort_max', 75)
         except Exception:
             _k_min, _k_max = 25, 75
-        if 'reset' not in _phase_log:
-            _phase_log['reset'] = {
-                'status': 'pending', 'zeit': None,
-                'aktion': f'SOC_MIN → {_k_min}%, SOC_MAX → {_k_max}%',
-                'grund': 'Komfort-Reset (nach Sunset)',
+
+        # Komfort-Phase: Abend + Reset zusammengelegt
+        _sunset_zeit = _h_to_hhmm(_sunset_h) if _sunset_h else None
+        if 'abend' in _phase_log:
+            # Already logged as 'abend' → adopt as 'komfort'
+            _phase_log['komfort'] = _phase_log.pop('abend')
+        elif 'reset' in _phase_log:
+            # Already logged as 'reset' → adopt as 'komfort'
+            _phase_log['komfort'] = _phase_log.pop('reset')
+        else:
+            _phase_log['komfort'] = {
+                'status': 'pending',
+                'zeit': f'~{_sunset_zeit}' if _sunset_zeit else None,
+                'aktion': f'Grenzen → {_k_min}–{_k_max}%',
+                'grund': f'Komfort-Modus nach Sonnenuntergang'
+                         + (f' (~{_sunset_zeit})' if _sunset_zeit else ''),
                 'manuell': False,
             }
+        # Remove leftover keys if both existed
+        _phase_log.pop('abend', None)
+        _phase_log.pop('reset', None)
 
         result['automation_phasen'] = _phase_log
     except Exception as _pe:
@@ -481,7 +597,13 @@ def _fetch_temperatures(result):
             f'http://{config.INVERTER_IP}/components/readable', timeout=3)
         if _comp_resp.status_code == 200:
             _comp_data = _comp_resp.json()
-            _wr_ch = _comp_data.get('Body', {}).get('Data', {}).get('0', {}).get('channels', {})
+            _data = _comp_data.get('Body', {}).get('Data', {})
+
+            # Dynamische Schlüsselsuche (FW ≥1.39: benannte Keys statt "0"/"16580608")
+            _inv_key = next((k for k in _data if 'Inverter' in k), '0')
+            _batt_key = next((k for k in _data if 'Storage' in k or 'BYD' in k), '16580608')
+
+            _wr_ch = _data.get(_inv_key, {}).get('channels', {})
             for attr, key in [
                 ('wr_temp_intern', 'DEVICE_TEMPERATURE_AMBIENTMEAN_01_F32'),
                 ('wr_temp_ac',     'MODULE_TEMPERATURE_MEAN_01_F32'),
@@ -492,7 +614,7 @@ def _fetch_temperatures(result):
                 if _t is not None:
                     result[attr] = round(_t, 1)
 
-            _batt_dev = _comp_data.get('Body', {}).get('Data', {}).get('16580608', {})
+            _batt_dev = _data.get(_batt_key, {})
             _batt_ch = _batt_dev.get('channels', {})
             _batt_attr = _batt_dev.get('attributes', {})
             for attr, key in [
@@ -544,12 +666,20 @@ def _fetch_temperatures(result):
     except Exception as e:
         logging.debug(f"F1 temperatures fetch: {e}")
 
+    # Fallback: Wenn keine WR-Temperaturen verfügbar, 'n/v' setzen
+    for _tk in ('wr_temp_intern', 'wr_temp_ac', 'wr_temp_dc', 'wr_temp_dc_batt',
+                'battery_temp', 'battery_temp_max', 'battery_temp_min'):
+        if _tk not in result:
+            result[_tk] = 'n/v'
+
     # F2 (Symo 10.0)
     try:
         import requests as _req2
         _f2_resp = _req2.get('http://192.168.2.123/components/readable', timeout=2)
         if _f2_resp.status_code == 200:
-            _f2_ch = _f2_resp.json().get('Body', {}).get('Data', {}).get('0', {}).get('channels', {})
+            _f2_data = _f2_resp.json().get('Body', {}).get('Data', {})
+            _f2_inv_key = next((k for k in _f2_data if 'Inverter' in k), '0')
+            _f2_ch = _f2_data.get(_f2_inv_key, {}).get('channels', {})
             for attr, key in [
                 ('f2_temp_intern', 'DEVICE_TEMPERATURE_AMBIENTMEAN_01_F32'),
                 ('f2_temp_ac',     'MODULE_TEMPERATURE_MEAN_01_F32'),
@@ -562,34 +692,51 @@ def _fetch_temperatures(result):
     except Exception as e:
         logging.debug(f"F2 temperatures fetch: {e}")
 
+    # Fallback: Wenn keine F2-Temperaturen verfügbar, 'n/v' setzen
+    for _tk2 in ('f2_temp_intern', 'f2_temp_ac', 'f2_temp_dc', 'f2_temp_dc2'):
+        if _tk2 not in result:
+            result[_tk2] = 'n/v'
+
 
 def _fetch_hp_status(now, result):
     """Fritz!DECT Heizpatronen-Status: Log-Daten + Live-Abfrage."""
-    # Log-Daten aus automation_log
+    # Log-Daten aus schaltlog.txt (Engine schreibt HP-Events nur dorthin)
+    import re as _re_hp
     try:
-        with sqlite3.connect(config.DB_PATH) as _hdb:
-            _24h_ago_hp = int(now) - 86400
-            hp_rows = _hdb.execute("""
-                SELECT ts, kommando, wert, grund, ergebnis
-                FROM automation_log
-                WHERE aktor = 'fritzdect'
-                  AND ts >= datetime(?, 'unixepoch')
-                ORDER BY ts DESC
-                LIMIT 10
-            """, (_24h_ago_hp,)).fetchall()
+        _schaltlog_path = str(Path(__file__).resolve().parent.parent / 'logs' / 'schaltlog.txt')
+        _today_str = time.strftime('%Y-%m-%d', time.localtime(now))
+        hp_aktionen = []
+        _hp_pattern = _re_hp.compile(
+            r'^\s*(\d{4}-\d{2}-\d{2}),\s*(\d{2}:\d{2}:\d{2})\s+'
+            r'ENGINE\s+fritzdect\s+'
+            r'(hp_ein|hp_aus)\S*\s+'
+            r'(OK|FEHLER)\s*(.*)')
+        if os.path.exists(_schaltlog_path):
+            with open(_schaltlog_path, 'r') as _slf:
+                for _line in _slf:
+                    if _line.startswith('~'):
+                        continue  # Skip consolidated/extern entries
+                    _m = _hp_pattern.match(_line)
+                    if _m:
+                        _datum, _zeit, _cmd, _erg, _grund = _m.groups()
+                        if _datum == _today_str:
+                            hp_aktionen.append({
+                                'ts': f'{_datum} {_zeit[:5]}',
+                                'kommando': _cmd,
+                                'wert': '',
+                                'grund': (_grund or '').strip()[:120],
+                                'ergebnis': _erg,
+                            })
+            # Neueste zuerst
+            hp_aktionen.reverse()
+            hp_aktionen = hp_aktionen[:20]
 
-            hp_aktionen = [{
-                'ts': r[0][:16].replace('T', ' ') if r[0] else '?',
-                'kommando': r[1], 'wert': r[2],
-                'grund': (r[3] or '')[:120], 'ergebnis': r[4],
-            } for r in hp_rows]
-
-            result['hp_aktionen'] = hp_aktionen
-            result['hp_bursts_heute'] = sum(
-                1 for a in hp_aktionen
-                if a['kommando'] == 'hp_ein' and a['ergebnis'] == 'OK')
+        result['hp_aktionen'] = hp_aktionen
+        result['hp_bursts_heute'] = sum(
+            1 for a in hp_aktionen
+            if a['kommando'] == 'hp_ein' and a['ergebnis'] == 'OK')
     except Exception as _he:
-        logging.debug(f"HP-Log: {_he}")
+        logging.debug(f"HP-Log (schaltlog): {_he}")
         result['hp_aktionen'] = []
         result['hp_bursts_heute'] = 0
 
