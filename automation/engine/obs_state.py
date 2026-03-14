@@ -95,6 +95,7 @@ class ObsState:
     # ── Prognose (Tier-3 Forecast) ────────────────────────
     pv_at_sunrise_1h_w: Optional[float] = None  # Progn. PV-Leistung 1h nach Sunrise [W]
     forecast_quality: Optional[str] = None       # 'gut' | 'mittel' | 'schlecht'
+    sunshine_hours: Optional[float] = None        # Prognostizierte Sonnenstunden heute [h]
     forecast_ts: Optional[str] = None            # ISO-8601 wann Forecast zuletzt geholt
     clearsky_peak_h: Optional[float] = None      # Clear-Sky-Peak Dezimalstunde
     forecast_power_profile: Optional[list] = None # [{hour, total_ac_w}…] Stundenleistung

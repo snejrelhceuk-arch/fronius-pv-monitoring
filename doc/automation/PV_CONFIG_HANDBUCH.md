@@ -1,7 +1,7 @@
 # PV-CONFIG Handbuch
 
 **Konfigurationsprogramm für die PV-Batterie-Automation**
-Version 1.5 — Stand: 8. März 2026
+Version 1.6 — Stand: 14. März 2026
 
 ---
 
@@ -373,14 +373,19 @@ Score um 16:30h:     55  (Deadline, voller Score)
 
 **6-Phasen-Logik:**
 
+> **Grundprinzip (seit 2026-03-14): HP = Überlaufventil.** Die Batterie wird
+> ZUERST auf SOC_MAX gefüllt. Erst wenn SOC den Deckel erreicht (innerhalb 5%
+> bei Phase 1/2/3, innerhalb 2% bei Phase 1b/4) darf die HP als Senke für
+> PV-Überschuss einspringen. Phase 0 erfordert zusätzlich Mindest-Sonnenstunden.
+
 | Phase | Bedingung | Burst-Dauer | Zweck |
 |-------|-----------|-------------|-------|
-| **0 — Morgen-Drain** | ab sunrise−1h, SOC > 20%, Prognose gut, Forecast ≥ 4 kW | 45 Min. | Batterie gezielt leeren — Warmwasser als Senke |
-| **1 — Vormittag** | rest_h > 5, rest_kwh > 20, P_Batt > 3 kW (initial) / > 1 kW (Wiedereintritt) | 30 Min. | Langer Tag, großzügig Warmwasser machen |
-| **1b — Nulleinspeiser-Probe** | SOC ≈ MAX, Batt idle, Forecast ≥ HP-Last | 120 s (Probe) → 30 Min. bei Erfolg | WR-Drosselung erkennen, stille PV-Kapazität nutzen |
-| **2 — Mittags** | P_Batt > min_lade, rest_kwh deckt Batt + Reserve | 30 Min. | Hauptphase bei Batterie-Sättigung |
-| **3 — Nachmittags** | rest_h < 3 und ≥ 2, konservativ | 15 Min. | Kurze Restzeit → nur kurze Bursts |
-| **4 — Abend** | rest_h < 2, SOC ≈ MAX, PV ≥ 1500W | 15 Min. (kurz) | Nachladezyklus: EIN/AUS nach SOC-Nähe zu MAX |
+| **0 — Morgen-Drain** | ab sunrise−1h, sunshine_h ≥ 5, SOC > 20%, Prognose gut, Forecast ≥ 4 kW | 45 Min. | Batterie gezielt leeren — Warmwasser als Senke |
+| **1 — Vormittag** | **SOC ≥ MAX−5%**, rest_h > 5, rest_kwh > 20, P_Batt > 3 kW | 30 Min. | Überlaufventil: Batterie am Deckel, HP nutzt Restkapazität |
+| **1b — Nulleinspeiser-Probe** | SOC ≥ MAX−2%, Batt idle, Forecast ≥ HP-Last | 120 s (Probe) → 30 Min. bei Erfolg | WR-Drosselung erkennen, stille PV-Kapazität nutzen |
+| **2 — Mittags** | **SOC ≥ MAX−5%**, P_Batt > min_lade, rest_kwh deckt Batt + Reserve | 30 Min. | Hauptphase bei Batterie-Sättigung |
+| **3 — Nachmittags** | **SOC ≥ MAX−5%**, rest_h < 3 und ≥ 2, konservativ | 15 Min. | Kurze Restzeit → nur kurze Bursts |
+| **4 — Abend** | rest_h < 2, SOC ≥ MAX−2%, PV ≥ 1500W | 15 Min. (kurz) | Nachladezyklus: EIN/AUS nach SOC-Nähe zu MAX |
 
 **Phase 0 (Morgen-Drain) im Detail:**
 
@@ -388,9 +393,9 @@ Wenn `morgen_soc_min` den SOC_MIN früh auf 5% öffnet, entlädt sich die Batter
 
 **Bedingungen (alle müssen erfüllt sein):**
 - Uhrzeit vor `drain_fenster_ende` (Standard: 10:00)
-- Batterie lädt nicht (P_Batt < 500 W, also kein PV-Überschuss)
+- **Sonnenstunden ≥ `drain_min_sunshine_h` (Standard: 5.0h)** — NEU seit 2026-03-14. An Regentagen mit wenig prognostizierter Sonne (z.B. 3.5h) wird kein Drain ausgeführt: die Batterie-Energie wird für den Haushalt gebraucht.
 - Haushalt < 700 W, WP < 500 W, EV < 1000 W (wenig anderweitiger Verbrauch)
-- SOC > 10% (nicht schon fast leer)
+- SOC > `drain_start_soc` (Standard: 20%)
 - `forecast_quality` ist „gut“ oder „mittel“
 - Forecast zeigt ≥ 4 kW in den kommenden Stunden (PV wird kommen)
 
@@ -401,15 +406,23 @@ Wenn `morgen_soc_min` den SOC_MIN früh auf 5% öffnet, entlädt sich die Batter
 
 **Notaus-Kriterien (HART vs. KONTEXTABHÄNGIG):**
 
-| # | Kriterium | Typ | Extern-Hysterese | Wirkung |
-|---|-----------|-----|------------------|--------|
-| 1 | `rest_h < min_rest_h` (2h vor Sunset) | **DIFFERENZIERT** | — | Phase 4 Abend-Zyklus: SOC ≈ MAX + PV ok → HP erlaubt; sonst AUS |
-| 2 | WW-Temperatur ≥ 78 °C | **HART** | Sofort | Verbrühungs-/Überdruckschutz |
-| 3 | SOC ≤ `stop_entladung_unter` (5%) | **HART** | Sofort | Absoluter Tiefentladeschutz (aus soc_schutz) |
-| 4 | Batterie entlädt — potenzialabhängig | **KONTEXT** | Pausiert 1h | Abhängig von Potenzial und SOC_MAX (s.u.) |
-| 5 | Verbraucher-Konkurrenz (WP/EV) | **KONTEXT** | Pausiert 1h | Abhängig von Potenzial-Stufe (s.u.) |
-| 6 | Netzbezug > 200 W | **KONTEXT** | Pausiert 1h | Kurzzeitig normal bei HP-Zuschalten |
-| 7 | Burst-Timer abgelaufen | **KONTEXT** | Pausiert 1h | Kein Timer bei manuellem Einschalten |
+| # | Kriterium | Typ | Autoritätsschaltung | Wirkung |
+|---|-----------|-----|---------------------|--------|
+| 1 | WW-Temperatur ≥ 78 °C | **HART** | Sofort | Verbrühungs-/Überdruckschutz |
+| 2 | SOC ≤ `stop_entladung_unter` (5%) | **HART** | Sofort | Absoluter Tiefentladeschutz (aus soc_schutz) |
+| 3 | SOC ≤ `extern_notaus_soc_pct` (15%) | **HART** | Sofort | Autoritäts-Override: manuelle Einschaltung überstimmt bei niedrigem SOC |
+| 4 | `rest_h < min_rest_h` (2h vor Sunset) | **DIFFERENZIERT** | **Pausiert** | Phase 4 Abend-Zyklus: SOC ≈ MAX + PV ok → HP erlaubt; sonst AUS |
+| 5 | Batterie entlädt — potenzialabhängig | **KONTEXT** | **Pausiert** | Abhängig von Potenzial und SOC_MAX (s.u.) |
+| 6 | Verbraucher-Konkurrenz (WP/EV) | **KONTEXT** | **Pausiert** | Abhängig von Potenzial-Stufe (s.u.) |
+| 7 | Netzbezug > 200 W | **KONTEXT** | **Pausiert** | Kurzzeitig normal bei HP-Zuschalten |
+| 8 | Burst-Timer abgelaufen | **KONTEXT** | **Pausiert** | Kein Timer bei manuellem Einschalten |
+
+**Autoritätsschaltung (seit 2026-03-14):** Bei manueller Einschaltung (Fritz!DECT Taster
+oder App) respektiert die Engine die Nutzer-Entscheidung für `extern_respekt_s`
+(Standard 30 Min, einstellbar 15 Min–2 h). Nur **Übertemperatur**, **SOC ≤ 5%** und
+**SOC ≤ 15%** (`extern_notaus_soc_pct`) dürfen sofort überstimmen. Phase 4 und alle
+weichen Kriterien pausieren. Bei manuellem Ausschalten gilt analog eine
+EIN-Sperre für die gleiche Dauer.
 
 **Potenzial-Skala (Tagesprognose kWh):**
 
@@ -428,12 +441,12 @@ Verbraucher haben Vorrang). In dieser Phase toleriert die Engine Batterie-Entlad
 mäßigem/ausreichendem Potenzial, weil PV die Batterie später wieder füllt. Erst wenn
 SOC_MAX auf 100% geht (Nachmittag) wird die Batterie-Entladung strenger bewertet.
 
-**Extern-Erkennung:** Wenn die HP außerhalb der Engine eingeschaltet wird (pv-config Menü 6, Fritz!Box-App, physischer Schalter), erkennt die Engine dies automatisch: HP ist EIN, aber kein Burst/Drain läuft. In diesem Fall gelten für `extern_respekt_s` (Standard: 1 Stunde) nur die **HARTEN** Kriterien. Danach übernimmt die Engine wieder normal.
+**Autoritätsschaltung (Extern-Erkennung):** Wenn die HP außerhalb der Engine eingeschaltet wird (pv-config Menü 6, Fritz!Box-App, physischer Schalter), erkennt die Engine dies automatisch: HP ist EIN, aber kein Burst/Drain läuft. In diesem Fall gilt für `extern_respekt_s` (Standard: 30 Min, einstellbar 15 Min–2 h) die **Nutzer-Autorität**: alle weichen Kriterien UND Phase 4 pausieren. Nur **Übertemperatur**, **SOC ≤ 5%** (soc_schutz) und **SOC ≤ 15%** (`extern_notaus_soc_pct`) überstimmen sofort. Bei manuellem Ausschalten sperrt die Engine hp_ein für die gleiche Dauer.
 
 > **Hinweis:** Der Notaus läuft im Engine fast-cycle (60 s) und ist
 > **immer aktiv**, auch wenn der Regelkreis auf `aktiv: false` steht.
-> HARTE Kriterien (Temperatur, SOC-Schutzgrenze, Sunset) greifen
-> auch während der Extern-Hysterese.
+> HARTE Kriterien (Temperatur, SOC-Schutzgrenze, extern_notaus_soc)
+> greifen auch während der Autoritätsschaltung.
 
 | Parameter | Standard | Bereich | Wirkung |
 |-----------|----------|---------|--------|
@@ -455,6 +468,7 @@ SOC_MAX auf 100% geht (Nachmittag) wird die Batterie-Entladung strenger bewertet
 | potenzial_ausreichend_kwh | 20.0 kWh | 10–40 kWh | **Tagesprognose für "ausreichend".** HP + WP parallel (kein EV). Entladung toleriert wenn SOC_MAX ≤ 75%. |
 | potenzial_maessig_kwh | 15.0 kWh | 5–30 kWh | **Tagesprognose für "mäßig".** HP nur solo (kein WP/EV). Entladung toleriert wenn SOC_MAX ≤ 75%. Unter diesem Wert → "niedrig": HP nur bei explizitem Burst, keine Entladung toleriert. |
 | drain_fruehstart_vor_sunrise_h | 1.0 h | 0–3 h | **Drain-Frühstart vor Sonnenaufgang.** Phase 0 startet ab `sunrise − dieser_Wert`. |
+| drain_min_sunshine_h | 5.0 h | 0–12 h | **Mindest-Sonnenstunden für Drain (NEU 2026-03-14).** Phase 0 wird blockiert wenn die prognostizierten Sonnenstunden unter diesem Wert liegen. An Regentagen braucht der Haushalt die Batterie-Energie. 0 = deaktiviert (kein Sonnenstunden-Guard). |
 | drain_start_soc_pct | 20% | 10–50% | **Drain-SOC-Startschwelle.** Phase 0 nur wenn SOC über diesem Wert. |
 | drain_stop_soc_pct | 15% | 5–30% | **Drain-SOC-Untergrenze.** Drain-Notaus schaltet HP aus wenn SOC diesen Wert erreicht. |
 | drain_max_haushalt | 700 W | 200–2000 W | **Max. Hausverbrauch für Drain.** HP-Drain nur bei niedrigem Haushalt — sonst leert die Batterie schon schnell genug. |
@@ -471,28 +485,36 @@ SOC_MAX auf 100% geht (Nachmittag) wird die Batterie-Entladung strenger bewertet
 | probe_cooldown_s | 600 s | 120–1800 s | **Probe-Wartezeit.** Nach gescheiterter Probe kein neuer Versuch für diese Dauer. |
 | probe_pv_delta_min_w | 500 W | 100–2000 W | **Mindest-PV-Anstieg.** Probe gilt als Erfolg wenn PV um ≥ diesen Wert steigt. |
 | probe_grid_max_w | 300 W | 0–1000 W | **Max. Netzbezug nach Probe.** Probe gilt als gescheitert wenn Netzbezug über diesem Wert. |
-| extern_respekt | 3600 s | 0–7200 s | **Extern-Hysterese.** Wenn HP außerhalb der Engine eingeschaltet wird, pausieren WEICHE Notaus-Kriterien für diese Dauer. HARTE Kriterien (Temp, SOC-abs, Sunset) wirken immer sofort. 0 = deaktiviert (Notaus greift sofort wie bisher). |
+| extern_respekt | 1800 s | 900–7200 s | **Autoritätszeit (30 Min, 15 Min–2 h).** Bei manueller Einschaltung: Engine respektiert Nutzer-Entscheidung, nur Übertemp und SOC ≤ extern_notaus_soc überstimmen. Bei manuellem Ausschalten: hp_ein für diese Dauer gesperrt. |
+| extern_notaus_soc | 15% | 5–30% | **Autoritäts-Override bei niedrigem SOC.** Wird HP manuell eingeschaltet, überstimmt die Engine bei SOC ≤ diesem Wert und schaltet HP aus (Batterieschutz). |
 
-**Rechenbeispiel (sonniger Märztag, ≈ 45 kWh Prognose):**
+**Rechenbeispiel (sonniger Märztag, ≈ 45 kWh Prognose, 9h Sonne):**
 ```
-06:30 — Sunrise 07:30, SOC = 25%
-  Phase 0: sunrise−1h = 06:30 ✓, SOC 25% > 20% ✓, Prognose gut ✓
+06:30 — Sunrise 07:30, SOC = 25%, Sonnenstunden = 9h
+  Phase 0: sunrise−1h = 06:30 ✓, sunshine_h=9 ≥ 5 ✓, SOC 25% > 20% ✓, Prognose gut ✓
   → HP EIN (Drain 45 Min.) — Batterie gezielt leeren
 
-10:30 — SOC = 15% (Drain-Stop), P_Batt = +3.5 kW, Forecast_rest = 38 kWh
-  Phase 1: rest_h = 7.5 > 5 ✓, rest_kwh = 38 > 20 ✓, P_Batt > 3 kW ✓
-  → HP EIN (Burst 30 Min.)
+  Gegenbeispiel (Regentag): sunshine_h = 3.5 < 5.0
+  → Phase 0 BLOCKIERT (Batterie für Haushalt reserviert)
 
-12:00 — SOC = 98% (≈ SOC_MAX), P_Batt ≈ 0, WR drosselt
+10:30 — SOC = 15% (Drain-Stop), P_Batt = +3.5 kW, Forecast_rest = 38 kWh
+  Phase 1: rest_h = 7.5 > 5 ✓, rest_kwh = 38 > 20 ✓
+  SOC = 15% vs. SOC_MAX(75%)−5 = 70%? 15% < 70% ✗
+  → Phase 1 BLOCKIERT (Batterie erst auf ≥70% füllen!)
+
+11:45 — SOC = 71% (≥ 70% = MAX−5), P_Batt = +3.8 kW
+  Phase 1: SOC ✓, P_Batt > 3 kW ✓ → HP EIN (Burst 30 Min.)
+
+12:00 — SOC = 73% (≈ SOC_MAX), P_Batt ≈ 0, WR drosselt
   Phase 1b Probe: SOC ≥ MAX−2% ✓, Batt idle ✓, Forecast ok ✓
   → HP EIN (Probe 120 s) — PV steigt um 1.2 kW, Netzbezug 50W
-  → Probe Erfolg → Probe → Burst lang (30 Min.)
+  → Probe Erfolg → Burst lang (30 Min.)
 
-14:00 — SOC = 85%, SOC_MAX = 100%, P_Batt = −1.5 kW (Wolke)
-  Potenzial: "gut" → Entladung toleriert ✓
-  Phase 2: HP bleibt an (laufender Burst respektiert)
+14:00 — SOC = 85%, SOC_MAX = 100%, P_Batt = +5.1 kW
+  Phase 2: SOC 85% ≥ 95% (MAX−5)? 85% < 95% ✗
+  → Phase 2 BLOCKIERT (SOC erst auf 95% bringen!)
 
-16:00 — rest_h = 1.5 < 2.0, SOC = 97%, SOC_MAX = 100%, PV = 2.1 kW
+15:30 — SOC = 96%, rest_h = 1.5 < 2.0
   Phase 4: SOC ≥ MAX−2% ✓, PV ≥ 1500W ✓, Entladung < 1000W ✓
   → HP EIN (Abend-Zyklus 15 Min.)
   SOC sinkt auf 89% → SOC < MAX−10% → HP AUS → Batterie lädt nach

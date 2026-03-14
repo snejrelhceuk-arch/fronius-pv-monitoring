@@ -226,6 +226,7 @@ class ForecastCollector:
             obs.forecast_kwh = strategy.get('expected_kwh', 0)
             obs.cloud_avg_pct = strategy.get('cloud_cover_avg', 50)
             obs.forecast_quality = strategy.get('quality')
+            obs.sunshine_hours = strategy.get('sunshine_hours')
             obs.sunrise = strategy.get('sunrise_hour')
             obs.sunset = strategy.get('sunset_hour')
             self._sunrise_h = obs.sunrise

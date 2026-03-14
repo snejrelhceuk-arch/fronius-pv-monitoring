@@ -1,7 +1,7 @@
 {
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
-  "_updated": "2026-03-06",
+  "_updated": "2026-03-12",
   "regelkreise": {
     "soc_extern": {
       "_doc": "Toleranz für extern geänderte SOC-Werte (z.B. manuell via Fronius App). Wenn SOC_MIN oder SOC_MAX außerhalb der Automation geändert werden, respektiert die Engine die Werte für die konfigurierte Dauer.",
@@ -21,7 +21,7 @@
     "soc_schutz": {
       "_doc": "Sicherheitshalber: SOC-Grenzen nie verletzen",
       "_entfernt": "2026-03-07: GEN24 DC-DC-Wandler begrenzt Batteriestrom auf ~22A; SOC_MIN via HTTP-API steuert Entlade-Erlaubnis implizit",
-      "aktiv": false,
+      "aktiv": true,
       "prioritaet": 1,
       "beschreibung": "SOC-Untergrenze/Obergrenze als harte Schutzschwelle",
       "parameter": {
@@ -71,21 +71,30 @@
       "parameter": {
         "sls_strom_max_a": {
           "wert": 35.0,
-          "bereich": [30, 63],
+          "bereich": [
+            30,
+            63
+          ],
           "einheit": "A",
           "obs_feld": "i_l1_netz_a, i_l2_netz_a, i_l3_netz_a",
           "beschreibung": "SLS-Auslösestrom je Phase (L1/L2/L3). Bei Anschlussänderung an neuen SLS anpassen (z.B. 50A)."
         },
         "sls_leistung_max_w": {
           "wert": 24000,
-          "bereich": [18000, 43000],
+          "bereich": [
+            18000,
+            43000
+          ],
           "einheit": "W",
           "obs_feld": "grid_power_w",
           "beschreibung": "Fallback Gesamtleistung wenn Phasenströme nicht verfügbar. Formel: √3×400V×SLS_A"
         },
         "sls_sicherheitsmarge_a": {
           "wert": 2.0,
-          "bereich": [1, 5],
+          "bereich": [
+            1,
+            5
+          ],
           "einheit": "A",
           "beschreibung": "Sicherheitspuffer bei Stromreduktion. Wattpilot wird um Überschreitung + Marge reduziert."
         }
@@ -403,7 +412,7 @@
     },
     "zellausgleich": {
       "_doc": "Monatlicher Vollzyklus für BYD-Zellbalancing",
-      "aktiv": true,
+      "aktiv": false,
       "prioritaet": 3,
       "beschreibung": "Prognosegesteuert: Am ersten guten Sonnentag vollständig laden",
       "parameter": {
@@ -855,7 +864,17 @@
           "einheit": "°C",
           "beschreibung": "Warmwasserspeicher Übertemperatur → HP sofort AUS"
         },
-        "_drain_doc": "Phase 0 — Morgen-Drain: HP um Batterie schneller zu leeren. Frühestens sunrise-1h, prognosegetrieben.",
+        "_drain_doc": "Phase 0 — Morgen-Drain: HP um Batterie schneller zu leeren. Frühestens sunrise-1h, prognosegetrieben. Sonnenstunden-Guard: kein Drain bei Regentagen (< 5h Sonne).",
+        "drain_min_sunshine_h": {
+          "wert": 5.0,
+          "bereich": [
+            0.0,
+            12.0
+          ],
+          "einheit": "h",
+          "obs_feld": "sunshine_hours",
+          "beschreibung": "Mindest-Sonnenstunden (Prognose) für Morgen-Drain. Unter diesem Wert wird Phase 0 blockiert — bei Regentagen braucht der Haushalt die Batterieenergie. 0 = deaktiviert."
+        },
         "drain_fruehstart_vor_sunrise_h": {
           "wert": 1.0,
           "bereich": [
@@ -945,13 +964,22 @@
           "beschreibung": "Drain-Burst Maximaldauer (45 Min) — Sicherheits-Backstop"
         },
         "extern_respekt_s": {
-          "wert": 3600,
+          "wert": 1800,
           "bereich": [
-            0,
+            900,
             7200
           ],
           "einheit": "s",
-          "beschreibung": "Hysterese bei externem Schalten (1h): Bei EIN pausieren WEICHE Notaus-Kriterien, HARTE wirken sofort. Bei AUS wird hp_ein für diese Dauer gesperrt. 0 = deaktiviert."
+          "beschreibung": "Autoritätszeit bei manuellem Schalten (Default 30 Min, einstellbar 15 Min–2 h). Bei EIN: Engine respektiert manuelle Einschaltung, nur Übertemp und SOC ≤ extern_notaus_soc_pct überstimmen. Bei AUS: hp_ein für diese Dauer gesperrt."
+        },
+        "extern_notaus_soc_pct": {
+          "wert": 15,
+          "bereich": [
+            5,
+            30
+          ],
+          "einheit": "%",
+          "beschreibung": "SOC-Schwelle für Autoritäts-Override: Wird HP manuell eingeschaltet, überstimmt die Engine bei SOC ≤ diesem Wert und schaltet HP aus (Batterieschutz). Standard 15%."
         },
         "potenzial_gut_kwh": {
           "wert": 30.0,
@@ -1024,26 +1052,38 @@
         "_probe_doc": "Probierlogik (Nulleinspeiser-Erkennung): Kurzer Testpuls — wenn PV danach hochfährt, war der WR gedrosselt → Burst verlängern. Nur sinnvoll wenn Forecast PV-Kapazität bestätigt.",
         "probe_dauer_s": {
           "wert": 120,
-          "bereich": [60, 300],
+          "bereich": [
+            60,
+            300
+          ],
           "einheit": "s",
           "beschreibung": "Dauer des Probe-Pulses (HP kurz einschalten um PV-Reaktion zu messen)"
         },
         "probe_cooldown_s": {
           "wert": 600,
-          "bereich": [120, 1800],
+          "bereich": [
+            120,
+            1800
+          ],
           "einheit": "s",
           "beschreibung": "Wartezeit nach gescheiterter Probe bis zum nächsten Versuch"
         },
         "probe_pv_delta_min_w": {
           "wert": 500,
-          "bereich": [200, 2000],
+          "bereich": [
+            200,
+            2000
+          ],
           "einheit": "W",
           "obs_feld": "pv_total_w",
           "beschreibung": "Mindest-PV-Anstieg nach Probe damit diese als erfolgreich gilt (WR hat aufgeregelt)"
         },
         "probe_grid_max_w": {
           "wert": 300,
-          "bereich": [100, 1000],
+          "bereich": [
+            100,
+            1000
+          ],
           "einheit": "W",
           "obs_feld": "grid_power_w",
           "beschreibung": "Max. Netzbezug während Probe — überschritten = Energie aus Netz, nicht aus PV-Aufregeln"
@@ -1073,6 +1113,7 @@
       "forecast_kwh": "Tagesprognose [kWh] — morgen, nachmittag, zellausgleich",
       "forecast_rest_kwh": "Rest-Prognose ab jetzt [kWh] — nachmittag, forecast_plausi",
       "pv_vs_forecast_pct": "IST/SOLL Verhältnis [%] — forecast_plausibilisierung",
+      "sunshine_hours": "Prognostizierte Sonnenstunden heute [h] — heizpatrone (Phase 0 Drain-Guard)",
       "cloud_avg_pct": "Wolken Tagesdurchschnitt [%] — nachmittag_soc_max",
       "cloud_now_pct": "Wolken aktuell [%] — forecast_plausibilisierung",
       "cloud_rest_avg_pct": "Wolken Resttag Schnitt [%] — forecast_plausi, nachmittag"
