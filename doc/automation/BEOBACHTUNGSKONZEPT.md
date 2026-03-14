@@ -166,6 +166,7 @@ ObsState = {
     'pv_f2_w':         float,
     'pv_f3_w':         float,
     'forecast_kwh':    float,   # Tagesprognose [kWh]
+    'sunshine_hours':  float,   # Prognostizierte Sonnenstunden heute [h]
     'cloud_avg_pct':   float,   # Wolkenbedeckung [%]
 
     # Speicher

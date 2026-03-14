@@ -2,107 +2,82 @@
 # ========================================
 # Web-Server Neustart Script
 # ========================================
-# Stoppt und startet nur den Web-API Server (gunicorn)
-# Collector bleibt unberührt und läuft weiter
-# LLM-freundlich mit klaren Status-Ausgaben
+# Delegiert an systemd (pv-web.service).
+# Manueller nohup-Start ist NICHT erlaubt — Port-Konflikte vermeiden!
 # ========================================
 
-set -e  # Exit bei Fehler
+set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Farben für Ausgabe (optional)
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
+
+SERVICE="pv-web.service"
 
 echo "========================================="
-echo "Web-Server Neustart (nur Web-API)"
+echo "Web-Server Neustart (via systemd)"
 echo "========================================="
 echo ""
 
 # ========================================
-# SCHRITT 1: Stoppe Web-API (gunicorn)
+# Guard: pv-web.service muss enabled sein
 # ========================================
-echo "STEP 1: Stoppe Web-API Server..."
-if pgrep -f "gunicorn.*web_api" > /dev/null; then
-    pkill -f "gunicorn.*web_api"
-    echo -e "${GREEN}✓ Gunicorn-Prozesse beendet${NC}"
-    sleep 2
-    
-    # Prüfe ob wirklich beendet
-    if pgrep -f "gunicorn.*web_api" > /dev/null; then
-        echo -e "${RED}✗ Gunicorn läuft noch, forciere Beendigung...${NC}"
-        pkill -9 -f "gunicorn.*web_api"
-        sleep 2
-    fi
-else
-    echo -e "${YELLOW}ℹ Gunicorn war nicht aktiv${NC}"
-fi
-
-# ========================================
-# SCHRITT 2: Validierung - Web-API gestoppt?
-# ========================================
-echo ""
-echo "STEP 2: Validiere Prozess-Beendigung..."
-RUNNING_WEB=$(ps aux | grep -E "gunicorn.*web_api" | grep -v grep | wc -l)
-
-if [ "$RUNNING_WEB" -eq 0 ]; then
-    echo -e "${GREEN}✓ Web-API erfolgreich beendet${NC}"
-else
-    echo -e "${RED}✗ FEHLER: Noch $RUNNING_WEB Web-API Prozess(e) aktiv!${NC}"
-    ps aux | grep -E "gunicorn.*web_api" | grep -v grep
-    echo ""
-    echo "Bitte manuell prüfen oder mit 'pkill -9 -f gunicorn.*web_api' beenden"
+if ! systemctl is-enabled "$SERVICE" >/dev/null 2>&1; then
+    echo -e "${RED}✗ FEHLER: $SERVICE ist nicht enabled!${NC}"
+    echo "  Aktivieren mit: sudo systemctl enable $SERVICE"
     exit 1
 fi
 
 # ========================================
-# SCHRITT 3: Starte Web-API neu
+# SCHRITT 1: Restart via systemd
 # ========================================
-echo ""
-echo "STEP 3: Starte Web-API Server..."
-nohup gunicorn -c gunicorn_config.py web_api:app > /dev/null 2>&1 &
+echo "STEP 1: Neustart via 'systemctl restart $SERVICE'..."
+sudo systemctl restart "$SERVICE"
 sleep 3
 
-# Prüfe ob gestartet
-if pgrep -f "gunicorn.*web_api" > /dev/null; then
-    GUNICORN_COUNT=$(pgrep -f "gunicorn.*web_api" | wc -l)
-    echo -e "${GREEN}✓ Web-API gestartet ($GUNICORN_COUNT Prozesse)${NC}"
-else
-    echo -e "${RED}✗ FEHLER: Web-API konnte nicht gestartet werden${NC}"
-    echo "Prüfe gunicorn_config.py und web_api.py"
-    exit 1
-fi
-
 # ========================================
-# SCHRITT 4: Finale Statusprüfung
+# SCHRITT 2: Status prüfen
 # ========================================
 echo ""
-echo "STEP 4: Finale Statusprüfung..."
-echo "========================================="
+echo "STEP 2: Prüfe Service-Status..."
 
-GUNICORN_PROCESSES=$(ps aux | grep -E "gunicorn.*web_api" | grep -v grep | wc -l)
-COLLECTOR_RUNNING=$(ps aux | grep -E "collector.py" | grep -v grep | wc -l)
-
-if [ "$GUNICORN_PROCESSES" -ge 1 ]; then
-    echo -e "${GREEN}✓✓✓ WEB-SERVER ERFOLGREICH NEU GESTARTET ✓✓✓${NC}"
-    echo ""
-    echo "Web-API Prozesse:"
-    ps aux | grep -E "gunicorn.*web_api" | grep -v grep | awk '{print "  - PID " $2 ": Web-API Worker"}'
-    echo ""
-    if [ "$COLLECTOR_RUNNING" -ge 1 ]; then
-        echo -e "${GREEN}ℹ Collector läuft weiter (unverändert)${NC}"
-    else
-        echo -e "${YELLOW}⚠ Collector läuft nicht! Ggf. mit 'nohup python3 collector.py &' starten${NC}"
-    fi
-    echo ""
-    echo "Web-Interface: http://localhost:8000"
-    echo "========================================="
-    exit 0
+if systemctl is-active --quiet "$SERVICE"; then
+    GUNICORN_COUNT=$(pgrep -fc "gunicorn.*web_api" || echo 0)
+    echo -e "${GREEN}✓ $SERVICE aktiv ($GUNICORN_COUNT Prozesse)${NC}"
 else
-    echo -e "${RED}✗✗✗ FEHLER: Web-API konnte nicht gestartet werden ✗✗✗${NC}"
-    echo "Keine Gunicorn-Prozesse gefunden"
+    echo -e "${RED}✗ $SERVICE nicht aktiv!${NC}"
+    systemctl status "$SERVICE" --no-pager -l | tail -10
     exit 1
 fi
+
+# ========================================
+# SCHRITT 3: API-Funktionstest
+# ========================================
+echo ""
+echo "STEP 3: API-Funktionstest..."
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:8000/ 2>/dev/null || echo "000")
+
+if [[ "$HTTP_CODE" =~ ^(200|302)$ ]]; then
+    echo -e "${GREEN}✓ Web-API antwortet (HTTP $HTTP_CODE)${NC}"
+else
+    echo -e "${RED}✗ Web-API antwortet nicht (HTTP $HTTP_CODE)${NC}"
+    exit 1
+fi
+
+# ========================================
+# SCHRITT 4: Finale Zusammenfassung
+# ========================================
+echo ""
+echo "========================================="
+COLLECTOR_RUNNING=$(pgrep -fc "[^_]collector\.py" || echo 0)
+if [ "$COLLECTOR_RUNNING" -ge 1 ]; then
+    echo -e "${GREEN}ℹ Collector läuft (unverändert)${NC}"
+else
+    echo -e "${YELLOW}⚠ Collector läuft nicht!${NC}"
+fi
+echo -e "${GREEN}✓✓✓ WEB-SERVER ERFOLGREICH NEU GESTARTET ✓✓✓${NC}"
+echo "Web-Interface: http://localhost:8000"
+echo "========================================="

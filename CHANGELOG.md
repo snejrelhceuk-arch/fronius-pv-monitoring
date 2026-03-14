@@ -5,6 +5,17 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [Unreleased] — 2026-03-14
+
+### Geändert
+- **Autoritätsschaltung:** Manuelle HP-Einschaltung wird für `extern_respekt_s` (Default 30 Min, 15 Min–2 h) respektiert. Nur Übertemp, SOC ≤ 5% und SOC ≤ `extern_notaus_soc_pct` (15%) überstimmen. Phase 4 und weiche Kriterien pausieren. Manuelles Ausschalten sperrt hp_ein analog.
+- **extern_respekt_s**: Default 3600→1800, Bereich [0,7200]→[900,7200]
+
+### Hinzugefügt
+- **extern_notaus_soc_pct**: Neuer Parameter (Default 15%, [5–30%]) — SOC-Schwelle für Autoritäts-Override bei manueller Einschaltung
+
+---
+
 ## [Unreleased] — 2026-03-09
 
 ### Dokumentation

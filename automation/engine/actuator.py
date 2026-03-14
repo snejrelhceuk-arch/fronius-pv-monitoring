@@ -185,44 +185,58 @@ class Actuator:
 
     def _log_aktion(self, aktion: dict, ergebnis: dict):
         """Logge Aktion + Ergebnis in Persist-DB."""
-        try:
-            conn = self._get_persist_conn()
-            now = datetime.now().isoformat()
+        for _attempt in range(2):
+            try:
+                conn = self._get_persist_conn()
+                now = datetime.now().isoformat()
 
-            if self.dry_run:
-                status = 'DRY-RUN'
-            elif ergebnis.get('ok'):
-                status = 'OK'
-            else:
-                status = 'FEHLER'
+                if self.dry_run:
+                    status = 'DRY-RUN'
+                elif ergebnis.get('ok'):
+                    status = 'OK'
+                else:
+                    status = 'FEHLER'
 
-            verify = ergebnis.get('verify')
-            verify_ok = None
-            verify_json = None
-            if verify:
-                verify_ok = 1 if verify.get('ok') else 0
-                verify_json = json.dumps(verify, ensure_ascii=False)
+                verify = ergebnis.get('verify')
+                verify_ok = None
+                verify_json = None
+                if verify:
+                    verify_ok = 1 if verify.get('ok') else 0
+                    verify_json = json.dumps(verify, ensure_ascii=False)
 
-            conn.execute(
-                "INSERT INTO automation_log "
-                "(ts, tier, aktor, kommando, wert, grund, ergebnis, verify_ok, verify_json, detail) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    now,
-                    aktion.get('tier', 0),
-                    aktion.get('aktor', '?'),
-                    aktion.get('kommando', '?'),
-                    json.dumps(aktion.get('wert')) if aktion.get('wert') is not None else None,
-                    aktion.get('grund', ''),
-                    status,
-                    verify_ok,
-                    verify_json,
-                    ergebnis.get('detail', ''),
+                conn.execute(
+                    "INSERT INTO automation_log "
+                    "(ts, tier, aktor, kommando, wert, grund, ergebnis, verify_ok, verify_json, detail) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        now,
+                        aktion.get('tier', 0),
+                        aktion.get('aktor', '?'),
+                        aktion.get('kommando', '?'),
+                        json.dumps(aktion.get('wert')) if aktion.get('wert') is not None else None,
+                        aktion.get('grund', ''),
+                        status,
+                        verify_ok,
+                        verify_json,
+                        ergebnis.get('detail', ''),
+                    )
                 )
-            )
-            conn.commit()
-        except Exception as e:
-            LOG.error(f"Persist-DB Logging fehlgeschlagen: {e}")
+                conn.commit()
+                break  # Erfolg — Schleife verlassen
+            except Exception as e:
+                LOG.error(f"Persist-DB Logging fehlgeschlagen: {e}")
+                # Bei "malformed" oder I/O-Fehlern: Verbindung verwerfen und neu aufbauen
+                if _attempt == 0 and ('malformed' in str(e) or 'disk I/O' in str(e)):
+                    LOG.warning("Persist-DB Verbindung wird erneuert (malformed/IO)")
+                    try:
+                        if self._persist_conn:
+                            self._persist_conn.close()
+                    except Exception:
+                        pass
+                    self._persist_conn = None
+                    # Retry in nächster Iteration
+                else:
+                    break  # Kein Retry bei anderen Fehlern
 
         # ── Zentrales Schaltlog ──
         try:
