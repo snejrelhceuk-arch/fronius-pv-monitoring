@@ -1107,30 +1107,47 @@ def api_backup_status():
         return jsonify(result)
 
     try:
+        # Prüfe Erreichbarkeit UND Aktualität der Backup-DB
         proc = subprocess.run(
             [
                 'ssh', '-o', 'ConnectTimeout=5', '-o', 'StrictHostKeyChecking=no',
                 pi5_host,
-                f'test -d "{target_dir}" && echo up || echo down'
+                f'test -d "{target_dir}" && stat -c%Y "{pi5_db_path}" 2>/dev/null || echo 0'
             ],
             capture_output=True, text=True, timeout=8
         )
 
-        out = (proc.stdout or '').strip().lower()
-        if out == 'up':
+        out = (proc.stdout or '').strip()
+        try:
+            remote_mtime = int(out)
+        except ValueError:
+            remote_mtime = 0
+
+        if remote_mtime == 0:
             result = {
-                'status': 'up',
-                'detail': 'Zielverzeichnis erreichbar',
+                'status': 'down',
+                'detail': 'Zielverzeichnis oder DB fehlt/nicht erreichbar',
                 'target_dir': target_dir,
                 'checked_at': int(now),
             }
         else:
-            result = {
-                'status': 'down',
-                'detail': 'Zielverzeichnis fehlt/nicht erreichbar',
-                'target_dir': target_dir,
-                'checked_at': int(now),
-            }
+            age_h = (now - remote_mtime) / 3600
+            if age_h <= 12:
+                result = {
+                    'status': 'up',
+                    'detail': f'Backup aktuell (vor {age_h:.1f}h)',
+                    'target_dir': target_dir,
+                    'checked_at': int(now),
+                    'backup_age_hours': round(age_h, 1),
+                }
+            else:
+                result = {
+                    'status': 'stale',
+                    'detail': f'Backup veraltet! Letzte Aktualisierung vor {age_h:.0f}h',
+                    'target_dir': target_dir,
+                    'checked_at': int(now),
+                    'backup_age_hours': round(age_h, 1),
+                }
     except subprocess.TimeoutExpired:
         result = {
             'status': 'down',
