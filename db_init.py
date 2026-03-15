@@ -188,27 +188,58 @@ def ensure_tmpfs_db():
             pass
     
     # 2. Persist-Kopie vorhanden UND gültig → Wiederherstellen
+    #    BUG-FIX 2026-03-15: Retry bei transientem I/O-Error (SD nach Umstecken/Boot)
     persist_valid = False
     if os.path.exists(persist_path) and os.path.getsize(persist_path) > MIN_VALID_DB_SIZE:
         has_tables, tables = _db_has_tables(persist_path)
         if has_tables:
             persist_valid = True
+            last_err = None
+            for attempt in range(3):
+                try:
+                    if attempt > 0:
+                        logger.info(f"SD-Restore Retry {attempt+1}/3 nach {attempt * 2}s Pause...")
+                        time.sleep(attempt * 2)  # 0s, 2s, 4s
+                    t0 = time.time()
+                    tmp_target = tmpfs_path + '.tmp'
+                    _backup_sqlite_db(persist_path, tmp_target)
+
+                    os.rename(tmp_target, tmpfs_path)
+
+                    dt = time.time() - t0
+                    size_mb = os.path.getsize(tmpfs_path) / 1e6
+                    logger.info(f"tmpfs-DB wiederhergestellt: {persist_path} -> {tmpfs_path} "
+                                 f"({size_mb:.1f} MB in {dt:.1f}s)"
+                                 + (f" [Retry {attempt+1}]" if attempt > 0 else ""))
+                    return True
+
+                except Exception as e:
+                    last_err = e
+                    logger.warning(f"SD-Restore Versuch {attempt+1}/3 fehlgeschlagen: {e}")
+                    for f in [tmpfs_path + '.tmp', tmpfs_path]:
+                        try:
+                            os.remove(f)
+                        except FileNotFoundError:
+                            pass
+
+            # Alle 3 Versuche fehlgeschlagen — letzter Fallback: Raw-Copy statt SQLite-Backup
+            logger.warning(f"SQLite-Backup 3× fehlgeschlagen ({last_err}) — versuche Raw-Copy")
             try:
-                t0 = time.time()
                 tmp_target = tmpfs_path + '.tmp'
-                _backup_sqlite_db(persist_path, tmp_target)
-                
-                os.rename(tmp_target, tmpfs_path)
-                
-                dt = time.time() - t0
-                size_mb = os.path.getsize(tmpfs_path) / 1e6
-                logger.info(f"tmpfs-DB wiederhergestellt: {persist_path} -> {tmpfs_path} "
-                             f"({size_mb:.1f} MB in {dt:.1f}s)")
-                return True
-                
-            except Exception as e:
-                logger.error(f"tmpfs-DB Wiederherstellung fehlgeschlagen: {e}")
-                for f in [tmpfs_path + '.tmp', tmpfs_path]:
+                shutil.copy2(persist_path, tmp_target)
+                # Integrität nach Copy prüfen
+                has_t, _ = _db_has_tables(tmp_target)
+                if has_t:
+                    os.rename(tmp_target, tmpfs_path)
+                    size_mb = os.path.getsize(tmpfs_path) / 1e6
+                    logger.info(f"tmpfs-DB per Raw-Copy wiederhergestellt ({size_mb:.1f} MB)")
+                    return True
+                else:
+                    logger.error("Raw-Copy DB ist korrupt — Fallback auf Backup")
+                    os.remove(tmp_target)
+            except Exception as e2:
+                logger.error(f"Raw-Copy ebenfalls fehlgeschlagen: {e2}")
+                for f in [tmpfs_path + '.tmp']:
                     try:
                         os.remove(f)
                     except FileNotFoundError:
@@ -227,6 +258,17 @@ def ensure_tmpfs_db():
     gz_backup = _find_latest_backup()
     if gz_backup:
         logger.warning(f"Persist-DB ungültig — versuche Backup: {gz_backup}")
+        # Persist-DB sichern bevor sie überschrieben wird (könnte transient unlesbar,
+        # aber physisch intakt sein — z.B. nach SD-Umstecken/Boot-I/O-Error)
+        if os.path.exists(persist_path) and os.path.getsize(persist_path) > MIN_VALID_DB_SIZE:
+            rescue_path = persist_path + '.pre_restore'
+            try:
+                os.rename(persist_path, rescue_path)
+                logger.info(f"Persist-DB gesichert als {rescue_path} "
+                             f"({os.path.getsize(rescue_path) / 1e6:.1f} MB) — "
+                             f"manuell prüfbar falls Backup älter ist")
+            except OSError as e:
+                logger.warning(f"Persist-DB Sicherung fehlgeschlagen: {e}")
         if _restore_from_gz_backup(gz_backup, persist_path):
             try:
                 tmp_target = tmpfs_path + '.tmp'
@@ -234,6 +276,36 @@ def ensure_tmpfs_db():
                 os.rename(tmp_target, tmpfs_path)
                 size_mb = os.path.getsize(tmpfs_path) / 1e6
                 logger.info(f"tmpfs-DB aus Backup wiederhergestellt ({size_mb:.1f} MB)")
+
+                # Nach GFS-Restore: Prüfe ob .pre_restore neuere Daten hat
+                # (SD könnte jetzt lesbar sein — transiente I/O-Errors sind oft beim 2. Lesen weg)
+                rescue_path = persist_path + '.pre_restore'
+                if os.path.exists(rescue_path) and os.path.getsize(rescue_path) > MIN_VALID_DB_SIZE:
+                    try:
+                        rescue_conn = sqlite3.connect(f"file:{rescue_path}?mode=ro", uri=True, timeout=5)
+                        rescue_max = rescue_conn.execute("SELECT MAX(ts) FROM raw_data").fetchone()[0]
+                        rescue_conn.close()
+
+                        current_conn = sqlite3.connect(f"file:{tmpfs_path}?mode=ro", uri=True, timeout=5)
+                        current_max = current_conn.execute("SELECT MAX(ts) FROM raw_data").fetchone()[0]
+                        current_conn.close()
+
+                        if rescue_max and current_max and rescue_max > current_max:
+                            diff_h = (rescue_max - current_max) / 3600
+                            logger.info(f"pre_restore hat {diff_h:.1f}h neuere Daten "
+                                         f"— restauriere stattdessen von pre_restore")
+                            # pre_restore ist lesbar → als tmpfs und persist übernehmen
+                            _backup_sqlite_db(rescue_path, tmpfs_path + '.tmp')
+                            os.rename(tmpfs_path + '.tmp', tmpfs_path)
+                            shutil.copy2(rescue_path, persist_path)
+                            size_mb = os.path.getsize(tmpfs_path) / 1e6
+                            logger.info(f"tmpfs-DB aus pre_restore wiederhergestellt "
+                                         f"({size_mb:.1f} MB, {diff_h:.1f}h neuer als GFS)")
+                        elif rescue_max and current_max:
+                            logger.info(f"pre_restore nicht neuer als GFS — verwerfe")
+                    except Exception as e_rescue:
+                        logger.warning(f"pre_restore Prüfung fehlgeschlagen: {e_rescue} — bleibe bei GFS")
+
                 return True
             except Exception as e:
                 logger.error(f"tmpfs-Wiederherstellung aus Backup fehlgeschlagen: {e}")
@@ -431,11 +503,11 @@ def _persist_tmpfs_to_pi5(tmpfs_path):
         logger.warning(f"Pi5-Persist ÜBERSPRUNGEN: tmpfs-DB hat nicht die erwarteten Tabellen")
         return False
     
-    tmp_file = '/tmp/pv_db_pi5_transfer.db'
+    tmp_file = '/dev/shm/pv_db_pi5_transfer.db'
     t0 = time.time()
     
     try:
-        # 1. Konsistente Kopie aus tmpfs
+        # 1. Konsistente Kopie aus tmpfs (in /dev/shm, nicht /tmp — zu klein!)
         _backup_sqlite_db(tmpfs_path, tmp_file)
         
         # 2. rsync nach Pi5 (--compress, --timeout=120)
