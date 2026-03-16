@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "monthly_statistics": [
+    {
+      "year": 2026,
+      "month": 1,
+      "field": "waermepumpe_kwh",
+      "mode": "fixed",
+      "value": 620.88,
+      "source": "manual_reference_2026-03-16",
+      "reason": "WP-Januar 2026 in Rohdaten nicht belastbar; Monatswert manuell freigegeben.",
+      "active": true
+    },
+    {
+      "year": 2026,
+      "month": 2,
+      "field": "waermepumpe_kwh",
+      "mode": "fixed",
+      "value": 463.7,
+      "source": "manual_reference_2026-03-16",
+      "reason": "WP-Februar 2026 in Rohdaten unvollstaendig; Monatswert manuell freigegeben.",
+      "active": true
+    },
+    {
+      "year": 2026,
+      "month": 3,
+      "field": "waermepumpe_kwh",
+      "mode": "offset",
+      "value": -0.47,
+      "source": "manual_reference_2026-03-16",
+      "reason": "Laufender Maerz 2026 soll weiter anwachsen; Offset korrigiert den aktuellen Monatsstand auf 109.78 kWh.",
+      "active": true
+    },
+    {
+      "year": 2026,
+      "month": 1,
+      "field": "wattpilot_kwh",
+      "mode": "fixed",
+      "value": 743.83,
+      "source": "manual_reference_2026-03-16",
+      "reason": "Wattpilot-Januar 2026 vor Start des lokalen Collectors nur ueber Monatsreferenz verfuegbar.",
+      "active": true
+    },
+    {
+      "year": 2026,
+      "month": 2,
+      "field": "wattpilot_kwh",
+      "mode": "fixed",
+      "value": 842.39,
+      "source": "manual_reference_2026-03-16",
+      "reason": "Wattpilot-Collector startete erst am 2026-02-12; Februar braucht einen freigegebenen Monatswert.",
+      "active": true
+    },
+    {
+      "year": 2026,
+      "month": 3,
+      "field": "wattpilot_kwh",
+      "mode": "offset",
+      "value": 12.08,
+      "source": "manual_reference_2026-03-16",
+      "reason": "Laufender Maerz 2026 soll weiter anwachsen; Offset korrigiert den aktuellen Monatsstand auf 392.94 kWh.",
+      "active": true
+    }
+  ]
+}

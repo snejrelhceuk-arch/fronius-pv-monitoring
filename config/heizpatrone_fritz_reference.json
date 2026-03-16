@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "source": "fritz_box_manual_2026-03-16",
+  "monthly": [
+    {
+      "year": 2026,
+      "month": 1,
+      "energy_kwh": 48.48,
+      "note": "Monatswert aus Fritz-Box fuer Heizpatrone"
+    },
+    {
+      "year": 2026,
+      "month": 2,
+      "energy_kwh": 105.78,
+      "note": "Monatswert aus Fritz-Box fuer Heizpatrone"
+    }
+  ],
+  "daily": [
+    { "date": "2026-03-01", "energy_kwh": 5.75 },
+    { "date": "2026-03-02", "energy_kwh": 15.67 },
+    { "date": "2026-03-03", "energy_kwh": 21.24 },
+    { "date": "2026-03-04", "energy_kwh": 15.54 },
+    { "date": "2026-03-05", "energy_kwh": 17.80 },
+    { "date": "2026-03-06", "energy_kwh": 13.55 },
+    { "date": "2026-03-07", "energy_kwh": 20.80 },
+    { "date": "2026-03-08", "energy_kwh": 8.30 },
+    { "date": "2026-03-09", "energy_kwh": 8.26 },
+    { "date": "2026-03-10", "energy_kwh": 4.73 },
+    { "date": "2026-03-11", "energy_kwh": 18.43 },
+    { "date": "2026-03-12", "energy_kwh": 11.11 },
+    { "date": "2026-03-13", "energy_kwh": 10.94 },
+    { "date": "2026-03-14", "energy_kwh": 2.58 },
+    { "date": "2026-03-15", "energy_kwh": 0.00 },
+    { "date": "2026-03-16", "energy_kwh": 0.00 }
+  ]
+}
