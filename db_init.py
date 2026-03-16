@@ -594,18 +594,58 @@ def ensure_forecast_table():
                 conn.commit()
                 logger.info(f"data_15min.{col} Spalte hinzugefügt")
         
-        # Migration: sonnenstunden in statistics-Tabellen sicherstellen
-        for table in ('monthly_statistics', 'yearly_statistics'):
-            try:
-                conn.execute(f"SELECT sonnenstunden FROM {table} LIMIT 1")
-            except sqlite3.OperationalError:
+        # Migration: Statistik-Spalten sicherstellen
+        monthly_columns = {
+            'sonnenstunden': "ALTER TABLE monthly_statistics ADD COLUMN sonnenstunden REAL DEFAULT NULL",
+            'waermepumpe_kwh': "ALTER TABLE monthly_statistics ADD COLUMN waermepumpe_kwh REAL DEFAULT 0",
+        }
+        yearly_columns = {
+            'sonnenstunden': "ALTER TABLE yearly_statistics ADD COLUMN sonnenstunden REAL DEFAULT NULL",
+            'waermepumpe_kwh': "ALTER TABLE yearly_statistics ADD COLUMN waermepumpe_kwh REAL DEFAULT 0",
+        }
+        for table, columns in (('monthly_statistics', monthly_columns), ('yearly_statistics', yearly_columns)):
+            for col, ddl in columns.items():
                 try:
-                    conn.execute(f"ALTER TABLE {table} ADD COLUMN sonnenstunden REAL DEFAULT NULL")
-                    conn.commit()
-                    logger.info(f"{table}.sonnenstunden Spalte hinzugefügt")
-                except Exception:
-                    pass
-        
+                    conn.execute(f"SELECT {col} FROM {table} LIMIT 1")
+                except sqlite3.OperationalError:
+                    try:
+                        conn.execute(ddl)
+                        conn.commit()
+                        logger.info(f"{table}.{col} Spalte hinzugefügt")
+                    except Exception:
+                        pass
+
+        # Fritz!DECT Heizpatrone: Tages- und Monatsreferenzen
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS heizpatrone_daily (
+                ts INTEGER PRIMARY KEY,
+                energy_wh REAL NOT NULL DEFAULT 0,
+                source TEXT DEFAULT 'manual',
+                note TEXT DEFAULT '',
+                created_at REAL DEFAULT (strftime('%s','now'))
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS heizpatrone_monthly (
+                year INTEGER NOT NULL,
+                month INTEGER NOT NULL,
+                energy_kwh REAL NOT NULL DEFAULT 0,
+                source TEXT DEFAULT 'manual',
+                note TEXT DEFAULT '',
+                created_at REAL DEFAULT (strftime('%s','now')),
+                PRIMARY KEY (year, month)
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_heizpatrone_daily_ts
+            ON heizpatrone_daily(ts)
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_heizpatrone_monthly_year_month
+            ON heizpatrone_monthly(year, month)
+        """)
+        conn.commit()
+
         conn.close()
         logger.info("forecast_daily Tabelle bereit")
     except Exception as e:

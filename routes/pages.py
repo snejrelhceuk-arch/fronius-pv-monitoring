@@ -97,7 +97,7 @@ def analyse():
                COALESCE(solar_erzeugung_kwh, 0),
                COALESCE(direktverbrauch_kwh, 0),
                COALESCE(wattpilot_kwh, 0),
-               COALESCE(heizpatrone_kwh, 0),
+               COALESCE(waermepumpe_kwh, 0),
                COALESCE(batt_entladung_kwh, 0),
                COALESCE(batt_ladung_kwh, 0),
                COALESCE(netz_bezug_kwh, 0),

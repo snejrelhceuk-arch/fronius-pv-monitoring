@@ -10,6 +10,7 @@
     <style>
         /* Verbraucher-spezifische Farben */
         .status-chip.wp { background: rgba(198,40,40,0.35); }
+        .status-chip.heizpatrone { background: rgba(230,81,0,0.3); }
         .status-chip.wattpilot { background: rgba(21,101,192,0.3); }
         .status-chip.haushalt { background: rgba(255,138,101,0.25); }
         #verbraucherChart {
@@ -76,8 +77,8 @@
         // ═══════════════════════════════════════
         // STATE
         // ═══════════════════════════════════════
-        const COLORS = { wp: '#C62828', wattpilot: '#1565C0', haushalt: '#FF8A65' };
-        const NAMES  = { wp: 'Wärmepumpe', wattpilot: 'E-Auto', haushalt: 'Sonstige' };
+        const COLORS = { wp: '#C62828', heizpatrone: '#E65100', wattpilot: '#1565C0', haushalt: '#FF8A65' };
+        const NAMES  = { wp: 'Wärmepumpe', heizpatrone: 'Heizpatrone', wattpilot: 'E-Auto', haushalt: 'Sonstige' };
 
         let currentView = 'tag';
         let currentDate = new Date();
@@ -208,15 +209,21 @@
             if (!totals) return;
             const grid = document.getElementById('summaryGrid');
             const gesamt = totals.gesamt || 0.001;
-            const pctWP = (totals.wp / gesamt * 100).toFixed(0);
-            const pctWatt = (totals.wattpilot / gesamt * 100).toFixed(0);
-            const pctHH = (totals.haushalt / gesamt * 100).toFixed(0);
+            const pctWP   = (totals.wp          / gesamt * 100).toFixed(0);
+            const pctHP   = (totals.heizpatrone / gesamt * 100).toFixed(0);
+            const pctWatt = (totals.wattpilot   / gesamt * 100).toFixed(0);
+            const pctHH   = (totals.haushalt    / gesamt * 100).toFixed(0);
 
             grid.innerHTML = `
                 <div class="status-chip wp">
                     <span class="label">WP</span>
                     <span class="val">${formatEnergy(totals.wp)}</span>
                     <span class="pct">${pctWP}%</span>
+                </div>
+                <div class="status-chip heizpatrone">
+                    <span class="label">HP</span>
+                    <span class="val">${formatEnergy(totals.heizpatrone)}</span>
+                    <span class="pct">${pctHP}%</span>
                 </div>
                 <div class="status-chip wattpilot">
                     <span class="label">E-Auto</span>
@@ -260,9 +267,10 @@
                 byTime[key] = d;
             });
 
-            const wpData = allTimes.map(t => byTime[t] ? byTime[t].p_wp : null);
-            const wattData = allTimes.map(t => byTime[t] ? byTime[t].p_wattpilot : null);
-            const hhData = allTimes.map(t => byTime[t] ? byTime[t].p_haushalt : null);
+            const wpData   = allTimes.map(t => byTime[t] ? byTime[t].p_wp          : null);
+            const hpData   = allTimes.map(t => byTime[t] ? byTime[t].p_heizpatrone  : null);
+            const wattData = allTimes.map(t => byTime[t] ? byTime[t].p_wattpilot    : null);
+            const hhData   = allTimes.map(t => byTime[t] ? byTime[t].p_haushalt     : null);
 
             const option = {
                 tooltip: {
@@ -274,6 +282,7 @@
                         if (!d) return `<strong>${timeStr}</strong><br/>Keine Daten`;
                         let html = `<strong>${timeStr}</strong><br/><br/>`;
                         html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.wp};border-radius:2px;margin-right:5px;"></span>Wärmepumpe: <strong>${d.p_wp.toFixed(0)} W</strong><br/>`;
+                        html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.heizpatrone};border-radius:2px;margin-right:5px;"></span>Heizpatrone: <strong>${d.p_heizpatrone.toFixed(0)} W</strong><br/>`;
                         html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.wattpilot};border-radius:2px;margin-right:5px;"></span>E-Auto: <strong>${d.p_wattpilot.toFixed(0)} W</strong><br/>`;
                         html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.haushalt};border-radius:2px;margin-right:5px;"></span>Sonstige: <strong>${d.p_haushalt.toFixed(0)} W</strong><br/>`;
                         html += `<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>`;
@@ -282,7 +291,7 @@
                     }
                 },
                 legend: {
-                    data: ['Wärmepumpe', 'E-Auto', 'Sonstige'],
+                    data: ['Wärmepumpe', 'Heizpatrone', 'E-Auto', 'Sonstige'],
                     bottom: 10
                 },
                 grid: {
@@ -321,6 +330,16 @@
                         smooth: true,
                         symbol: 'none',
                         areaStyle: { color: COLORS.wp, opacity: 0.15 }
+                    },
+                    {
+                        name: 'Heizpatrone',
+                        type: 'line',
+                        data: hpData,
+                        itemStyle: { color: COLORS.heizpatrone },
+                        lineStyle: { width: 2 },
+                        smooth: true,
+                        symbol: 'none',
+                        areaStyle: { color: COLORS.heizpatrone, opacity: 0.15 }
                     },
                     {
                         name: 'E-Auto',
@@ -383,15 +402,19 @@
                 else byKey[d.label] = d;
             });
 
-            const wpData = labels.map((l, i) => {
+            const wpData   = labels.map((l, i) => {
                 const key = currentView === 'monat' ? (i + 1) : (currentView === 'jahr' ? (i + 1) : l);
                 return byKey[key] ? byKey[key].w_wp : null;
+            });
+            const hpData   = labels.map((l, i) => {
+                const key = currentView === 'monat' ? (i + 1) : (currentView === 'jahr' ? (i + 1) : l);
+                return byKey[key] ? byKey[key].w_heizpatrone : null;
             });
             const wattData = labels.map((l, i) => {
                 const key = currentView === 'monat' ? (i + 1) : (currentView === 'jahr' ? (i + 1) : l);
                 return byKey[key] ? byKey[key].w_wattpilot : null;
             });
-            const hhData = labels.map((l, i) => {
+            const hhData   = labels.map((l, i) => {
                 const key = currentView === 'monat' ? (i + 1) : (currentView === 'jahr' ? (i + 1) : l);
                 return byKey[key] ? byKey[key].w_haushalt : null;
             });
@@ -423,6 +446,7 @@
 
                         let html = `<strong>${titleStr}</strong><br/><br/>`;
                         html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.wp};border-radius:2px;margin-right:5px;"></span>WP: <strong>${formatEnergy(d.w_wp)}</strong><br/>`;
+                        html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.heizpatrone};border-radius:2px;margin-right:5px;"></span>HP (Überschuss): <strong>${formatEnergy(d.w_heizpatrone)}</strong><br/>`;
                         html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.wattpilot};border-radius:2px;margin-right:5px;"></span>E-Auto: <strong>${formatEnergy(d.w_wattpilot)}</strong><br/>`;
                         html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.haushalt};border-radius:2px;margin-right:5px;"></span>Sonstige: <strong>${formatEnergy(d.w_haushalt)}</strong><br/>`;
                         html += `<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>`;
@@ -431,7 +455,7 @@
                     }
                 },
                 legend: {
-                    data: ['Wärmepumpe', 'E-Auto', 'Sonstige'],
+                    data: ['Wärmepumpe', 'Heizpatrone', 'E-Auto', 'Sonstige'],
                     bottom: 10
                 },
                 grid: {
@@ -461,6 +485,14 @@
                         stack: 'verbrauch',
                         data: wpData,
                         itemStyle: { color: COLORS.wp },
+                        emphasis: { focus: 'series' }
+                    },
+                    {
+                        name: 'Heizpatrone',
+                        type: 'bar',
+                        stack: 'verbrauch',
+                        data: hpData,
+                        itemStyle: { color: COLORS.heizpatrone },
                         emphasis: { focus: 'series' }
                     },
                     {

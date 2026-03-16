@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 # tmpfs-DB beim Import sicherstellen (idempotent)
 db_init.ensure_tmpfs_db()
+db_init.ensure_forecast_table()
 
 
 def get_db_connection(timeout=10.0):

@@ -8,16 +8,17 @@ Historische Daten (CSV-Import 2022-2025) werden NICHT überschrieben,
 da daily_data erst ab Jan 2026 existiert.
 
 Mapping:
-  daily_data (Wh)  →  monthly_statistics (kWh)
-  W_PV_total       →  solar_erzeugung_kwh
-  W_Imp_Netz_total →  netz_bezug_kwh
-  W_Exp_Netz_total →  netz_einspeisung_kwh
-  W_Batt_Charge    →  batt_ladung_kwh
-  W_Batt_Discharge →  batt_entladung_kwh
-  W_PV_Direct      →  direktverbrauch_kwh
-  W_Consumption    →  gesamt_verbrauch_kwh
-  W_WP_total       →  heizpatrone_kwh  (WP-SmartMeter = Wärmepumpe)
-  wattpilot_daily  →  wattpilot_kwh  (Wallbox, aus wattpilot_daily Tabelle)
+  daily_data (Wh)   →  monthly_statistics (kWh)
+  W_PV_total        →  solar_erzeugung_kwh
+  W_Imp_Netz_total  →  netz_bezug_kwh
+  W_Exp_Netz_total  →  netz_einspeisung_kwh
+  W_Batt_Charge     →  batt_ladung_kwh
+  W_Batt_Discharge  →  batt_entladung_kwh
+  W_PV_Direct       →  direktverbrauch_kwh
+  W_Consumption     →  gesamt_verbrauch_kwh
+  W_WP_total        →  waermepumpe_kwh  (WP-SmartMeter = Wärmepumpe)
+  heizpatrone_*     →  heizpatrone_kwh  (Fritz!DECT Heizpatrone)
+  wattpilot_daily   →  wattpilot_kwh    (Wallbox, aus wattpilot_daily Tabelle)
 """
 
 import sys
@@ -30,6 +31,7 @@ if is_failover():
     sys.exit(0)
 import config
 from db_utils import get_db_connection
+from statistics_corrections import load_monthly_stat_corrections, apply_monthly_stat_correction
 
 DB_PATH = config.DB_PATH
 
@@ -48,10 +50,46 @@ EINSPEISEVERGUETUNG = config.EINSPEISEVERGUETUNG
 FIRST_AUTO_MONTH = (2026, 1)  # (Jahr, Monat) - ab Januar 2026 (daily_data = Solarweb-Import)
 
 
+def _get_heizpatrone_monthly_kwh(cursor, year, month, ts_start, ts_end):
+    """Hole Heizpatronenverbrauch aus Fritz!DECT-Referenztabellen.
+
+    Priorität:
+      1. Monatliche Referenz aus heizpatrone_monthly
+      2. Summe taggenauer Werte aus heizpatrone_daily
+      3. 0.0 falls keine Daten vorhanden
+    """
+    try:
+        cursor.execute("""
+            SELECT energy_kwh
+            FROM heizpatrone_monthly
+            WHERE year = ? AND month = ?
+        """, (year, month))
+        row = cursor.fetchone()
+        if row and row[0] is not None:
+            return float(row[0]), 'monthly'
+    except sqlite3.OperationalError:
+        return 0.0, 'none'
+
+    try:
+        cursor.execute("""
+            SELECT COALESCE(SUM(energy_wh), 0) / 1000.0
+            FROM heizpatrone_daily
+            WHERE ts >= ? AND ts < ?
+        """, (ts_start, ts_end))
+        row = cursor.fetchone()
+        if row and row[0] is not None:
+            return float(row[0]), 'daily'
+    except sqlite3.OperationalError:
+        pass
+
+    return 0.0, 'none'
+
+
 def update_monthly_statistics():
     """Berechne monthly_statistics aus daily_data für aktuelle und letzte 2 Monate"""
     conn = get_db_connection()
     cursor = conn.cursor()
+    corrections = load_monthly_stat_corrections()
     try:
         now = datetime.now()
 
@@ -100,6 +138,19 @@ def update_monthly_statistics():
                 continue
 
             solar, bezug, einsp, batt_lad, batt_entl, direkt, gesamt, wp_total, tage = row
+            wp_total, wp_correction = apply_monthly_stat_correction(
+                year, month, 'waermepumpe_kwh', wp_total, corrections
+            )
+            if wp_correction:
+                logging.info(
+                    f"  {year}-{month:02d}: WP-Korrektur {wp_correction['mode']} "
+                    f"{wp_correction['source_value']:.2f} -> {wp_total:.2f} kWh "
+                    f"[{wp_correction['source']}]"
+                )
+
+            heizpatrone_kwh, hp_source = _get_heizpatrone_monthly_kwh(
+                cursor, year, month, ts_start, ts_end
+            )
 
             # Wattpilot-Verbrauch aus wattpilot_daily (Wh → kWh)
             wattpilot_kwh = 0
@@ -114,6 +165,21 @@ def update_monthly_statistics():
                     wattpilot_kwh = wattpilot_row[0]
             except Exception:
                 pass  # Tabelle existiert noch nicht
+
+            wattpilot_kwh, wattpilot_correction = apply_monthly_stat_correction(
+                year, month, 'wattpilot_kwh', wattpilot_kwh, corrections
+            )
+            if wattpilot_correction:
+                logging.info(
+                    f"  {year}-{month:02d}: Wattpilot-Korrektur {wattpilot_correction['mode']} "
+                    f"{wattpilot_correction['source_value']:.2f} -> {wattpilot_kwh:.2f} kWh "
+                    f"[{wattpilot_correction['source']}]"
+                )
+
+            if heizpatrone_kwh > 0:
+                logging.info(
+                    f"  {year}-{month:02d}: Heizpatrone {heizpatrone_kwh:.2f} kWh [{hp_source}]"
+                )
 
             # Sonnenstunden aus forecast_daily (Summe der prognostizierten Sonnenstunden)
             sonnenstunden = None
@@ -149,11 +215,11 @@ def update_monthly_statistics():
                     year, month,
                     solar_erzeugung_kwh, netz_bezug_kwh, netz_einspeisung_kwh,
                     batt_ladung_kwh, batt_entladung_kwh, direktverbrauch_kwh,
-                    gesamt_verbrauch_kwh, heizpatrone_kwh, wattpilot_kwh,
+                    gesamt_verbrauch_kwh, waermepumpe_kwh, heizpatrone_kwh, wattpilot_kwh,
                     autarkie_prozent, eigenverbrauch_prozent,
                     strompreis_bezug_eur_kwh, einspeiseverguetung_eur_kwh,
                     sonnenstunden
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.0, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.0, ?)
                 ON CONFLICT(year, month) DO UPDATE SET
                     solar_erzeugung_kwh = excluded.solar_erzeugung_kwh,
                     netz_bezug_kwh = excluded.netz_bezug_kwh,
@@ -162,6 +228,7 @@ def update_monthly_statistics():
                     batt_entladung_kwh = excluded.batt_entladung_kwh,
                     direktverbrauch_kwh = excluded.direktverbrauch_kwh,
                     gesamt_verbrauch_kwh = excluded.gesamt_verbrauch_kwh,
+                    waermepumpe_kwh = excluded.waermepumpe_kwh,
                     heizpatrone_kwh = excluded.heizpatrone_kwh,
                     wattpilot_kwh = excluded.wattpilot_kwh,
                     autarkie_prozent = excluded.autarkie_prozent,
@@ -172,7 +239,7 @@ def update_monthly_statistics():
                 year, month,
                 round(solar, 2), round(bezug, 2), round(einsp, 2),
                 round(batt_lad, 2), round(batt_entl, 2), round(direkt, 2),
-                round(gesamt, 2), round(wp_total, 2), round(wattpilot_kwh, 2),
+                round(gesamt, 2), round(wp_total, 2), round(heizpatrone_kwh, 2), round(wattpilot_kwh, 2),
                 round(autarkie, 2), round(eigenverbrauch_pct, 2),
                 strompreis, sonnenstunden
             ))
@@ -205,6 +272,7 @@ def update_yearly_statistics():
         for year in years:
             cursor.execute("""
                 SELECT
+                    COALESCE(SUM(waermepumpe_kwh), 0),
                     COALESCE(SUM(heizpatrone_kwh), 0),
                     COALESCE(SUM(netz_bezug_kwh), 0),
                     COALESCE(SUM(batt_entladung_kwh), 0),
@@ -228,8 +296,8 @@ def update_yearly_statistics():
             if not row or row[11] == 0:
                 continue
 
-            heiz, bezug, batt_entl, direkt, gesamt, solar, batt_lad, einsp, \
-                _autarkie_avg, _eigen_avg, wp, monate, sonnenstunden_jahr = row
+            wp_kwh, heiz, bezug, batt_entl, direkt, gesamt, solar, batt_lad, einsp, \
+                _autarkie_avg, _eigen_avg, wattpilot_kwh, monate, sonnenstunden_jahr = row
 
             # Autarkie/Eigenverbrauch aus Jahressummen berechnen (gewichtet, nicht AVG)
             # Korrekte Formel: (1 - Bezug/Verbrauch) — Direktverbrauch enthält
@@ -254,14 +322,15 @@ def update_yearly_statistics():
             cursor.execute("""
                 INSERT INTO yearly_statistics (
                     year,
-                    heizpatrone_kwh, netz_bezug_kwh, batt_entladung_kwh,
+                    waermepumpe_kwh, heizpatrone_kwh, netz_bezug_kwh, batt_entladung_kwh,
                     direktverbrauch_kwh, gesamt_verbrauch_kwh,
                     solar_erzeugung_kwh, batt_ladung_kwh, netz_einspeisung_kwh,
                     autarkie_prozent_avg, eigenverbrauch_prozent_avg,
                     ersparnis_autarkie_eur, ersparnis_eigenverbrauch_eur,
                     einnahmen_einspeisung_eur, wattpilot_kwh, sonnenstunden
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(year) DO UPDATE SET
+                    waermepumpe_kwh = excluded.waermepumpe_kwh,
                     heizpatrone_kwh = excluded.heizpatrone_kwh,
                     netz_bezug_kwh = excluded.netz_bezug_kwh,
                     batt_entladung_kwh = excluded.batt_entladung_kwh,
@@ -279,12 +348,12 @@ def update_yearly_statistics():
                     sonnenstunden = excluded.sonnenstunden
             """, (
                 year,
-                round(heiz, 2), round(bezug, 2), round(batt_entl, 2),
+                round(wp_kwh, 2), round(heiz, 2), round(bezug, 2), round(batt_entl, 2),
                 round(direkt, 2), round(gesamt, 2),
                 round(solar, 2), round(batt_lad, 2), round(einsp, 2),
                 round(autarkie, 2), round(eigenverbrauch_pct, 2),
                 round(ersparnis_autarkie, 2), round(ersparnis_eigen, 2),
-                round(einnahmen_einsp, 2), round(wp, 2), sonnenstunden_val
+                round(einnahmen_einsp, 2), round(wattpilot_kwh, 2), sonnenstunden_val
             ))
             count += 1
 

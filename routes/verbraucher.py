@@ -1,5 +1,5 @@
 """
-Blueprint: Verbraucher-APIs (WP, Wattpilot, Haushalt).
+Blueprint: Verbraucher-APIs (WP, Heizpatrone, Wattpilot, Haushalt).
 
 Enthält: /api/verbraucher, /api/verbraucher/tag, /api/verbraucher/monat,
          /api/verbraucher/jahr, /api/verbraucher/gesamt
@@ -8,9 +8,88 @@ import re
 import logging
 from datetime import datetime
 from flask import Blueprint, jsonify, request
-from routes.helpers import get_db_connection, DB_FILE
+from routes.helpers import get_db_connection
 
 bp = Blueprint('verbraucher', __name__)
+
+
+def _load_wattpilot_daily(cursor, first_ts, last_ts):
+    data = {}
+    try:
+        cursor.execute(
+            """
+            SELECT ts, energy_wh, max_power_w, charging_hours, sessions
+            FROM wattpilot_daily
+            WHERE ts >= ? AND ts < ?
+            ORDER BY ts
+            """,
+            (first_ts, last_ts),
+        )
+        for row in cursor.fetchall():
+            day_ts = (int(row[0]) // 86400) * 86400
+            data[day_ts] = {
+                'energy_wh': row[1] or 0,
+                'max_power_w': row[2] or 0,
+                'charging_hours': row[3] or 0,
+                'sessions': row[4] or 0,
+            }
+    except Exception:
+        pass
+    return data
+
+
+def _load_heizpatrone_daily(cursor, first_ts, last_ts):
+    data = {}
+    try:
+        cursor.execute(
+            """
+            SELECT ts, energy_wh
+            FROM heizpatrone_daily
+            WHERE ts >= ? AND ts < ?
+            ORDER BY ts
+            """,
+            (first_ts, last_ts),
+        )
+        for ts, energy_wh in cursor.fetchall():
+            day_ts = (int(ts) // 86400) * 86400
+            data[day_ts] = energy_wh or 0
+    except Exception:
+        pass
+    return data
+
+
+def _get_heizpatrone_month_total_kwh(cursor, year, month, first_ts, last_ts):
+    try:
+        cursor.execute(
+            """
+            SELECT energy_kwh
+            FROM heizpatrone_monthly
+            WHERE year = ? AND month = ?
+            """,
+            (year, month),
+        )
+        row = cursor.fetchone()
+        if row and row[0] is not None:
+            return float(row[0])
+    except Exception:
+        pass
+
+    try:
+        cursor.execute(
+            """
+            SELECT COALESCE(SUM(energy_wh), 0) / 1000.0
+            FROM heizpatrone_daily
+            WHERE ts >= ? AND ts < ?
+            """,
+            (first_ts, last_ts),
+        )
+        row = cursor.fetchone()
+        if row and row[0] is not None:
+            return float(row[0])
+    except Exception:
+        pass
+
+    return 0.0
 
 
 @bp.route('/api/verbraucher')
@@ -19,6 +98,7 @@ def verbraucher_chart():
     Verbraucher-Aufschlüsselung für Monatsansicht.
     Zeigt den Gesamtverbrauch aufgeteilt nach:
     - Wärmepumpe (SmartMeter Unit 4)
+    - Heizpatrone (Fritz!DECT)
     - Wattpilot/E-Auto (aus wattpilot_daily)
     - Haushalt/Rest (Differenz)
     """
@@ -32,22 +112,17 @@ def verbraucher_chart():
             month = now.month
 
         first_day = datetime(year, month, 1)
-        if month == 12:
-            last_day = datetime(year + 1, 1, 1)
-        else:
-            last_day = datetime(year, month + 1, 1)
-
+        last_day = datetime(year + (1 if month == 12 else 0), (month % 12) + 1, 1)
         first_ts = int(first_day.timestamp())
         last_ts = int(last_day.timestamp())
 
-        # Nutze Disk-DB für aktuelle Daten
         conn = get_db_connection()
         if not conn:
             return jsonify({"error": "DB nicht verfügbar"}), 500
         cursor = conn.cursor()
 
-        # 1. Tagesdaten mit WP (Wärmepumpe) und Gesamtverbrauch
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT ts,
                    W_WP_total,
                    W_Consumption_total,
@@ -57,58 +132,39 @@ def verbraucher_chart():
             FROM daily_data
             WHERE ts >= ? AND ts < ?
             ORDER BY ts
-        """, (first_ts, last_ts))
+            """,
+            (first_ts, last_ts),
+        )
         daily_rows = cursor.fetchall()
 
-        # 2. Wattpilot-Tagesdaten
-        wattpilot_by_day = {}
-        try:
-            cursor.execute("""
-                SELECT ts, energy_wh, max_power_w, charging_hours, sessions
-                FROM wattpilot_daily
-                WHERE ts >= ? AND ts < ?
-                ORDER BY ts
-            """, (first_ts, last_ts))
-            for row in cursor.fetchall():
-                day_ts = (int(row[0]) // 86400) * 86400
-                wattpilot_by_day[day_ts] = {
-                    'energy_wh': row[1] or 0,
-                    'max_power_w': row[2] or 0,
-                    'charging_hours': row[3] or 0,
-                    'sessions': row[4] or 0
-                }
-        except Exception:
-            pass  # Tabelle existiert noch nicht
+        wattpilot_by_day = _load_wattpilot_daily(cursor, first_ts, last_ts)
+        heizpatrone_by_day = _load_heizpatrone_daily(cursor, first_ts, last_ts)
+        heizpatrone_month_total = _get_heizpatrone_month_total_kwh(cursor, year, month, first_ts, last_ts)
 
         datapoints = []
-        totals = {'wp': 0, 'wattpilot': 0, 'haushalt': 0, 'gesamt': 0}
+        totals = {'wp': 0, 'heizpatrone': 0, 'wattpilot': 0, 'haushalt': 0, 'gesamt': 0}
 
         for row in daily_rows:
-            ts = row[0]
-            w_wp = (row[1] or 0)
-            w_consumption = (row[2] or 0)
-            w_direct = (row[3] or 0)
-            w_batt_dis = (row[4] or 0)
-            w_netz = (row[5] or 0)
+            ts, w_wp, w_consumption, w_direct, w_batt_dis, w_netz = row
+            w_wp = w_wp or 0
+            w_consumption = w_consumption or 0
+            if w_consumption <= 0:
+                w_consumption = (w_direct or 0) + (w_batt_dis or 0) + (w_netz or 0)
 
-            # Wattpilot aus eigener Tabelle
             day_key = (int(ts) // 86400) * 86400
             wattpilot_day = wattpilot_by_day.get(day_key, {})
             w_wattpilot = wattpilot_day.get('energy_wh', 0)
+            w_heizpatrone = heizpatrone_by_day.get(day_key, 0)
+            w_haushalt = max(0, w_consumption - w_wp - w_heizpatrone - w_wattpilot)
 
-            # Gesamtverbrauch = Direktverbrauch + Batterieentladung + Netzbezug
-            if w_consumption <= 0:
-                w_consumption = w_direct + w_batt_dis + w_netz
-
-            # Haushalt = Gesamtverbrauch - WP - Wattpilot
-            w_haushalt = max(0, w_consumption - w_wp - w_wattpilot)
-
-            wp_kwh = w_wp / 1000
-            wattpilot_kwh = w_wattpilot / 1000
-            haushalt_kwh = w_haushalt / 1000
-            gesamt_kwh = w_consumption / 1000
+            wp_kwh = w_wp / 1000.0
+            heizpatrone_kwh = w_heizpatrone / 1000.0
+            wattpilot_kwh = w_wattpilot / 1000.0
+            haushalt_kwh = w_haushalt / 1000.0
+            gesamt_kwh = w_consumption / 1000.0
 
             totals['wp'] += wp_kwh
+            totals['heizpatrone'] += heizpatrone_kwh
             totals['wattpilot'] += wattpilot_kwh
             totals['haushalt'] += haushalt_kwh
             totals['gesamt'] += gesamt_kwh
@@ -118,6 +174,7 @@ def verbraucher_chart():
                 'date': datetime.fromtimestamp(ts).strftime('%Y-%m-%d'),
                 'day': datetime.fromtimestamp(ts).day,
                 'w_waermepumpe': round(wp_kwh, 2),
+                'w_heizpatrone': round(heizpatrone_kwh, 2),
                 'w_wattpilot': round(wattpilot_kwh, 2),
                 'w_haushalt': round(haushalt_kwh, 2),
                 'w_gesamt': round(gesamt_kwh, 2),
@@ -126,13 +183,20 @@ def verbraucher_chart():
                 'wattpilot_charging_hours': round(wattpilot_day.get('charging_hours', 0), 1),
             })
 
+        if heizpatrone_month_total > totals['heizpatrone']:
+            totals['heizpatrone'] = heizpatrone_month_total
+            totals['haushalt'] = max(
+                0,
+                totals['gesamt'] - totals['wp'] - totals['heizpatrone'] - totals['wattpilot'],
+            )
+
         conn.close()
 
         return jsonify({
             'year': year,
             'month': month,
             'datapoints': datapoints,
-            'totals': {k: round(v, 2) for k, v in totals.items()}
+            'totals': {k: round(v, 2) for k, v in totals.items()},
         })
 
     except Exception as e:
@@ -145,8 +209,9 @@ def api_verbraucher_tag():
     """
     Verbraucher-Leistungsübersicht für Tagesansicht (5-min-Intervall).
     WP = Wärmepumpe (P_WP_avg)
+    Heizpatrone = derzeit ohne historische 5-min-Zeitreihe
     Wattpilot = E-Auto (aus wattpilot_readings)
-    Haushalt = Gesamtverbrauch - WP - Wattpilot
+    Haushalt = Gesamtverbrauch - WP - Heizpatrone - Wattpilot
     """
     try:
         date_param = request.args.get('date')
@@ -159,27 +224,31 @@ def api_verbraucher_tag():
         cursor = conn.cursor()
 
         if date_param:
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT COUNT(*) FROM data_1min
                 WHERE datetime(ts, 'unixepoch', 'localtime') >= date(?, 'start of day')
                   AND datetime(ts, 'unixepoch', 'localtime') < date(?, '+1 day', 'start of day')
-            """, (date_param, date_param))
+                """,
+                (date_param, date_param),
+            )
             count_1min = cursor.fetchone()[0]
             table = 'data_1min' if count_1min > 0 else 'data_15min'
             where = "WHERE datetime(ts, 'unixepoch', 'localtime') >= date(?, 'start of day') AND datetime(ts, 'unixepoch', 'localtime') < date(?, '+1 day', 'start of day')"
             where_params = (date_param, date_param)
         else:
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT COUNT(*) FROM data_1min
                 WHERE datetime(ts, 'unixepoch', 'localtime') >= date('now', 'localtime', 'start of day')
-            """)
+                """
+            )
             count_1min = cursor.fetchone()[0]
             table = 'data_1min' if count_1min > 0 else 'data_15min'
             date_param = datetime.now().strftime('%Y-%m-%d')
             where = "WHERE datetime(ts, 'unixepoch', 'localtime') >= date('now', 'localtime', 'start of day')"
             where_params = ()
 
-        # Aggregiere auf 5-Minuten-Intervalle
         query = f"""
             SELECT
                 CAST((ts / 300) AS INTEGER) * 300 AS ts5,
@@ -196,17 +265,19 @@ def api_verbraucher_tag():
         cursor.execute(query, where_params)
         rows = cursor.fetchall()
 
-        # Wattpilot-Leistung laden (5-min Aggregation)
         wattpilot_power_map = {}
         try:
-            cursor.execute(f"""
+            cursor.execute(
+                f"""
                 SELECT
                     CAST((ts / 300) AS INTEGER) * 300 AS ts5,
                     AVG(power_w) AS p_wp
                 FROM wattpilot_readings
                 {where}
                 GROUP BY CAST((ts / 300) AS INTEGER)
-            """, where_params)
+                """,
+                where_params,
+            )
             for r in cursor.fetchall():
                 wattpilot_power_map[int(r[0])] = max(0, r[1] or 0)
         except Exception:
@@ -215,7 +286,7 @@ def api_verbraucher_tag():
         conn.close()
 
         datapoints = []
-        totals = {'wp': 0, 'wattpilot': 0, 'haushalt': 0, 'gesamt': 0}
+        totals = {'wp': 0, 'heizpatrone': 0, 'wattpilot': 0, 'haushalt': 0, 'gesamt': 0}
 
         for row in rows:
             ts5, p_wp, p_gesamt, w_wp, w_gesamt = row
@@ -224,20 +295,23 @@ def api_verbraucher_tag():
             w_wp = max(0, w_wp or 0)
             w_gesamt = max(0, w_gesamt or 0)
 
+            p_heizpatrone = 0
             p_wattpilot = wattpilot_power_map.get(int(ts5), 0)
-            p_haushalt = max(0, p_gesamt - p_wp - p_wattpilot)
+            p_haushalt = max(0, p_gesamt - p_wp - p_heizpatrone - p_wattpilot)
 
-            # Energie-Split (proportional)
             if p_gesamt > 0:
+                w_heizpatrone = 0
                 w_wattpilot = w_gesamt * (p_wattpilot / p_gesamt)
                 w_haushalt = w_gesamt * (p_haushalt / p_gesamt)
                 w_wp_actual = w_gesamt * (p_wp / p_gesamt)
             else:
+                w_heizpatrone = 0
                 w_wattpilot = 0
                 w_haushalt = 0
                 w_wp_actual = w_wp
 
             totals['wp'] += w_wp_actual
+            totals['heizpatrone'] += w_heizpatrone
             totals['wattpilot'] += w_wattpilot
             totals['haushalt'] += w_haushalt
             totals['gesamt'] += w_gesamt
@@ -245,6 +319,7 @@ def api_verbraucher_tag():
             datapoints.append({
                 'timestamp': int(ts5),
                 'p_wp': round(p_wp, 1),
+                'p_heizpatrone': round(p_heizpatrone, 1),
                 'p_wattpilot': round(p_wattpilot, 1),
                 'p_haushalt': round(p_haushalt, 1),
                 'p_gesamt': round(p_gesamt, 1),
@@ -253,7 +328,7 @@ def api_verbraucher_tag():
         return jsonify({
             'date': date_param,
             'datapoints': datapoints,
-            'totals': {k: round(v / 1000, 2) for k, v in totals.items()}
+            'totals': {k: round(v / 1000, 2) for k, v in totals.items()},
         })
 
     except Exception as e:
@@ -265,7 +340,7 @@ def api_verbraucher_tag():
 def api_verbraucher_monat():
     """
     Verbraucher-Energieübersicht für Monatsansicht (gestapelte Balken pro Tag).
-    Nutzt daily_data + wattpilot_daily.
+    Nutzt daily_data + wattpilot_daily + heizpatrone_daily.
     """
     try:
         year = request.args.get('year', type=int)
@@ -284,49 +359,47 @@ def api_verbraucher_monat():
             return jsonify({"error": "DB nicht verfügbar"}), 500
         cursor = conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT ts, W_WP_total, W_Consumption_total,
                    W_PV_Direct_total, W_Batt_Discharge_total, W_Imp_Netz_total
             FROM daily_data
             WHERE ts >= ? AND ts < ?
             ORDER BY ts
-        """, (first_ts, last_ts))
+            """,
+            (first_ts, last_ts),
+        )
         daily_rows = cursor.fetchall()
 
-        wattpilot_by_day = {}
-        try:
-            cursor.execute("""
-                SELECT ts, energy_wh FROM wattpilot_daily
-                WHERE ts >= ? AND ts < ? ORDER BY ts
-            """, (first_ts, last_ts))
-            for row in cursor.fetchall():
-                day_key = (int(row[0]) // 86400) * 86400
-                wattpilot_by_day[day_key] = row[1] or 0
-        except Exception:
-            pass
+        wattpilot_by_day = _load_wattpilot_daily(cursor, first_ts, last_ts)
+        heizpatrone_by_day = _load_heizpatrone_daily(cursor, first_ts, last_ts)
+        heizpatrone_month_total = _get_heizpatrone_month_total_kwh(cursor, year, month, first_ts, last_ts)
 
         conn.close()
 
         datapoints = []
-        totals = {'wp': 0, 'wattpilot': 0, 'haushalt': 0, 'gesamt': 0}
+        totals = {'wp': 0, 'heizpatrone': 0, 'wattpilot': 0, 'haushalt': 0, 'gesamt': 0}
 
         for row in daily_rows:
             ts, w_wp, w_consumption, w_direct, w_batt_dis, w_netz = row
-            w_wp = (w_wp or 0)
-            w_consumption = (w_consumption or 0)
+            w_wp = w_wp or 0
+            w_consumption = w_consumption or 0
             if w_consumption <= 0:
                 w_consumption = (w_direct or 0) + (w_batt_dis or 0) + (w_netz or 0)
 
             day_key = (int(ts) // 86400) * 86400
-            w_wattpilot = wattpilot_by_day.get(day_key, 0)
-            w_haushalt = max(0, w_consumption - w_wp - w_wattpilot)
+            w_wattpilot = wattpilot_by_day.get(day_key, {}).get('energy_wh', 0)
+            w_heizpatrone = heizpatrone_by_day.get(day_key, 0)
+            w_haushalt = max(0, w_consumption - w_wp - w_heizpatrone - w_wattpilot)
 
-            wp_kwh = w_wp / 1000
-            wattpilot_kwh = w_wattpilot / 1000
-            haushalt_kwh = w_haushalt / 1000
-            gesamt_kwh = w_consumption / 1000
+            wp_kwh = w_wp / 1000.0
+            heizpatrone_kwh = w_heizpatrone / 1000.0
+            wattpilot_kwh = w_wattpilot / 1000.0
+            haushalt_kwh = w_haushalt / 1000.0
+            gesamt_kwh = w_consumption / 1000.0
 
             totals['wp'] += wp_kwh
+            totals['heizpatrone'] += heizpatrone_kwh
             totals['wattpilot'] += wattpilot_kwh
             totals['haushalt'] += haushalt_kwh
             totals['gesamt'] += gesamt_kwh
@@ -334,15 +407,24 @@ def api_verbraucher_monat():
             datapoints.append({
                 'day': datetime.fromtimestamp(ts).day,
                 'w_wp': round(wp_kwh, 2),
+                'w_heizpatrone': round(heizpatrone_kwh, 2),
                 'w_wattpilot': round(wattpilot_kwh, 2),
                 'w_haushalt': round(haushalt_kwh, 2),
                 'w_gesamt': round(gesamt_kwh, 2),
             })
 
+        if heizpatrone_month_total > totals['heizpatrone']:
+            totals['heizpatrone'] = heizpatrone_month_total
+            totals['haushalt'] = max(
+                0,
+                totals['gesamt'] - totals['wp'] - totals['heizpatrone'] - totals['wattpilot'],
+            )
+
         return jsonify({
-            'year': year, 'month': month,
+            'year': year,
+            'month': month,
             'datapoints': datapoints,
-            'totals': {k: round(v, 2) for k, v in totals.items()}
+            'totals': {k: round(v, 2) for k, v in totals.items()},
         })
 
     except Exception as e:
@@ -352,9 +434,7 @@ def api_verbraucher_monat():
 
 @bp.route('/api/verbraucher/jahr')
 def api_verbraucher_jahr():
-    """
-    Verbraucher-Energieübersicht für Jahresansicht (gestapelte Balken pro Monat).
-    """
+    """Verbraucher-Energieübersicht für Jahresansicht (gestapelte Balken pro Monat)."""
     try:
         year = request.args.get('year', type=int)
         if not year:
@@ -365,32 +445,38 @@ def api_verbraucher_jahr():
             return jsonify({"error": "DB nicht verfügbar"}), 500
         cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT month, gesamt_verbrauch_kwh, heizpatrone_kwh, wattpilot_kwh
+        cursor.execute(
+            """
+            SELECT month, gesamt_verbrauch_kwh, waermepumpe_kwh, heizpatrone_kwh, wattpilot_kwh
             FROM monthly_statistics
             WHERE year = ?
             ORDER BY month
-        """, (year,))
+            """,
+            (year,),
+        )
         rows = cursor.fetchall()
         conn.close()
 
         datapoints = []
-        totals = {'wp': 0, 'wattpilot': 0, 'haushalt': 0, 'gesamt': 0}
+        totals = {'wp': 0, 'heizpatrone': 0, 'wattpilot': 0, 'haushalt': 0, 'gesamt': 0}
 
-        for mon, gesamt, heiz, wattpilot in rows:
+        for mon, gesamt, wp, heiz, wattpilot in rows:
             gesamt = gesamt or 0
+            wp = wp or 0
             heiz = heiz or 0
             wattpilot = wattpilot or 0
-            haushalt = max(0, gesamt - heiz - wattpilot)
+            haushalt = max(0, gesamt - wp - heiz - wattpilot)
 
-            totals['wp'] += heiz
+            totals['wp'] += wp
+            totals['heizpatrone'] += heiz
             totals['wattpilot'] += wattpilot
             totals['haushalt'] += haushalt
             totals['gesamt'] += gesamt
 
             datapoints.append({
                 'month': mon,
-                'w_wp': round(heiz, 2),
+                'w_wp': round(wp, 2),
+                'w_heizpatrone': round(heiz, 2),
                 'w_wattpilot': round(wattpilot, 2),
                 'w_haushalt': round(haushalt, 2),
                 'w_gesamt': round(gesamt, 2),
@@ -399,7 +485,7 @@ def api_verbraucher_jahr():
         return jsonify({
             'year': year,
             'datapoints': datapoints,
-            'totals': {k: round(v, 2) for k, v in totals.items()}
+            'totals': {k: round(v, 2) for k, v in totals.items()},
         })
 
     except Exception as e:
@@ -409,22 +495,23 @@ def api_verbraucher_jahr():
 
 @bp.route('/api/verbraucher/gesamt')
 def api_verbraucher_gesamt():
-    """
-    Verbraucher-Energieübersicht Gesamtansicht (gestapelte Balken pro Jahr).
-    """
+    """Verbraucher-Energieübersicht Gesamtansicht (gestapelte Balken pro Jahr)."""
     try:
         conn = get_db_connection()
         if not conn:
             return jsonify({"error": "DB nicht verfügbar"}), 500
         cursor = conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT year,
-                   SUM(gesamt_verbrauch_kwh), SUM(heizpatrone_kwh), SUM(wattpilot_kwh)
+                   SUM(gesamt_verbrauch_kwh), SUM(waermepumpe_kwh),
+                   SUM(heizpatrone_kwh), SUM(wattpilot_kwh)
             FROM monthly_statistics
             GROUP BY year
             ORDER BY year
-        """)
+            """
+        )
         rows = cursor.fetchall()
 
         cursor.execute("SELECT MIN(year), MAX(year) FROM monthly_statistics")
@@ -432,17 +519,19 @@ def api_verbraucher_gesamt():
         conn.close()
 
         datapoints = []
-        totals = {'wp': 0, 'wattpilot': 0, 'haushalt': 0, 'gesamt': 0}
+        totals = {'wp': 0, 'heizpatrone': 0, 'wattpilot': 0, 'haushalt': 0, 'gesamt': 0}
 
-        for yr, gesamt, heiz, wattpilot in rows:
+        for yr, gesamt, wp, heiz, wattpilot in rows:
             gesamt = gesamt or 0
+            wp = wp or 0
             heiz = heiz or 0
             wattpilot = wattpilot or 0
             if gesamt < 1:
                 continue
-            haushalt = max(0, gesamt - heiz - wattpilot)
+            haushalt = max(0, gesamt - wp - heiz - wattpilot)
 
-            totals['wp'] += heiz
+            totals['wp'] += wp
+            totals['heizpatrone'] += heiz
             totals['wattpilot'] += wattpilot
             totals['haushalt'] += haushalt
             totals['gesamt'] += gesamt
@@ -450,7 +539,8 @@ def api_verbraucher_gesamt():
             datapoints.append({
                 'year': yr,
                 'label': str(yr),
-                'w_wp': round(heiz, 2),
+                'w_wp': round(wp, 2),
+                'w_heizpatrone': round(heiz, 2),
                 'w_wattpilot': round(wattpilot, 2),
                 'w_haushalt': round(haushalt, 2),
                 'w_gesamt': round(gesamt, 2),
@@ -459,7 +549,7 @@ def api_verbraucher_gesamt():
         return jsonify({
             'datapoints': datapoints,
             'totals': {k: round(v, 2) for k, v in totals.items()},
-            'year_range': [yr_range[0] or 2022, yr_range[1] or datetime.now().year]
+            'year_range': [yr_range[0] or 2022, yr_range[1] or datetime.now().year],
         })
 
     except Exception as e:
