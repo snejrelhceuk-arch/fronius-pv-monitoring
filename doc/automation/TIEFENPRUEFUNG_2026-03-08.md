@@ -92,7 +92,7 @@ Fritz!Box ──→ FritzDECT-Collector               ActionPlan
 - Single-Process mit Threads vermeidet IPC-Komplexität
 - RAM-DB in tmpfs `/dev/shm/` → kein SD-Card-Verschleiß für Hochfrequenz-Daten
 - Observer + Daemon als zwei Laufmodi (Diagnose vs. Produktion)
-- ABC-Trennung (Web-API read-only, Config nur via SSH)
+- Rollenmodell A/B/C/D (Web-API read-only, Config nur via SSH, Diagnos getrennt)
 
 **Kritisch zu hinterfragen:**
 

@@ -3,7 +3,7 @@
 **Erstellt:** 2026-02-22  
 **Letzte Überarbeitung:** 2026-03-01 (HP-Automation produktiv: Fritz!DECT, SOC-Notaus, flow_view)  
 **Status:** Produktiv (Batterie + Heizpatrone laufen über pv-automation.service)  
-**ABC-Referenz:** [ABC_TRENNUNGSPOLICY.md](ABC_TRENNUNGSPOLICY.md)
+**Referenz Rollenmodell:** [ABCD_ROLLENMODELL.md](../system/ABCD_ROLLENMODELL.md)
 
 ---
 
@@ -12,7 +12,8 @@
 Ein **erweiterungsoffenes** Automationsframework für alle steuerbaren Aktoren
 der PV-Anlage, das:
 
-- die ABC-Trennungspolicy strikt einhält (C schreibt, B liest, A speichert)
+- das A/B/C/D-Rollenmodell strikt einhaelt (C schreibt Aktorik, B liest,
+  A liefert Daten, D bewertet read-only)
 - von jeder Instanz (Batterie, WP, EV, Heizpatrone, Klima, Lüftung, …)
   **nur das Interface kennen muss**, nicht die Implementierung
 - über ein SSH-Terminal konfigurierbar ist (kein Web-Write-Pfad)
@@ -83,7 +84,7 @@ Mensch (SSH / VPN)
 
 ### Zweck
 Interaktives Terminal-Menü für den Bediener. Läuft **on-demand** per SSH,
-kein Daemon. Kein Web-Frontend (→ ABC: kein Write-Pfad in B).
+kein Daemon. Kein Web-Frontend (→ Rollenmodell: kein Write-Pfad in B).
 
 ### Menüstruktur (Entwurf)
 
@@ -496,22 +497,23 @@ Für jede Aktion im ActionPlan (nach Priorität sortiert):
 
 ---
 
-## 7. ABC-Mapping — Wer darf was?
+## 7. Rollenmodell — Wer darf was?
 
 ```
 ┌─────────┬────────────────────────────────────────────────────┐
-│ Schicht │ ABC-Zuordnung                                     │
+│ Bereich           │ Rollenmodell                            │
 ├─────────┼────────────────────────────────────────────────────┤
-│ S1      │ C — schreibt nur config/*.json (kein DB, kein HW) │
-│ S2      │ C — liest Sensoren, schreibt Schutz-Aktionen      │
-│ S3      │ C — reine Logik, kein I/O außer Config lesen      │
-│ S4      │ C — schreibt Aktoren + Protokoll in A (DB)        │
+│ S1-S4             │ C — Regeln, Logik, Aktorik, Audit-Log   │
 ├─────────┼────────────────────────────────────────────────────┤
-│ Web-API │ B — liest ObsState, ActionPlan, automation_log    │
-│         │    aus DB/shared State. Kein Schreibzugriff.      │
+│ Collector-Pipeline│ A — liefert Rohdaten und Aggregationen  │
 ├─────────┼────────────────────────────────────────────────────┤
-│ DB      │ A — automation_log, obs_state_history,             │
-│         │    device_state. Schema-Owner.                     │
+│ Web-API          │ B — liest ObsState, ActionPlan, Logs     │
+│                  │     aus DB/shared State. Kein Write-Pfad │
+├─────────┼────────────────────────────────────────────────────┤
+│ Diagnos          │ D — liest Health, Integritaet und Parity │
+│                  │     und meldet ohne technische Writes     │
+├─────────┼────────────────────────────────────────────────────┤
+│ Datenlayer       │ gemeinsame SQLite-Plattform unter A/B/C/D│
 └─────────┴────────────────────────────────────────────────────┘
 ```
 
@@ -790,7 +792,8 @@ Die bestehende Tabelle `battery_control_log` ist Legacy und wird nicht mehr akti
 
 | Dokument | Relevanz |
 |----------|----------|
-| [ABC_TRENNUNGSPOLICY.md](ABC_TRENNUNGSPOLICY.md) | ABC-Grundprinzipien, Verantwortungsmatrix |
+| [ABCD_ROLLENMODELL.md](../system/ABCD_ROLLENMODELL.md) | Rollen A/B/C/D, Grenzen und Verantwortungen |
+| [DIAGNOS_KONZEPT.md](../diagnos/DIAGNOS_KONZEPT.md) | Zielbild fuer Health, Integritaet und Parity |
 | [BEOBACHTUNGSKONZEPT.md](BEOBACHTUNGSKONZEPT.md) | ObsState-Definition, Datenkanäle, Prioritäten |
 | [PARAMETER_MATRIZEN.md](PARAMETER_MATRIZEN.md) | Erzeuger/Speicher/Verbraucher/Netz-Matrizen |
 | [BATTERIE_STRATEGIEN.md](BATTERIE_STRATEGIEN.md) | Strategien A–F, Kontroll-Matrix |
