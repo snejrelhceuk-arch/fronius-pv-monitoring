@@ -12,8 +12,8 @@ Diese Richtlinie definiert, wie Inhalte aus diesem Projekt veröffentlicht werde
 ohne Urheberrechte, Nutzungsbedingungen, Geheimhaltungsinteressen oder
 Sicherheitsgrenzen zu verletzen.
 
-Sie ergänzt die technische Architektur und ist bewusst getrennt von
-`doc/ABC_TRENNUNGSPOLICY.md`.
+Sie ergaenzt die technische Architektur und ist bewusst getrennt vom
+`doc/system/ABCD_ROLLENMODELL.md`.
 
 ---
 
@@ -85,7 +85,7 @@ Vor jedem öffentlichen Push/Release:
 
 ## 8. Abgrenzung zu technischer Architektur
 
-- **Technische Systemgrenzen (A/B/C):** `doc/ABC_TRENNUNGSPOLICY.md`
+- **Technische Systemgrenzen (A/B/C/D):** `doc/system/ABCD_ROLLENMODELL.md`
 - **Betriebs- und Schutzregeln:** `doc/SCHUTZREGELN.md`
 - **Rollen/Failover-Betrieb:** `doc/DUAL_HOST_ARCHITECTURE.md`
 - **Recht/Veröffentlichung/Compliance:** diese Datei

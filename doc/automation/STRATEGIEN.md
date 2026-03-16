@@ -433,7 +433,7 @@ die Regelung des Nulleinspeisers braucht bis zu 30 s zum Nachregeln.
 | Fritz!Box-Optimierung | Bulk-Query (`getdevicelistinfos`), 60 s Poll | ✅ Produktiv |
 | flow_view HP-Zeile | Live-Status (EIN/AUS + Leistung), 120 s Cache | ✅ Produktiv |
 
-**ABC-Schichten-Zuordnung:**
+**ABCD-Rollenmodell:**
 - Schicht A (Collector): nicht betroffen (HP hat kein Modbus)
 - Schicht B (Web-API): Status-Anzeige in flow_view (Fritz-Schaltzustand)
 - Schicht C (Automation): `RegelHeizpatrone` + `AktorFritzDECT`
