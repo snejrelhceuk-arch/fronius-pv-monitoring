@@ -98,8 +98,8 @@ class AutomationDaemon:
         # Sunset-Erkennung für Tagesbericht
         self._war_tag: Optional[bool] = None  # is_day im vorherigen Zyklus
 
-        # Matrix-Auto-Reload
-        self._matrix_mtime: float = 0
+        # SIGHUP → Matrix-Reload
+        self._reload_requested = False
 
     def start(self):
         """Initialisiere alle Komponenten."""
@@ -343,7 +343,16 @@ class AutomationDaemon:
             except Exception as e:
                 LOG.error(f"Event-Notifier Fehler: {e}")
 
-        # 5. Engine fast-Zyklus (alle 60 s)
+        # 5. Matrix-Reload bei SIGHUP
+        if self._reload_requested:
+            self._reload_requested = False
+            try:
+                self._engine.reload_matrix()
+                LOG.info("SIGHUP: Parametermatrix neu geladen")
+            except Exception as e:
+                LOG.error(f"Matrix-Reload Fehler: {e}")
+
+        # 6. Engine fast-Zyklus (alle 60 s)
         if now - self._last_fast >= FAST_INTERVAL:
             try:
                 results = self._engine.zyklus('fast')
@@ -353,18 +362,8 @@ class AutomationDaemon:
             except Exception as e:
                 LOG.error(f"Engine fast-Zyklus: {e}")
 
-        # 6. Engine strategic-Zyklus (alle 15 min)
+        # 7. Engine strategic-Zyklus (alle 15 min)
         if now - self._last_strategic >= STRATEGIC_INTERVAL:
-            # Matrix-Auto-Reload: mtime prüfen
-            try:
-                mt = os.path.getmtime(DEFAULT_MATRIX_PATH)
-                if mt != self._matrix_mtime:
-                    self._engine.reload_matrix()
-                    self._matrix_mtime = mt
-                    LOG.info("Matrix-Auto-Reload: Parametermatrix neu geladen")
-            except OSError:
-                pass
-
             try:
                 results = self._engine.zyklus('strategic')
                 if results:
@@ -604,8 +603,13 @@ def main():
         LOG.info(f"Signal {sig} → Shutdown")
         daemon._running = False
 
+    def _sighup_handler(sig, frame):
+        LOG.info("SIGHUP → Matrix-Reload angefordert")
+        daemon._reload_requested = True
+
     signal.signal(signal.SIGTERM, _signal_handler)
     signal.signal(signal.SIGINT, _signal_handler)
+    signal.signal(signal.SIGHUP, _sighup_handler)
 
     daemon.run()
 

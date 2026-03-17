@@ -88,16 +88,16 @@ Details in den Phasen unten.
 - [x] **🔥 LWPM 410 Modbus-RTU-Modul (Art.Nr. 339410, ~155€) — ✅ BESTELLT (2026-02-14)**
 - [ ] **WPM-Reglerversion am Gerät prüfen!** (LCD=WPM_L/H, Touch=WPM_M)
 - [ ] **Softwarestand ablesen** (kompatibel ab H_H50, SG-Ready ab L20.2)
-- [ ] **Steckplatz "Serial Card / BMS Card" prüfen** (vorhanden?)
-- [ ] LWPM 410 in WPM einbauen (spannungsfrei!)
-- [ ] RS485-Kabel MEGA-BAS ↔ LWPM 410 verlegen (A→A, B→B, 120Ω Term.)
-- [ ] `pymodbus` installieren + Modbus-RTU-Test-Script schreiben
-- [ ] Register-Scan: Alle Temperaturen auslesen (R1-R9, R24)
+- [x] LWPM 410 eingebaut, RS485 angebunden (`/dev/ttyACM0`)
+- [x] `pymodbus` installiert, `wp_modbus.py` produktiv (7 Register, 10s Cache)
+- [x] Register-Scan: Temperaturen lesend verifiziert (vorlauf, ruecklauf, ruecklauf_soll, ww_ist, quelle_ein, quelle_aus, ww_soll)
 - [ ] SG-Ready via Modbus testen (Coil 3 + Coil 4 schreiben)
-- [ ] WW-Solltemperatur via Modbus setzen (Register 5047)
+- [ ] WW-Solltemperatur via Modbus **schreiben** (Register 5047 — lesend bereits verifiziert)
 - [ ] Betriebsmodus via Modbus umschalten (Register 5015)
 - [ ] Täglichen Pflichtlauf absichern (Kompressor-Schmierung)
 - [ ] Modbus-Daten in SQLite-DB loggen (neue Tabelle `wp_modbus`)
+- [ ] ObsState-Felder aus `wp_modbus` befüllen
+- [ ] Passive WP-Regel: Zuschalt-Prognose → SOC_MIN-Offset für Battery-Drain
 
 ## Phase 6: Software-Integration
 

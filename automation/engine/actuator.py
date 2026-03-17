@@ -22,6 +22,7 @@ _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.
 from automation.engine.aktoren.aktor_batterie import AktorBatterie, AktorBase
 from automation.engine.aktoren.aktor_wattpilot import AktorWattpilot
 from automation.engine.aktoren.aktor_fritzdect import AktorFritzDECT
+from automation.engine.aktoren.aktor_waermepumpe import AktorWaermepumpe
 from automation.engine.schaltlog import logge_engine
 
 LOG = logging.getLogger('actuator')
@@ -96,6 +97,7 @@ class Actuator:
         self._aktoren['batterie'] = AktorBatterie(dry_run=self.dry_run)
         self._aktoren['wattpilot'] = AktorWattpilot(dry_run=self.dry_run)
         self._aktoren['fritzdect'] = AktorFritzDECT(dry_run=self.dry_run)
+        self._aktoren['waermepumpe'] = AktorWaermepumpe(dry_run=self.dry_run)
         LOG.info(f"Aktoren registriert: {list(self._aktoren.keys())}")
 
     def registriere_aktor(self, name: str, aktor: AktorBase):

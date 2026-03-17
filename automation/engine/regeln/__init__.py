@@ -21,6 +21,7 @@ from automation.engine.regeln.optimierung import (
 )
 # optimierung.py: RegelAbendEntladerate, RegelLaderateDynamisch entfernt (2026-03-07)
 from automation.engine.regeln.geraete import RegelWattpilotBattSchutz, RegelHeizpatrone
+from automation.engine.regeln.waermepumpe import RegelWwAbsenkung
 
 __all__ = [
     'Regel',
@@ -28,4 +29,5 @@ __all__ = [
     'RegelMorgenSocMin', 'RegelNachmittagSocMax', 'RegelKomfortReset',
     'RegelZellausgleich', 'RegelForecastPlausi',
     'RegelWattpilotBattSchutz', 'RegelHeizpatrone',
+    'RegelWwAbsenkung',
 ]

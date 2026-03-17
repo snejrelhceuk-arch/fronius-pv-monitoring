@@ -72,6 +72,7 @@ class DataCollector:
         self._collect_pv_today(obs)
         self._collect_wp_today(obs)
         self._collect_fritzdect(obs)
+        self._collect_wp_modbus(obs)
 
     # ── raw_data: PV, Netz, Batterie (aus Collector/Modbus) ──
 
@@ -373,3 +374,47 @@ class DataCollector:
 
         if info and info.get('state') is not None:
             obs.heizpatrone_aktiv = str(info['state']).strip() == '1'
+
+    # ── Wärmepumpe Dimplex: Modbus-Temperaturen ─────────────
+
+    _WP_MODBUS_INTERVAL = 30  # Sekunden (serielle Schnittstelle schonen)
+
+    def _collect_wp_modbus(self, obs: ObsState):
+        """WP-Temperaturen via Modbus RTU → ObsState.
+
+        ABCD: Hardwarezugriff (/dev/ttyACM0) gehört in C (Automation),
+        nicht in B (Web). Daher sammelt der DataCollector die Werte,
+        und B liest sie aus obs_state.
+        """
+        now = time.time()
+        if not hasattr(self, '_wp_modbus_cache_ts'):
+            self._wp_modbus_cache_ts = 0
+
+        if now - self._wp_modbus_cache_ts < self._WP_MODBUS_INTERVAL:
+            return
+
+        try:
+            from wp_modbus import get_wp_status
+            wp = get_wp_status()
+            if not wp:
+                return
+
+            if wp.get('ww_ist') is not None:
+                obs.ww_temp_c = wp['ww_ist']
+            if wp.get('vorlauf') is not None:
+                obs.wp_vorlauf_c = wp['vorlauf']
+            if wp.get('ruecklauf') is not None:
+                obs.wp_ruecklauf_c = wp['ruecklauf']
+            if wp.get('ruecklauf_soll') is not None:
+                obs.wp_ruecklauf_soll_c = wp['ruecklauf_soll']
+            if wp.get('quelle_ein') is not None:
+                obs.wp_quelle_ein_c = wp['quelle_ein']
+            if wp.get('quelle_aus') is not None:
+                obs.wp_quelle_aus_c = wp['quelle_aus']
+            if wp.get('ww_soll') is not None:
+                obs.wp_ww_soll_c = wp['ww_soll']
+
+            self._wp_modbus_cache_ts = now
+
+        except Exception as e:
+            LOG.debug(f"WP-Modbus collect: {e}")

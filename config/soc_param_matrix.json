@@ -1,7 +1,7 @@
 {
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
-  "_updated": "2026-03-12",
+  "_updated": "2026-03-17",
   "regelkreise": {
     "soc_extern": {
       "_doc": "Toleranz für extern geänderte SOC-Werte (z.B. manuell via Fronius App). Wenn SOC_MIN oder SOC_MAX außerhalb der Automation geändert werden, respektiert die Engine die Werte für die konfigurierte Dauer.",
@@ -412,7 +412,7 @@
     },
     "zellausgleich": {
       "_doc": "Monatlicher Vollzyklus für BYD-Zellbalancing",
-      "aktiv": false,
+      "aktiv": true,
       "prioritaet": 3,
       "beschreibung": "Prognosegesteuert: Am ersten guten Sonnentag vollständig laden",
       "parameter": {
@@ -489,7 +489,7 @@
     "temp_schutz": {
       "_doc": "Gradueller Laderate-Schutz nach Zelltemperatur (Tier-2, ergänzt Tier-1 Interrupt)",
       "_entfernt": "2026-03-07: BMS regelt Temperatur-Schutz selbständig (LFP-Zellchemie); InWRte-Schreiben wirkungslos",
-      "aktiv": false,
+      "aktiv": true,
       "prioritaet": 1,
       "beschreibung": "Laderate stufenweise reduzieren bei steigender Batterie-Temperatur",
       "parameter": {
@@ -1091,6 +1091,53 @@
       },
       "score_gewicht": 40,
       "engine_zyklus": "fast"
+    },
+    "ww_absenkung": {
+      "_doc": "Warmwasser-Nachtabsenkung: WW-Soll via Modbus RTU (Reg 5047) nachts senken, morgens wiederherstellen. Spart Standby-Verluste im WW-Speicher.",
+      "aktiv": true,
+      "prioritaet": 2,
+      "beschreibung": "Nachts WW-Temperatur um konfigurierbare Absenkung senken (Standard 57→52°C)",
+      "parameter": {
+        "standard_temp_c": {
+          "wert": 58,
+          "bereich": [
+            55,
+            62
+          ],
+          "einheit": "°C",
+          "aktor_kommando": "set_ww_soll",
+          "beschreibung": "WW-Solltemperatur im Normalbetrieb (Tageswert)"
+        },
+        "absenkung_k": {
+          "wert": 5,
+          "bereich": [
+            1,
+            10
+          ],
+          "einheit": "K",
+          "beschreibung": "Absenkungsbetrag in Kelvin. Nacht-Soll = standard_temp_c - absenkung_k"
+        },
+        "start_h": {
+          "wert": 20,
+          "bereich": [
+            20,
+            23
+          ],
+          "einheit": "h",
+          "beschreibung": "Beginn der Nachtabsenkung (Dezimalstunde, z.B. 23 = 23:00)"
+        },
+        "ende_h": {
+          "wert": 3,
+          "bereich": [
+            0,
+            5
+          ],
+          "einheit": "h",
+          "beschreibung": "Ende der Nachtabsenkung (Dezimalstunde, z.B. 3 = 03:00)"
+        }
+      },
+      "score_gewicht": 45,
+      "engine_zyklus": "fast"
     }
   },
   "beobachtungsfelder": {
@@ -1126,7 +1173,9 @@
       "ev_charging": "WattPilot lädt (car==2) — wattpilot_battschutz",
       "ev_eco_mode": "WattPilot Eco-Modus (lmo==4) — wattpilot_battschutz",
       "house_load_w": "Hausverbrauch [W] — Kapazitätsverteilung",
-      "heizpatrone_aktiv": "Heizstab läuft (Fritz!DECT-Status) — heizpatrone"
+      "heizpatrone_aktiv": "Heizstab läuft (Fritz!DECT-Status) — heizpatrone",
+      "ww_temp_c": "WW-Ist-Temperatur [°C] (WP Modbus Reg 3) — ww_absenkung",
+      "wp_ww_soll_c": "WW-Soll aktuell [°C] (WP Modbus Reg 5047) — ww_absenkung"
     },
     "netz": {
       "grid_power_w": "Netzbezug/Einspeisung [W] — sls_schutz, heizpatrone",

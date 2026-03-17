@@ -805,13 +805,41 @@ def _fetch_hp_status(now, result):
 
 
 def _fetch_wp_status(result):
-    """Wärmepumpe Dimplex – aktuelle Temperaturen via Modbus RTU (10 s Cache)."""
+    """Wärmepumpe Dimplex – Temperaturen aus ObsState (ABCD: kein direkter Modbus in B).
+
+    Daten werden vom DataCollector (C-Rolle) via wp_modbus.py gesammelt
+    und in /dev/shm/automation_obs.db → obs_state abgelegt.
+    """
     try:
-        from wp_modbus import get_wp_status
-        wp = get_wp_status()
-        result['wp_status'] = wp if wp else {'error': 'keine Daten'}
+        import json as _json_wp
+        _obs_db_wp = '/dev/shm/automation_obs.db'
+        with sqlite3.connect(_obs_db_wp) as _odb_wp:
+            _orow_wp = _odb_wp.execute('SELECT state_json FROM obs_state LIMIT 1').fetchone()
+            if _orow_wp:
+                _obs_wp = _json_wp.loads(_orow_wp[0])
+                wp = {}
+                _field_map = {
+                    'vorlauf': 'wp_vorlauf_c',
+                    'ruecklauf': 'wp_ruecklauf_c',
+                    'ruecklauf_soll': 'wp_ruecklauf_soll_c',
+                    'ww_ist': 'ww_temp_c',
+                    'quelle_ein': 'wp_quelle_ein_c',
+                    'quelle_aus': 'wp_quelle_aus_c',
+                    'ww_soll': 'wp_ww_soll_c',
+                }
+                for api_key, obs_key in _field_map.items():
+                    val = _obs_wp.get(obs_key)
+                    if val is not None:
+                        wp[api_key] = val
+                if wp:
+                    wp['quelle'] = 'obs_state'
+                    result['wp_status'] = wp
+                else:
+                    result['wp_status'] = {'error': 'keine WP-Daten in ObsState'}
+            else:
+                result['wp_status'] = {'error': 'obs_state leer'}
     except Exception as _we:
-        logging.debug(f"WP-Status: {_we}")
+        logging.debug(f"WP-Status (ObsState): {_we}")
         result['wp_status'] = {'error': str(_we)}
 
 

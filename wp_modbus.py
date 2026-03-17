@@ -1,9 +1,11 @@
 """
-Wärmepumpe Dimplex — Modbus RTU Reader.
+Wärmepumpe Dimplex — Modbus RTU Reader + Writer.
 
-Liest ausgewählte Register über USB-RS485 Adapter.
+Liest/schreibt ausgewählte Register über USB-RS485 Adapter.
 Serielle Schnittstelle: /dev/ttyACM0, 19200 Baud, 8N1, Slave-ID 1.
 Cache-TTL: 10 Sekunden.
+
+ABCD: Nur von C-Rolle (Automation) genutzt. B (Web) liest via obs_state.
 """
 import logging
 import time
@@ -100,3 +102,66 @@ def get_wp_status():
             _WP_CACHE['data'] = data
             _WP_CACHE['ts'] = now
         return dict(_WP_CACHE['data']) if _WP_CACHE['data'] else None
+
+
+# ── Schreib-Funktionen (ABCD: nur C-Rolle) ──────────────────
+
+# Zugelassene Schreib-Register (Whitelist — Sicherheit)
+_WRITE_REGS = {
+    'ww_soll': {'addr': 5047, 'min': 10, 'max': 85, 'einheit': '°C'},
+    'heiz_soll': {'addr': 5037, 'min': 18, 'max': 60, 'einheit': '°C'},
+}
+
+
+def write_register(name: str, value: int) -> bool:
+    """Einzelnes WP-Register schreiben (Whitelist-geschützt).
+
+    Args:
+        name: Register-Name aus _WRITE_REGS (z.B. 'ww_soll')
+        value: Ganzzahliger Wert im erlaubten Bereich
+
+    Returns:
+        True bei Erfolg, False bei Fehler
+    """
+    reg = _WRITE_REGS.get(name)
+    if not reg:
+        logging.error("WP Modbus write: '%s' nicht in Whitelist %s",
+                       name, list(_WRITE_REGS.keys()))
+        return False
+
+    value = int(value)
+    if not reg['min'] <= value <= reg['max']:
+        logging.error("WP Modbus write: %s=%d außerhalb [%d, %d] %s",
+                       name, value, reg['min'], reg['max'], reg['einheit'])
+        return False
+
+    try:
+        from pymodbus.client import ModbusSerialClient
+    except ImportError:
+        logging.error("WP Modbus: pymodbus nicht installiert")
+        return False
+
+    client = ModbusSerialClient(
+        port=SERIAL_PORT, baudrate=BAUD_RATE,
+        bytesize=8, parity='N', stopbits=1, timeout=1.5,
+    )
+    if not client.connect():
+        logging.warning("WP Modbus write: Verbindung fehlgeschlagen")
+        return False
+
+    try:
+        rr = client.write_register(address=reg['addr'], value=value, slave=SLAVE_ID)
+        if rr.isError():
+            logging.error("WP Modbus write: %s=%d → Fehler: %s", name, value, rr)
+            return False
+        logging.info("WP Modbus write: %s=%d%s (Reg %d) OK",
+                      name, value, reg['einheit'], reg['addr'])
+        # Cache invalidieren
+        with _WP_LOCK:
+            _WP_CACHE['ts'] = 0
+        return True
+    except Exception as e:
+        logging.error("WP Modbus write Fehler: %s", e)
+        return False
+    finally:
+        client.close()

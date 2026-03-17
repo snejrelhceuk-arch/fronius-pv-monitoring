@@ -5,16 +5,25 @@ Enthält:
   - get_db_connection(): tmpfs-DB Verbindung
   - get_forecast(): SolarForecast Singleton
   - store_forecast_daily() / get_stored_forecast(): Prognose-Persistierung
-  - get_fronius_api(): BatteryConfig Singleton
+  - get_fronius_api(): FroniusReadOnly Singleton (NUR Lesen, ABCD-konform)
   - get_strompreis_fuer_monat(): Strompreis-Delegation
   - Shared State: DB_FILE, ram_db_lock, Caches
+
+ABCD-Rollentrennung:
+  B (Web/API) darf NUR lesen — keine Schreiboperationen auf Hardware.
+  Die Klasse FroniusReadOnly ist eine BEWUSSTE Code-Duplette aus
+  fronius_api.py, reduziert auf reine Lesefähigkeit (kein POST/PUT).
+  Siehe: doc/SYSTEM_BRIEFING.md §ABCD
 """
 import sqlite3
+import hashlib
 import logging
 import os
+import re
 import threading
 import time
 from datetime import datetime
+import requests
 import config
 import db_init
 
@@ -378,20 +387,134 @@ def get_stored_forecast(date_str):
         return None
 
 
-# ─── Batterie-API (Lazy Singleton) ──────────────────────
+# ─── Fronius Read-Only Client (ABCD: B darf nur lesen) ────────────
+#
+# BEWUSSTE CODE-DUPLETTE aus fronius_api.py:
+# Nur GET-Fähigkeit, kein POST/PUT, keine write()/set_*() Methoden.
+# Grund: Rollentrennung B (Web) ↔ C (Automation) — DRY < ABCD.
+#
+# Wenn die API gehackt wird, kann über diesen Client KEIN Schreibvorgang
+# auf dem Wechselrichter ausgelöst werden.
+#
+
+# Fronius-Konstanten (dupliziert — absichtlich kein Import von fronius_api)
+_FRONIUS_HOST = f"http://{config.INVERTER_IP}"
+_FRONIUS_REALM = "Webinterface area"
+_FRONIUS_USER = "technician"
+_API_BATTERIES = "/api/config/batteries"
+
+
+def _load_fronius_password_readonly():
+    """Passwort laden (identisch mit fronius_api — ABCD-Duplette)."""
+    try:
+        pw = config.load_secret('FRONIUS_PASS')
+    except Exception:
+        pw = os.environ.get('FRONIUS_PASS')
+    return pw
+
+
+class _FroniusAuthReadOnly:
+    """Fronius Hybrid Digest Auth — NUR GET, kein PUT/POST.
+
+    Dupliziert aus fronius_api.FroniusAuth, reduziert auf Lesezugriff.
+    """
+
+    def __init__(self):
+        pw = _load_fronius_password_readonly()
+        if not pw:
+            raise RuntimeError("Kein Fronius-Passwort für Read-Only Client")
+        ha1_input = f"{_FRONIUS_USER}:{_FRONIUS_REALM}:{pw}"
+        self._ha1 = hashlib.md5(ha1_input.encode()).hexdigest()
+        self._nonce = None
+        self._nc = 0
+
+    def _get_nonce(self, uri):
+        r = requests.get(f"{_FRONIUS_HOST}{uri}", timeout=5)
+        match = re.search(r'nonce="([^"]+)"', r.headers.get("X-WWW-Authenticate", ""))
+        if not match:
+            raise ConnectionError(f"Keine Nonce: HTTP {r.status_code}")
+        self._nonce = match.group(1)
+        self._nc = 0
+
+    def get(self, uri, retry=True):
+        """Authentifizierter GET — einzige erlaubte HTTP-Methode."""
+        if not self._nonce:
+            self._get_nonce(uri)
+        self._nc += 1
+        nc = f"{self._nc:08x}"
+        cnonce = hashlib.md5(f"{time.time()}:{os.getpid()}".encode()).hexdigest()[:16]
+        ha2 = hashlib.sha256(f"GET:{uri}".encode()).hexdigest()
+        resp_data = f"{self._ha1}:{self._nonce}:{nc}:{cnonce}:auth:{ha2}"
+        response = hashlib.sha256(resp_data.encode()).hexdigest()
+        auth = (
+            f'Digest username="{_FRONIUS_USER}", realm="{_FRONIUS_REALM}", '
+            f'nonce="{self._nonce}", uri="{uri}", response="{response}", '
+            f'qop=auth, nc={nc}, cnonce="{cnonce}"'
+        )
+        r = requests.get(
+            f"{_FRONIUS_HOST}{uri}",
+            headers={"Authorization": auth},
+            timeout=5,
+        )
+        if r.status_code == 401 and retry:
+            self._nonce = None
+            return self.get(uri, retry=False)
+        return r
+
+    # KEIN put(), KEIN post() — by design (ABCD)
+
+
+class FroniusReadOnly:
+    """Fronius Batterie-Konfiguration — NUR LESEN.
+
+    Dupliziert aus fronius_api.BatteryConfig, aber ohne write()/set_*().
+    B-Rolle (Web/API) bekommt ausschließlich diese Klasse.
+    """
+
+    def __init__(self):
+        self._auth = _FroniusAuthReadOnly()
+        self._cache = None
+        self._cache_time = 0
+
+    def read(self, force=False):
+        """Lese aktuelle Batterie-Konfiguration (HTTP GET)."""
+        if not force and self._cache and (time.time() - self._cache_time < 5):
+            return self._cache
+        r = self._auth.get(_API_BATTERIES)
+        if r.status_code != 200:
+            raise ConnectionError(
+                f"Batterie-Konfiguration nicht lesbar: HTTP {r.status_code}"
+            )
+        self._cache = r.json()
+        self._cache_time = time.time()
+        return self._cache
+
+    def get_values(self):
+        """Nur die Parameter-Werte (ohne _meta)."""
+        data = self.read()
+        return {k: v for k, v in data.items() if not k.startswith('_')}
+
+    # KEIN write(), KEIN set_soc_min(), KEIN set_soc_max(),
+    # KEIN set_soc_mode(), KEIN set_grid_charge() — by design (ABCD)
+
+
+# ─── Batterie-API (Lazy Singleton, Read-Only) ──────────────────
 _fronius_api_instance = None
 
 
 def get_fronius_api():
-    """Lazy Singleton für FroniusAPI (Batterie-Konfiguration)."""
+    """Lazy Singleton für Fronius Read-Only Client.
+
+    ABCD: B (Web/API) bekommt FroniusReadOnly — keine Schreibmethoden.
+    Schreibzugriff nur über C (Automation Engine) via fronius_api.BatteryConfig.
+    """
     global _fronius_api_instance
     if _fronius_api_instance is None:
         try:
-            from fronius_api import BatteryConfig
-            _fronius_api_instance = BatteryConfig()
-            logging.info("FroniusAPI initialisiert")
+            _fronius_api_instance = FroniusReadOnly()
+            logging.info("FroniusReadOnly initialisiert (ABCD: nur Lesen)")
         except Exception as e:
-            logging.error(f"FroniusAPI Init Fehler: {e}")
+            logging.error(f"FroniusReadOnly Init Fehler: {e}")
             return None
     return _fronius_api_instance
 

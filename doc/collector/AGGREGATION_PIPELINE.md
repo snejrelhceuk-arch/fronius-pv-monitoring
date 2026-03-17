@@ -31,6 +31,7 @@ daily_data
 └─── aggregate_statistics.py ──► monthly_statistics  (Anlagen-Historie)
                                  │  Retention: permanent
                                  │  17 Spalten (kWh + Kosten)
+                                 │  + optionale Monatskorrekturen aus config/statistics_corrections.json
                                  │
                                  └──► yearly_statistics  (Anlagen-Historie)
                                       Retention: permanent
@@ -130,6 +131,19 @@ Monats-Prognose 90 Tage historisiert werden koennen.
 
 **Hinweis**: Der WP-SmartMeter misst die Wärmepumpe. Ein separater Wattpilot-Sensor
 existiert nicht. Für 2022–2025 stammen die getrennten Werte aus dem CSV-Import (Solarweb).
+
+### Formale Monatskorrekturen
+
+Wenn ein Monat lokal nicht vollstaendig oder nicht belastbar rekonstruiert werden kann,
+greift `aggregate_statistics.py` auf das versionierte Korrekturregister
+`config/statistics_corrections.json` zu.
+
+Modi:
+
+- `fixed`: fester Monatswert fuer abgeschlossene Monate
+- `offset`: additiver Versatz fuer laufende Monate
+
+Details siehe `doc/collector/STATISTICS_CORRECTIONS.md`.
 
 ### Berechnete Kennzahlen
 
