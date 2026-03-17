@@ -159,9 +159,23 @@
         }
         /* ══════ Automation Info-Blöcke ══════ */
         .auto-section {
-            margin: 4px 0 2px 0;
+            margin: 0;
+            padding: 0;
             font-size: 11px;
             color: rgba(255,255,255,0.5);
+        }
+        #battAutoSection {
+            border-top: 1px solid rgba(255,255,255,0.12);
+            border-bottom: 1px solid rgba(255,255,255,0.12);
+            margin: 4px 0 0 0;
+            padding: 2px 0;
+        }
+        #hpAutoSection {
+            border-bottom: 1px solid rgba(255,255,255,0.12);
+            padding: 2px 0;
+        }
+        #wpAutoSection {
+            padding: 2px 0;
         }
         .auto-section .auto-header {
             padding: 3px 8px;
@@ -169,9 +183,11 @@
             font-size: 11.5px;
             letter-spacing: 0.5px;
             border-bottom: 1px solid rgba(16,185,129,0.2);
+            display: none;
         }
         .auto-section .auto-header.batt { color: #10b981; }
         .auto-section .auto-header.hp   { color: #fb923c; border-bottom-color: rgba(251,146,60,0.2); }
+        .auto-section .auto-header.wp   { color: #14b8a6; border-bottom-color: rgba(20,184,166,0.3); }
         .auto-phase {
             display: flex;
             align-items: baseline;
@@ -216,7 +232,7 @@
         .auto-phase.active .ap-val   { color: #10b981; }
         .auto-phase.pending .ap-icon  { color: #fbbf24; }
         .auto-phase.pending .ap-label { color: rgba(255,255,255,0.35); }
-        .auto-phase.pending .ap-val   { color: #fbbf24; }
+        .auto-phase.pending .ap-val   { color: #10b981; }
         .auto-phase.skipped .ap-icon  { color: rgba(255,255,255,0.2); }
         .auto-phase.skipped .ap-label { color: rgba(255,255,255,0.25); }
         .auto-phase.skipped .ap-text  { color: rgba(255,255,255,0.25); }
@@ -224,7 +240,11 @@
         /* HP-spezifisch */
         .auto-phase.hp-ein .ap-icon { color: #fb923c; }
         .auto-phase.hp-ein .ap-val  { color: #fb923c; }
-        .auto-phase.hp-aus .ap-icon { color: rgba(255,255,255,0.3); }
+        .auto-phase.hp-aus .ap-icon { color: #fb923c; }
+        .auto-phase.hp-aus .ap-val  { color: #fb923c; }
+        .auto-phase.wp .ap-icon  { color: #0d9488; }
+        .auto-phase.wp .ap-val   { color: #14b8a6; font-weight: 600; }
+        .auto-phase.wp .ap-label { color: rgba(20,184,166,0.75); }
         .hp-timeline-row {
             padding: 2px 8px 4px 22px;
             font-size: 10px;
@@ -235,10 +255,12 @@
         /* (HP styles moved into .auto-section / .auto-phase) */
         .inverter-temps {
             display: flex;
-            justify-content: center;
+            justify-content: flex-start;
             align-items: center;
             gap: 16px;
-            padding: 2px 0 4px 0;
+            padding: 6px 0 4px 8px;
+            margin-top: 4px;
+            border-top: 1px solid rgba(255,255,255,0.12);
             color: rgba(255,255,255,0.35);
             font-size: 11px;
             font-weight: 500;
@@ -572,6 +594,16 @@
                     </div>
                 </div>
                 <div class="hp-timeline-row" id="hpTimeline"></div>
+            </div>
+            <!-- WP: Wärmepumpe Dimplex -->
+            <div class="auto-section" id="wpAutoSection">
+                <div id="wpAutoBody">
+                    <div class="auto-phase wp">
+                        <span class="ap-icon"></span>
+                        <span class="ap-label">Wärmepumpe</span>
+                        <span class="ap-text">—</span>
+                    </div>
+                </div>
             </div>
             <div class="inverter-temps" id="inverterTemps">
                 <span class="it-label">F1</span>
@@ -1205,6 +1237,26 @@
 
             hpBody.innerHTML = hpHtml;
 
+            // ── WP: Wärmepumpe Dimplex ──────────────────────────
+            const wp = d.wp_status || {};
+            const wpBody = document.getElementById('wpAutoBody');
+            if (wpBody && !wp.error) {
+                const wv  = wp.vorlauf != null ? wp.vorlauf : '--';
+                const wr  = wp.ruecklauf != null ? wp.ruecklauf : '--';
+                const wrs = wp.ruecklauf_soll != null ? wp.ruecklauf_soll : '--';
+                const wwi = wp.ww_ist != null ? wp.ww_ist : '--';
+                const wws = wp.ww_soll != null ? wp.ww_soll : '--';
+                const wqe = wp.quelle_ein != null ? wp.quelle_ein : '--';
+                const wqa = wp.quelle_aus != null ? wp.quelle_aus : '--';
+                const wts = wp.ts || '';
+                wpBody.innerHTML =
+                    `<div class="auto-phase wp">
+                        <span class="ap-icon"></span>
+                        <span class="ap-label">Wärmepumpe</span>
+                        <span class="ap-text">VL <span class="ap-val">${wv}°</span> · RL <span class="ap-val">${wr}°</span> · Soll <span class="ap-val">${wrs}°</span> · WW <span class="ap-val">${wwi}°</span>/<span class="ap-val">${wws}°</span> · Quelle <span class="ap-val">${wqe}°</span>/<span class="ap-val">${wqa}°</span> <span class="ap-zeit">${wts}</span></span>
+                    </div>`;
+            }
+
             // HP-Timeline
             const hpTL = document.getElementById('hpTimeline');
             if (hpTL && hpAktionen.length > 1) {
@@ -1229,7 +1281,7 @@
     fetchFailoverStatus();
     fetchBackupStatus();
     setInterval(fetchFlow, 10000);
-    setInterval(fetchBatteryDetail, 60000);
+    setInterval(fetchBatteryDetail, 10000);
     setInterval(fetchFailoverStatus, 60000);  // Failover-Check 1×/Min (SSH-basiert, Cache: 60s)
     setInterval(fetchBackupStatus, 600000);   // Backup-Check 1×/10 Min (SSH-basiert, Cache: 10 Min)
     animate();

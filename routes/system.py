@@ -55,6 +55,7 @@ def api_battery_status():
         _fetch_temperatures(result)
         _fetch_hp_status(now, result)
         _fetch_soh(result)
+        _fetch_wp_status(result)
 
         battery_cache['data'] = result
         battery_cache['ts'] = now
@@ -801,6 +802,17 @@ def _fetch_hp_status(now, result):
             'zustand': '?', 'live': False, 'seit': None,
             'grund': '', 'kommando': None,
         }
+
+
+def _fetch_wp_status(result):
+    """Wärmepumpe Dimplex – aktuelle Temperaturen via Modbus RTU (10 s Cache)."""
+    try:
+        from wp_modbus import get_wp_status
+        wp = get_wp_status()
+        result['wp_status'] = wp if wp else {'error': 'keine Daten'}
+    except Exception as _we:
+        logging.debug(f"WP-Status: {_we}")
+        result['wp_status'] = {'error': str(_we)}
 
 
 def _fetch_soh(result):
