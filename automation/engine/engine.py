@@ -41,6 +41,7 @@ from automation.engine.regeln import (          # noqa: E402
     RegelForecastPlausi,
     RegelWattpilotBattSchutz,
     RegelHeizpatrone,
+    RegelWwAbsenkung,
 )
 
 LOG = logging.getLogger('engine')
@@ -119,6 +120,7 @@ class Engine:
             RegelForecastPlausi(),
             RegelWattpilotBattSchutz(),
             RegelHeizpatrone(),
+            RegelWwAbsenkung(),
         ]
         LOG.info(f"Regeln registriert: {[r.name for r in self._regeln]}")
 

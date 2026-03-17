@@ -14,6 +14,8 @@ ENV/
 *.db-shm
 *.db-wal
 data_backup_*.db
+data.db.*
+*.bak_*
 
 # Logs
 *.log

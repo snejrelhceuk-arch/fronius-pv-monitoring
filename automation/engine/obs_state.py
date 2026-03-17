@@ -90,7 +90,13 @@ class ObsState:
     wp_power_avg30_w: Optional[float] = None  # WP 30-min Mittelwert [W]
     wp_today_kwh: Optional[float] = None  # WP-Verbrauch heute [kWh]
     ev_power_avg30_w: Optional[float] = None  # EV 30-min Mittelwert [W]
-    ww_temp_c: Optional[float] = None     # Warmwasserspeicher [°C] — geplant
+    ww_temp_c: Optional[float] = None     # Warmwasserspeicher [°C] (WP Modbus Reg 3)
+    wp_vorlauf_c: Optional[float] = None  # WP Vorlauf [°C] (WP Modbus Reg 5)
+    wp_ruecklauf_c: Optional[float] = None  # WP Rücklauf [°C] (WP Modbus Reg 2)
+    wp_ruecklauf_soll_c: Optional[float] = None  # WP Rücklauf-Soll [°C] (WP Modbus Reg 53)
+    wp_quelle_ein_c: Optional[float] = None  # WP Quelle Eintritt [°C] (WP Modbus Reg 6)
+    wp_quelle_aus_c: Optional[float] = None  # WP Quelle Austritt [°C] (WP Modbus Reg 7)
+    wp_ww_soll_c: Optional[int] = None   # WP WW-Solltemperatur [°C] (WP Modbus Reg 5047)
     heizpatrone_aktiv: bool = False        # Heizstab-Status (vorerst immer False)
     # ── Prognose (Tier-3 Forecast) ────────────────────────
     pv_at_sunrise_1h_w: Optional[float] = None  # Progn. PV-Leistung 1h nach Sunrise [W]
