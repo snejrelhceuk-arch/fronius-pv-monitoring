@@ -13,7 +13,7 @@
 # ============================================================
 
 set -e
-BASE="/srv/pv-system"
+BASE="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "=== PV-System Systemd-Services installieren ==="
 

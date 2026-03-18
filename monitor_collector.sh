@@ -3,7 +3,8 @@
 # Empfohlen: */5 * * * * /srv/pv-system/monitor_collector.sh
 
 # --- Role Guard: Auf Failover-Host nichts tun ---
-source /srv/pv-system/scripts/role_guard.sh 2>/dev/null || exit 0
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "${SCRIPT_DIR}/scripts/role_guard.sh" 2>/dev/null || exit 0
 
 LOG_FILE="/tmp/collector_monitor.log"
 # Nur collector.py zählen, NICHT wattpilot_collector.py

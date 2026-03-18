@@ -291,4 +291,4 @@ if __name__ == "__main__":
     print("\nNaechste Schritte:")
     print("  1. Weitere Jahre hinzufuegen: data_2023.csv, data_2024.csv, ...")
     print("  2. API-Endpunkte nutzen: /api/statistics/monthly, /api/statistics/yearly")
-    print("  3. Web-Ansicht: http://192.0.2.195:8000/statistics")
+    print("  3. Web-Ansicht: http://localhost:8000/statistics")

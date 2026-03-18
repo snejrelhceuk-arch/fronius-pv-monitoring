@@ -654,5 +654,5 @@ Bei gleichzeitig aktiven Regeln entscheidet der Score:
 | WR-Limit | 26.5 kW (3× Fronius Gen24) |
 | Chemie | LiFePO₄ (LFP) |
 | Heizpatrone | 2 kW (Warmwasserspeicher) |
-| Schaltaktor | Fritz!DECT 200/210 (AIN 00000 0000000) |
+| Schaltaktor | Fritz!DECT 200/210 (AIN …) |
 | Fritz!Box | AHA-HTTP-API via login_sid.lua |

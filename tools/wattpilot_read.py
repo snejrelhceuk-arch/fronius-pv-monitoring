@@ -21,16 +21,24 @@ import sys
 import os
 from datetime import datetime
 
-# --- Konfiguration ---
-WATTPILOT_IP = "192.0.2.197"
-WEBSOCKET_TIMEOUT = 10               # Sekunden
 OUTPUT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(OUTPUT_DIR)
+
+# --- Konfiguration ---
+try:
+    sys.path.insert(0, ROOT_DIR)
+    from config import WATTPILOT_IP as _CFG_WATTPILOT_IP
+except ImportError:
+    _CFG_WATTPILOT_IP = "192.0.2.197"
+
+WATTPILOT_IP = _CFG_WATTPILOT_IP
+WEBSOCKET_TIMEOUT = 10               # Sekunden
 
 
 def _load_password():
     """Passwort aus Umgebungsvariable oder .secrets-Datei laden."""
     try:
-        sys.path.insert(0, os.path.dirname(OUTPUT_DIR))
+        sys.path.insert(0, ROOT_DIR)
         from config import load_secret
         pw = load_secret('WATTPILOT_PASSWORD')
     except ImportError:

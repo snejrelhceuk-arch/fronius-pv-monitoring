@@ -36,7 +36,11 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 # --- Konfiguration (Defaults, überschreibbar via config.py) ---
-DEFAULT_IP = "192.0.2.197"
+try:
+    import config as _cfg
+    DEFAULT_IP = _cfg.WATTPILOT_IP
+except ImportError:
+    DEFAULT_IP = "192.0.2.197"
 DEFAULT_TIMEOUT = 10
 
 # Auto-Status Mapping
@@ -112,7 +116,7 @@ class WattpilotClient:
     def __init__(self, ip=None, timeout=None, password=None):
         """
         Args:
-            ip: Wattpilot IP-Adresse (Default: aus config oder 192.0.2.197)
+            ip: Wattpilot IP-Adresse (Default: aus config oder neutralem Platzhalter)
             timeout: WebSocket Timeout in Sekunden (Default: 10)
             password: Passwort (Default: aus .secrets oder Umgebungsvariable)
         """

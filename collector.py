@@ -10,7 +10,7 @@ from modbus_v3 import poller_loop, flush_buffer_to_db
 if __name__ == '__main__':
     print("=== Fronius Modbus Data Collector ===")
     print("Nur Datensammlung (kein Webserver)")
-    print("Visualisierung: http://192.0.2.195:8000")
+    print("Visualisierung: http://localhost:8000")
     print("")
     
     try:

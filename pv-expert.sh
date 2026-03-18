@@ -4,7 +4,10 @@
 #   ./pv-expert.sh "Wie prüfe ich ob der Collector läuft?"
 #   ./pv-expert.sh    (interaktiver Modus)
 
-OLLAMA_HOST="ollama-host"  # SSH-Alias (192.0.2.116)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/scripts/load_infra_env.sh"
+
+OLLAMA_HOST="${OLLAMA_HOST:-${PV_OLLAMA_SSH_HOST:-ollama-host}}"
 MODEL="pv-system-expert"
 
 if [ -n "$1" ]; then

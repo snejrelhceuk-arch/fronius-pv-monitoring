@@ -160,7 +160,7 @@ def whiptail_menu(title, items):
     "device": "heizpatrone",
     "version": 1,
     "changed_at": "2026-02-22T14:30:00",
-    "changed_by": "admin@ssh"
+    "changed_by": "user@ssh"
   },
   "enabled": true,
   "leistung_kw": 2.0,

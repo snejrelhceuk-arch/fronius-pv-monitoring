@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 # =============================================================
-# Code-Sync: Primary (181) → Failover (failover-host/105)
+# Code-Sync: Primary → Failover
 #
 # Synchronisiert NUR git-tracked Dateien (Code, Templates, Doku)
 # vom Primary-Host zum Failover — OHNE host-spezifische Daten.
@@ -33,18 +33,23 @@ set -euo pipefail
 #   ./scripts/sync_code_to_peer.sh --force     # Ohne Nachfrage
 #
 # Voraussetzungen:
-#   - SSH-Key-Auth von 181 → 105 (admin → jk)
-#   - Aufruf NUR vom Primary-Host (181)
+#   - SSH-Key-Auth vom Primary zum Failover
+#   - Aufruf NUR vom Primary-Host
 #
 # Siehe doc/DUAL_HOST_ARCHITECTURE.md Abschnitt 9.
 # =============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/load_infra_env.sh"
 
 # --- Konfiguration (überschreibbar per Env-Variable) ---
-FAILOVER_HOST="${FAILOVER_HOST:-failover-user@failover-host}"
-FAILOVER_REPO="${FAILOVER_REPO:-/srv/pv-system}"
+DEFAULT_FAILOVER_HOST="${PV_FAILOVER_HOST:-}"
+if [ -z "$DEFAULT_FAILOVER_HOST" ] && [ -n "${PV_FAILOVER_USER:-}" ] && [ -n "${PV_FAILOVER_IP:-}" ]; then
+    DEFAULT_FAILOVER_HOST="${PV_FAILOVER_USER}@${PV_FAILOVER_IP}"
+fi
+FAILOVER_HOST="${FAILOVER_HOST:-${DEFAULT_FAILOVER_HOST:-failover-user@failover-host}}"
+FAILOVER_REPO="${FAILOVER_REPO:-${PV_FAILOVER_PV_BASE:-/srv/pv-system}}"
 
 # --- Role Guard: nur auf Primary ausführen ---
 ROLE="primary"

@@ -38,7 +38,7 @@ def favicon():
 # Wenn PV_MIRROR_MODE=1: Read-Only Spiegel, keine externen Zugriffe.
 # DB wird per sync_db.sh kopiert, kein Collector aktiv.
 MIRROR_MODE = os.environ.get('PV_MIRROR_MODE', '0') == '1'
-MIRROR_SOURCE = os.environ.get('PV_MIRROR_SOURCE', 'Pi5 (192.0.2.195)')
+MIRROR_SOURCE = os.environ.get('PV_MIRROR_SOURCE', 'lokaler Spiegel')
 
 if MIRROR_MODE:
     logging.info(f"=== MIRROR-MODUS aktiv === Quelle: {MIRROR_SOURCE}")
@@ -50,7 +50,7 @@ def inject_mirror_info():
         'mirror_mode': MIRROR_MODE,
         'mirror_source': MIRROR_SOURCE,
         'local_hostname': _socket.gethostname(),
-        'local_ip': os.environ.get('PV_LOCAL_IP', '192.0.2.181'),
+        'local_ip': os.environ.get('PV_LOCAL_IP', '127.0.0.1'),
         'api_base_url': os.environ.get('PV_API_BASE_URL', ''),
     }
 
@@ -122,7 +122,7 @@ def api_mirror_status():
     return jsonify({
         'mirror_mode': MIRROR_MODE,
         'source': MIRROR_SOURCE,
-        'local_ip': os.environ.get('PV_LOCAL_IP', '192.0.2.181'),
+        'local_ip': os.environ.get('PV_LOCAL_IP', '127.0.0.1'),
         'last_sync': last_sync,
         'sync_age_seconds': sync_age,
         'sync_age_text': sync_age_text,
@@ -173,7 +173,7 @@ def _check_port_available(host, port):
 
 if __name__ == '__main__':
     print("=== PV-System Web API ===")
-    print(f"URL: http://192.0.2.195:{config.WEB_API_PORT}")
+    print(f"URL: http://localhost:{config.WEB_API_PORT}")
     print("Datensammlung läuft separat in collector.py")
     print("")
 

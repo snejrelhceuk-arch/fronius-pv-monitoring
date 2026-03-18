@@ -676,7 +676,8 @@ def _fetch_temperatures(result):
     # F2 (Symo 10.0)
     try:
         import requests as _req2
-        _f2_resp = _req2.get('http://192.0.2.123/components/readable', timeout=2)
+        _f2_api = os.environ.get('PV_SECONDARY_INVERTER_API', 'http://192.0.2.123/components/readable')
+        _f2_resp = _req2.get(_f2_api, timeout=2)
         if _f2_resp.status_code == 200:
             _f2_data = _f2_resp.json().get('Body', {}).get('Data', {})
             _f2_inv_key = next((k for k in _f2_data if 'Inverter' in k), '0')
@@ -1077,7 +1078,7 @@ def wattpilot_history():
 @bp.route('/api/failover_status')
 def api_failover_status():
     """
-    Prüft den Failover-Host (failover-host) via SSH:
+    Prüft den Failover-Host via SSH:
     Liest den Timestamp der Sync-Marker-Datei (.state/last_mirror_sync.ok).
     Wenn ≤ 15 Min alt → live, ≤ 30 Min → stale, sonst → down.
     Fallback: SSH-Connect prüfen (Host da, aber Sync kaputt).
@@ -1090,7 +1091,7 @@ def api_failover_status():
         return jsonify(_failover_cache['result'])
 
     failover_ip = getattr(config, 'FAILOVER_IP', None)
-    failover_user = getattr(config, 'FAILOVER_USER', 'jk')
+    failover_user = getattr(config, 'FAILOVER_USER', 'failover-user')
     failover_pv_base = getattr(config, 'FAILOVER_PV_BASE',
                                '/srv/pv-system')
 
@@ -1127,7 +1128,7 @@ def api_failover_status():
 
     except subprocess.TimeoutExpired:
         result = {'status': 'down', 'age': None,
-                  'detail': 'SSH-Timeout (failover-host nicht erreichbar)'}
+                  'detail': 'SSH-Timeout (Failover-Host nicht erreichbar)'}
     except Exception as e:
         result = {'status': 'down', 'age': None,
                   'detail': f'Fehler: {e}'}

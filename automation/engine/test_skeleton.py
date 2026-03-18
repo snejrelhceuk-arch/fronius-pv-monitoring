@@ -12,7 +12,7 @@ Testet den kompletten Datenfluss ohne Hardware-Zugriff:
   7. Matrix-getriebene Regel-Tests (9 Regelkreise)
 
 Aufruf:
-  cd /srv/pv-system
+  cd <project-root>
   python3 -m automation.engine.test_skeleton
 """
 
