@@ -7,6 +7,26 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased] — 2026-03-14
 
+## v1.2.0 — 2026-03-18
+
+### Features
+- Fritz!DECT Multi-Device-Integration (Heizpatrone + Klimaanlage) mit 10s-Polling in der Automation.
+- Flow-View erweitert um HP/Klima-Verbraucher inkl. Realtime-Leistung.
+- HP-Schaltchronik in der UI: Automation-Events orange, externe/manuelle Schaltungen rot.
+
+### Fixes
+- `NaN`-Flackern in der Flow-Ansicht behoben (Smoothing ergänzt um HP/Klima).
+- API liest HP/Klima ausschließlich aus Observer-DB (`fritzdect_readings`), ohne Hardwarezugriff.
+- DB-Schema für Fritz!DECT-Echtzeitdaten auf Multi-Device-Betrieb korrigiert (`PRIMARY KEY (ts, device_id)`).
+
+### Dokumentation
+- Fritz!DECT-Dokumentation in den Automation-Bereich verschoben:
+	`doc/automation/fritzdect/`.
+
+---
+
+## v1.1.1 — 2026-03-14
+
 ### Geändert
 - **Autoritätsschaltung:** Manuelle HP-Einschaltung wird für `extern_respekt_s` (Default 30 Min, 15 Min–2 h) respektiert. Nur Übertemp, SOC ≤ 5% und SOC ≤ `extern_notaus_soc_pct` (15%) überstimmen. Phase 4 und weiche Kriterien pausieren. Manuelles Ausschalten sperrt hp_ein analog.
 - **extern_respekt_s**: Default 3600→1800, Bereich [0,7200]→[900,7200]
@@ -16,23 +36,16 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — 2026-03-09
+## v1.1.0 — 2026-03-09
 
 ### Dokumentation
-- **Doc-Restrukturierung:** 43 Markdown-Dateien in 6 thematische Unterordner sortiert (`system/`, `automation/`, `collector/`, `web/`, `meta/`, `archive/`)
-- **SYSTEM_BRIEFING.md:** LLM-Onboarding-Dokument für neue Chat-Sessions erstellt
-- **Batterie-Docs konsolidiert:** Auth + CLI-Referenz aus BATTERIE_STRATEGIEN in BATTERY_ALGORITHM.md übernommen, Original archiviert
-- **Sachfehler korrigiert:** Kapazität 10.24→20.48 kWh (3 Stellen), HP-Status, Modellname, Git-Branch-Infos
-- **Duplikate entfernt:** STRATEGIEN §3 Sicherheitsregeln → Querverweis auf SCHUTZREGELN.md
+- Doku-Restrukturierung in Themenordner (`system/`, `automation/`, `collector/`, `web/`, `meta/`, `archive/`).
+- SYSTEM_BRIEFING und Batterie-Doku konsolidiert; Korrekturen zu Kapazität und Architekturdetails.
 
 ### Fixes (Tiefenprüfung 2026-03-08)
-- **S1:** HP-Startup-Schutz — `_hp_startup_check()` fragt Fritz!DECT beim Daemon-Start
-- **K1:** `RegelSlsSchutz` in `engine_vorausschau()` ergänzt
-- **K2:** SOC-Extern-Registrierung erst nach Aktor-Bestätigung (nicht vorher)
-- **K4:** Früh-Reset-Hysterese mit ON/OFF-Schwellen (10/12 kWh), neuer Param `erholung_hysterese_kwh`
-- **W3:** Toten Modbus-Code aus `AktorBatterie.verifiziere()` entfernt
-- **W4:** DataCollector: Klassen- zu Instanzvariablen für Cache-Timestamps
-- **W5:** Magic Number `37.59 * 0.15` durch `_PV_KWP * _GHI_EFF` aus Config ersetzt
+- HP-Startup-Schutz, SLS-Regel-Integration und SOC-Extern-Registrierung stabilisiert.
+- Früh-Reset-Hysterese und DataCollector-Cache-Verhalten verbessert.
+- Technische Bereinigung: toter Modbus-Code entfernt, Magic Number durch Config-Parameter ersetzt.
 
 ### Config
 - **S2:** 4 entfernte Regelkreise auf `aktiv: false` gesetzt (GEN24 HW-Limit)

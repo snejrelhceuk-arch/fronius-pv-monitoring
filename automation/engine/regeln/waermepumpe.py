@@ -81,8 +81,8 @@ class RegelWwAbsenkung(Regel):
         if aktuell is None:
             return 0
 
-        # Bereits korrekt (±1°C Toleranz)?
-        if abs(int(aktuell) - ziel) <= 1:
+        # Bereits korrekt? (exakter Vergleich — beide Werte ganzzahlig)
+        if int(aktuell) == ziel:
             return 0
 
         # Änderung nötig

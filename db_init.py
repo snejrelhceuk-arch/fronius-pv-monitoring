@@ -644,6 +644,62 @@ def ensure_forecast_table():
             CREATE INDEX IF NOT EXISTS idx_heizpatrone_monthly_year_month
             ON heizpatrone_monthly(year, month)
         """)
+        
+        # Fritz!DECT Echtzeitdaten (10s Polling): HP + Klimaanlage
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS fritzdect_readings (
+                ts INTEGER NOT NULL,
+                device_id TEXT NOT NULL,
+                ain TEXT NOT NULL,
+                name TEXT,
+                power_mw INTEGER,
+                power_w REAL,
+                state INTEGER,
+                energy_total_wh REAL,
+                temp_c REAL,
+                created_at REAL DEFAULT (strftime('%s','now')),
+                PRIMARY KEY (ts, device_id)
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_fritzdect_ts
+            ON fritzdect_readings(ts)
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_fritzdect_device_id
+            ON fritzdect_readings(device_id)
+        """)
+        
+        # Klimaanlage Tages- und Monatsreferenzen (analog zu Heizpatrone)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS klimaanlage_daily (
+                ts INTEGER PRIMARY KEY,
+                energy_wh REAL NOT NULL DEFAULT 0,
+                source TEXT DEFAULT 'fritz_dect',
+                note TEXT DEFAULT '',
+                created_at REAL DEFAULT (strftime('%s','now'))
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS klimaanlage_monthly (
+                year INTEGER NOT NULL,
+                month INTEGER NOT NULL,
+                energy_kwh REAL NOT NULL DEFAULT 0,
+                source TEXT DEFAULT 'fritz_dect',
+                note TEXT DEFAULT '',
+                created_at REAL DEFAULT (strftime('%s','now')),
+                PRIMARY KEY (year, month)
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_klimaanlage_daily_ts
+            ON klimaanlage_daily(ts)
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_klimaanlage_monthly_year_month
+            ON klimaanlage_monthly(year, month)
+        """)
+        
         conn.commit()
 
         conn.close()

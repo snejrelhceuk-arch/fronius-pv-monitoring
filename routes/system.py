@@ -712,11 +712,13 @@ def _fetch_hp_status(now, result):
             r'ENGINE\s+fritzdect\s+'
             r'(hp_ein|hp_aus)\S*\s+'
             r'(OK|FEHLER)\s*(.*)')
+        _hp_extern_pattern = _re_hp.compile(
+            r'^\s*~?\s*(\d{4}-\d{2}-\d{2}),\s*(\d{2}:\d{2}:\d{2})\s+'
+            r'EXTERN\s+fritzdect\s+HP\s+extern\s+(EIN|AUS)\s+--\s*(.*)',
+            _re_hp.IGNORECASE)
         if os.path.exists(_schaltlog_path):
             with open(_schaltlog_path, 'r') as _slf:
                 for _line in _slf:
-                    if _line.startswith('~'):
-                        continue  # Skip consolidated/extern entries
                     _m = _hp_pattern.match(_line)
                     if _m:
                         _datum, _zeit, _cmd, _erg, _grund = _m.groups()
@@ -727,6 +729,21 @@ def _fetch_hp_status(now, result):
                                 'wert': '',
                                 'grund': (_grund or '').strip()[:120],
                                 'ergebnis': _erg,
+                                'quelle': 'automation',
+                            })
+                        continue
+
+                    _mx = _hp_extern_pattern.match(_line)
+                    if _mx:
+                        _datum, _zeit, _state, _grund = _mx.groups()
+                        if _datum == _today_str:
+                            hp_aktionen.append({
+                                'ts': f'{_datum} {_zeit[:5]}',
+                                'kommando': 'hp_ein' if str(_state).upper() == 'EIN' else 'hp_aus',
+                                'wert': '',
+                                'grund': (_grund or 'Manuell/extern geschaltet').strip()[:120],
+                                'ergebnis': 'EXTERN',
+                                'quelle': 'extern',
                             })
             # Neueste zuerst
             hp_aktionen.reverse()

@@ -97,7 +97,18 @@ class ObsState:
     wp_quelle_ein_c: Optional[float] = None  # WP Quelle Eintritt [°C] (WP Modbus Reg 6)
     wp_quelle_aus_c: Optional[float] = None  # WP Quelle Austritt [°C] (WP Modbus Reg 7)
     wp_ww_soll_c: Optional[int] = None   # WP WW-Solltemperatur [°C] (WP Modbus Reg 5047)
-    heizpatrone_aktiv: bool = False        # Heizstab-Status (vorerst immer False)
+    
+    # ── Heizpatrone (Fritz!DECT Steckdose) ────────────────────
+    heizpatrone_aktiv: bool = False        # Heizstab-Status (0/1 via AHA API)
+    heizpatrone_power_w: Optional[float] = None  # Echtzeitleistung [W] (von Fritz!Box)
+    heizpatrone_power_avg30_w: Optional[float] = None  # 30-min Mittelwert [W]
+    heizpatrone_today_kwh: Optional[float] = None  # Tagesverbrauch [kWh]
+    
+    # ── Klimaanlage (Fritz!DECT Steckdose) ────────────────────
+    klima_aktiv: bool = False             # Klimaanlage-Status (0/1 via AHA API)
+    klima_power_w: Optional[float] = None  # Echtzeitleistung [W] (von Fritz!Box)
+    klima_power_avg30_w: Optional[float] = None  # 30-min Mittelwert [W]
+    klima_today_kwh: Optional[float] = None  # Tagesverbrauch [kWh]
     # ── Prognose (Tier-3 Forecast) ────────────────────────
     pv_at_sunrise_1h_w: Optional[float] = None  # Progn. PV-Leistung 1h nach Sunrise [W]
     forecast_quality: Optional[str] = None       # 'gut' | 'mittel' | 'schlecht'

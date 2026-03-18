@@ -576,6 +576,23 @@ def api_flow_realtime():
                     wattpilot_power = round(wattpilot_row[0], 0)
             except Exception as e:
                 logging.debug(f"Wattpilot read: {e}")
+
+            # Fritz!DECT Geräte (Heizpatrone + Klimaanlage) — aktuellste Readings
+            heizpatrone_power = 0
+            klima_power = 0
+            try:
+                c.execute("""
+                    SELECT device_id, power_w FROM fritzdect_readings
+                    WHERE ts > ?
+                    ORDER BY ts DESC LIMIT 10
+                """, (now - 60,))
+                for device_id, pw in c.fetchall():
+                    if device_id == 'heizpatrone':
+                        heizpatrone_power = max(0, round(pw or 0, 1))
+                    elif device_id == 'klimaanlage':
+                        klima_power = max(0, round(pw or 0, 1))
+            except Exception as e:
+                logging.debug(f"Fritz!DECT reading: {e}")
         finally:
             conn.close()
 
@@ -623,7 +640,7 @@ def api_flow_realtime():
         # Wattpilot (bereits oben aus DB gelesen)
         wattpilot = max(0, wattpilot_power)
 
-        haushalt = max(0, round(verbrauch_gesamt - wattpilot - waermepumpe, 0))
+        haushalt = max(0, round(verbrauch_gesamt - wattpilot - waermepumpe - heizpatrone_power - klima_power, 0))
 
         # Flussrichtungen ermitteln
         flows = {
@@ -710,6 +727,8 @@ def api_flow_realtime():
                 'household': haushalt,
                 'wattpilot': wattpilot,
                 'heatpump': waermepumpe,
+                'heizpatrone': heizpatrone_power,
+                'klima': klima_power,
                 'total_today_kwh': consumption_today_kwh
             },
             'flows': flows
