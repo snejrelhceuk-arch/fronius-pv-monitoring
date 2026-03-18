@@ -21,12 +21,12 @@ Strings: S1 SSO-52°/5kWp, S2 NNW-52°/4.6kWp(Abend-PV Mai-Aug),
   S6 WSW-90°/2.2kWp, S7 WSW-90°/4.1kWp, S8 SSO-90°/5.9kWp(Fassade)
 
 Hosts:
-  Pi4 Primary (primary-host, 192.0.2.181, admin) — Collector+Web+Aggregation+Battery
-  Pi4 Failover (failover-host, 192.0.2.105, jk) — DB-Mirror+Read-Only Web
-  Pi5 Backup (backup-host, 192.0.2.195, admin) — rsync-Empfänger (NVMe)
-  Ollama-Server (Ubuntu, 192.0.2.116, backup-user) — LLM (RTX 3070)
+  Primary Monitoring Host — Collector+Web+Aggregation+Battery
+  Failover Host — DB-Mirror+Read-Only Web
+  Backup Host — rsync-Empfänger (NVMe)
+  Ollama Host — LLM (RTX 3070)
 
-Netzwerk: Fronius 192.0.2.122:502 (Modbus TCP), Wattpilot 192.0.2.197 (WebSocket)
+Netzwerk: Fronius via Modbus TCP, Wattpilot via WebSocket, interne Hosts per lokaler Override-Datei
 
 ═══════════════════════════════════════════════════════════════
 2. KRITISCHES DOMÄNENWISSEN
@@ -128,7 +128,7 @@ Logs: /tmp/modbus_v3.log, /tmp/aggregate_1min.log, /tmp/aggregate.log
 DB: sqlite3 /dev/shm/fronius_data.db "SELECT COUNT(*) FROM raw_data;"
 Batterie: python3 battery_control.py (Status), python3 fronius_api.py --read
 Forecast: python3 solar_forecast.py --today
-Web: http://192.0.2.181:8000/flow, /monitoring, /api/dashboard
+Web: lokaler Flask/Gunicorn-Service auf Port 8000 (/flow, /monitoring, /api/dashboard)
 Automation: python3 -m automation.engine.test_skeleton
 Backup: systemctl status pv-backup-gfs.timer
 

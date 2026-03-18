@@ -329,7 +329,7 @@ def _try_restore_from_pi5(tmpfs_path):
     Wird nur aufgerufen wenn die lokale Persist-DB ungültig ist.
     Timeout: 30s — bei Pi5-Ausfall schnell weiter zum nächsten Fallback.
     """
-    pi5_host = getattr(config, 'PI5_BACKUP_HOST', 'admin@192.0.2.195')
+    pi5_host = getattr(config, 'PI5_BACKUP_HOST', 'backup-user@backup-host')
     pi5_db = getattr(config, 'PI5_BACKUP_DB_PATH',
                      '/srv/pv-system/data.db')
     tmp_file = '/tmp/pv_db_pi5_restore.db'
@@ -484,7 +484,7 @@ def _persist_tmpfs_to_pi5(tmpfs_path):
     2. rsync → Pi5 (komprimiert, idempotent)
     3. Temp-Datei löschen
     """
-    pi5_host = getattr(config, 'PI5_BACKUP_HOST', 'admin@192.0.2.195')
+    pi5_host = getattr(config, 'PI5_BACKUP_HOST', 'backup-user@backup-host')
     pi5_db = getattr(config, 'PI5_BACKUP_DB_PATH',
                      '/srv/pv-system/data.db')
     

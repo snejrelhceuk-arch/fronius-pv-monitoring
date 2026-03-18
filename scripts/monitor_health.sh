@@ -13,7 +13,8 @@
 
 set -uo pipefail
 
-DB_PATH="/srv/pv-system/data.db"
+BASE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+DB_PATH="${BASE_DIR}/data.db"
 LOG_FILE="/tmp/monitor_health.log"
 ALERT_FILE="/tmp/monitor_health_alerts.log"
 
@@ -133,7 +134,7 @@ else
 fi
 
 # --- 5. Disk-Space ---
-DISK_USAGE=$(df --output=pcent /home/user 2>/dev/null | tail -1 | tr -d ' %')
+DISK_USAGE=$(df --output=pcent "$HOME" 2>/dev/null | tail -1 | tr -d ' %')
 if [ -n "$DISK_USAGE" ] && [ "$DISK_USAGE" -lt "$DISK_WARN_PERCENT" ]; then
     ok "Disk-Nutzung: ${DISK_USAGE}%"
 else
@@ -153,7 +154,7 @@ for logfile in /tmp/aggregate.log /tmp/aggregate_1min.log /tmp/aggregate_daily.l
 done
 
 # --- 7. Backup-Aktualität ---
-LATEST_BACKUP=$(ls -1t /srv/pv-system/backup/db/daily/*.gz 2>/dev/null | head -1)
+LATEST_BACKUP=$(ls -1t "${BASE_DIR}/backup/db/daily"/*.gz 2>/dev/null | head -1)
 if [ -n "$LATEST_BACKUP" ]; then
     BACKUP_AGE_HOURS=$(( (NOW - $(stat -c%Y "$LATEST_BACKUP")) / 3600 ))
     if [ "$BACKUP_AGE_HOURS" -lt 26 ]; then

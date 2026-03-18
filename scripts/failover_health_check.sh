@@ -2,6 +2,7 @@
 set -euo pipefail
 
 _SCRIPT_BASE="$(cd "$(dirname "$0")/.." && pwd)"
+source "${_SCRIPT_BASE}/scripts/load_infra_env.sh"
 
 # Auf dem Primary-Host prüft dieses Script seine eigene Erreichbarkeit –
 # die Mirror-Sync-Prüfung ist nur auf dem Failover sinnvoll.
@@ -13,7 +14,7 @@ if [ -f "$ROLE_FILE" ]; then
   [ "$ROLE_CONTENT" = "failover" ] && IS_PRIMARY=false
 fi
 
-PRIMARY_IP="${PRIMARY_IP:-192.0.2.181}"
+PRIMARY_IP="${PRIMARY_IP:-${PV_PRIMARY_IP:-192.0.2.181}}"
 PRIMARY_WEB_PORT="${PRIMARY_WEB_PORT:-8000}"
 MAX_SYNC_AGE_SEC="${MAX_SYNC_AGE_SEC:-660}"  # 660s > 10-Min-Sync-Intervall, verhindert Knappheits-WARNs
 STATE_DIR="${STATE_DIR:-${_SCRIPT_BASE}/.state}"

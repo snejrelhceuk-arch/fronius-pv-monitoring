@@ -5,7 +5,7 @@
 #
 # Wird nach jedem erfolgreichen Commit auf dem Primary-Host
 # ausgeführt und synchronisiert das PV-System-Wissen zum
-# Ollama-Server (192.0.2.116).
+# konfigurierten Ollama-Host.
 #
 # Der Sync läuft im Hintergrund, um den Git-Workflow nicht
 # zu blockieren. Ergebnis wird geloggt.

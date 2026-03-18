@@ -7,9 +7,37 @@ import os
 # --- Pfade ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SECRETS_FILE = os.path.join(BASE_DIR, '.secrets')
+INFRA_FILE = os.path.join(BASE_DIR, '.infra.local')
 DB_PATH = '/dev/shm/fronius_data.db'          # Primäre DB im RAM (tmpfs)
 DB_PERSIST_PATH = os.path.join(BASE_DIR, 'data.db')  # Persist-Kopie auf SD-Card (Pi4)
 PID_FILE = os.path.join(BASE_DIR, 'collector.pid')
+
+
+def _read_key_value_file(file_path):
+    values = {}
+    if not os.path.exists(file_path):
+        return values
+    with open(file_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            key, val = line.split('=', 1)
+            val = val.strip()
+            if len(val) >= 2 and ((val[0] == val[-1] == '"') or (val[0] == val[-1] == "'")):
+                val = val[1:-1]
+            values[key.strip()] = val
+    return values
+
+
+_LOCAL_INFRA = _read_key_value_file(INFRA_FILE)
+
+
+def load_local_setting(env_key, default=''):
+    value = os.environ.get(env_key)
+    if value not in (None, ''):
+        return value
+    return _LOCAL_INFRA.get(env_key, default)
 
 
 def load_secret(env_key, secrets_file=None):
@@ -27,14 +55,7 @@ def load_secret(env_key, secrets_file=None):
         return pw
     sf = secrets_file or SECRETS_FILE
     if os.path.exists(sf):
-        with open(sf, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith('#') or '=' not in line:
-                    continue
-                key, val = line.split('=', 1)
-                if key.strip() == env_key:
-                    return val.strip()
+        return _read_key_value_file(sf).get(env_key)
     return None
 
 # --- Standort: Erlau, Landkreis Mittelsachsen, Sachsen ---
@@ -50,19 +71,19 @@ PV_BATTERY_KWH = 20.48      # BYD HVS parallel (2x usable)
 PV_NULLEINSPEISUNG = True    # Nulleinspeiser
 
 # --- Netzwerk ---
-INVERTER_IP = '192.0.2.122'
+INVERTER_IP = load_local_setting('PV_INVERTER_IP', '192.0.2.122')
 MODBUS_PORT = 502
 FRONIUS_API_BASE = f'http://{INVERTER_IP}/solar_api/v1'
 WEB_API_HOST = '0.0.0.0'
 WEB_API_PORT = 8000
 
-# --- Failover-Host (failover-host) ---
-FAILOVER_IP = '192.0.2.105'
-FAILOVER_USER = 'jk'
-FAILOVER_PV_BASE = '/srv/pv-system'
+# --- Failover-Host ---
+FAILOVER_IP = load_local_setting('PV_FAILOVER_IP', '192.0.2.105')
+FAILOVER_USER = load_local_setting('PV_FAILOVER_USER', 'failover-user')
+FAILOVER_PV_BASE = load_local_setting('PV_FAILOVER_PV_BASE', '/srv/pv-system')
 
 # --- Wattpilot (Wallbox) ---
-WATTPILOT_IP = '192.0.2.197'
+WATTPILOT_IP = load_local_setting('PV_WATTPILOT_IP', '192.0.2.197')
 WATTPILOT_TIMEOUT = 10             # WebSocket Timeout (Sek.)
 WATTPILOT_POLL_INTERVAL = 30       # Zählerstand-Abfrage alle 30s (WebSocket-Belegung ~8%)
 WATTPILOT_RETRY_INTERVAL = 5       # Sekunden bis Retry bei WebSocket-Konflikt (App, Netzwerk)
@@ -82,8 +103,8 @@ FLUSH_INTERVAL = 60        # Sekunden zwischen DB-Writes
 # Jede Einzelsicherung max. 2 Tage alt, zusammen max. 1 Tag Lücke.
 # Fixpunkte (daily_data._start/_end) decken Tages-/Monats-/Jahreswerte ab.
 DB_PERSIST_UNIT = 'hour'
-PI5_BACKUP_HOST = 'admin@192.0.2.195'
-PI5_BACKUP_DB_PATH = '/srv/pv-system/data.db'
+PI5_BACKUP_HOST = load_local_setting('PV_PI5_BACKUP_HOST', 'backup-user@backup-host')
+PI5_BACKUP_DB_PATH = load_local_setting('PV_PI5_BACKUP_DB_PATH', '/srv/pv-system/data.db')
 
 # --- Retention Policies ---
 RAW_DATA_RETENTION_DAYS = 7        # raw_data (Pi4/SD-Karten-kompatibel)
@@ -151,13 +172,13 @@ HEIZPERIODE_MONATE = {10, 11, 12, 1, 2, 3}  # Okt–Mär (6 Monate)
 
 # --- E-Mail-Benachrichtigungen ---
 # Einmalige Meldung bei kritischen Events (Deduplizierung: 1× pro Event-Typ pro Tag)
-NOTIFICATION_EMAIL = 'alerts@example.invalid'
-NOTIFICATION_SMTP_HOST = 'smtp.example.invalid'  # SMTP-Relay
+NOTIFICATION_EMAIL = load_local_setting('PV_NOTIFICATION_EMAIL', 'alerts@example.invalid')
+NOTIFICATION_SMTP_HOST = load_local_setting('PV_NOTIFICATION_SMTP_HOST', 'smtp.example.invalid')
 NOTIFICATION_SMTP_PORT = 465               # SSL (nicht 587/STARTTLS)
-NOTIFICATION_SMTP_USER = 'alerts@example.invalid'
+NOTIFICATION_SMTP_USER = load_local_setting('PV_NOTIFICATION_SMTP_USER', 'alerts@example.invalid')
 # SMTP-Passwort: NICHT hier — verschlüsselt in /etc/pv-system/smtp_pass.key
 # Setzen via: pv-config → Benachrichtigungen → SMTP-Passwort
-NOTIFICATION_FROM = 'alerts@example.invalid'
+NOTIFICATION_FROM = load_local_setting('PV_NOTIFICATION_FROM', 'alerts@example.invalid')
 # Meldbare Events — Keys müssen in EVENT_THRESHOLDS definiert sein
 # Sonder-Event 'sunset_tagesbericht': 24h-Zusammenfassung bei Sonnenuntergang
 NOTIFICATION_EVENTS = ['batt_temp_40', 'batt_soc_kritisch', 'netz_ueberlast', 'sls_ueberlast', 'sunset_tagesbericht']

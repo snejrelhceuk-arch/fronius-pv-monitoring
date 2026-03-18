@@ -15,8 +15,11 @@ set -euo pipefail
 # =============================================================
 
 BASE="$(cd "$(dirname "$0")/.." && pwd)"
-PRIMARY_HOST="${PRIMARY_HOST:-admin@192.0.2.181}"
-REMOTE_DB_PATH="${REMOTE_DB_PATH:-/srv/pv-system/data.db}"
+source "$BASE/scripts/load_infra_env.sh"
+
+DEFAULT_REMOTE_DB_PATH="${PV_PRIMARY_DB_PATH:-${PV_PRIMARY_REPO:-/srv/pv-system}/data.db}"
+PRIMARY_HOST="${PRIMARY_HOST:-${PV_PRIMARY_HOST:-primary-user@primary-host}}"
+REMOTE_DB_PATH="${REMOTE_DB_PATH:-${DEFAULT_REMOTE_DB_PATH}}"
 TMPFS_DB_PATH="/dev/shm/fronius_data.db"
 TMP_INCOMING="/dev/shm/fronius_data.db.incoming"
 LOCK_FILE="/tmp/pv_failover_sync.lock"

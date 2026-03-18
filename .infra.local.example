@@ -1,0 +1,27 @@
+# Private Infrastruktur-Overrides fuer lokale Laufzeit
+# Diese Datei als .infra.local kopieren und mit echten Werten befuellen.
+
+PV_INVERTER_IP=192.0.2.122
+PV_FAILOVER_IP=192.0.2.105
+PV_FAILOVER_USER=failover-user
+PV_FAILOVER_PV_BASE=/srv/pv-system
+PV_FAILOVER_HOST=failover-user@failover-host
+
+PV_PRIMARY_HOST=primary-user@primary-host
+PV_PRIMARY_IP=192.0.2.181
+PV_PRIMARY_REPO=/srv/pv-system
+PV_PRIMARY_DB_PATH=/srv/pv-system/data.db
+
+PV_WATTPILOT_IP=192.0.2.197
+PV_SECONDARY_INVERTER_API=http://192.0.2.123/components/readable
+
+PV_PI5_BACKUP_HOST=backup-user@backup-host
+PV_PI5_BACKUP_DB_PATH=/srv/pv-system/data.db
+PV_PI5_BACKUP_BASE=/srv/pv-system/backup/db
+
+PV_OLLAMA_SSH_HOST=ollama-host
+
+PV_NOTIFICATION_EMAIL=alerts@example.invalid
+PV_NOTIFICATION_SMTP_HOST=smtp.example.invalid
+PV_NOTIFICATION_SMTP_USER=alerts@example.invalid
+PV_NOTIFICATION_FROM=alerts@example.invalid

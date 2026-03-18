@@ -7,7 +7,7 @@
 #   2. Keine Duplikate (falls doch → kill + systemd-Restart)
 #   3. Frische Daten in DB (falls >5min alt → Warnung loggen)
 
-BASE_DIR="/srv/pv-system"
+BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # --- Role Guard: Auf Failover-Host nichts tun ---
 source "${BASE_DIR}/scripts/role_guard.sh" 2>/dev/null || exit 0

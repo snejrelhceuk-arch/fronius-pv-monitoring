@@ -8,7 +8,8 @@ if [ "$MODE" != "active" ] && [ "$MODE" != "passive" ]; then
 fi
 
 BASE="$(cd "$(dirname "$0")/.." && pwd)"
-PRIMARY_SOURCE="${PRIMARY_SOURCE:-Pi4 Primär (192.0.2.181)}"
+source "$BASE/scripts/load_infra_env.sh"
+PRIMARY_SOURCE="${PRIMARY_SOURCE:-Primary-Host}"
 OVERRIDE_DIR="/etc/systemd/system/pv-web.service.d"
 OVERRIDE_FILE="${OVERRIDE_DIR}/override.conf"
 

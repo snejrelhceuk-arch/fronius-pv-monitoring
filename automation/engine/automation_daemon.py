@@ -10,7 +10,7 @@ Eigenständiger Prozess der alle Schichten orchestriert:
   - Actuator: Ausführung + Persist-DB-Logging (automation_log)
 
 Aufruf:
-  cd /srv/pv-system
+  cd <project-root>
   python3 -m automation.engine.automation_daemon
   python3 -m automation.engine.automation_daemon --dry-run
   python3 -m automation.engine.automation_daemon --once     # 1 Zyklus

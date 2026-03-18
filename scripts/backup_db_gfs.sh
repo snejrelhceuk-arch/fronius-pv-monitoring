@@ -19,14 +19,15 @@
 set -euo pipefail
 
 BASE="$(cd "$(dirname "$0")/.." && pwd)"
+source "$BASE/scripts/load_infra_env.sh"
 
 # --- Konfiguration ---
 DB_PATH="${DB_PATH:-/dev/shm/fronius_data.db}"
 BACKUP_BASE="${BACKUP_BASE:-${BASE}/backup/db}"
 LOG_FILE="${LOG_FILE:-/tmp/db_backup_gfs.log}"
 
-PI5_BACKUP_HOST="${PI5_BACKUP_HOST:-admin@192.0.2.195}"
-PI5_BACKUP_BASE="${PI5_BACKUP_BASE:-/srv/pv-system/backup/db}"
+PI5_BACKUP_HOST="${PI5_BACKUP_HOST:-${PV_PI5_BACKUP_HOST:-backup-user@backup-host}}"
+PI5_BACKUP_BASE="${PI5_BACKUP_BASE:-${PV_PI5_BACKUP_BASE:-/srv/pv-system/backup/db}}"
 
 STATE_DIR="${STATE_DIR:-${BASE}/.state}"
 SOHN_STAMP_FILE="${STATE_DIR}/backup_gfs_sohn_last_ts"

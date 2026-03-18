@@ -2,10 +2,10 @@
 
 Production-ready Monitoring für Fronius Gen24 Hybrid PV-Anlage (37,59 kWp) mit BYD Battery Storage.
 
-> **Systemdokumentation**: [doc/SYSTEM_ARCHITECTURE.md](doc/SYSTEM_ARCHITECTURE.md) — Energiefluss, Counter-Semantik, DB-Schema
+> Interne Betriebs- und Infrastrukturdokumentation wird lokal gehalten und ist im öffentlichen Repo bewusst nicht enthalten.
 
 ## Produktionsstart
-**01.01.2026 00:00 Uhr** | Pi4 (192.0.2.181) | CLI-Boot
+Produktivbetrieb seit **01.01.2026 00:00 Uhr**
 
 ## Schnellstart
 
@@ -16,7 +16,7 @@ System läuft als systemd-Services (pv-collector, pv-web). Kein manueller Start 
 sudo systemctl status pv-collector pv-web
 
 # Browser
-http://192.0.2.181:8000
+http://localhost:8000
 
 # Logs
 tail -f /tmp/modbus_v3.log
@@ -35,7 +35,7 @@ tail -f /tmp/aggregate_1min.log
 ## Architektur
 
 ```
- Fronius Gen24 (192.0.2.122:502)     Pi4 (192.0.2.181)
+ Fronius Gen24 (Modbus TCP)            Monitoring-Host
  ┌─────────────────────────┐           ┌──────────────────────────┐
  │ Unit 1: Inverter F1     │  Modbus   │ modbus_v3.py (Collector) │
  │ Unit 2: SM Netz         │◄────────► │   → RAM-Buffer           │
@@ -59,7 +59,7 @@ Siehe [doc/SYSTEM_ARCHITECTURE.md](doc/SYSTEM_ARCHITECTURE.md) Abschnitt 2.
 
 1. **Polling:** Alle 3s Modbus-Read → RAM-Buffer → raw_data (Flush 60s)
 2. **Aggregation:** 5 Stufen via Cron (1min / 15min / hourly / daily / monthly)
-3. **Persist:** tmpfs-DB → SD-Card (stündlich) + periodisch Pi5
+3. **Persist:** tmpfs-DB → SD-Card (stündlich) + periodischer externer Backup-Host
 4. **GFS-Backup:** `backup_db_gfs.sh` (03:00 täglich via systemd, Sohn intern alle 3 Tage aus RAM)
 5. **Cleanup:** raw_data 7d, data_1min 90d, hourly 365d, daily 10y
 
@@ -81,7 +81,7 @@ Siehe [doc/SYSTEM_ARCHITECTURE.md](doc/SYSTEM_ARCHITECTURE.md) Abschnitt 2.
 
 **WP steht IMMER für Wärmepumpe, NIE für Wattpilot!**
 Variablen: `wp_` → Wärmepumpe, `wattpilot_` → Wallbox.
-Siehe auch [doc/WATTPILOT_ARCHITECTURE.md](doc/WATTPILOT_ARCHITECTURE.md#wp-wattpilot-namenskonvention).
+Die Trennung ist im Code und in der öffentlichen API strikt beibehalten.
 
 ## Monitoring
 
@@ -109,8 +109,7 @@ git pull origin main
 # Datenbank-Backup
 cp data.db data_backup_$(date +%Y%m%d_%H%M).db
 
-# 3-Host-Sync: Pi4 (primary), Pi4 (failover), Laptop (dev)
-# Siehe doc/system/GIT_WORKFLOW.md
+# Multi-Host-Sync und Betriebsabläufe werden lokal dokumentiert.
 ```
 
 ## Cron-Jobs
@@ -154,7 +153,7 @@ Vor externer Veröffentlichung gilt die Checkliste in
 
 ## Hardware
 
-- **Inverter:** Fronius GEN24 12.0 (192.0.2.122:502)
+- **Inverter:** Fronius GEN24 12.0 (Modbus TCP)
 - **PV:** 37.59 kWp (3 Strings: S1 Süd30°, S2 Nord15°, S3 Süd10°)
 - **Battery:** BYD HVS 2×10.24 kWh parallel (20.48 kWh netto, LFP)
 - **Protokoll:** SunSpec Modbus TCP + Fronius HTTP-API
@@ -170,8 +169,8 @@ pkill -f modbus_v3
 
 **Problem:** Keine Daten
 ```bash
-# Modbus-Connection testen
-curl -s http://192.0.2.122/solar_api/v1/GetInverterRealtimeData.cgi
+# Modbus-/HTTP-Connection testen
+curl -s http://<inverter-host>/solar_api/v1/GetInverterRealtimeData.cgi
 ```
 
 **Problem:** Aggregation läuft nicht
@@ -179,7 +178,7 @@ curl -s http://192.0.2.122/solar_api/v1/GetInverterRealtimeData.cgi
 # Cron-Job prüfen
 crontab -l
 # Manuell ausführen
-cd /srv/pv-system && python3 aggregate.py
+python3 aggregate.py
 ```
 
 ## Version

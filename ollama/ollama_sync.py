@@ -33,6 +33,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import config
+
 # ── Pfade ────────────────────────────────────────────────────
 BASE_DIR = Path(__file__).resolve().parent.parent
 OLLAMA_DIR = BASE_DIR / 'ollama'
@@ -41,7 +43,7 @@ SYNC_STATE_PATH = OLLAMA_DIR / '.sync_state.json'
 CHANGELOG_PATH = OLLAMA_DIR / 'CHANGELOG.md'
 
 # ── Ollama-Server ────────────────────────────────────────────
-OLLAMA_SSH_HOST = 'ollama-host'          # SSH-Alias (192.0.2.116)
+OLLAMA_SSH_HOST = config.load_local_setting('PV_OLLAMA_SSH_HOST', 'ollama-host')
 OLLAMA_MODEL_NAME = 'pv-system-expert'
 OLLAMA_BASE_MODEL = 'qwen2.5-coder:7b-instruct-q4_K_M'
 
