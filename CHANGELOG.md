@@ -7,12 +7,19 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Projektankündigungen
+- MEGA-BAS Rollout: I2C-HAT-Inbetriebnahme mit zusätzlicher Temperatur-Sensorik und vorbereiteter Aktorik für kommende Hardware-Phasen.
+- 3-Phasen-Heizpatrone (Zukunftsphase): Konzept für stufenweise Zuschaltung und Schützstrategie als nächster Ausbauschritt.
+
 ## v1.2.0 — 2026-03-18
 
 ### Features
+- Batterie-System auf 2× BYD HVS (20.48 kWh) umgestellt; Automationslogik auf SOC-Entscheidungen fokussiert (keine Lade-/Entladeraten-Regelkreise mehr, klare SOC-Fensterstrategie).
+- Wärmepumpe über LWPM-410 Modbus-RTU integriert: Infos auslesen und WW-Nachtabsenkung automatisch.
 - Fritz!DECT Multi-Device-Integration (Heizpatrone + Klimaanlage) mit 10s-Polling in der Automation.
-- Flow-View erweitert um HP/Klima-Verbraucher inkl. Realtime-Leistung.
+- Flow-View erweitert: Informationen und tägliche Zuschaltung für Eigenverbrauch (Wattpilot, Wärmepumpe, Heizpatrone, Klimaanlage).
 - HP-Schaltchronik in der UI: Automation-Events orange, externe/manuelle Schaltungen rot.
+- Eigenes System-Health-Modul zur Systemüberwachung (Rollenverteilung Schicht D) mit Checks für Host, Services, Daten-Freshness und Push-Mail-Warnungen.
 
 ### Fixes
 - `NaN`-Flackern in der Flow-Ansicht behoben (Smoothing ergänzt um HP/Klima).
