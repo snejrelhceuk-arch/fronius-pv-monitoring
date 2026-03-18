@@ -5,7 +5,7 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [Unreleased] — 2026-03-14
+## [Unreleased]
 
 ## v1.2.0 — 2026-03-18
 
@@ -21,7 +21,7 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/).
 
 ### Dokumentation
 - Fritz!DECT-Dokumentation in den Automation-Bereich verschoben:
-	`doc/automation/fritzdect/`.
+  doc/automation/fritzdect/.
 
 ---
 
