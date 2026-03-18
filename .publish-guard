@@ -1,0 +1,37 @@
+# =============================================================
+# .publish-guard — Sperrmuster für Pre-Commit-Hook
+# =============================================================
+# Jede Zeile ist ein grep -E (Extended Regex) Pattern.
+# Wenn ein staged File eines dieser Muster enthält,
+# wird der Commit blockiert.
+#
+# Neue Muster einfach als Zeile hinzufügen.
+# Kommentare (#) und Leerzeilen werden ignoriert.
+# =============================================================
+
+# --- Interne IP-Adressen (Netz 192.168.2.x) ---
+192\.168\.2\.[0-9]+
+
+# --- Benutzernamen ---
+zmithy
+\bjk@
+
+# --- Hostnamen ---
+\bfronipi\b
+\bPI5-5\b
+\braspberrypi\b
+
+# --- E-Mail / Domain ---
+hekabe
+navigator@
+
+# --- SMTP-Provider ---
+smtp\.strato\.de
+
+# --- Dateisystem-Pfade ---
+/home/admin/Dokumente/PVAnlage
+/home/admin/Documents/PVAnlage
+/home/jk/Dokumente/PVAnlage
+
+# --- Geräte-Seriennummern (Fritz!DECT AIN) ---
+11657.0535198
