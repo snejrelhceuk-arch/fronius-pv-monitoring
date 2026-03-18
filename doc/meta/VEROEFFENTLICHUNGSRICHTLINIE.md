@@ -88,6 +88,7 @@ Vor jedem öffentlichen Push/Release:
 - **Technische Systemgrenzen (A/B/C/D):** `doc/system/ABCD_ROLLENMODELL.md`
 - **Betriebs- und Schutzregeln:** `doc/SCHUTZREGELN.md`
 - **Rollen/Failover-Betrieb:** `doc/DUAL_HOST_ARCHITECTURE.md`
+- **Technische Publish-Absicherung:** `doc/system/PUBLISH_GUARD.md`
 - **Recht/Veröffentlichung/Compliance:** diese Datei
 
 ---
