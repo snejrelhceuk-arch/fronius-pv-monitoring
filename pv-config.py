@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import subprocess
 import sqlite3
 import sys
@@ -41,7 +42,7 @@ from automation.engine.param_matrix import (
 )
 
 # ── Konstanten ─────────────────────────────────────────────────
-VERSION = '1.0.0'
+VERSION = '1.2.0'
 TITLE = 'PV-System Konfiguration'
 BATTERY_CONFIG_PATH = os.path.join(PROJECT_ROOT, 'config', 'battery_control.json')
 SCHEDULER_STATE_PATH = os.path.join(PROJECT_ROOT, 'config', 'battery_scheduler_state.json')
@@ -1675,6 +1676,24 @@ def _hp_schwellen():
 
 
 # ═══════════════════════════════════════════════════════════════
+# Daemon-Reload nach Param-Änderung
+# ═══════════════════════════════════════════════════════════════
+
+_DAEMON_PID_FILE = os.path.join(PROJECT_ROOT, 'automation_daemon.pid')
+
+def _notify_daemon_reload():
+    """SIGHUP an Automation-Daemon senden → Matrix-Reload."""
+    try:
+        if not os.path.exists(_DAEMON_PID_FILE):
+            return
+        with open(_DAEMON_PID_FILE) as f:
+            pid = int(f.read().strip())
+        os.kill(pid, signal.SIGHUP)
+    except (ValueError, ProcessLookupError, PermissionError):
+        pass
+
+
+# ═══════════════════════════════════════════════════════════════
 # Matrix speichern (atomar)
 # ═══════════════════════════════════════════════════════════════
 
@@ -1698,6 +1717,7 @@ def _speichere_matrix(matrix: dict):
             json.dump(matrix, f, indent=2, ensure_ascii=False)
             f.write('\n')
         os.replace(tmp_path, DEFAULT_MATRIX_PATH)
+        _notify_daemon_reload()
     except Exception as e:
         wt_msgbox(f'Fehler beim Speichern:\n\n{str(e)[:200]}')
         if os.path.exists(tmp_path):

@@ -45,7 +45,7 @@ class DataCollector:
         # W4: Cache-Variablen als Instanzvariablen (nicht class-level)
         self._soc_config_cache_ts: float = 0
         self._fritzdect_cache_ts: float = 0
-        self._fritzdect_cache_data: dict = None
+        # _fritzdect_device_cache ist als class-Attribut definiert (siehe Methode)
 
     def _get_conn(self) -> Optional[sqlite3.Connection]:
         """Öffne read-only Verbindung zur Collector-DB."""
@@ -341,39 +341,132 @@ class DataCollector:
         finally:
             conn.close()
 
-    # ── Fritz!DECT: Heizpatrone Live-Status ──────────────────
+    # ── Fritz!DECT: Smart-Home-Geräte (Heizpatrone + Klimaanlage) ──
 
-    _FRITZDECT_POLL_INTERVAL = 60
+    _FRITZDECT_POLL_INTERVAL = 10  # Sekunden (optimiert für Echtzeiterfassung)
+    _fritzdect_device_cache: dict = {}  # { 'ain_norm': info, ... }
 
     def _collect_fritzdect(self, obs: ObsState):
-        """HP-Status von Fritz!Box → obs.heizpatrone_aktiv."""
+        """Alle konfigurierten Fritz!DECT-Geräte in EINEM Request erfassen.
+        
+        Holt Heizpatrone + Klimaanlage mit einem getdevicelistinfos()-Call
+        und speichert Leistung + Status in ObsState.
+        """
         now = time.time()
-        if (self._fritzdect_cache_data is not None
+        
+        # Cache-Check: Alle Daten auf einmal
+        if (self._fritzdect_device_cache
                 and (now - self._fritzdect_cache_ts) < self._FRITZDECT_POLL_INTERVAL):
-            info = self._fritzdect_cache_data
+            all_devices = self._fritzdect_device_cache
         else:
-            info = None
+            all_devices = {}
             try:
                 from automation.engine.aktoren.aktor_fritzdect import (
                     _load_fritz_config, _get_session_id, _aha_device_info
                 )
+                
                 cfg = _load_fritz_config()
                 host = cfg.get('fritz_ip', '192.168.178.1')
-                ain = cfg.get('ain', '')
                 user = cfg.get('fritz_user', '')
                 pw = cfg.get('fritz_password', '')
-                if ain and user and pw:
+                polling_interval = cfg.get('polling_interval_s', self._FRITZDECT_POLL_INTERVAL)
+                
+                # Aktualisiere Interval aus Config (erlaubt Anpassung ohne Code-Änderung)
+                self._FRITZDECT_POLL_INTERVAL = polling_interval
+                
+                if user and pw:
                     sid = _get_session_id(host, user, pw)
                     if sid:
-                        info = _aha_device_info(host, ain, sid)
+                        # EIN REQUEST für ALLE Geräte (sehr effizient!)
+                        geraete_cfg = cfg.get('geraete', [])
+                        for gerät in geraete_cfg:
+                            if not gerät.get('active', True):
+                                continue  # Überspringe inaktive Geräte
+                            
+                            ain = gerät.get('ain', '').replace(' ', '')
+                            if not ain:
+                                continue
+                            
+                            # Benutze _aha_device_info mit AIN — dieser holt aus der Liste
+                            # (alternativ könnte man ALLE auf einmal parsen, aber das ist
+                            # pro Gerät cleaner)
+                            info = _aha_device_info(host, gerät.get('ain', ''), sid)
+                            if info:
+                                all_devices[ain] = info
+                        
+                        self._fritzdect_cache_ts = now
+                        self._fritzdect_device_cache = all_devices
             except Exception as e:
                 LOG.debug(f"Fritz!DECT collect: {e}")
+        
+        # Iteriere über konfigurierte Geräte und schreibe ins ObsState
+        try:
+            from automation.engine.aktoren.aktor_fritzdect import _load_fritz_config
+            cfg = _load_fritz_config()
+            geraete_cfg = cfg.get('geraete', [])
+            
+            for gerät in geraete_cfg:
+                if not gerät.get('active', True):
+                    continue
+                
+                dev_id = gerät.get('id', '').lower()
+                ain = gerät.get('ain', '').replace(' ', '')
+                info = all_devices.get(ain)
+                
+                if not info:
+                    continue
+                
+                # State: '0' | '1'
+                state_1 = str(info.get('state', '')).strip() == '1'
+                power_w = round((info.get('power_mw') or 0) / 1000.0, 1)
+                
+                # Mapping zu ObsState (pro Gerät)
+                if dev_id == 'heizpatrone':
+                    obs.heizpatrone_aktiv = state_1
+                    obs.heizpatrone_power_w = power_w
+                    # energy_wh → today_kwh (wird später aus Aggregation gefüllt)
+                
+                elif dev_id == 'klimaanlage':
+                    obs.klima_aktiv = state_1
+                    obs.klima_power_w = power_w
+                    # energy_wh → today_kwh (wird später aus Aggregation gefüllt)
+                
+                # In DB schreiben für Web-API (fritzdect_readings)
+                self._save_fritzdect_reading(
+                    int(now), dev_id, gerät.get('ain', ''),
+                    info.get('name', ''), info
+                )
+        
+        except Exception as e:
+            LOG.debug(f"Fritz!DECT mapping: {e}")
 
-            self._fritzdect_cache_ts = now
-            self._fritzdect_cache_data = info
-
-        if info and info.get('state') is not None:
-            obs.heizpatrone_aktiv = str(info['state']).strip() == '1'
+    def _save_fritzdect_reading(self, ts: int, device_id: str, ain: str,
+                                name: str, info: dict):
+        """Speichere Fritz!DECT-Reading in fritzdect_readings (tmpfs-DB).
+        
+        Ermöglicht der Web-API, aktuelle Werte direkt aus DB zu lesen,
+        ohne über obs_state gehen zu müssen.
+        """
+        try:
+            import sqlite3
+            db_path = '/dev/shm/fronius_data.db'
+            power_mw = info.get('power_mw')
+            power_w = (power_mw / 1000.0) if power_mw is not None else None
+            state = int(info.get('state', 0)) if info.get('state') else None
+            energy_wh = info.get('energy_wh')
+            
+            conn = sqlite3.connect(db_path, timeout=2)
+            try:
+                conn.execute("""
+                    INSERT OR REPLACE INTO fritzdect_readings
+                    (ts, device_id, ain, name, power_mw, power_w, state, energy_total_wh)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (ts, device_id, ain, name, power_mw, power_w, state, energy_wh))
+                conn.commit()
+            finally:
+                conn.close()
+        except Exception as e:
+            LOG.debug(f"Fritz!DECT DB-Write ({device_id}): {e}")
 
     # ── Wärmepumpe Dimplex: Modbus-Temperaturen ─────────────
 

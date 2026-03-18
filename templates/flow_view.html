@@ -142,10 +142,10 @@
         /* ══════ Battery Detail Bar ══════ */
         .battery-detail {
             display: flex;
-            justify-content: center;
+            justify-content: flex-start;
             align-items: center;
             gap: 20px;
-            padding: 6px 0 2px 0;
+            padding: 6px 0 2px 8px;
             color: rgba(255,255,255,0.45);
             font-size: 12px;
             font-weight: 500;
@@ -251,6 +251,45 @@
             color: rgba(255,255,255,0.35);
             white-space: nowrap;
             overflow-x: auto;
+        }
+        /* Einzeilige Automation-Zeilen */
+        .auto-oneliner {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            padding: 2px 8px 2px 8px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.5);
+            line-height: 1.4;
+            white-space: nowrap;
+            overflow-x: auto;
+        }
+        .auto-oneliner .ap-icon {
+            display: none;
+        }
+        .auto-oneliner .ap-val {
+            color: #10b981;
+            font-weight: 600;
+        }
+        .auto-oneliner .ap-hp-val {
+            color: #fb923c;
+            font-weight: 600;
+        }
+        .auto-oneliner .ap-wp-val {
+            color: #14b8a6;
+            font-weight: 600;
+        }
+        .auto-oneliner .ap-sep {
+            color: rgba(255,255,255,0.15);
+            margin: 0 4px;
+        }
+        .auto-oneliner .ap-zeit {
+            color: rgba(255,255,255,0.35);
+            font-variant-numeric: tabular-nums;
+        }
+        .auto-oneliner .ap-label {
+            font-weight: 600;
+            color: rgba(255,255,255,0.6);
         }
         /* (HP styles moved into .auto-section / .auto-phase) */
         .inverter-temps {
@@ -514,108 +553,100 @@
 
                 <!-- ═══ SUB-VERBRAUCHER (kurze Linien, Fluss immer → Verbraucher) ═══ -->
                 <g class="sub-consumers">
-                <circle cx="640" cy="130" r="39" fill="none"
+                                        <circle cx="640" cy="130" r="39" fill="none"
                         stroke="#dbeafe" stroke-width="2" id="circle-household"/>
-                <text x="640" y="123" text-anchor="middle"
+                                        <text x="640" y="123" text-anchor="middle"
                       fill="#dbeafe" font-size="13" font-weight="600">Haushalt</text>
-                <text x="640" y="142" text-anchor="middle"
+                                        <text x="640" y="142" text-anchor="middle"
                       fill="rgba(255,255,255,0.7)" font-size="15"
                       font-weight="600" id="value-household">0W</text>
 
-                <circle cx="680" cy="225" r="39" fill="none"
+                                        <circle cx="680" cy="225" r="39" fill="none"
                         stroke="#93c5fd" stroke-width="2" id="circle-wattpilot"/>
-                <text x="680" y="218" text-anchor="middle"
+                                        <text x="680" y="218" text-anchor="middle"
                       fill="#93c5fd" font-size="13" font-weight="600">Wattpilot</text>
-                <text x="680" y="237" text-anchor="middle"
+                                        <text x="680" y="237" text-anchor="middle"
                       fill="rgba(255,255,255,0.7)" font-size="15"
                       font-weight="600" id="value-wattpilot">0W</text>
 
-                <circle cx="640" cy="320" r="39" fill="none"
+                                        <circle cx="640" cy="320" r="39" fill="none"
                         stroke="#60a5fa" stroke-width="2" id="circle-heatpump"/>
-                <text x="640" y="313" text-anchor="middle"
+                                        <text x="640" y="313" text-anchor="middle"
                       fill="#60a5fa" font-size="14" font-weight="600">WP</text>
-                <text x="640" y="332" text-anchor="middle"
+                                        <text x="640" y="332" text-anchor="middle"
                       fill="rgba(255,255,255,0.7)" font-size="15"
                       font-weight="600" id="value-heatpump">0W</text>
 
+                                <!-- Heizpatrone (Fritz!DECT) oberhalb Haushalt -->
+                                        <circle cx="560" cy="40" r="32" fill="none"
+                        stroke="#ea580c" stroke-width="2" id="circle-heizpatrone"/>
+                                        <text x="560" y="36" text-anchor="middle"
+                      fill="#ea580c" font-size="11" font-weight="600">HP</text>
+                                        <text x="560" y="51" text-anchor="middle"
+                      fill="rgba(255,255,255,0.7)" font-size="13"
+                      font-weight="600" id="value-heizpatrone">0W</text>
+
+                                <!-- Klimaanlage (Fritz!DECT) oberhalb Haushalt -->
+                                        <circle cx="660" cy="40" r="32" fill="none"
+                        stroke="#00bcd4" stroke-width="2" id="circle-klima"/>
+                                        <text x="660" y="36" text-anchor="middle"
+                      fill="#00bcd4" font-size="11" font-weight="600">Klima</text>
+                                        <text x="660" y="51" text-anchor="middle"
+                      fill="rgba(255,255,255,0.7)" font-size="13"
+                      font-weight="600" id="value-klima">0W</text>
+
                 <!-- Reserve (placeholder) -->
-                <circle cx="670" cy="360" r="18" fill="none"
+                                        <circle cx="670" cy="360" r="18" fill="none"
                         stroke="rgba(255,255,255,0.12)" stroke-width="1"
                         stroke-dasharray="4,4"/>
-                <text x="670" y="363" text-anchor="middle"
+                                        <text x="670" y="363" text-anchor="middle"
                       fill="rgba(255,255,255,0.12)" font-size="9">Reserve</text>
                 </g>
             </svg>
 
-            <!-- Battery Detail -->
+            <!-- Zeile 1: Batterie-Infos (einzeilig, kompakt) -->
             <div class="battery-detail" id="batteryDetail">
+                <span>Lad/Entlad: <span class="bd-val" id="bd-charge">--</span>/<span class="bd-val" id="bd-discharge">--</span> kWh</span>
+                <span class="bd-sep">|</span>
                 <span>SOH: <span class="bd-val" id="bd-soh">--</span>%<span id="bd-soh-source" style="font-size:9px;opacity:0.4;margin-left:2px"></span></span>
-                <span class="bd-sep">|</span>
-                <span>Ladung: <span class="bd-val" id="bd-charge">--</span> kWh</span>
-                <span class="bd-sep">|</span>
-                <span>Entladung: <span class="bd-val" id="bd-discharge">--</span> kWh</span>
                 <span class="bd-sep">|</span>
                 <span>SOC: <span class="bd-val" id="bd-soc-range">--</span></span>
                 <span class="bd-sep">|</span>
-                <span>Temp: <span class="bd-val" id="bd-temp">--</span> °C</span>
-                <span class="bd-sep">|</span>
-                <span>WR: <span class="bd-val" id="bd-storctl">--</span></span>
-                <span class="bd-sep">|</span>
-                <span>Bat: <span class="bd-val" id="bd-chast">--</span></span>
+                <span>Status: <span class="bd-val" id="bd-chast">--</span></span>
             </div>
-            <div class="battery-detail" id="batteryDetail2" style="padding-top:0;font-size:11px;opacity:0.7;">
-                <span>Kap: <span class="bd-val" id="bd-cap-est">--</span>/<span class="bd-val" id="bd-cap-max">--</span> kWh</span>
-                <span class="bd-sep">|</span>
-                <span>Zyklen: <span class="bd-val" id="bd-cycles">--</span></span>
-                <span class="bd-sep">|</span>
-                <span>Lifetime: <span class="bd-val" id="bd-lt-charge">--</span>/<span class="bd-val" id="bd-lt-discharge">--</span> MWh</span>
-                <span class="bd-sep">|</span>
-                <span>FW: <span class="bd-val" id="bd-firmware">--</span></span>
-            </div>
-            <!-- Batt-Automation: Beschreibungsblöcke -->
+            <!-- Zeile 2: Batt-Automation (einzeilig) -->
             <div class="auto-section" id="battAutoSection">
-                <div class="auto-header batt">⚡ Batterie-Automation</div>
-                <div id="battAutoBody">
-                    <div class="auto-phase pending">
-                        <span class="ap-icon">⏳</span>
-                        <span class="ap-label">Morgens</span>
-                        <span class="ap-text">—</span>
-                    </div>
+                <div id="battAutoBody" class="auto-oneliner">
+                    <span class="ap-icon">⏳</span> <span class="ap-text">—</span>
                 </div>
             </div>
-            <!-- HP-Automation: Heizpatrone -->
+            <!-- Zeile 3: HP Status + Schaltzeiten (einzeilig) -->
             <div class="auto-section" id="hpAutoSection">
-                <div class="auto-header hp">🔥 Heizpatrone</div>
-                <div id="hpAutoBody">
-                    <div class="auto-phase hp-aus">
-                        <span class="ap-icon">○</span>
-                        <span class="ap-label">Status</span>
-                        <span class="ap-text">—</span>
-                    </div>
+                <div id="hpAutoBody" class="auto-oneliner">
+                    <span class="ap-icon">○</span> <span class="ap-text">—</span>
                 </div>
-                <div class="hp-timeline-row" id="hpTimeline"></div>
             </div>
-            <!-- WP: Wärmepumpe Dimplex -->
+            <!-- Zeile 4: Wärmepumpe (einzeilig, wie gehabt) -->
             <div class="auto-section" id="wpAutoSection">
-                <div id="wpAutoBody">
-                    <div class="auto-phase wp">
-                        <span class="ap-icon"></span>
-                        <span class="ap-label">Wärmepumpe</span>
-                        <span class="ap-text">—</span>
-                    </div>
+                <div id="wpAutoBody" class="auto-oneliner">
+                    <span class="ap-icon"></span> <span class="ap-text">—</span>
                 </div>
             </div>
+            <!-- Zeile 5: Temperaturen F1 + F2 + Batt -->
             <div class="inverter-temps" id="inverterTemps">
-                <span class="it-label">F1</span>
-                <span>Gehäuse <span class="it-val" id="it-intern">--</span>°</span>
+                <span class="it-label">F1:</span>
+                <span><span class="it-val" id="it-intern">--</span>°</span>
                 <span>AC-KK <span class="it-val" id="it-ac">--</span>°</span>
                 <span>DC <span class="it-val" id="it-dc">--</span>°</span>
-                <span>DC/Batt <span class="it-val" id="it-dc-batt">--</span>°</span>
+                <span>DC <span class="it-val" id="it-dc-batt">--</span>°</span>
                 <span class="it-sep">│</span>
-                <span class="it-label">F2</span>
-                <span>Gehäuse <span class="it-val" id="it-f2-intern">--</span>°</span>
+                <span class="it-label">F2:</span>
+                <span><span class="it-val" id="it-f2-intern">--</span>°</span>
                 <span>AC-KK <span class="it-val" id="it-f2-ac">--</span>°</span>
                 <span>DC <span class="it-val" id="it-f2-dc">--</span>°</span>
+                <span class="it-sep">│</span>
+                <span class="it-label" style="color:#10b981">Batt:</span>
+                <span><span class="it-val" id="bd-temp" style="color:#10b981">--</span>°C</span>
             </div>
         </div>
     </div>
@@ -643,12 +674,15 @@
         household:  {x:640,y:130, r:39},
         wattpilot:  {x:680,y:225, r:39},
         heatpump:   {x:640,y:320, r:39},
+        heizpatrone: {x:560,y:40, r:32},
+        klima:      {x:660,y:40, r:32},
     };
 
     const C = {  // Farben
         netz:'#ef4444', pv:'#fbbf24', battery:'#10b981',
         consumption:'#60a5fa', producer:'#fcd34d',
         household:'#dbeafe', wattpilot:'#93c5fd', heatpump:'#60a5fa',
+        heizpatrone:'#ea580c', klima:'#00bcd4',
     };
 
     // Flow-Definitionen: Pfad + Funktion die Leistung aus Daten extrahiert
@@ -679,6 +713,10 @@
           get: d => Math.max(0, d.consumption.wattpilot||0) },
         { id:'c_hp', path:[N.consumption, N.heatpump],   color:C.heatpump,
           get: d => Math.max(0, d.consumption.heatpump||0) },
+                { id:'c_heizpatrone', path:[N.household, N.heizpatrone],  color:C.heizpatrone,
+          get: d => Math.max(0, d.consumption.heizpatrone||0) },
+                { id:'c_klima', path:[N.household, N.klima],    color:C.klima,
+          get: d => Math.max(0, d.consumption.klima||0) },
     ];
 
     // ── Konstanten ──
@@ -958,6 +996,8 @@
                           household:s(o.consumption.household,n.consumption.household),
                           wattpilot:s(o.consumption.wattpilot,n.consumption.wattpilot),
                           heatpump:s(o.consumption.heatpump,n.consumption.heatpump),
+                          heizpatrone:s(o.consumption.heizpatrone||0,n.consumption.heizpatrone||0),
+                          klima:s(o.consumption.klima||0,n.consumption.klima||0),
                           total_today_kwh:sf2(o.consumption.total_today_kwh||0,n.consumption.total_today_kwh||0) },
             flows:     { pv_to_consumption:s(o.flows.pv_to_consumption,n.flows.pv_to_consumption),
                          pv_to_grid:s(o.flows.pv_to_grid,n.flows.pv_to_grid),
@@ -996,6 +1036,8 @@
         document.getElementById('value-household').textContent   = fmt(Math.max(0, d.consumption.household));
         document.getElementById('value-wattpilot').textContent   = fmt(Math.max(0, d.consumption.wattpilot));
         document.getElementById('value-heatpump').textContent    = fmt(Math.max(0, d.consumption.heatpump));
+        document.getElementById('value-heizpatrone').textContent = fmt(Math.max(0, d.consumption.heizpatrone));
+        document.getElementById('value-klima').textContent       = fmt(Math.max(0, d.consumption.klima));
 
         // Aktivitätslevel-Füllung (transparent)
         const GREEN  = 'rgba(34, 197, 94, 0.12)';   // grünlich
@@ -1008,6 +1050,8 @@
         document.getElementById('circle-household').setAttribute('fill', d.consumption.household >= 1000 ? RED : NONE);
         document.getElementById('circle-wattpilot').setAttribute('fill', d.consumption.wattpilot >= 4000 ? RED : NONE);
         document.getElementById('circle-heatpump').setAttribute('fill',  d.consumption.heatpump >= 2000 ? RED : NONE);
+        document.getElementById('circle-heizpatrone').setAttribute('fill', d.consumption.heizpatrone >= 500 ? RED : NONE);
+        document.getElementById('circle-klima').setAttribute('fill',     d.consumption.klima >= 500 ? RED : NONE);
         document.getElementById('node-consumption').setAttribute('fill', d.consumption.total >= 5000 ? RED : NONE);
 
         updateGauges(d);
@@ -1109,26 +1153,14 @@
             // Eine Einstellung "Auto + 75% SOC_MAX" existiert NICHT.
             let socRangeText;
             if (socModeRaw === 'auto') {
-                socRangeText = '5–100 (Auto⋅FW)';
+                socRangeText = '5–100% (auto)';
             } else if (socModeRaw === 'manual') {
-                socRangeText = `${sMin}\u2013${sMax}% (Manuell)`;
+                socRangeText = `${sMin}\u2013${sMax}% (man)`;
             } else {
                 socRangeText = `${sMin}\u2013${sMax}% (${socModeRaw || '?'})`;
             }
             document.getElementById('bd-soc-range').textContent = socRangeText;
-            document.getElementById('bd-temp').textContent = d.battery_temp != null ? d.battery_temp : '--';
-            // StorCtl_Mod + ChaSt (SunSpec Model 124)
-            const storEl = document.getElementById('bd-storctl');
-            if (storEl) {
-                const sct = d.storctl_mod;
-                const sctText = d.storctl_mod_text || '';
-                if (sct != null) {
-                    const sctColor = sct === 0 ? '#4ade80' : '#fbbf24';
-                    storEl.innerHTML = `<span style="color:${sctColor}">${sctText}</span>`;
-                } else {
-                    storEl.textContent = '--';
-                }
-            }
+            // StorCtl + ChaSt → nur ChaSt (Status) in Zeile 1
             const chaEl = document.getElementById('bd-chast');
             if (chaEl) {
                 const ch = d.cha_state;
@@ -1150,14 +1182,10 @@
             document.getElementById('it-f2-intern').textContent = d.f2_temp_intern != null ? d.f2_temp_intern : '--';
             document.getElementById('it-f2-ac').textContent = d.f2_temp_ac != null ? d.f2_temp_ac : '--';
             document.getElementById('it-f2-dc').textContent = d.f2_temp_dc != null ? d.f2_temp_dc : '--';
-            // ── BMS-Detail-Zeile (Kapazität, Zyklen, Lifetime, Firmware) ──
-            document.getElementById('bd-cap-est').textContent = d.bms_est_capacity_kwh != null ? d.bms_est_capacity_kwh : '--';
-            document.getElementById('bd-cap-max').textContent = d.bms_max_capacity_kwh != null ? d.bms_max_capacity_kwh : '--';
-            document.getElementById('bd-cycles').textContent = d.bms_full_cycles != null ? Math.round(d.bms_full_cycles) : '--';
-            document.getElementById('bd-lt-charge').textContent = d.bms_lifetime_charged_kwh != null ? (d.bms_lifetime_charged_kwh / 1000).toFixed(1) : '--';
-            document.getElementById('bd-lt-discharge').textContent = d.bms_lifetime_discharged_kwh != null ? (d.bms_lifetime_discharged_kwh / 1000).toFixed(1) : '--';
-            document.getElementById('bd-firmware').textContent = d.bms_firmware != null ? d.bms_firmware : '--';
-            // ── Batt-Automation: Beschreibungsblöcke ────────────────
+            // Batt-Temp (in Temp-Zeile 5)
+            document.getElementById('bd-temp').textContent = d.battery_temp != null ? d.battery_temp : '--';
+
+            // ── Zeile 2: Batt-Automation (einzeilig) ────────────────
             const phasen = d.automation_phasen || {};
             const battBody = document.getElementById('battAutoBody');
 
@@ -1166,78 +1194,47 @@
                 skipped: '–', waiting: '⏳',
             };
             const phaseKeys = [
-                {key: 'morgen',      label: 'Morgens'},
-                {key: 'nachmittag',  label: 'Nachmittag'},
-                {key: 'komfort',     label: 'Komfort'},
+                {key: 'morgen',      label: 'Früh'},
+                {key: 'nachmittag',  label: 'Nachm.'},
+                {key: 'komfort',     label: 'Abend'},
             ];
 
-            let battHtml = '';
+            let battParts = [];
             for (const pd of phaseKeys) {
                 const p = phasen[pd.key];
                 if (!p) continue;
                 const st = p.status || 'pending';
                 const icon = statusIcons[st] || '○';
-                const zeit = p.zeit ? `<span class="ap-zeit">${p.zeit}</span> ` : '';
-                // Beschreibungstext: aktion + grund als Fließtext
+                const zeit = p.zeit ? ` <span class="ap-zeit">(${p.zeit})</span>` : '';
                 let desc = '';
-                if (p.aktion) desc += `<span class="ap-val">${p.aktion}</span>`;
-                if (p.grund) desc += ` — ${p.grund}`;
+                const aktionClean = (p.aktion || '').replace(/^Grenzen\s*→\s*/i, '');
+                if (aktionClean) desc += `<span class="ap-val">${aktionClean}</span>`;
                 if (!desc) desc = '—';
-                battHtml += `<div class="auto-phase ${st}">
-                    <span class="ap-icon">${icon}</span>
-                    <span class="ap-label">${pd.label}</span>
-                    <span class="ap-text">${zeit}${desc}</span>
-                </div>`;
+                battParts.push(`${icon} ${pd.label}: ${desc}${zeit}`);
             }
+            battBody.innerHTML = battParts.length
+                ? `<span class="ap-icon">⚡</span><span class="ap-label" style="color:#10b981">Batt:</span> ${battParts.join(' <span class="ap-sep">│</span> ')}`
+                : '<span class="ap-icon">⏳</span> <span class="ap-text">—</span>';
 
-            battBody.innerHTML = battHtml || '<div class="auto-phase pending"><span class="ap-icon">⏳</span><span class="ap-label">—</span><span class="ap-text">Keine Daten</span></div>';
-
-            // ── HP-Automation: Heizpatrone ───────────────────────
-            const hpStatus = d.hp_status || {};
+            // ── Zeile 3: HP-Schaltzeiten (einzeilig, ohne Live-Statuswert) ───────
             const hpAktionen = d.hp_aktionen || [];
-            const hpBursts = d.hp_bursts_heute || 0;
             const hpBody = document.getElementById('hpAutoBody');
-
-            let hpHtml = '';
-
-            // Zeile 1: Aktueller Zustand
-            const isEin = hpStatus.zustand === 'EIN';
-            const stClass = isEin ? 'hp-ein' : 'hp-aus';
-            const stIcon = isEin ? '●' : '○';
-            const pw = (isEin && hpStatus.power_w != null) ? ` ${hpStatus.power_w} W` : '';
-            const energyKwh = hpStatus.energy_wh != null ? ` · Σ ${(hpStatus.energy_wh / 1000).toFixed(1)} kWh` : '';
-            const burstInfo = hpBursts > 0 ? ` · ${hpBursts}× EIN heute` : '';
-            const liveTag = hpStatus.live ? '' : ' <span class="ap-zeit">(kein Live)</span>';
-
-            hpHtml += `<div class="auto-phase ${stClass}">
-                <span class="ap-icon">${stIcon}</span>
-                <span class="ap-label">Status</span>
-                <span class="ap-text"><span class="ap-val">${hpStatus.zustand || '?'}${pw}</span>${energyKwh}${burstInfo}${liveTag}</span>
-            </div>`;
-
-            // Zeile 2: Letzter Schaltvorgang + Grund
             if (hpAktionen.length > 0) {
-                const last = hpAktionen[0];
-                const cmdLabel = last.kommando === 'hp_ein' ? 'EIN' : 'AUS';
-                const cmdClass = last.kommando === 'hp_ein' ? 'hp-ein' : 'hp-aus';
-                const cmdIcon = last.kommando === 'hp_ein' ? '▲' : '▼';
-                const grundText = last.grund ? ` — ${last.grund}` : '';
-                hpHtml += `<div class="auto-phase ${cmdClass}">
-                    <span class="ap-icon">${cmdIcon}</span>
-                    <span class="ap-label">Letzte</span>
-                    <span class="ap-text"><span class="ap-zeit">${last.ts || '?'}</span> <span class="ap-val">${cmdLabel}</span>${grundText}</span>
-                </div>`;
+                const timeline = hpAktionen.slice().reverse().map(a => {
+                    const zeit = a.ts ? a.ts.substring(11, 16) : '?';
+                    const aIsEin = a.kommando === 'hp_ein';
+                    const isExtern = String(a.quelle || '').toLowerCase() === 'extern';
+                    const color = isExtern ? '#ef4444' : '#fb923c';
+                    const symbol = aIsEin ? '▲' : '▼';
+                    const src = isExtern ? 'extern' : 'automation';
+                    return `<span style="color:${color}" title="${src}: ${a.grund || ''}">${zeit}${symbol}</span>`;
+                });
+                hpBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#fb923c">HP:</span> ${timeline.join(' ')}`;
             } else {
-                hpHtml += `<div class="auto-phase hp-aus">
-                    <span class="ap-icon">–</span>
-                    <span class="ap-label">Letzte</span>
-                    <span class="ap-text">Keine Schaltvorgänge (24 h)</span>
-                </div>`;
+                hpBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#fb923c">HP:</span> <span class="ap-text">keine Schaltungen heute</span>`;
             }
 
-            hpBody.innerHTML = hpHtml;
-
-            // ── WP: Wärmepumpe Dimplex ──────────────────────────
+            // ── Zeile 4: WP Wärmepumpe (einzeilig) ─────────────────
             const wp = d.wp_status || {};
             const wpBody = document.getElementById('wpAutoBody');
             if (wpBody && !wp.error) {
@@ -1248,29 +1245,11 @@
                 const wws = wp.ww_soll != null ? wp.ww_soll : '--';
                 const wqe = wp.quelle_ein != null ? wp.quelle_ein : '--';
                 const wqa = wp.quelle_aus != null ? wp.quelle_aus : '--';
-                const wts = wp.ts || '';
-                wpBody.innerHTML =
-                    `<div class="auto-phase wp">
-                        <span class="ap-icon"></span>
-                        <span class="ap-label">Wärmepumpe</span>
-                        <span class="ap-text">VL <span class="ap-val">${wv}°</span> · RL <span class="ap-val">${wr}°</span> · Soll <span class="ap-val">${wrs}°</span> · WW <span class="ap-val">${wwi}°</span>/<span class="ap-val">${wws}°</span> · Quelle <span class="ap-val">${wqe}°</span>/<span class="ap-val">${wqa}°</span> <span class="ap-zeit">${wts}</span></span>
-                    </div>`;
+                wpBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#14b8a6">WP:</span> VL <span class="ap-wp-val">${wv}°</span> <span class="ap-sep">·</span> RL <span class="ap-wp-val">${wr}°</span>/<span class="ap-wp-val">${wrs}°</span> <span class="ap-sep">·</span> WW <span class="ap-wp-val">${wwi}°</span>/<span class="ap-wp-val">${wws}°</span> <span class="ap-sep">·</span> Quelle <span class="ap-wp-val">${wqe}°</span>/<span class="ap-wp-val">${wqa}°</span>`;
             }
 
-            // HP-Timeline
-            const hpTL = document.getElementById('hpTimeline');
-            if (hpTL && hpAktionen.length > 1) {
-                const entries = hpAktionen.slice().reverse().map(a => {
-                    const zeit = a.ts ? a.ts.substring(11, 16) : '?';
-                    const aIsEin = a.kommando === 'hp_ein';
-                    const color = aIsEin ? '#fb923c' : '#6b7280';
-                    const symbol = aIsEin ? '▲' : '▼';
-                    return `<span style="color:${color}" title="${a.grund || ''}">${zeit}${symbol}</span>`;
-                });
-                hpTL.innerHTML = entries.join(' › ');
-            } else if (hpTL) {
-                hpTL.innerHTML = '';
-            }
+            // ── Zeile 5: Temperaturen (Batt-Temp bereits im HTML integriert) ──
+            document.getElementById('bd-temp').textContent = d.battery_temp != null ? d.battery_temp : '--';
 
         } catch(e) { console.warn('BatteryDetail:', e); }
     }

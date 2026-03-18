@@ -1,7 +1,7 @@
 {
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
-  "_updated": "2026-03-17",
+  "_updated": "2026-03-18",
   "regelkreise": {
     "soc_extern": {
       "_doc": "Toleranz für extern geänderte SOC-Werte (z.B. manuell via Fronius App). Wenn SOC_MIN oder SOC_MAX außerhalb der Automation geändert werden, respektiert die Engine die Werte für die konfigurierte Dauer.",
@@ -1099,7 +1099,7 @@
       "beschreibung": "Nachts WW-Temperatur um konfigurierbare Absenkung senken (Standard 57→52°C)",
       "parameter": {
         "standard_temp_c": {
-          "wert": 58,
+          "wert": 56,
           "bereich": [
             55,
             62
@@ -1118,7 +1118,7 @@
           "beschreibung": "Absenkungsbetrag in Kelvin. Nacht-Soll = standard_temp_c - absenkung_k"
         },
         "start_h": {
-          "wert": 20,
+          "wert": 22,
           "bereich": [
             20,
             23
