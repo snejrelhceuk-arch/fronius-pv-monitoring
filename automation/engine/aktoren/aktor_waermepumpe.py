@@ -85,7 +85,9 @@ class AktorWaermepumpe(AktorBase):
             if kommando == 'set_ww_soll':
                 ist = wp.get('ww_soll')
                 return {'ok': ist == int(wert), 'soll': wert, 'ist': ist}
-            # set_heiz_soll: Reg 5037 nicht im Standard-Read, Verifikation entfällt
+            if kommando == 'set_heiz_soll':
+                ist = wp.get('heiz_soll')
+                return {'ok': ist == int(wert), 'soll': wert, 'ist': ist}
             return {'ok': True, 'grund': f'Keine Rücklese-Verifikation für {kommando}'}
         except Exception as e:
             LOG.warning(f"WP Verifikation fehlgeschlagen: {e}")

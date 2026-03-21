@@ -71,6 +71,7 @@ def init_persist_log(db_path: str = PERSIST_DB_PATH) -> sqlite3.Connection:
 
 # Deduplizierungs-Sperre: Identische Befehle innerhalb dieser Zeit überspringen
 DEDUP_INTERVALL_S = 45  # Sekunden
+DEDUP_FEHLER_INTERVALL_S = 300  # 5 Minuten Cooldown nach FEHLER
 
 
 class Actuator:
@@ -91,6 +92,8 @@ class Actuator:
 
         # Deduplizierung: {(aktor, kommando, wert_str): timestamp}
         self._letzte_aktion: dict[tuple, float] = {}
+        # FEHLER-Cooldown: {(aktor, kommando, wert_str): timestamp}
+        self._letzte_fehler: dict[tuple, float] = {}
 
     def _register_default_aktoren(self):
         """Standard-Aktoren registrieren."""
@@ -146,12 +149,21 @@ class Actuator:
             return {'ok': True, 'kommando': kommando,
                     'detail': 'Dedupliziert (identischer Befehl kürzlich gesendet)'}
 
+        # ── FEHLER-Cooldown: nach Fehler nicht sofort erneut versuchen ──
+        letzte_fehler_ts = self._letzte_fehler.get(dedup_key, 0)
+        if (now - letzte_fehler_ts) < DEDUP_FEHLER_INTERVALL_S:
+            LOG.debug(f"FEHLER-Cooldown: {aktor_name}.{kommando}={wert_str} übersprungen "
+                      f"(Fehler vor {now - letzte_fehler_ts:.0f}s, Sperre {DEDUP_FEHLER_INTERVALL_S}s)")
+            return {'ok': False, 'kommando': kommando,
+                    'detail': f'FEHLER-Cooldown ({DEDUP_FEHLER_INTERVALL_S}s): letzter Versuch fehlgeschlagen'}
         # Ausführen
         ergebnis = aktor.ausfuehren(aktion)
 
         # Bei Erfolg: Timestamp für Deduplizierung merken
         if ergebnis.get('ok'):
             self._letzte_aktion[dedup_key] = now
+        else:
+            self._letzte_fehler[dedup_key] = now
 
         # Read-Back Verifikation (nur bei echtem Betrieb und Erfolg)
         if ergebnis.get('ok') and not self.dry_run:
