@@ -430,6 +430,14 @@ class DataCollector:
                     obs.klima_aktiv = state_1
                     obs.klima_power_w = power_w
                     # energy_wh → today_kwh (wird später aus Aggregation gefüllt)
+                    # Temperatur falls vorhanden (Fritz!DECT liefert <temperature> in XML)
+                    temp_c = None
+                    if info and 'temperature' in info:
+                        try:
+                            temp_c = float(info['temperature'])
+                        except Exception:
+                            pass
+                    obs.klima_temp_c = temp_c
                 
                 # In DB schreiben für Web-API (fritzdect_readings)
                 self._save_fritzdect_reading(
@@ -506,6 +514,8 @@ class DataCollector:
                 obs.wp_quelle_aus_c = wp['quelle_aus']
             if wp.get('ww_soll') is not None:
                 obs.wp_ww_soll_c = wp['ww_soll']
+            if wp.get('heiz_soll') is not None:
+                obs.wp_heiz_soll_c = wp['heiz_soll']
 
             self._wp_modbus_cache_ts = now
 

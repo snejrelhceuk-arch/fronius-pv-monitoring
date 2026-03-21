@@ -32,6 +32,7 @@ _REGS_TENTH = {
 }
 _REGS_INT = {
     'ww_soll': 5047,
+    'heiz_soll': 5037,
 }
 
 

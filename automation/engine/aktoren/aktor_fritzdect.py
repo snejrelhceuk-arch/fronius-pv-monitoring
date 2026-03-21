@@ -5,8 +5,10 @@ Steuert die Heizpatrone (2 kW) über eine Fritz!DECT-Steckdose via
 Fritz!Box AHA-HTTP-API (Session-ID-Auth, setswitchon/off, getswitchstate).
 
 Unterstützte Kommandos:
-  hp_ein   — Heizpatrone einschalten
-  hp_aus   — Heizpatrone ausschalten
+    hp_ein     — Heizpatrone einschalten
+    hp_aus     — Heizpatrone ausschalten
+    klima_ein  — Klimaanlage einschalten
+    klima_aus  — Klimaanlage ausschalten
 
 Credentials: .secrets → FRITZ_USER + FRITZ_PASSWORD (wie FRONIUS_PASS)
 Config:      config/fritz_config.json → fritz_ip, ain
@@ -181,6 +183,18 @@ def _aha_device_info(host: str, ain: str, sid: str) -> Optional[dict]:
                 except ValueError:
                     pass
 
+
+        # Temperatur extrahieren (falls vorhanden)
+        temp_el = device.find('temperature')
+        if temp_el is not None:
+            celsius_el = temp_el.find('celsius')
+            if celsius_el is not None and celsius_el.text:
+                try:
+                    # Fritz!Box liefert Temperatur in 0.1°C
+                    result['temperature'] = float(celsius_el.text) / 10.0
+                except Exception:
+                    pass
+
         return result
 
     LOG.warning(f"AIN '{ain}' nicht in getdevicelistinfos gefunden")
@@ -190,9 +204,11 @@ def _aha_device_info(host: str, ain: str, sid: str) -> Optional[dict]:
 class AktorFritzDECT(AktorBase):
     """Heizpatrone via Fritz!DECT-Steckdose (AHA-HTTP-API).
 
-    Kommandos:
-      hp_ein  — setswitchon  (Heizpatrone EIN)
-      hp_aus  — setswitchoff (Heizpatrone AUS)
+        Kommandos:
+            hp_ein     — setswitchon  (Heizpatrone EIN)
+            hp_aus     — setswitchoff (Heizpatrone AUS)
+            klima_ein  — setswitchon  (Klimaanlage EIN)
+            klima_aus  — setswitchoff (Klimaanlage AUS)
     """
 
     name = 'fritzdect'
@@ -200,8 +216,10 @@ class AktorFritzDECT(AktorBase):
     RETRY_DELAY = 2.0
 
     _KOMMANDOS = {
-        'hp_ein': 'setswitchon',
-        'hp_aus': 'setswitchoff',
+        'hp_ein': ('setswitchon', 'heizpatrone'),
+        'hp_aus': ('setswitchoff', 'heizpatrone'),
+        'klima_ein': ('setswitchon', 'klimaanlage'),
+        'klima_aus': ('setswitchoff', 'klimaanlage'),
     }
 
     def __init__(self, dry_run: bool = False):
@@ -212,6 +230,21 @@ class AktorFritzDECT(AktorBase):
         """Config neu laden (z.B. nach Änderung in pv-config)."""
         self._cfg = _load_fritz_config()
 
+    def _get_ain(self, device_id: str = 'heizpatrone') -> str:
+        """AIN eines Geräts aus geraete[]-Array holen.
+
+        Fallback auf Legacy-Top-Level 'ain' nur für Heizpatrone.
+        """
+        if device_id == 'heizpatrone':
+            ain_legacy = self._cfg.get('ain', '')
+            if ain_legacy:
+                return ain_legacy
+
+        for g in self._cfg.get('geraete', []):
+            if str(g.get('id', '')).lower() == str(device_id).lower():
+                return g.get('ain', '')
+        return ''
+
     def _get_sid(self) -> Optional[str]:
         """Session-ID holen (cached)."""
         return _get_session_id(
@@ -220,14 +253,14 @@ class AktorFritzDECT(AktorBase):
             self._cfg.get('fritz_password', ''),
         )
 
-    def _switch(self, aha_cmd: str) -> Optional[str]:
+    def _switch(self, aha_cmd: str, device_id: str = 'heizpatrone') -> Optional[str]:
         """AHA-Schaltbefehl mit Retry."""
         global _sid_cache
         host = self._cfg.get('fritz_ip', '192.168.178.1')
-        ain = self._cfg.get('ain', '')
+        ain = self._get_ain(device_id)
 
         if not ain:
-            LOG.error("Keine AIN konfiguriert (config/fritz_config.json)")
+            LOG.error(f"Keine AIN konfiguriert für Gerät '{device_id}' (config/fritz_config.json)")
             return None
 
         for attempt in range(self.MAX_RETRIES + 1):
@@ -258,7 +291,7 @@ class AktorFritzDECT(AktorBase):
         """Führe eine Fritz!DECT-Aktion aus.
 
         Args:
-            aktion: dict mit 'kommando' ('hp_ein'|'hp_aus'), optional 'grund'
+            aktion: dict mit 'kommando' (hp_ein|hp_aus|klima_ein|klima_aus), optional 'grund'
 
         Returns:
             dict mit 'ok': bool, 'kommando': str, 'detail': str
@@ -266,19 +299,20 @@ class AktorFritzDECT(AktorBase):
         kommando = aktion.get('kommando', '')
         grund = aktion.get('grund', '')
 
-        aha_cmd = self._KOMMANDOS.get(kommando)
-        if not aha_cmd:
+        mapping = self._KOMMANDOS.get(kommando)
+        if not mapping:
             LOG.error(f"Unbekanntes Kommando: {kommando}")
             return {'ok': False, 'kommando': kommando,
                     'detail': f'Unbekanntes Kommando: {kommando}'}
+        aha_cmd, device_id = mapping
 
-        LOG.info(f"Fritz!DECT: {kommando} (AHA: {aha_cmd}) — {grund}")
+        LOG.info(f"Fritz!DECT: {kommando} ({device_id}, AHA: {aha_cmd}) — {grund}")
 
         if self.dry_run:
             LOG.info(f"  [DRY-RUN] Würde ausführen: {aha_cmd}")
             return {'ok': True, 'kommando': kommando, 'detail': '[DRY-RUN]'}
 
-        result = self._switch(aha_cmd)
+        result = self._switch(aha_cmd, device_id=device_id)
 
         if result is None:
             LOG.error(f"Fritz!DECT {kommando} fehlgeschlagen")
@@ -286,7 +320,7 @@ class AktorFritzDECT(AktorBase):
                     'detail': f'FEHLER: {grund}'}
 
         # Prüfe Ergebnis: setswitchon → '1', setswitchoff → '0'
-        erwartet = '1' if kommando == 'hp_ein' else '0'
+        erwartet = '1' if kommando.endswith('_ein') else '0'
         ok = result == erwartet
 
         if ok:
@@ -305,9 +339,13 @@ class AktorFritzDECT(AktorBase):
     def verifiziere(self, aktion: dict) -> dict:
         """Read-Back: Aktuellen Schaltzustand abfragen."""
         kommando = aktion.get('kommando', '')
-        erwartet = '1' if kommando == 'hp_ein' else '0'
+        mapping = self._KOMMANDOS.get(kommando)
+        if not mapping:
+            return {'ok': False, 'grund': f'Unbekanntes Kommando: {kommando}'}
+        _, device_id = mapping
+        erwartet = '1' if kommando.endswith('_ein') else '0'
 
-        result = self._switch('getswitchstate')
+        result = self._switch('getswitchstate', device_id=device_id)
         if result is None:
             return {'ok': False, 'grund': 'Fritz!Box nicht erreichbar'}
 
@@ -329,7 +367,7 @@ class AktorFritzDECT(AktorBase):
             dict mit state, power_mw, energy_wh, name, erreichbar
         """
         host = self._cfg.get('fritz_ip', '192.168.178.1')
-        ain = self._cfg.get('ain', '')
+        ain = self._get_ain()
 
         if not ain:
             LOG.error("Keine AIN konfiguriert (config/fritz_config.json)")

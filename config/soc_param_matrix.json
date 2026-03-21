@@ -1,7 +1,7 @@
 {
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
-  "_updated": "2026-03-18",
+  "_updated": "2026-03-21",
   "regelkreise": {
     "soc_extern": {
       "_doc": "Toleranz für extern geänderte SOC-Werte (z.B. manuell via Fronius App). Wenn SOC_MIN oder SOC_MAX außerhalb der Automation geändert werden, respektiert die Engine die Werte für die konfigurierte Dauer.",
@@ -1092,6 +1092,34 @@
       "score_gewicht": 40,
       "engine_zyklus": "fast"
     },
+    "klimaanlage": {
+      "_doc": "Klimaanlage via Fritz!DECT als Thermoschutz im Heizhaus. Vor Sonnenaufgang nur mit Forecast 'gut' und Temp >= initial_temp_c. Nach Sonnenaufgang Start bei Temp >= initial_temp_c_maessig. Danach Durchlauf bis Sunset/SOC-Stop (sunset_soc_stop_pct).",
+      "aktiv": true,
+      "prioritaet": 2,
+      "beschreibung": "Klima-Thermoschutz: Vor-Sunrise 15°C+Forecast, nach Sunrise ab 20°C, Sunset-SOC-Stopp parametrierbar",
+      "parameter": {
+        "initial_temp_c": {
+          "wert": 15,
+          "bereich": [10, 20],
+          "einheit": "°C",
+          "beschreibung": "Vor Sonnenaufgang: Mindesttemperatur im Heizhaus. Klima darf nur mit Forecast 'gut' UND Temp >= diesem Wert einschalten. Fallback wenn kein Sensorwert verfügbar. Gilt als Startkriterium."
+        },
+        "initial_temp_c_maessig": {
+          "wert": 20,
+          "bereich": [15, 25],
+          "einheit": "°C",
+          "beschreibung": "Nach Sonnenaufgang: Einschalt-Temperatur für den sicheren Thermoschutzbetrieb (Standard 20°C). Gilt als Startkriterium; danach läuft die Klima bis Sunset/SOC-Stop weiter."
+        },
+        "sunset_soc_stop_pct": {
+          "wert": 90,
+          "bereich": [30, 100],
+          "einheit": "%",
+          "beschreibung": "Nach Sonnenuntergang: Klima AUS wenn Batterie-SOC unter diesen Wert fällt."
+        }
+      },
+      "score_gewicht": 52,
+      "engine_zyklus": "fast"
+    },
     "ww_absenkung": {
       "_doc": "Warmwasser-Nachtabsenkung: WW-Soll via Modbus RTU (Reg 5047) nachts senken, morgens wiederherstellen. Spart Standby-Verluste im WW-Speicher.",
       "aktiv": true,
@@ -1099,7 +1127,7 @@
       "beschreibung": "Nachts WW-Temperatur um konfigurierbare Absenkung senken (Standard 57→52°C)",
       "parameter": {
         "standard_temp_c": {
-          "wert": 56,
+          "wert": 57,
           "bereich": [
             55,
             62
@@ -1109,7 +1137,7 @@
           "beschreibung": "WW-Solltemperatur im Normalbetrieb (Tageswert)"
         },
         "absenkung_k": {
-          "wert": 5,
+          "wert": 7,
           "bereich": [
             1,
             10
@@ -1137,6 +1165,53 @@
         }
       },
       "score_gewicht": 45,
+      "engine_zyklus": "fast"
+    },
+    "heiz_absenkung": {
+      "_doc": "Heizkreis-Absenkung: Heiz-Festwertsoll (Reg 5037) abends absenken und nachts halten, morgens auf Standard zurück. Ruecklaufbezug der WP ist fuer die Automation ohne Bedeutung.",
+      "aktiv": true,
+      "prioritaet": 2,
+      "beschreibung": "Ab 18:00 Heiz-Soll um 2K absenken, um 03:00 auf Standardwert zurückstellen",
+      "parameter": {
+        "standard_temp_c": {
+          "wert": 37,
+          "bereich": [
+            28,
+            47
+          ],
+          "einheit": "°C",
+          "aktor_kommando": "set_heiz_soll",
+          "beschreibung": "Heiz-Solltemperatur im Normalbetrieb (Tagwert)"
+        },
+        "absenkung_k": {
+          "wert": 7,
+          "bereich": [
+            0,
+            10
+          ],
+          "einheit": "K",
+          "beschreibung": "Absenkungsbetrag in Kelvin. Nacht-Soll = standard_temp_c - absenkung_k (Modbus-Minimum 18°C wird eingehalten)"
+        },
+        "start_h": {
+          "wert": 18,
+          "bereich": [
+            15,
+            23
+          ],
+          "einheit": "h",
+          "beschreibung": "Beginn der Absenkung (Dezimalstunde, z.B. 18 = 18:00)"
+        },
+        "ende_h": {
+          "wert": 3,
+          "bereich": [
+            1,
+            9
+          ],
+          "einheit": "h",
+          "beschreibung": "Ende der Absenkung (Dezimalstunde, z.B. 3 = 03:00)"
+        }
+      },
+      "score_gewicht": 44,
       "engine_zyklus": "fast"
     }
   },
@@ -1174,8 +1249,10 @@
       "ev_eco_mode": "WattPilot Eco-Modus (lmo==4) — wattpilot_battschutz",
       "house_load_w": "Hausverbrauch [W] — Kapazitätsverteilung",
       "heizpatrone_aktiv": "Heizstab läuft (Fritz!DECT-Status) — heizpatrone",
+      "klima_aktiv": "Klimaanlage läuft (Fritz!DECT-Status) — klimaanlage",
       "ww_temp_c": "WW-Ist-Temperatur [°C] (WP Modbus Reg 3) — ww_absenkung",
-      "wp_ww_soll_c": "WW-Soll aktuell [°C] (WP Modbus Reg 5047) — ww_absenkung"
+      "wp_ww_soll_c": "WW-Soll aktuell [°C] (WP Modbus Reg 5047) — ww_absenkung",
+      "wp_heiz_soll_c": "Heiz-Festwertsoll [°C] (WP Modbus Reg 5037) — heiz_absenkung"
     },
     "netz": {
       "grid_power_w": "Netzbezug/Einspeisung [W] — sls_schutz, heizpatrone",
