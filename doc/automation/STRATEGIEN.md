@@ -147,7 +147,9 @@ MORGENS (Sonnenaufgang + 2h):
 
 TAGSÜBER (PV-Überschuss > 3 kW):
     → Heizpatrone regelt auf Zieltemperatur (60–70°C)
-    → Klimaanlage bei Überschuss >3 kW UND Außentemp >25°C
+    → Klimaanlage im Heizhaus temperaturgeführt:
+      Vor Sunrise nur bei Forecast gut + Temp >= 15°C,
+      nach Sunrise sicher ab Temp >= 20°C
     → Bei massivem Überschuss: WP auf Smart Grid "dunkelgrün" setzen
       (Coil 3=1, Coil 4=1 → WP Maximalleistung, E9 nicht relevant)
     → Heizpatrone separat steuern (Fritz!DECT API oder MEGA-BAS TRIAC→24V-Relais)

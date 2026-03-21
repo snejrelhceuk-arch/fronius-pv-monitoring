@@ -229,7 +229,7 @@ zeitgesteuert ueber den Automation-Engine Fast-Zyklus (1 min).
 - **Ab ende_h**: Engine erkennt Ist-Soll ≠ Tag-Soll, Score=45 →  
   Aktor `waermepumpe` setzt Register 5047 auf `standard_temp_c`  
   (Default: **57 degC**)
-- Toleranz ±1 degC verhindert Pendeln bei Modbus-Rundung
+- Exakter Soll-Ist-Vergleich (ganze °C), keine ±1°C-Toleranz
 
 ### 11.3 Dateien
 
@@ -240,7 +240,43 @@ zeitgesteuert ueber den Automation-Engine Fast-Zyklus (1 min).
 | wp_modbus.py | write_register() mit Whitelist (5047, 5037) |
 | config/soc_param_matrix.json | Regelkreis ww_absenkung (Parameter) |
 
-## 12. Quellen
+## 12. Heizkreis-Absenkung (Automation)
+
+Seit 2026-03-19 steuert die Regel `heiz_absenkung` das Register **5037**
+(Heiz-Festwertsoll) zeitgesteuert im Fast-Zyklus (1 min).
+
+### 12.1 Parameter (soc_param_matrix.json)
+
+| Parameter | Default | Bereich | Beschreibung |
+|---|---:|---|---|
+| standard_temp_c | 37 | 27–47 degC | Heiz-Soll Tageswert |
+| absenkung_k | 2 | 0–10 K | Absenkung gegenueber Standard |
+| start_h | 18 | 15–23 Uhr | Beginn Absenkfenster |
+| ende_h | 3 | 1–9 Uhr | Ende Absenkfenster |
+
+Hinweis:
+- Der Zielwert wird im Code auf den Modbus-Bereich 18..60 degC begrenzt.
+- Ruecklaufbezug der WP ist fuer die Automation ohne Bedeutung;
+  gesteuert wird direkt Register 5037.
+
+### 12.2 Ablauf
+
+- **Ab start_h**: Engine setzt bei Abweichung den Heiz-Sollwert auf  
+  `standard_temp_c - absenkung_k` (Default: 37 - 2 = **35 degC**)
+- **Ab ende_h**: Engine stellt den Tageswert `standard_temp_c` wieder her  
+  (Default: **37 degC**)
+
+### 12.3 Dateien
+
+| Datei | Rolle |
+|---|---|
+| automation/engine/regeln/waermepumpe.py | RegelHeizAbsenkung (Bewertung + Aktionen) |
+| automation/engine/collectors/data_collector.py | Übernahme WP `heiz_soll` in ObsState |
+| automation/engine/obs_state.py | Feld `wp_heiz_soll_c` |
+| wp_modbus.py | Lesen Register 5037 (`heiz_soll`) |
+| config/soc_param_matrix.json | Regelkreis heiz_absenkung (Parameter) |
+
+## 13. Quellen
 
 - Herstellerdoku: NWPM Modbus TCP (Dimplex Atlassian)
 - Projektbezug:

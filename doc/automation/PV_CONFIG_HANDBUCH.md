@@ -23,6 +23,7 @@ Version 1.6 — Stand: 14. März 2026
    - [4.8 ~~laderate_dynamisch~~ — ENTFERNT](#48-laderate_dynamisch--entfernt)
    - [4.9 wattpilot_battschutz — EV-Ladeschutz](#49-wattpilot_battschutz--ev-ladeschutz-priorität-1)
    - [4.10 heizpatrone — HP-Burst-Steuerung](#410-heizpatrone--hp-burst-steuerung-priorität-2)
+  - [4.11 klimaanlage — Temperatur- und Prognosesteuerung](#411-klimaanlage--temperatur--und-prognosesteuerung-priorität-2)
 5. [Menü 3: Batterie-Automation](#5-menü-3-batterie-automation)
 6. [Menü 4: System-Status](#6-menü-4-system-status)
 7. [Menü 5: Solar-Prognose](#7-menü-5-solar-prognose)
@@ -521,6 +522,35 @@ SOC_MAX auf 100% geht (Nachmittag) wird die Batterie-Entladung strenger bewertet
 ```
 
 > **Erstinbetriebnahme:** Der Regelkreis wird mit `aktiv: false` ausgeliefert. Vor dem Einschalten: `.secrets` mit `FRITZ_USER`/`FRITZ_PASSWORD` füllen, AIN prüfen (Menü 6 → Verbindungstest), dann im Menü 1 (Regelkreise) aktivieren. Die Schwellwerte sollten an echten Sonnentagen kalibriert werden.
+
+---
+
+### 4.11 klimaanlage — Temperatur- und Prognosesteuerung (Priorität 2)
+
+**Zweck:** Klimagerät über Fritz!DECT als Thermoschutz für das Heizhaus steuern.
+Vor Sonnenaufgang gilt ein konservativer Start, nach Sonnenaufgang ein sicherer
+temperaturgeführter Betrieb.
+
+**Score:** 52
+**Zyklus:** fast
+**Aktor:** `fritzdect` (`klima_ein` / `klima_aus`)
+
+**Bedingungslogik (vereinfacht):**
+- Startfreigabe erst ab `sunrise - 1h`.
+- **Vor Sonnenaufgang:** EIN nur bei `forecast_quality = gut` UND `Temp >= initial_temp_c`.
+- **Nach Sonnenaufgang:** EIN sobald `Temp >= initial_temp_c_maessig` (Standard 20°C), unabhängig von Forecast.
+- **Latch-Betrieb:** Nach erfolgreichem Start bleibt die Klima tagsüber EIN (kein temperaturbedingtes AUS).
+- Abschalten: nach Sonnenuntergang UND `SOC < sunset_soc_stop_pct`.
+
+**Temperaturquelle:**
+- Primärwert ist die Temperatur der Klima-Steckdose (`klima_temp_c`).
+- Wenn kein Sensorwert vorliegt, wird mit `initial_temp_c` als Fallback gerechnet.
+
+| Parameter | Standard | Bereich | Wirkung |
+|-----------|----------|---------|---------|
+| initial_temp_c | 15 °C | 10–20 °C | Vor-Sunrise-Schwelle (nur mit Forecast gut) und Fallback, wenn kein Sensorwert vorhanden ist. |
+| initial_temp_c_maessig | 20 °C | 15–25 °C | Nach-Sunrise-Einschaltschwelle für sicheren Thermoschutzbetrieb. |
+| sunset_soc_stop_pct | 90% | 30–100% | Abschaltschwelle nach Sonnenuntergang: Klima AUS bei `SOC < Wert`. |
 
 ---
 
