@@ -446,7 +446,7 @@ Prioritätsreihenfolge (konfigurierbar in automation_global.json):
   3. E-Auto                (Score aus Urgency + Überschuss)
   4. Wärmepumpe SG-Ready   (Score aus WW-Temp + Überschuss)
   5. Heizpatrone            (Score aus WW-Temp + Überschuss)
-  6. Klimaanlage            (Score aus Außentemp + Überschuss)
+  6. Klimaanlage            (Score aus Heizhaus-Temperatur + Tageszeit/Fallback)
 
 Jeder Aktor bekommt nur soviel Budget wie bei seinem Rang noch übrig ist.
 ```
