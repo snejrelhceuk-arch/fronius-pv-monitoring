@@ -1,7 +1,7 @@
 """
 Blueprint: System-Status-APIs.
 
-Enthält: /api/battery_status, /api/system_info,
+Enthält: /api/battery_status, /api/flow_status, /api/system_info,
          /api/wattpilot/status, /api/wattpilot/history,
          /api/failover_status, /api/backup_status
 """
@@ -26,15 +26,37 @@ _BACKUP_CACHE_TTL = 600  # Sekunden (10 Minuten)
 # Fritz!DECT Live-Status Cache (eigener, längerer TTL als battery_cache)
 _fritzdect_cache = {'ts': 0, 'data': None}
 _FRITZDECT_CACHE_TTL = 120  # 2 Minuten (Fritz!Box ist langsam, 1 Bulk-Request ~2s)
+_flow_cache = {'ts': 0, 'data': None}
+
+
+def _build_battery_status_result(now, api):
+    """Batterienahe Live-Daten für kompakte UI-Widgets."""
+    result = _fetch_fronius_base(api)
+    _fetch_battery_energy(now, result)
+    _fetch_bms_counters(now, result)
+    _fetch_soh(result)
+    return result
+
+
+def _build_flow_status_result(now, api):
+    """Flow-/Dashboard-Daten: Batterie plus Automation, Verbraucher und Temperaturen."""
+    result = _build_battery_status_result(now, api)
+    _fetch_automation_state(now, result)
+    _fetch_last_soc_switch(result)
+    _fetch_temperatures(result)
+    _fetch_hp_status(now, result)
+    _fetch_wp_status(result)
+    return result
 
 
 @bp.route('/api/battery_status')
 def api_battery_status():
     """
-    Aktuelle Batterie-Konfiguration vom Fronius GEN24.
-    Liefert SOC_MIN, SOC_MAX, Modus, Netzladung, Notstrom-Reserve.
-    Plus: Scheduler-Status (Phasen-Flags), StorCtl_Mod/ChaSt (SunSpec).
-    Cache: 60 Sekunden (Werte ändern sich selten).
+    Batterienahe Live-Daten vom Fronius GEN24.
+
+    Liefert nur Batteriefelder und batteriebezogene Kennzahlen,
+    z.B. SOC_MIN/SOC_MAX, aktueller SOC, Lade-/Entladeenergie, SOH,
+    SunSpec-Status und BMS-Kennzahlen.
     """
     now = time.time()
 
@@ -47,15 +69,7 @@ def api_battery_status():
         if not api:
             return jsonify({"error": "FroniusAPI nicht verfügbar"}), 503
 
-        result = _fetch_fronius_base(api)
-        _fetch_automation_state(now, result)
-        _fetch_last_soc_switch(result)
-        _fetch_battery_energy(now, result)
-        _fetch_bms_counters(now, result)
-        _fetch_temperatures(result)
-        _fetch_hp_status(now, result)
-        _fetch_soh(result)
-        _fetch_wp_status(result)
+        result = _build_battery_status_result(now, api)
 
         battery_cache['data'] = result
         battery_cache['ts'] = now
@@ -67,7 +81,31 @@ def api_battery_status():
         return jsonify({"error": str(e)}), 500
 
 
-# ── Hilfsfunktionen für api_battery_status ────────────────────────────────────────
+@bp.route('/api/flow_status')
+def api_flow_status():
+    """Flow-/Dashboard-Payload: Batterie, Automation, Temperaturen und Verbraucher."""
+    now = time.time()
+
+    if _flow_cache['data'] and (now - _flow_cache['ts']) < 60:
+        return jsonify(_flow_cache['data'])
+
+    try:
+        api = get_fronius_api()
+        if not api:
+            return jsonify({"error": "FroniusAPI nicht verfügbar"}), 503
+
+        result = _build_flow_status_result(now, api)
+        _flow_cache['data'] = result
+        _flow_cache['ts'] = now
+        return jsonify(result)
+    except Exception as e:
+        logging.error(f"Flow Status Fehler: {e}")
+        if _flow_cache['data']:
+            return jsonify(_flow_cache['data'])
+        return jsonify({"error": str(e)}), 500
+
+
+# ── Hilfsfunktionen für api_battery_status / api_flow_status ─────────────────────
 
 # SunSpec Model 124 StorCtl_Mod + ChaSt Bezeichner
 STORCTL_LABELS = {
@@ -708,14 +746,26 @@ def _fetch_hp_status(now, result):
         _schaltlog_path = str(Path(__file__).resolve().parent.parent / 'logs' / 'schaltlog.txt')
         _today_str = time.strftime('%Y-%m-%d', time.localtime(now))
         hp_aktionen = []
+        klima_aktionen = []
+        hp_seen = set()
+        klima_seen = set()
         _hp_pattern = _re_hp.compile(
             r'^\s*(\d{4}-\d{2}-\d{2}),\s*(\d{2}:\d{2}:\d{2})\s+'
             r'ENGINE\s+fritzdect\s+'
             r'(hp_ein|hp_aus)\S*\s+'
             r'(OK|FEHLER)\s*(.*)')
+        _klima_pattern = _re_hp.compile(
+            r'^\s*(\d{4}-\d{2}-\d{2}),\s*(\d{2}:\d{2}:\d{2})\s+'
+            r'ENGINE\s+fritzdect\s+'
+            r'(klima_ein|klima_aus)\S*\s+'
+            r'(OK|FEHLER)\s*(.*)')
         _hp_extern_pattern = _re_hp.compile(
             r'^\s*~?\s*(\d{4}-\d{2}-\d{2}),\s*(\d{2}:\d{2}:\d{2})\s+'
             r'EXTERN\s+fritzdect\s+HP\s+extern\s+(EIN|AUS)\s+--\s*(.*)',
+            _re_hp.IGNORECASE)
+        _klima_extern_pattern = _re_hp.compile(
+            r'^\s*~?\s*(\d{4}-\d{2}-\d{2}),\s*(\d{2}:\d{2}:\d{2})\s+'
+            r'EXTERN\s+fritzdect\s+Klima\s+extern\s+(EIN|AUS)\s+--\s*(.*)',
             _re_hp.IGNORECASE)
         if os.path.exists(_schaltlog_path):
             with open(_schaltlog_path, 'r') as _slf:
@@ -723,12 +773,36 @@ def _fetch_hp_status(now, result):
                     _m = _hp_pattern.match(_line)
                     if _m:
                         _datum, _zeit, _cmd, _erg, _grund = _m.groups()
-                        if _datum == _today_str:
+                        if _datum == _today_str and _erg == 'OK':
+                            _grund_txt = (_grund or '').strip()[:120]
+                            _key = (_datum, _zeit, _cmd, 'OK', _grund_txt, 'automation')
+                            if _key in hp_seen:
+                                continue
+                            hp_seen.add(_key)
                             hp_aktionen.append({
                                 'ts': f'{_datum} {_zeit[:5]}',
                                 'kommando': _cmd,
                                 'wert': '',
-                                'grund': (_grund or '').strip()[:120],
+                                'grund': _grund_txt,
+                                'ergebnis': _erg,
+                                'quelle': 'automation',
+                            })
+                        continue
+
+                    _mk = _klima_pattern.match(_line)
+                    if _mk:
+                        _datum, _zeit, _cmd, _erg, _grund = _mk.groups()
+                        if _datum == _today_str and _erg == 'OK':
+                            _grund_txt = (_grund or '').strip()[:120]
+                            _key = (_datum, _zeit, _cmd, 'OK', _grund_txt, 'automation')
+                            if _key in klima_seen:
+                                continue
+                            klima_seen.add(_key)
+                            klima_aktionen.append({
+                                'ts': f'{_datum} {_zeit[:5]}',
+                                'kommando': _cmd,
+                                'wert': '',
+                                'grund': _grund_txt,
                                 'ergebnis': _erg,
                                 'quelle': 'automation',
                             })
@@ -738,25 +812,55 @@ def _fetch_hp_status(now, result):
                     if _mx:
                         _datum, _zeit, _state, _grund = _mx.groups()
                         if _datum == _today_str:
+                            _cmd = 'hp_ein' if str(_state).upper() == 'EIN' else 'hp_aus'
+                            _grund_txt = (_grund or 'Manuell/extern geschaltet').strip()[:120]
+                            _key = (_datum, _zeit, _cmd, 'EXTERN', _grund_txt, 'extern')
+                            if _key in hp_seen:
+                                continue
+                            hp_seen.add(_key)
                             hp_aktionen.append({
                                 'ts': f'{_datum} {_zeit[:5]}',
-                                'kommando': 'hp_ein' if str(_state).upper() == 'EIN' else 'hp_aus',
+                                'kommando': _cmd,
                                 'wert': '',
-                                'grund': (_grund or 'Manuell/extern geschaltet').strip()[:120],
+                                'grund': _grund_txt,
+                                'ergebnis': 'EXTERN',
+                                'quelle': 'extern',
+                            })
+                        continue
+
+                    _mxk = _klima_extern_pattern.match(_line)
+                    if _mxk:
+                        _datum, _zeit, _state, _grund = _mxk.groups()
+                        if _datum == _today_str:
+                            _cmd = 'klima_ein' if str(_state).upper() == 'EIN' else 'klima_aus'
+                            _grund_txt = (_grund or 'Manuell/extern geschaltet').strip()[:120]
+                            _key = (_datum, _zeit, _cmd, 'EXTERN', _grund_txt, 'extern')
+                            if _key in klima_seen:
+                                continue
+                            klima_seen.add(_key)
+                            klima_aktionen.append({
+                                'ts': f'{_datum} {_zeit[:5]}',
+                                'kommando': _cmd,
+                                'wert': '',
+                                'grund': _grund_txt,
                                 'ergebnis': 'EXTERN',
                                 'quelle': 'extern',
                             })
             # Neueste zuerst
             hp_aktionen.reverse()
             hp_aktionen = hp_aktionen[:20]
+            klima_aktionen.reverse()
+            klima_aktionen = klima_aktionen[:20]
 
         result['hp_aktionen'] = hp_aktionen
+        result['klima_aktionen'] = klima_aktionen
         result['hp_bursts_heute'] = sum(
             1 for a in hp_aktionen
             if a['kommando'] == 'hp_ein' and a['ergebnis'] == 'OK')
     except Exception as _he:
         logging.debug(f"HP-Log (schaltlog): {_he}")
         result['hp_aktionen'] = []
+        result['klima_aktionen'] = []
         result['hp_bursts_heute'] = 0
 
     # Live-Status von Fritz!Box (eigener Cache 120s)

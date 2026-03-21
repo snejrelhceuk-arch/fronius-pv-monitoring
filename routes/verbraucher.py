@@ -6,7 +6,7 @@ Enthält: /api/verbraucher, /api/verbraucher/tag, /api/verbraucher/monat,
 """
 import re
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import Blueprint, jsonify, request
 from routes.helpers import get_db_connection
 
@@ -55,6 +55,40 @@ def _load_heizpatrone_daily(cursor, first_ts, last_ts):
             data[day_ts] = energy_wh or 0
     except Exception:
         pass
+
+    # Fallback: Fehlende Tagessummen aus Fritz!DECT-Zaehler (energy_total_wh)
+    # per Tagesdelta ermitteln. Manuelle Referenzwerte in heizpatrone_daily
+    # haben Vorrang und werden nicht ueberschrieben.
+    try:
+        cursor.execute(
+            """
+            SELECT
+                date(datetime(ts, 'unixepoch', 'localtime')) AS day_local,
+                MIN(energy_total_wh) AS e_start,
+                MAX(energy_total_wh) AS e_end
+            FROM fritzdect_readings
+            WHERE ts >= ? AND ts < ?
+              AND (
+                lower(COALESCE(device_id, '')) = 'heizpatrone'
+                OR lower(COALESCE(name, '')) LIKE '%heiz%patrone%'
+                OR lower(COALESCE(name, '')) LIKE '%sdheiz%'
+              )
+              AND energy_total_wh IS NOT NULL
+            GROUP BY day_local
+            """,
+            (first_ts, last_ts),
+        )
+        for day_local, e_start, e_end in cursor.fetchall():
+            if not day_local or e_start is None or e_end is None:
+                continue
+            delta_wh = max(0.0, float(e_end) - float(e_start))
+            day_dt = datetime.strptime(day_local, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+            day_ts = int(day_dt.timestamp())
+            if day_ts not in data:
+                data[day_ts] = delta_wh
+    except Exception:
+        pass
+
     return data
 
 
@@ -75,17 +109,9 @@ def _get_heizpatrone_month_total_kwh(cursor, year, month, first_ts, last_ts):
         pass
 
     try:
-        cursor.execute(
-            """
-            SELECT COALESCE(SUM(energy_wh), 0) / 1000.0
-            FROM heizpatrone_daily
-            WHERE ts >= ? AND ts < ?
-            """,
-            (first_ts, last_ts),
-        )
-        row = cursor.fetchone()
-        if row and row[0] is not None:
-            return float(row[0])
+        daily_by_day = _load_heizpatrone_daily(cursor, first_ts, last_ts)
+        if daily_by_day:
+            return float(sum(daily_by_day.values()) / 1000.0)
     except Exception:
         pass
 
@@ -283,6 +309,29 @@ def api_verbraucher_tag():
         except Exception:
             pass
 
+        heizpatrone_power_map = {}
+        try:
+            cursor.execute(
+                f"""
+                SELECT
+                    CAST((ts / 300) AS INTEGER) * 300 AS ts5,
+                    AVG(power_w) AS p_hp
+                FROM fritzdect_readings
+                {where}
+                  AND (
+                    lower(COALESCE(device_id, '')) = 'heizpatrone'
+                    OR lower(COALESCE(name, '')) LIKE '%heiz%patrone%'
+                    OR lower(COALESCE(name, '')) LIKE '%sdheiz%'
+                  )
+                GROUP BY CAST((ts / 300) AS INTEGER)
+                """,
+                where_params,
+            )
+            for r in cursor.fetchall():
+                heizpatrone_power_map[int(r[0])] = max(0, r[1] or 0)
+        except Exception:
+            pass
+
         conn.close()
 
         datapoints = []
@@ -295,15 +344,23 @@ def api_verbraucher_tag():
             w_wp = max(0, w_wp or 0)
             w_gesamt = max(0, w_gesamt or 0)
 
-            p_heizpatrone = 0
+            p_heizpatrone = heizpatrone_power_map.get(int(ts5), 0)
             p_wattpilot = wattpilot_power_map.get(int(ts5), 0)
-            p_haushalt = max(0, p_gesamt - p_wp - p_heizpatrone - p_wattpilot)
+            p_sum = p_wp + p_heizpatrone + p_wattpilot
+            if p_sum <= p_gesamt:
+                p_haushalt = max(0, p_gesamt - p_sum)
+                p_norm = p_gesamt
+            else:
+                # Bei Messdifferenzen auf Sensor-Summe normieren,
+                # damit die Teilenergien nicht ueber dem Gesamtwert liegen.
+                p_haushalt = 0
+                p_norm = p_sum
 
-            if p_gesamt > 0:
-                w_heizpatrone = 0
-                w_wattpilot = w_gesamt * (p_wattpilot / p_gesamt)
-                w_haushalt = w_gesamt * (p_haushalt / p_gesamt)
-                w_wp_actual = w_gesamt * (p_wp / p_gesamt)
+            if p_norm > 0:
+                w_heizpatrone = w_gesamt * (p_heizpatrone / p_norm)
+                w_wattpilot = w_gesamt * (p_wattpilot / p_norm)
+                w_haushalt = w_gesamt * (p_haushalt / p_norm)
+                w_wp_actual = w_gesamt * (p_wp / p_norm)
             else:
                 w_heizpatrone = 0
                 w_wattpilot = 0

@@ -30,7 +30,7 @@ if is_failover():
     sys.exit(0)
 import time
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import config
 from db_utils import get_db_connection
 
@@ -434,7 +434,100 @@ def aggregate_daily():
     finally:
         conn.close()
 
+def _aggregate_heizpatrone_daily():
+    """Schreibe tägliche Heizpatronenverbrauchssummen aus Fritz!DECT-Zählerdaten in heizpatrone_daily.
+
+    Logik:
+      - Für jeden abgeschlossenen Kalendertag mit Daten in fritzdect_readings:
+          W_HP_tag = MAX(energy_total_wh) − MIN(energy_total_wh) des Tages
+      - Bereits bestehende Zeilen mit source != 'counter_auto' (= manuell/importiert) werden NICHT überschrieben.
+      - Bestehende 'counter_auto'-Zeilen werden aktualisiert (letzter Tag wächst noch).
+      - Heutiger Tag wird ebenfalls geschrieben (vorläufig, wird morgen aktualisiert).
+    """
+    conn = get_db_connection()
+    c = conn.cursor()
+    try:
+        # Prüfe ob Tabellen existieren
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='fritzdect_readings'")
+        if not c.fetchone():
+            logging.info("HP-Daily: fritzdect_readings nicht vorhanden, übersprungen")
+            return
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='heizpatrone_daily'")
+        if not c.fetchone():
+            logging.info("HP-Daily: heizpatrone_daily nicht vorhanden, übersprungen")
+            return
+
+        # Tages-Deltas aus Fritz-Zähler (über sqlites localtime grouping)
+        c.execute("""
+            SELECT
+                date(datetime(ts, 'unixepoch', 'localtime')) AS day_local,
+                MIN(energy_total_wh) AS e_start,
+                MAX(energy_total_wh) AS e_end,
+                COUNT(*) AS n_readings
+            FROM fritzdect_readings
+            WHERE lower(COALESCE(device_id, '')) = 'heizpatrone'
+              AND energy_total_wh IS NOT NULL
+            GROUP BY day_local
+            ORDER BY day_local
+        """)
+        day_rows = c.fetchall()
+
+        inserted = 0
+        updated = 0
+        skipped = 0
+        for day_local, e_start, e_end, n_readings in day_rows:
+            if not day_local or e_start is None or e_end is None:
+                continue
+            delta_wh = max(0.0, float(e_end) - float(e_start))
+            if delta_wh < 0.1 and n_readings < 5:
+                # Zu wenige Daten (z.B. Collector erst am Ende des Tags gestartet → 1 Messung)
+                logging.debug(f"HP-Daily {day_local}: nur {n_readings} Messung(en), Delta={delta_wh:.1f} Wh → übersprungen")
+                continue
+
+            # UTC-Midnight-Timestamp des lokalen Tages (Konvention in heizpatrone_daily)
+            day_ts = int(datetime.strptime(day_local, '%Y-%m-%d').replace(tzinfo=timezone.utc).timestamp())
+
+            # Existiert bereits ein Eintrag?
+            c.execute("SELECT source, energy_wh FROM heizpatrone_daily WHERE ts = ?", (day_ts,))
+            existing = c.fetchone()
+
+            if existing:
+                existing_source = existing[0] or ''
+                if existing_source != 'counter_auto':
+                    # Manuell importierter Eintrag → nicht überschreiben
+                    skipped += 1
+                    continue
+                # Eigener counter_auto-Eintrag → aktualisieren (Tag könnte noch nicht abgeschlossen sein)
+                c.execute("""
+                    UPDATE heizpatrone_daily
+                    SET energy_wh = ?, note = ?, created_at = strftime('%s','now')
+                    WHERE ts = ?
+                """, (delta_wh,
+                      f"Fritz counter delta ({n_readings} Messungen, {e_start:.0f}→{e_end:.0f} Wh)",
+                      day_ts))
+                updated += 1
+            else:
+                c.execute("""
+                    INSERT INTO heizpatrone_daily (ts, energy_wh, source, note)
+                    VALUES (?, ?, 'counter_auto', ?)
+                """, (day_ts,
+                      delta_wh,
+                      f"Fritz counter delta ({n_readings} Messungen, {e_start:.0f}→{e_end:.0f} Wh)"))
+                inserted += 1
+
+        conn.commit()
+        if inserted or updated:
+            logging.info(f"HP-Daily: {inserted} neu, {updated} aktualisiert, {skipped} manuell übersprungen")
+    except Exception as e:
+        logging.error(f"Fehler in _aggregate_heizpatrone_daily: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
     logging.info("Starte tägliche Aggregation")
     aggregate_daily()
+    _aggregate_heizpatrone_daily()
     logging.info("Tägliche Aggregation abgeschlossen")

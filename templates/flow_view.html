@@ -626,13 +626,19 @@
                     <span class="ap-icon">○</span> <span class="ap-text">—</span>
                 </div>
             </div>
-            <!-- Zeile 4: Wärmepumpe (einzeilig, wie gehabt) -->
+            <!-- Zeile 4: Klima Status + Schaltzeiten (einzeilig) -->
+            <div class="auto-section" id="klimaAutoSection">
+                <div id="klimaAutoBody" class="auto-oneliner">
+                    <span class="ap-icon">○</span> <span class="ap-text">—</span>
+                </div>
+            </div>
+            <!-- Zeile 5: Wärmepumpe (einzeilig, wie gehabt) -->
             <div class="auto-section" id="wpAutoSection">
                 <div id="wpAutoBody" class="auto-oneliner">
                     <span class="ap-icon"></span> <span class="ap-text">—</span>
                 </div>
             </div>
-            <!-- Zeile 5: Temperaturen F1 + F2 + Batt -->
+            <!-- Zeile 6: Temperaturen F1 + F2 + Batt -->
             <div class="inverter-temps" id="inverterTemps">
                 <span class="it-label">F1:</span>
                 <span><span class="it-val" id="it-intern">--</span>°</span>
@@ -1133,7 +1139,7 @@
     // ══════════════════════════════════════════════════════════
     async function fetchBatteryDetail() {
         try {
-            const r = await fetch(apiUrl('/api/battery_status'));
+            const r = await fetch(apiUrl('/api/flow_status'));
             if (!r.ok) return;
             const d = await r.json();
             document.getElementById('bd-soh').textContent = d.soh != null ? d.soh : '--';
@@ -1234,7 +1240,25 @@
                 hpBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#fb923c">HP:</span> <span class="ap-text">keine Schaltungen heute</span>`;
             }
 
-            // ── Zeile 4: WP Wärmepumpe (einzeilig) ─────────────────
+            // ── Zeile 4: Klima-Schaltzeiten (einzeilig) ─────────────────
+            const klimaAktionen = d.klima_aktionen || [];
+            const klimaBody = document.getElementById('klimaAutoBody');
+            if (klimaAktionen.length > 0) {
+                const klimaTimeline = klimaAktionen.slice().reverse().map(a => {
+                    const zeit = a.ts ? a.ts.substring(11, 16) : '?';
+                    const aIsEin = a.kommando === 'klima_ein';
+                    const isExtern = String(a.quelle || '').toLowerCase() === 'extern';
+                    const color = isExtern ? '#ef4444' : '#fb923c';
+                    const symbol = aIsEin ? '▲' : '▼';
+                    const src = isExtern ? 'extern' : 'automation';
+                    return `<span style="color:${color}" title="${src}: ${a.grund || ''}">${zeit}${symbol}</span>`;
+                });
+                klimaBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#00bcd4">Klima:</span> ${klimaTimeline.join(' ')}`;
+            } else {
+                klimaBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#00bcd4">Klima:</span> <span class="ap-text">keine Schaltungen heute</span>`;
+            }
+
+            // ── Zeile 5: WP Wärmepumpe (einzeilig) ─────────────────
             const wp = d.wp_status || {};
             const wpBody = document.getElementById('wpAutoBody');
             if (wpBody && !wp.error) {
@@ -1248,7 +1272,7 @@
                 wpBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#14b8a6">WP:</span> VL <span class="ap-wp-val">${wv}°</span> <span class="ap-sep">·</span> RL <span class="ap-wp-val">${wr}°</span>/<span class="ap-wp-val">${wrs}°</span> <span class="ap-sep">·</span> WW <span class="ap-wp-val">${wwi}°</span>/<span class="ap-wp-val">${wws}°</span> <span class="ap-sep">·</span> Quelle <span class="ap-wp-val">${wqe}°</span>/<span class="ap-wp-val">${wqa}°</span>`;
             }
 
-            // ── Zeile 5: Temperaturen (Batt-Temp bereits im HTML integriert) ──
+            // ── Zeile 6: Temperaturen (Batt-Temp bereits im HTML integriert) ──
             document.getElementById('bd-temp').textContent = d.battery_temp != null ? d.battery_temp : '--';
 
         } catch(e) { console.warn('BatteryDetail:', e); }
