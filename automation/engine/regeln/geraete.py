@@ -3,6 +3,7 @@ geraete.py — Geräte-spezifische Regeln (P1-P2, fast-Zyklus)
 
 RegelWattpilotBattSchutz — Batterieschutz bei EV-Ladung
 RegelHeizpatrone         — Fritz!DECT Heizpatrone (Burst-Strategie)
+RegelKlimaanlage         — Fritz!DECT Klimaanlage (wie Heizpatrone, höher priorisiert)
 
 Siehe: doc/WATTPILOT_ARCHITECTURE.md, automation/STRATEGIEN.md §2.6
 """
@@ -13,6 +14,7 @@ import logging
 import time
 from collections import deque
 from datetime import datetime
+from typing import Optional
 import config
 
 from automation.engine.obs_state import ObsState
@@ -156,6 +158,8 @@ class RegelHeizpatrone(Regel):
         self._burst_start: float = 0
         self._burst_ende: float = 0
         self._letzte_aus: float = 0
+        self._warte_auf_engine_aus: bool = False
+        self._warte_auf_engine_aus_ts: float = 0
         self._drain_modus: bool = False
         self._letzte_phase: str = ''       # Letzte Burst-Phase (für Wiedereintritt)
         # Extern-Erkennung: HP wurde außerhalb der Engine ein-/ausgeschaltet
@@ -169,6 +173,10 @@ class RegelHeizpatrone(Regel):
         self._probe_start_pv_w: float = 0     # PV-Leistung bei Probe-Start
         self._probe_start_grid_w: float = 0   # Grid-Leistung bei Probe-Start
         self._probe_cooldown_bis: float = 0   # Epoch: nächster Probe-Versuch frühestens
+
+    def _geraet_label(self) -> str:
+        """Kurzlabel für menschenlesbare Extern-Logs."""
+        return 'HP'
 
     # ── Potenzial-Klassifikation ─────────────────────────────
 
@@ -290,35 +298,44 @@ class RegelHeizpatrone(Regel):
 
         # ── Extern-Erkennung (in bewerte(), da immer aufgerufen) ──
         extern_respekt = get_param(matrix, self.regelkreis, 'extern_respekt_s', 3600)
+        geraet = self._geraet_label()
+
+        # Erwartete Engine-AUS-Bestätigung nicht ewig halten
+        if (self._warte_auf_engine_aus and obs.heizpatrone_aktiv
+                and (time.time() - self._warte_auf_engine_aus_ts) > 180):
+            self._warte_auf_engine_aus = False
+            self._warte_auf_engine_aus_ts = 0
 
         # Erster Zyklus nach (Neu-)Start: kein State → min_pause als Schutz
         if self._letzter_hp_zustand is None and not obs.heizpatrone_aktiv:
             # HP ist beim Start AUS → kurze Sperre damit Engine nicht sofort einschaltet
             if self._letzte_aus == 0:
                 self._letzte_aus = time.time()
-                LOG.info('Erster Zyklus: HP AUS vorgefunden → min_pause-Schutz aktiv')
+                LOG.info(f'Erster Zyklus: {geraet} AUS vorgefunden → min_pause-Schutz aktiv')
 
         # Extern-EIN: HP ging AUS→EIN ohne laufenden Burst/Drain
         if (obs.heizpatrone_aktiv and self._letzter_hp_zustand is not None
                 and not self._letzter_hp_zustand):
             if self._burst_ende == 0 and not self._drain_modus:
                 self._extern_ein_ts = time.time()
-                LOG.info('HP extern eingeschaltet erkannt → Hysterese aktiv')
-                logge_extern('fritzdect', 'HP extern EIN',
+                LOG.info(f'{geraet} extern eingeschaltet erkannt → Hysterese aktiv')
+                logge_extern('fritzdect', f'{geraet} extern EIN',
                              'Manuell eingeschaltet (nicht durch Engine)')
 
         # Extern-AUS: HP ging EIN→AUS ohne Engine-hp_aus
         if (not obs.heizpatrone_aktiv and self._letzter_hp_zustand is not None
                 and self._letzter_hp_zustand):
-            engine_hat_ausgeschaltet = (self._letzte_aus > 0
-                                        and (time.time() - self._letzte_aus) < 5)
-            if not engine_hat_ausgeschaltet:
+            engine_hat_ausgeschaltet = self._warte_auf_engine_aus
+            if engine_hat_ausgeschaltet:
+                self._warte_auf_engine_aus = False
+                self._warte_auf_engine_aus_ts = 0
+            else:
                 self._extern_aus_ts = time.time()
                 self._burst_ende = 0
                 self._burst_start = 0
                 self._drain_modus = False
-                LOG.info('HP extern ausgeschaltet erkannt → EIN-Sperre aktiv')
-                logge_extern('fritzdect', 'HP extern AUS',
+                LOG.info(f'{geraet} extern ausgeschaltet erkannt → EIN-Sperre aktiv')
+                logge_extern('fritzdect', f'{geraet} extern AUS',
                              'Manuell ausgeschaltet (nicht durch Engine) → EIN-Sperre aktiv')
 
         if not obs.heizpatrone_aktiv:
@@ -454,7 +471,7 @@ class RegelHeizpatrone(Regel):
         if (self._extern_aus_ts > 0
                 and (time.time() - self._extern_aus_ts) < extern_respekt):
             verbleibend = int(extern_respekt - (time.time() - self._extern_aus_ts))
-            LOG.debug(f'HP extern AUS → EIN-Sperre noch {verbleibend}s')
+            LOG.debug(f'{self._geraet_label()} extern AUS → EIN-Sperre noch {verbleibend}s')
             return 0
 
         batt_rest_kwh = max(0, (soc_max_eff - soc) * config.PV_BATTERY_KWH / 100)
@@ -756,6 +773,8 @@ class RegelHeizpatrone(Regel):
 
             if notaus_grund:
                 self._letzte_aus = time.time()
+                self._warte_auf_engine_aus = True
+                self._warte_auf_engine_aus_ts = self._letzte_aus
                 self._burst_start = 0
                 self._burst_ende = 0
                 self._drain_modus = False
@@ -944,6 +963,136 @@ class RegelHeizpatrone(Regel):
                 'tier': 2, 'aktor': 'fritzdect',
                 'kommando': 'hp_ein',
                 'grund': f'HP EIN (Burst {burst_dauer // 60:.0f} Min): {grund}',
+            }]
+
+        return []
+
+
+class RegelKlimaanlage(RegelHeizpatrone):
+    # Eigenstaendige Thermoschutzregel fuer das Heizhaus via Fritz!DECT.
+
+    name = 'klimaanlage'
+    regelkreis = 'klimaanlage'
+    aktor = 'fritzdect'
+    engine_zyklus = 'fast'
+
+    def _now_h(self) -> float:
+        now = datetime.now()
+        return now.hour + now.minute / 60.0
+
+    def _ist_vor_sunrise(self, obs: ObsState) -> bool:
+        sunrise_h = obs.sunrise if obs.sunrise is not None else 6.0
+        return self._now_h() < sunrise_h
+
+    def _get_temp_ist_c(self, obs: ObsState, matrix: dict) -> float:
+        if obs.klima_temp_c is not None:
+            return float(obs.klima_temp_c)
+        # Fallback wenn kein Sensorwert vorhanden
+        return float(get_param(matrix, self.regelkreis, 'initial_temp_c', 15))
+
+    def _forecast_ist_gut(self, obs: ObsState) -> bool:
+        return (obs.forecast_quality or '').lower() == 'gut'
+
+    def _sunset_soc_stop(self, obs: ObsState, matrix: dict) -> bool:
+        soc_stop = float(get_param(matrix, self.regelkreis, 'sunset_soc_stop_pct', 90))
+        sunset = obs.sunset if obs.sunset is not None else 20.0
+        now_h = self._now_h()
+        soc = obs.batt_soc_pct if obs.batt_soc_pct is not None else 100
+        return now_h > sunset and soc < soc_stop
+
+    def _soll_klima_laufen(self, obs: ObsState, matrix: dict) -> bool:
+        if not self._startzeit_erreicht(obs, matrix):
+            return False
+        if self._sunset_soc_stop(obs, matrix):
+            return False
+
+        # Latch-Betrieb: Wenn einmal EIN, dann bis Sunset/SOC-Stop durchlaufen lassen.
+        if bool(obs.klima_aktiv):
+            return True
+
+        temp_ist = self._get_temp_ist_c(obs, matrix)
+
+        if self._ist_vor_sunrise(obs):
+            temp_pre = float(get_param(matrix, self.regelkreis, 'initial_temp_c', 15))
+            return self._forecast_ist_gut(obs) and temp_ist >= temp_pre
+
+        temp_tag = float(get_param(matrix, self.regelkreis, 'initial_temp_c_maessig', 20))
+        return temp_ist >= temp_tag
+
+    def _startzeit_erreicht(self, obs: ObsState, matrix: dict) -> bool:
+        # Startbedingung: ab 1h vor Sonnenaufgang (sunrise - 1h)
+        sunrise_h = obs.sunrise if obs.sunrise is not None else 6.0
+        now_h = self._now_h()
+        return now_h >= (sunrise_h - 1.0)
+
+    def bewerte(self, obs: ObsState, matrix: dict) -> int:
+        if not ist_aktiv(matrix, self.regelkreis):
+            return 0
+
+        basis_score = get_score_gewicht(matrix, self.regelkreis)
+
+        # Harte Abschalt-Bedingung: nach Sonnenuntergang und SOC<SOC_STOP.
+        if self._sunset_soc_stop(obs, matrix):
+            if obs.klima_aktiv:
+                return int(basis_score * 2)
+            return 0
+
+        soll_laufen = self._soll_klima_laufen(obs, matrix)
+        ist_an = bool(obs.klima_aktiv)
+
+        if soll_laufen != ist_an:
+            return basis_score
+        return 0
+
+    def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
+        if not ist_aktiv(matrix, self.regelkreis):
+            return []
+
+        soc_stop = float(get_param(matrix, self.regelkreis, 'sunset_soc_stop_pct', 90))
+        if self._sunset_soc_stop(obs, matrix):
+            if obs.klima_aktiv:
+                return [{
+                    'tier': 2,
+                    'aktor': 'fritzdect',
+                    'kommando': 'klima_aus',
+                    'grund': f'Klima AUS: nach Sonnenuntergang und SOC < {soc_stop:.0f}%',
+                }]
+            return []
+
+        soll_laufen = self._soll_klima_laufen(obs, matrix)
+        ist_an = bool(obs.klima_aktiv)
+
+        if soll_laufen and not ist_an:
+            if self._ist_vor_sunrise(obs):
+                temp_pre = float(get_param(matrix, self.regelkreis, 'initial_temp_c', 15))
+                grund = (f'Klima EIN: Vor Sunrise, Forecast gut und Temp >= {temp_pre:.1f}°C')
+            else:
+                temp_tag = float(get_param(matrix, self.regelkreis, 'initial_temp_c_maessig', 20))
+                grund = f'Klima EIN: Nach Sunrise, Temp >= {temp_tag:.1f}°C'
+            return [{
+                'tier': 2,
+                'aktor': 'fritzdect',
+                'kommando': 'klima_ein',
+                'grund': grund,
+            }]
+
+        if (not soll_laufen) and ist_an:
+            if not self._startzeit_erreicht(obs, matrix):
+                grund = 'Klima AUS: Startfenster noch nicht offen (ab sunrise-1h)'
+            elif self._sunset_soc_stop(obs, matrix):
+                grund = f'Klima AUS: nach Sonnenuntergang und SOC < {soc_stop:.0f}%'
+            else:
+                if self._ist_vor_sunrise(obs):
+                    temp_pre = float(get_param(matrix, self.regelkreis, 'initial_temp_c', 15))
+                    grund = (f'Klima AUS: Vor Sunrise nur mit Forecast gut und Temp >= {temp_pre:.1f}°C')
+                else:
+                    temp_tag = float(get_param(matrix, self.regelkreis, 'initial_temp_c_maessig', 20))
+                    grund = f'Klima AUS: Nach Sunrise nur Sunset/SOC-Stop erlaubt (Temp-Schwelle {temp_tag:.1f}°C gilt nur zum Start)'
+            return [{
+                'tier': 2,
+                'aktor': 'fritzdect',
+                'kommando': 'klima_aus',
+                'grund': grund,
             }]
 
         return []

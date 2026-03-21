@@ -41,7 +41,9 @@ from automation.engine.regeln import (          # noqa: E402
     RegelForecastPlausi,
     RegelWattpilotBattSchutz,
     RegelHeizpatrone,
+    RegelKlimaanlage,
     RegelWwAbsenkung,
+    RegelHeizAbsenkung,
 )
 
 LOG = logging.getLogger('engine')
@@ -119,8 +121,10 @@ class Engine:
             RegelZellausgleich(),
             RegelForecastPlausi(),
             RegelWattpilotBattSchutz(),
+            RegelKlimaanlage(),
             RegelHeizpatrone(),
             RegelWwAbsenkung(),
+            RegelHeizAbsenkung(),
         ]
         LOG.info(f"Regeln registriert: {[r.name for r in self._regeln]}")
 
@@ -194,6 +198,10 @@ class Engine:
         #    mit erhöhtem Score (= Notaus, z.B. heizpatrone→fritzdect).
         def _ist_schutz(score, regel):
             if 'schutz' in regel.name:
+                return True
+            # Zeitgesteuerte WP-Sollwertregeln sollen unabhängig von
+            # Optimierungs-Gewinnern zuverlässig laufen.
+            if regel.name in ('ww_absenkung', 'heiz_absenkung'):
                 return True
             # HP-Notaus: fritzdect-Aktor mit erhöhtem Score (>score_gewicht)
             if regel.aktor == 'fritzdect' and score > get_score_gewicht(self._matrix, regel.regelkreis):
