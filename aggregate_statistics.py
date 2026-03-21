@@ -23,7 +23,7 @@ Mapping:
 
 import sys
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 from host_role import is_failover
 
@@ -54,8 +54,8 @@ def _get_heizpatrone_monthly_kwh(cursor, year, month, ts_start, ts_end):
     """Hole Heizpatronenverbrauch aus Fritz!DECT-Referenztabellen.
 
     Priorität:
-      1. Monatliche Referenz aus heizpatrone_monthly
-      2. Summe taggenauer Werte aus heizpatrone_daily
+      1. Monatliche Referenz aus heizpatrone_monthly (manuell importierte Monatssummen)
+      2. Summe aus heizpatrone_daily (manuell + counter_auto, täglich von aggregate_daily befüllt)
       3. 0.0 falls keine Daten vorhanden
     """
     try:
@@ -72,13 +72,14 @@ def _get_heizpatrone_monthly_kwh(cursor, year, month, ts_start, ts_end):
 
     try:
         cursor.execute("""
-            SELECT COALESCE(SUM(energy_wh), 0) / 1000.0
+            SELECT COALESCE(SUM(energy_wh), 0.0)
             FROM heizpatrone_daily
             WHERE ts >= ? AND ts < ?
         """, (ts_start, ts_end))
         row = cursor.fetchone()
-        if row and row[0] is not None:
-            return float(row[0]), 'daily'
+        total_wh = float(row[0]) if row and row[0] else 0.0
+        if total_wh > 0:
+            return total_wh / 1000.0, 'daily'
     except sqlite3.OperationalError:
         pass
 
