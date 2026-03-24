@@ -486,6 +486,11 @@ SOC_MAX auf 100% geht (Nachmittag) wird die Batterie-Entladung strenger bewertet
 | probe_cooldown_s | 600 s | 120–1800 s | **Probe-Wartezeit.** Nach gescheiterter Probe kein neuer Versuch für diese Dauer. |
 | probe_pv_delta_min_w | 500 W | 100–2000 W | **Mindest-PV-Anstieg.** Probe gilt als Erfolg wenn PV um ≥ diesen Wert steigt. |
 | probe_grid_max_w | 300 W | 0–1000 W | **Max. Netzbezug nach Probe.** Probe gilt als gescheitert wenn Netzbezug über diesem Wert. |
+| batt_idle_toleranz_w | 800 W | 300–1500 W | **Phase 1b: Batterie-Idle-Fenster.** Prüfung auf `abs(P_Batterie) < diesen_Wert` zur Nulleinspeiser-Erkennung. Höher = toleranter gegen normalen Batterie-Quiescent-Strom (±300–600W). Seit 2026-03-24. |
+| grid_ok_toleranz_w | 500 W | 200–1000 W | **Phase 1b: Grid-Toleranz-Fenster.** Prüfung auf `abs(P_Grid) < diesen_Wert` zur Netzbezug-Minimierung bei Nulleinspeiser-Probe. Höher = toleranter gegen Hausverbrauch-Schwankungen. Seit 2026-03-24. |
+| kurz_burst_max_s | 420 s | 180–900 s | **Kurz-Burst maximale Dauer (7 Min).** HP läuft maximal diese Zeit bei kurzen Restperioden (z.B. Wolkenbruch, Abend). Standard 420s (7 Min) seit 2026-03-24; vorher 300s. |
+| kurz_burst_limit | 2 | 1–5 | **Max. Kurz-Bursts hintereinander.** Nach dieser Zahl von Kurz-Bursts > 5-Min-Päuse erzwungen. Verhindert Flip-Flop-Muster. Seit 2026-03-24. |
+| kurz_burst_sperre_s | 1800 s | 300–3600 s | **Sperrzeit nach Kurz-Burst-Limit erreicht (30 Min).** HP wird für diese Dauer blockiert wenn `kurz_burst_limit` Bursts hintereinander stattgefunden haben. Standard 1800s (30 Min) seit 2026-03-24; vorher 420s. |
 | extern_respekt | 1800 s | 900–7200 s | **Autoritätszeit (30 Min, 15 Min–2 h).** Bei manueller Einschaltung: Engine respektiert Nutzer-Entscheidung, nur Übertemp und SOC ≤ extern_notaus_soc überstimmen. Bei manuellem Ausschalten: hp_ein für diese Dauer gesperrt. |
 | extern_notaus_soc | 15% | 5–30% | **Autoritäts-Override bei niedrigem SOC.** Wird HP manuell eingeschaltet, überstimmt die Engine bei SOC ≤ diesem Wert und schaltet HP aus (Batterieschutz). |
 

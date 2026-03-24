@@ -1,7 +1,7 @@
 {
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
-  "_updated": "2026-03-21",
+  "_updated": "2026-03-22",
   "regelkreise": {
     "soc_extern": {
       "_doc": "Toleranz für extern geänderte SOC-Werte (z.B. manuell via Fronius App). Wenn SOC_MIN oder SOC_MAX außerhalb der Automation geändert werden, respektiert die Engine die Werte für die konfigurierte Dauer.",
@@ -211,7 +211,7 @@
           "beschreibung": "Absolut frühester Start (Minimum). Öffnung nie vor dieser Stunde, auch bei schwachem Tag."
         },
         "oeffnungsschwelle_kw": {
-          "wert": 14,
+          "wert": 15,
           "bereich": [
             3,
             20
@@ -220,7 +220,7 @@
           "beschreibung": "Ab Clear-Sky-Peak vorwärts: SOC_MAX öffnen wenn Prognoseleistung unter diesen Wert sinkt"
         },
         "surplus_sicherheitsfaktor": {
-          "wert": 1.3,
+          "wert": 1.5,
           "bereich": [
             1.0,
             2.0
@@ -239,7 +239,7 @@
           "beschreibung": "Ab dieser Bewölkung: SOC_MAX sofort erhöhen"
         },
         "max_stunden_vor_sunset": {
-          "wert": 1.5,
+          "wert": 2.0,
           "bereich": [
             0.5,
             3.0
@@ -750,7 +750,7 @@
           "beschreibung": "Vormittags-Schwelle (lockerer bei guter Prognose, rest_kwh>20)"
         },
         "min_rest_kwh": {
-          "wert": 12.0,
+          "wert": 15.0,
           "bereich": [
             5.0,
             30.0
@@ -760,7 +760,7 @@
           "beschreibung": "Mindest-Restprognose kWh damit HP-Burst erlaubt"
         },
         "min_rest_kwh_morgens": {
-          "wert": 20.0,
+          "wert": 25.0,
           "bereich": [
             10.0,
             40.0
@@ -827,7 +827,7 @@
           "beschreibung": "HP nur wenn WattPilot unter diesem Wert (kein konkurrierendes EV-Laden)"
         },
         "batt_reserve_kwh": {
-          "wert": 2.0,
+          "wert": 4.0,
           "bereich": [
             0.5,
             5.0
@@ -836,7 +836,7 @@
           "beschreibung": "Reserve über Batterie-Vollladung hinaus die Prognose abdecken muss"
         },
         "batt_reserve_nachmittag_kwh": {
-          "wert": 3.0,
+          "wert": 6.0,
           "bereich": [
             1.0,
             8.0
@@ -845,7 +845,7 @@
           "beschreibung": "Nachmittags spät: größere Reserve für sichere Batterie-Volladung"
         },
         "notaus_netzbezug_w": {
-          "wert": 400,
+          "wert": 500,
           "bereich": [
             0,
             500
@@ -1087,6 +1087,55 @@
           "einheit": "W",
           "obs_feld": "grid_power_w",
           "beschreibung": "Max. Netzbezug während Probe — überschritten = Energie aus Netz, nicht aus PV-Aufregeln"
+        },
+        "_phase1b_doc": "Phase 1b Bedingungen für Nulleinspeiser-Probe: Batterie-Idle und Netzlast-Toleranz",
+        "batt_idle_toleranz_w": {
+          "wert": 800,
+          "bereich": [
+            300,
+            1500
+          ],
+          "einheit": "W",
+          "obs_feld": "batt_power_w",
+          "beschreibung": "Batterie-Idle-Toleranz: Phase 1b startet nur wenn abs(P_Batt) < diesem Wert (höher = weniger Sensibilität gegenüber Rausch)"
+        },
+        "grid_ok_toleranz_w": {
+          "wert": 500,
+          "bereich": [
+            200,
+            1000
+          ],
+          "einheit": "W",
+          "obs_feld": "grid_power_w",
+          "beschreibung": "Netz-Toleranz für Phase 1b: HP startet Probe nur wenn abs(Netzbezug) < diesem Wert (höher = mehr Bereitschaft, Haushaltslast zu tolerieren)"
+        },
+        "_kurz_burst_doc": "Kurz-Burst-Schutz: Nach N aufeinanderfolgenden kurzen Bursts (< 5 Min) → Sperre. Kurzer Burst = Indiz für falsche Bedingung & Energieverschwendung",
+        "kurz_burst_max_s": {
+          "wert": 420,
+          "bereich": [
+            180,
+            900
+          ],
+          "einheit": "s",
+          "beschreibung": "Schwelle für 'Kurz-Burst': HP-Einschaltung < diesem Wert gilt als zu kurz (Standard: 7 Min, vorher 5)"
+        },
+        "kurz_burst_limit": {
+          "wert": 2,
+          "bereich": [
+            1,
+            5
+          ],
+          "einheit": "count",
+          "beschreibung": "Nach N kurzen Bursts hintereinander → EIN-Sperre wird aktiviert (Schutz vor Bouncing)"
+        },
+        "kurz_burst_sperre_s": {
+          "wert": 1800,
+          "bereich": [
+            300,
+            3600
+          ],
+          "einheit": "s",
+          "beschreibung": "Dauer der EIN-Sperre nach Kurz-Burst-Limit erreicht (Standard: 30 Min). Während dieser Sperre kann HP nicht automatisch eingeschaltet werden."
         }
       },
       "score_gewicht": 40,
@@ -1100,19 +1149,28 @@
       "parameter": {
         "initial_temp_c": {
           "wert": 15,
-          "bereich": [10, 20],
+          "bereich": [
+            10,
+            20
+          ],
           "einheit": "°C",
           "beschreibung": "Vor Sonnenaufgang: Mindesttemperatur im Heizhaus. Klima darf nur mit Forecast 'gut' UND Temp >= diesem Wert einschalten. Fallback wenn kein Sensorwert verfügbar. Gilt als Startkriterium."
         },
         "initial_temp_c_maessig": {
           "wert": 20,
-          "bereich": [15, 25],
+          "bereich": [
+            15,
+            25
+          ],
           "einheit": "°C",
           "beschreibung": "Nach Sonnenaufgang: Einschalt-Temperatur für den sicheren Thermoschutzbetrieb (Standard 20°C). Gilt als Startkriterium; danach läuft die Klima bis Sunset/SOC-Stop weiter."
         },
         "sunset_soc_stop_pct": {
           "wert": 90,
-          "bereich": [30, 100],
+          "bereich": [
+            30,
+            100
+          ],
           "einheit": "%",
           "beschreibung": "Nach Sonnenuntergang: Klima AUS wenn Batterie-SOC unter diesen Wert fällt."
         }

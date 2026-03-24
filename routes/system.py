@@ -46,6 +46,26 @@ def _build_flow_status_result(now, api):
     _fetch_temperatures(result)
     _fetch_hp_status(now, result)
     _fetch_wp_status(result)
+
+    # PV-Prognose-Emoji und Qualität ergänzen
+    try:
+        from routes.helpers import get_forecast
+        forecast = get_forecast()
+        if forecast:
+            day_fc = forecast.get_day_forecast()
+            quality = day_fc.get('quality')
+            # Emoji-Mapping wie in solar_forecast.py
+            def _quality_emoji(quality):
+                return {'gut': '☀️', 'mittel': '⛅', 'schlecht': '☁️'}.get(quality, '❓')
+            emoji = _quality_emoji(quality)
+            result['pv_forecast_emoji'] = emoji
+            result['pv_forecast_quality'] = quality
+    except Exception as e:
+        import logging
+        logging.warning(f"PV-Prognose-Emoji konnte nicht geladen werden: {e}")
+        result['pv_forecast_emoji'] = '❓'
+        result['pv_forecast_quality'] = None
+
     return result
 
 
@@ -711,10 +731,10 @@ def _fetch_temperatures(result):
         if _tk not in result:
             result[_tk] = 'n/v'
 
-    # F2 (Symo 10.0)
+    # F2 (Gen24 10kW)
     try:
         import requests as _req2
-        _f2_api = os.environ.get('PV_SECONDARY_INVERTER_API', 'http://192.0.2.123/components/readable')
+        _f2_api = config.load_local_setting('PV_SECONDARY_INVERTER_API', 'http://192.0.2.123/components/readable')
         _f2_resp = _req2.get(_f2_api, timeout=2)
         if _f2_resp.status_code == 200:
             _f2_data = _f2_resp.json().get('Body', {}).get('Data', {})
