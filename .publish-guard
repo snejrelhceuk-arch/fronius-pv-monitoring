@@ -27,6 +27,8 @@ navigator@
 
 # --- SMTP-Provider ---
 smtp\.strato\.de
+\bStrato\b
+\bstrato\b
 
 # --- Dateisystem-Pfade ---
 /home/admin/Dokumente/PVAnlage
