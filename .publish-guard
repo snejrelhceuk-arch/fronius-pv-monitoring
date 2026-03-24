@@ -27,6 +27,8 @@ notify@
 
 # --- SMTP-Provider ---
 smtp\.example\.de
+\bStrato\b
+\bstrato\b
 
 # --- Dateisystem-Pfade ---
 /home/user/Dokumente/PVAnlage
