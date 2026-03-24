@@ -1871,7 +1871,7 @@ def _menu_benachrichtigung_events(thresholds: dict, aktive: list):
 
 
 def _menu_benachrichtigung_test(email: str, smtp_host: str):
-    """Test-Mail senden — über SMTP mit verschlüsseltem Passwort."""
+    """Test-Mail senden — über konfigurierten SMTP-Server mit verschlüsseltem Passwort."""
     if not email:
         wt_msgbox('Kein Empfänger konfiguriert.\n\nBitte zuerst Empfänger setzen.')
         return
