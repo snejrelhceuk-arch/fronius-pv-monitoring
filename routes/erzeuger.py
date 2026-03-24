@@ -235,7 +235,8 @@ def api_erzeuger_monat():
 def api_erzeuger_jahr():
     """
     Erzeuger-Energieübersicht für Jahresansicht (gestapelte Balken pro Monat).
-    Aggregiert aus data_1min / data_15min.
+    Gesamtsummen aus monthly_statistics (korrekte Referenzwerte inkl. SolarWeb-Backfill),
+    F1/F2/F3-Aufteilung proportional aus data_1min / data_15min skaliert.
     """
     try:
         year = request.args.get('year', type=int)
@@ -250,6 +251,16 @@ def api_erzeuger_jahr():
             return jsonify({"error": "DB nicht verfügbar"}), 500
         cursor = conn.cursor()
 
+        # ── Korrekte Monatssummen aus monthly_statistics (in Wh) ──
+        cursor.execute("""
+            SELECT month, COALESCE(solar_erzeugung_kwh, 0)
+            FROM monthly_statistics
+            WHERE year = ?
+            ORDER BY month
+        """, (year,))
+        stat_totals = {row[0]: row[1] * 1000.0 for row in cursor.fetchall()}
+
+        # ── F1/F2/F3-Aufteilung aus Rohdaten (für Proportionsberechnung) ──
         cursor.execute("SELECT COUNT(*) FROM data_1min WHERE ts >= ? AND ts < ?", (first_ts, last_ts))
         count = cursor.fetchone()[0]
         table = 'data_1min' if count > 0 else 'data_15min'
@@ -275,9 +286,29 @@ def api_erzeuger_jahr():
         totals = {'f1': 0, 'f2': 0, 'f3': 0, 'gesamt': 0}
 
         for mon, w_f1, w_f2, w_f3 in rows:
-            w_f1 = max(0, (w_f1 or 0)) / 1000
-            w_f2 = max(0, (w_f2 or 0)) / 1000
-            w_f3 = max(0, (w_f3 or 0)) / 1000
+            w_f1 = max(0.0, (w_f1 or 0.0))
+            w_f2 = max(0.0, (w_f2 or 0.0))
+            w_f3 = max(0.0, (w_f3 or 0.0))
+            raw_sum = w_f1 + w_f2 + w_f3
+
+            # monthly_statistics ist die autoritative Quelle (enthält SolarWeb-Korrekturen).
+            # F1/F2/F3 werden proportional auf die korrekte Gesamtmenge skaliert.
+            if mon in stat_totals and stat_totals[mon] > 0:
+                total_wh = stat_totals[mon]
+                if raw_sum > 0:
+                    scale = total_wh / raw_sum
+                    w_f1 *= scale
+                    w_f2 *= scale
+                    w_f3 *= scale
+                else:
+                    w_f1 = total_wh
+                    w_f2 = 0.0
+                    w_f3 = 0.0
+            # Kein monthly_statistics-Eintrag → Rohdaten direkt verwenden
+
+            w_f1 /= 1000.0
+            w_f2 /= 1000.0
+            w_f3 /= 1000.0
 
             totals['f1'] += w_f1
             totals['f2'] += w_f2

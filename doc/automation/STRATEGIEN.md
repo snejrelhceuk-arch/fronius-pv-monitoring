@@ -262,7 +262,13 @@ WENN rest_h > 5 UND rest_kwh > 20:
 #   Erfolgreich (ΔPV ≥ 500W, Grid ≤ 300W) → Burst verlängern 30 Min.
 #   Gescheitert → HP AUS, Cooldown 600s.
 WENN SOC ≥ SOC_MAX - 2% UND |P_Batt| < 500W UND |Grid| < 300W:
-    UND Forecast_jetzt_w ≥ 2000W:
+#   SEIT 2026-03-24: Toleranzen sind parametrierbar (batt_idle_toleranz_w, grid_ok_toleranz_w).
+#   Vorher hart codiert: 500W (Batterie), 300W (Grid) → führte zu 20% Phase 1b-Aktivierungen!
+#   Neue Defaults: 800W (Batterie-Idle), 500W (Grid). Toleranter bei normalen Batterie-Strömungen.
+WENN SOC ≥ SOC_MAX - 2% 
+  UND |P_Batt| < batt_idle_toleranz_w (default: 800W):
+  UND |Grid| < grid_ok_toleranz_w (default: 500W):
+  UND Forecast_jetzt_w ≥ 2000W:
     UND rest_kwh > Reserve:
     UND Probe-Cooldown abgelaufen:
     → HP EIN (Probe 120s → Auswertung → Verlängern oder AUS)

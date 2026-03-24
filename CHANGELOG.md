@@ -11,6 +11,34 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/).
 - MEGA-BAS Rollout: I2C-HAT-Inbetriebnahme mit zusätzlicher Temperatur-Sensorik und vorbereiteter Aktorik für kommende Hardware-Phasen.
 - 3-Phasen-Heizpatrone (Zukunftsphase): Konzept für stufenweise Zuschaltung und Schützstrategie als nächster Ausbauschritt.
 
+## v1.2.1 — 2026-03-24
+
+### Features
+- **Phase 1b Parametrisierung:** `batt_idle_toleranz_w` (default 800W) und `grid_ok_toleranz_w` (default 500W) neu in soc_param_matrix.json — alle Phase 1b Bedingungen jetzt via pv-config anpassbar.
+- **Kurz-Burst-Schutz erweitert:** 
+  - `kurz_burst_max_s`: Schwelle für "Kurz-Burst" von 300s (5 Min) auf **420s (7 Min)** erhöht
+  - `kurz_burst_sperre_s`: EIN-Sperre nach Kurz-Burst-Limit von 420s (7 Min) auf **1800s (30 Min)** erhöht
+  - Alle Kurz-Burst-Parameter (`kurz_burst_max_s`, `kurz_burst_limit`, `kurz_burst_sperre_s`) jetzt in soc_param_matrix.json und via pv-config editierbar
+
+### Fixes
+- **Chart Auto-Refresh bei Mitternacht:** Fehler behoben, bei dem Monitoring/Erzeuger-Charts nach Mitternacht stehen blieben. Charts erkennen jetzt automatisch Tageswechsel und fahren fort (`templates/erzeuger_view.html`, `templates/tag_view.html`)
+- **Phase 1b Bouncing reduziert:** Erhöhte Toleranzen für Batterie-Idle (500W → 800W) und Netzbezug (300W → 500W) reduzieren falsche Probes bei dynamischen Haushaltlasten significantly
+
+### Config
+- **5 neue Parameter in soc_param_matrix.json** für HP-Automation:
+  - `batt_idle_toleranz_w` (300–1500W, default 800W): Phase 1b Batterie-Idle-Schwelle
+  - `grid_ok_toleranz_w` (200–1000W, default 500W): Phase 1b Netzbezug-Toleranz
+  - `kurz_burst_max_s` (180–900s, default 420s): Definition "Kurz-Burst" (7 Min statt 5)
+  - `kurz_burst_limit` (1–5 count, default 2): Schwelle für EIN-Sperre
+  - `kurz_burst_sperre_s` (300–3600s, default 1800s): Dauer EIN-Sperre (30 Min statt 7 Min)
+
+### Dokumentation
+- doc/automation/WP_INTEGRATION.md: Parameter-Dokumentation aktualisiert
+- doc/automation/STRATEGIEN.md: Phase 1b Logik dokumentiert
+- Schaltprotokoll-Analyse dokumentiert (Ursachenbericht Phase 1b Überaktivität)
+
+---
+
 ## v1.2.0 — 2026-03-18
 
 ### Features

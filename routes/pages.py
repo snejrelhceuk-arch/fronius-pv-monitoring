@@ -4,10 +4,32 @@ Blueprint: Seiten-Routen (HTML-Templates).
 Enthält: /, /flow, /monitoring, /echtzeit, /verbraucher, /erzeuger, /analyse
 """
 from flask import Blueprint, render_template, request, redirect
+from datetime import datetime
+from urllib.parse import urlencode
 import config
 from routes.helpers import get_db_connection, get_strompreis_fuer_monat
 
 bp = Blueprint('pages', __name__)
+
+
+def _get_nav_context(args):
+    """Normalisiere den UI-Zeitkontext für Links zwischen verwandten Ansichten."""
+    now = datetime.now()
+    period = args.get('period', 'tag')
+    if period not in {'tag', 'monat', 'jahr', 'gesamt'}:
+        period = 'tag'
+
+    ctx = {'period': period}
+    if period == 'tag':
+        date_str = args.get('date') or now.strftime('%Y-%m-%d')
+        ctx['date'] = date_str
+    elif period == 'monat':
+        ctx['year'] = args.get('year', type=int) or now.year
+        ctx['month'] = args.get('month', type=int) or now.month
+    elif period == 'jahr':
+        ctx['year'] = args.get('year', type=int) or now.year
+
+    return ctx
 
 
 @bp.route('/')
@@ -50,8 +72,9 @@ def erzeuger_page():
 @bp.route('/analyse')
 @bp.route('/amortisation')  # Redirect-Kompatibilität
 def analyse_redirect():
-    """Redirect zur PV-Übersicht (Standard-Analyseseite)"""
-    return redirect('/analyse/pv')
+    """Analyse-Einstieg führt immer auf die Erzeuger-Ansicht mit Zeitkontext."""
+    nav_query = urlencode(_get_nav_context(request.args))
+    return redirect(f"/erzeuger?{nav_query}" if nav_query else '/erzeuger')
 
 
 @bp.route('/analyse/pv')
@@ -59,6 +82,8 @@ def analyse_redirect():
 @bp.route('/analyse/amortisation')
 def analyse():
     """Analyse der PV-Anlage - Daten aus monthly_statistics DB"""
+    nav_context = _get_nav_context(request.args)
+    nav_query = urlencode(nav_context)
 
     # Investitionen & Finanzdaten aus config.py
     invest_pv_2022 = config.INVEST_PV_2022
@@ -433,6 +458,7 @@ def analyse():
                              amort_pv_jahr=amort_pv_jahr,
                              amort_haushalt_jahr=amort_haushalt_jahr,
                              current_year=current_year,
-                             freq_extremes=freq_extremes)
+                             freq_extremes=freq_extremes,
+                             nav_query=('?' + nav_query) if nav_query else '')
     finally:
         conn.close()

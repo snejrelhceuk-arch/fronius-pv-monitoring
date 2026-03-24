@@ -20,15 +20,15 @@
     <div class="container">
         <div class="top-nav">
             <a href="/" class="nav-main">Flow</a>
-            <a href="/monitoring" class="nav-main">Monitoring</a>
-            <a href="/analyse" class="nav-main active">Analyse</a>
+            <a href="/monitoring{{ nav_query }}" class="nav-main">Monitoring</a>
+            <a href="/analyse{{ nav_query }}" class="nav-main active">Analyse</a>
             <div class="nav-separator"></div>
-            <a href="/erzeuger" class="nav-sub">Erzeuger</a>
-            <a href="/verbraucher" class="nav-sub">Verbraucher</a>
+            <a href="/erzeuger{{ nav_query }}" class="nav-sub">Erzeuger</a>
+            <a href="/verbraucher{{ nav_query }}" class="nav-sub">Verbraucher</a>
             <div class="nav-separator"></div>
-            <a href="/analyse/pv" class="nav-sub active">PV-Übersicht</a>
-            <a href="/analyse/haushalt" class="nav-sub">Haushalt</a>
-            <a href="/analyse/amortisation" class="nav-sub">Amortisation</a>
+            <a href="/analyse/pv{{ nav_query }}" class="nav-sub active">PV-Übersicht</a>
+            <a href="/analyse/haushalt{{ nav_query }}" class="nav-sub">Haushalt</a>
+            <a href="/analyse/amortisation{{ nav_query }}" class="nav-sub">Amortisation</a>
         </div>
 
         {% if freq_extremes %}

@@ -173,6 +173,9 @@ class RegelHeizpatrone(Regel):
         self._probe_start_pv_w: float = 0     # PV-Leistung bei Probe-Start
         self._probe_start_grid_w: float = 0   # Grid-Leistung bei Probe-Start
         self._probe_cooldown_bis: float = 0   # Epoch: nächster Probe-Versuch frühestens
+        # Kurz-Burst-Schutz: nach 2x Burst < 5 min → 1h Sperre
+        self._kurze_burst_zaehler: int = 0        # aufeinanderfolgende Kurz-Bursts
+        self._kurz_burst_sperre_bis: float = 0    # Epoch: EIN-Sperre aktiv bis
 
     def _geraet_label(self) -> str:
         """Kurzlabel für menschenlesbare Extern-Logs."""
@@ -474,6 +477,12 @@ class RegelHeizpatrone(Regel):
             LOG.debug(f'{self._geraet_label()} extern AUS → EIN-Sperre noch {verbleibend}s')
             return 0
 
+        # Kurz-Burst-Sperre: 2× Burst < 5 Min → 1h EIN-Pause
+        if self._kurz_burst_sperre_bis > 0 and time.time() < self._kurz_burst_sperre_bis:
+            verbleibend = int(self._kurz_burst_sperre_bis - time.time())
+            LOG.debug(f'{self._geraet_label()} Kurz-Burst-Sperre → EIN-Pause noch {verbleibend}s')
+            return 0
+
         batt_rest_kwh = max(0, (soc_max_eff - soc) * config.PV_BATTERY_KWH / 100)
 
         potenzial = self._potenzial(obs, matrix)
@@ -562,8 +571,10 @@ class RegelHeizpatrone(Regel):
         #   HP einschalten erzeugt Nachfrage → WR lässt PV hochfahren.
         hp_last = self.HP_NENN_W
         soc_nah_max = soc >= (soc_max_eff - 2)
-        batt_idle = abs(p_batt) < 500
-        grid_ok = abs(obs.grid_power_w or 0) < 300
+        batt_idle_tol = get_param(matrix, self.regelkreis, 'batt_idle_toleranz_w', 800)
+        batt_idle = abs(p_batt) < batt_idle_tol
+        grid_ok_tol = get_param(matrix, self.regelkreis, 'grid_ok_toleranz_w', 500)
+        grid_ok = abs(obs.grid_power_w or 0) < grid_ok_tol
 
         # Forecast für aktuelle Stunde: zeigt was PV KANN (nicht was WR liefert)
         forecast_jetzt_w = 0
@@ -772,6 +783,32 @@ class RegelHeizpatrone(Regel):
                                         f'({int((time.time() - self._burst_start) / 60)} Min)')
 
             if notaus_grund:
+                # Kurz-Burst-Erkennung: War die HP kürzer als kurz_burst_max_s an?
+                # Gilt nur für normale Bursts (nicht Drain), und nur wenn ein
+                # Burst-Start bekannt ist.
+                if self._burst_start > 0 and not self._drain_modus:
+                    kurz_max_s = get_param(matrix, self.regelkreis,
+                                           'kurz_burst_max_s', 420)  # 7 Min (vorher 5)
+                    kurz_limit = get_param(matrix, self.regelkreis,
+                                           'kurz_burst_limit', 2)
+                    kurz_sperre_s = get_param(matrix, self.regelkreis,
+                                              'kurz_burst_sperre_s', 1800)  # 30 Min (vorher 7)
+                    burst_dauer_ist = time.time() - self._burst_start
+                    if burst_dauer_ist < kurz_max_s:
+                        self._kurze_burst_zaehler += 1
+                        LOG.info(
+                            f'HP Kurz-Burst #{self._kurze_burst_zaehler}: '
+                            f'{burst_dauer_ist:.0f}s < {kurz_max_s}s Minimum '
+                            f'({notaus_grund})')
+                        if self._kurze_burst_zaehler >= kurz_limit:
+                            self._kurz_burst_sperre_bis = time.time() + kurz_sperre_s
+                            self._kurze_burst_zaehler = 0
+                            LOG.warning(
+                                f'HP: {kurz_limit}× Kurz-Burst → EIN-Sperre für '
+                                f'{kurz_sperre_s // 60:.0f} Min')
+                    else:
+                        # Langer Burst → Zähler zurücksetzen
+                        self._kurze_burst_zaehler = 0
                 self._letzte_aus = time.time()
                 self._warte_auf_engine_aus = True
                 self._warte_auf_engine_aus_ts = self._letzte_aus
@@ -788,6 +825,12 @@ class RegelHeizpatrone(Regel):
             return []
 
         # ── HP ist AUS → prüfe ob Burst gestartet werden soll ─
+        # Kurz-Burst-Sperre auch im Aktions-Pfad prüfen
+        if self._kurz_burst_sperre_bis > 0 and time.time() < self._kurz_burst_sperre_bis:
+            verbleibend = int(self._kurz_burst_sperre_bis - time.time())
+            LOG.debug(f'{self._geraet_label()} Kurz-Burst-Sperre aktiv → kein EIN noch {verbleibend}s')
+            return []
+
         batt_rest_kwh = max(0, (soc_max_eff - soc) * config.PV_BATTERY_KWH / 100)
         min_rest_h_morgens = get_param(matrix, self.regelkreis, 'min_rest_h_morgens', 5.0)
         min_rest_kwh_morgens = get_param(matrix, self.regelkreis, 'min_rest_kwh_morgens', 20.0)
@@ -886,8 +929,10 @@ class RegelHeizpatrone(Regel):
         if not burst_dauer:
             hp_last = self.HP_NENN_W
             soc_nah_max = soc >= (soc_max_eff - 2)
-            batt_idle = abs(p_batt) < 500
-            grid_ok = abs(obs.grid_power_w or 0) < 300
+            batt_idle_tol = get_param(matrix, self.regelkreis, 'batt_idle_toleranz_w', 800)
+            batt_idle = abs(p_batt) < batt_idle_tol
+            grid_ok_tol = get_param(matrix, self.regelkreis, 'grid_ok_toleranz_w', 500)
+            grid_ok = abs(obs.grid_power_w or 0) < grid_ok_tol
             reserve = get_param(matrix, self.regelkreis, 'batt_reserve_kwh', 2.0)
             pv_kann_hp = forecast_jetzt_w >= hp_last
             probe_cooldown_ok = (self._probe_cooldown_bis == 0

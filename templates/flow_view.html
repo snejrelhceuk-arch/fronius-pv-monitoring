@@ -111,11 +111,125 @@
             max-width: 1200px;
             width: 100%;
             position: relative;
+            --monitor-overlay-w: 0px;
+            --monitor-overlay-gap: 0px;
+            --monitor-overlay-h: 0px;
+        }
+
+        .monitor-overlay {
+            display: none;
+            position: absolute;
+            top: 96px;
+            right: 14px;
+            width: var(--monitor-overlay-w);
+            height: var(--monitor-overlay-h);
+            z-index: 6;
+            background: rgba(15, 23, 42, 0.88);
+            border: 1px solid rgba(255,255,255,0.18);
+            border-radius: 10px;
+            padding: 6px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+            backdrop-filter: blur(2px);
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .flow-chart.overlay-hidden .monitor-overlay {
+            display: none !important;
+        }
+
+        .monitor-overlay-title {
+            color: rgba(255,255,255,0.72);
+            font-size: 10px;
+            letter-spacing: 0.02em;
+            margin: 0 0 5px 2px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .monitor-overlay-close {
+            border: 1px solid rgba(255,255,255,0.25);
+            background: rgba(255,255,255,0.08);
+            color: rgba(255,255,255,0.9);
+            border-radius: 4px;
+            font-size: 10px;
+            line-height: 1;
+            padding: 2px 5px;
+            cursor: pointer;
+        }
+
+        .monitor-overlay-frame {
+            width: 100%;
+            flex: 1;
+            min-height: 0;
+            border: none;
+            border-radius: 8px;
+            background: rgba(2, 6, 23, 0.65);
+            display: block;
         }
 
         /* Timestamp now rendered as SVG text inside the chart */
 
-        #flow-svg { width: 100%; height: 420px; max-width: 900px; display: block; margin: 0 auto; }
+        #flow-svg {
+            width: 100%;
+            max-width: 960px;
+            display: block;
+            margin: 0 auto;
+            aspect-ratio: 590 / 400;
+            height: auto;
+        }
+
+        .flow-chart.has-monitor-overlay #flow-svg {
+            width: calc(100% - var(--monitor-overlay-w) - var(--monitor-overlay-gap));
+            max-width: none;
+            margin: 0 auto 0 0;
+            transform: translateX(calc(var(--monitor-overlay-w) * -0.1));
+        }
+
+        .flow-chart.has-monitor-overlay.overlay-hidden {
+            --monitor-overlay-w: 0px;
+            --monitor-overlay-gap: 0px;
+            --monitor-overlay-h: 0px;
+        }
+
+        .flow-chart.has-monitor-overlay.overlay-hidden #flow-svg {
+            width: min(70%, 900px);
+            max-width: 900px;
+            margin: 0 auto;
+            transform: none;
+        }
+
+        @media (min-width: 780px) and (min-height: 560px) {
+            .monitor-overlay {
+                display: flex;
+            }
+
+            .flow-chart.has-monitor-overlay {
+                --monitor-overlay-w: clamp(260px, 34vw, 400px);
+                --monitor-overlay-gap: 4px;
+                --monitor-overlay-h: min(56vh, calc(100% - 178px));
+            }
+        }
+
+        .overlay-toggle {
+            display: none;
+            padding: 3px 8px;
+            border: 1px solid #10b981;
+            background: rgba(16,185,129,0.16);
+            color: #10b981;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .overlay-toggle.is-visible {
+            display: inline-flex;
+            align-items: center;
+        }
 
         /* ══════ Status Badges ══════ */
         .status-group {
@@ -319,7 +433,7 @@
 
         @media (max-width: 768px) {
             .flow-chart { padding: 12px; }
-            #flow-svg { height: 400px; }
+            #flow-svg { height: 400px; aspect-ratio: auto; }
             .battery-detail { gap: 10px; font-size: 11px; }
             .inverter-temps { gap: 8px; font-size: 10px; }
         }
@@ -336,6 +450,12 @@
             .flow-chart { padding: 8px; border-radius: 10px; }
             .status-group { top: 8px; right: 10px; gap: 3px; }
             .status-badge { padding: 3px 8px; font-size: 9px; }
+            .monitor-overlay { top: 86px; right: 8px; padding: 4px; }
+            .flow-chart.has-monitor-overlay {
+                --monitor-overlay-w: clamp(220px, 35vw, 320px);
+                --monitor-overlay-gap: 4px;
+                --monitor-overlay-h: min(50vh, calc(100% - 160px));
+            }
         }
 
         /* Handy Landscape: SVG Fullscreen, maximaler Platz */
@@ -347,7 +467,7 @@
             .container { padding: 0 4px 4px 4px; }
             .flow-chart { padding: 4px; border-radius: 8px;
                           box-shadow: none; border: none; background: transparent; }
-            #flow-svg { height: calc(100vh - 70px); max-width: 100%; }
+            #flow-svg { height: calc(100vh - 70px); max-width: 100%; aspect-ratio: auto; }
             .status-group { top: 6px; right: 8px; gap: 2px; }
             .status-badge { padding: 3px 8px; font-size: 9px; }
         }
@@ -359,7 +479,13 @@
             .top-nav-inner { border-radius: 8px 8px 0 0; }
             .container { padding: 0 4px 4px 4px; }
             .flow-chart { padding: 4px; border-radius: 8px; }
-            #flow-svg { height: auto; min-height: 250px; max-height: calc(100vh - 180px); }
+            #flow-svg { height: auto; min-height: 250px; max-height: calc(100vh - 180px); aspect-ratio: auto; }
+            .monitor-overlay { display: none !important; }
+            .flow-chart.has-monitor-overlay {
+                --monitor-overlay-w: 0px;
+                --monitor-overlay-gap: 0px;
+            }
+            .flow-chart.has-monitor-overlay #flow-svg { max-width: 100%; transform: none; margin: 0 auto; }
             /* Sub-Kreise (Detail-Erzeuger + Detail-Verbraucher) ausblenden */
             .sub-producers, .sub-consumers { display: none; }
             /* Battery-Detail und Inverter-Temps: kompakter, aber sichtbar */
@@ -427,7 +553,7 @@
 
     <!-- Main Content -->
     <div class="container">
-        <div class="flow-chart">
+        <div class="flow-chart has-monitor-overlay">
             <div class="status-group">
                 <div class="status-badge" id="status">
                     <div class="status-dot"></div><span>API: Live</span>
@@ -438,9 +564,23 @@
                 <div class="status-badge warn-badge" id="status-backup">
                     <div class="status-dot"></div><span>Back: …</span>
                 </div>
+                <button id="overlayToggle" class="overlay-toggle" type="button">Overlay einblenden</button>
             </div>
 
-            <svg id="flow-svg" viewBox="60 -30 750 420">
+            <div class="monitor-overlay" aria-label="Monitoring Tag Live">
+                <div class="monitor-overlay-title">
+                    <span>Monitoring Tag - Live</span>
+                    <button id="overlayClose" class="monitor-overlay-close" type="button" aria-label="Overlay ausblenden">x</button>
+                </div>
+                <iframe
+                    class="monitor-overlay-frame"
+                    src="/monitoring?period=tag&embed=1"
+                    loading="lazy"
+                    title="Monitoring Tag Live"
+                ></iframe>
+            </div>
+
+            <svg id="flow-svg" viewBox="130 -24 590 402" preserveAspectRatio="xMinYMin meet">
                 <defs>
                     <filter id="glow">
                         <feGaussianBlur stdDeviation="2.5" result="blur"/>
@@ -487,26 +627,30 @@
                 <text x="200" y="250" text-anchor="middle"
                       fill="#ef4444" font-size="13" font-weight="700" id="sub-netz">0 kWh</text>
 
-                <!-- PV Gesamt -->
-                <circle cx="350" cy="135" r="62" fill="none"
+                    <!-- PV Prognose Emoji (links vom PV-Kreis, über Netz-Kreis) -->
+                    <text x="250" y="110" text-anchor="middle"
+                        fill="#fbbf24" font-size="32" font-weight="700" id="pv-forecast-emoji" style="pointer-events:none;">☀️</text>
+
+                    <!-- PV Gesamt -->
+                    <circle cx="350" cy="135" r="58" fill="none"
                         stroke="#fbbf24" stroke-width="3" id="node-pv"/>
-                <text x="350" y="117" text-anchor="middle"
-                      fill="#fbbf24" font-size="15" font-weight="600">PV Gesamt</text>
-                <text x="350" y="140" text-anchor="middle"
-                      fill="white" font-size="18" font-weight="700" id="value-pv">0 W</text>
-                <text x="350" y="156" text-anchor="middle"
-                      fill="#fbbf24" font-size="13" font-weight="700" id="sub-pv">0 kWh</text>
-                <text x="350" y="170" text-anchor="middle"
-                      fill="#fbbf24" font-size="13" font-weight="700" id="sub-pv-autarkie">0%</text>
+                    <text x="350" y="117" text-anchor="middle"
+                        fill="#fbbf24" font-size="15" font-weight="600">PV Gesamt</text>
+                    <text x="350" y="140" text-anchor="middle"
+                        fill="white" font-size="18" font-weight="700" id="value-pv">0 W</text>
+                    <text x="350" y="156" text-anchor="middle"
+                        fill="#fbbf24" font-size="13" font-weight="700" id="sub-pv">0 kWh</text>
+                    <text x="350" y="170" text-anchor="middle"
+                        fill="#fbbf24" font-size="13" font-weight="700" id="sub-pv-autarkie">0%</text>
 
                 <!-- Batterie -->
-                <circle cx="350" cy="315" r="55" fill="none"
+                    <circle cx="350" cy="322" r="55" fill="none"
                         stroke="#10b981" stroke-width="3" id="node-battery"/>
-                <text x="350" y="297" text-anchor="middle"
+                    <text x="350" y="304" text-anchor="middle"
                       fill="#10b981" font-size="15" font-weight="600">Batterie</text>
-                <text x="350" y="318" text-anchor="middle"
+                    <text x="350" y="325" text-anchor="middle"
                       fill="white" font-size="18" font-weight="700" id="value-battery">0 W</text>
-                <text x="350" y="335" text-anchor="middle"
+                    <text x="350" y="342" text-anchor="middle"
                       fill="#10b981" font-size="13" font-weight="700" id="sub-battery-soc">SOC: 0%</text>
 
                     <!-- Timestamp (rechts neben PV, über Verbrauch) -->
@@ -669,11 +813,60 @@
 
     const API_BASE = {{ api_base_url | tojson }};
     const apiUrl = (path) => API_BASE ? `${API_BASE}${path}` : path;
+    const DEFAULT_VIEWBOX = '130 -24 590 402';
+
+    const flowChartEl = document.querySelector('.flow-chart');
+    const overlayToggleEl = document.getElementById('overlayToggle');
+    const overlayCloseEl = document.getElementById('overlayClose');
+    let overlayHidden = false;
+    let lastOverlayEligible = false;
+
+    function overlayEligible() {
+        return window.innerWidth >= 780 && window.innerHeight >= 560;
+    }
+
+    function isOverlayHidden() {
+        return overlayHidden;
+    }
+
+    function setOverlayHidden(hidden) {
+        overlayHidden = Boolean(hidden);
+    }
+
+    function syncOverlayLayout() {
+        const eligible = overlayEligible();
+
+        // Sobald das Overlay wieder prinzipiell darstellbar ist (z.B. nach Zoom/Resize),
+        // wird es erneut aktiviert statt dauerhaft "festzuhängen".
+        if (eligible && !lastOverlayEligible) {
+            overlayHidden = false;
+        }
+        if (!eligible) {
+            overlayHidden = false;
+        }
+
+        const hidden = isOverlayHidden();
+        const useOverlay = eligible && !hidden;
+
+        flowChartEl.classList.toggle('overlay-hidden', !useOverlay);
+        overlayToggleEl.classList.toggle('is-visible', eligible && hidden);
+        lastOverlayEligible = eligible;
+    }
+
+    overlayCloseEl.addEventListener('click', function() {
+        setOverlayHidden(true);
+        syncOverlayLayout();
+    });
+
+    overlayToggleEl.addEventListener('click', function() {
+        setOverlayHidden(false);
+        syncOverlayLayout();
+    });
 
     const N = {  // Knoten-Koordinaten + Radien
         netz:       {x:200, y:225, r:58},
-        pv:         {x:350, y:135, r:62},
-        battery:    {x:350, y:315, r:55},
+        pv:         {x:350, y:135, r:58},
+        battery:    {x:350, y:322, r:55},
         consumption:{x:500, y:225, r:62},
         hub:        {x:350, y:225, r:5},
         f1: {x:250,y:30, r:39}, f2: {x:350,y:15, r:39}, f3: {x:450,y:30, r:39},
@@ -727,10 +920,30 @@
 
     // ── Konstanten ──
     const SVG_NS = "http://www.w3.org/2000/svg";
-    const MIN_W  = 10;          // Min. Leistung für Animation (sehr niedrig, damit Partikel fast immer da sind)
+    const MIN_W  = 10;          // Min. Leistung für Animation
     const GAP    = 40;          // Partikel-Abstand (px)
-    const V_BASE = 0.4;         // Basis-Speed (px/frame)
-    const V_MAX  = 2.5;         // Max-Speed
+    const FLOW_POLL_MS = 5000;  // API-Polling fuer Bubble-Flow
+
+    const FLOW_VISUAL_PROFILES = [
+        // <100W: gaaaanz langsam
+        { maxW: 100, speed: 0.05, radius: 2.1, stroke: 2.0 },
+        // 100..1000W: langsam
+        { maxW: 1000, speed: 0.16, radius: 2.7, stroke: 2.6 },
+        // 1..3kW: maeßig
+        { maxW: 3000, speed: 0.42, radius: 3.2, stroke: 3.3 },
+        // 3..10kW: groessere Punkte und langsam
+        { maxW: 10000, speed: 0.24, radius: 4.2, stroke: 4.1 },
+        // >10kW: maeßige Geschwindigkeit bei groessten Punkten
+        { maxW: Infinity, speed: 0.44, radius: 4.9, stroke: 4.8 }
+    ];
+
+    function getFlowVisualProfile(powerW) {
+        if (powerW < MIN_W) {
+            return { speed: 0, radius: 2.0, stroke: 2.0 };
+        }
+        const absW = Math.max(0, powerW || 0);
+        return FLOW_VISUAL_PROFILES.find(p => absW <= p.maxW) || FLOW_VISUAL_PROFILES[FLOW_VISUAL_PROFILES.length - 1];
+    }
 
     // ══════════════════════════════════════════════════════════
     //  GAUGE ARCS — dezente Zustandsanzeige (Tacho-Stil)
@@ -744,7 +957,7 @@
     const GAUGE_CFG = {
         pv:      { cx:350, cy:135, gr:54, max:26500, color:'#fbbf24' },
         netz:    { cx:200, cy:225, gr:50, max:24000, color:'#ef4444' },
-        battery: { cx:350, cy:315, gr:47, max:100,   color:'#10b981' },
+        battery: { cx:350, cy:322, gr:47, max:100,   color:'#10b981' },
     };
 
     function polarToCart(cx, cy, r, deg) {
@@ -882,6 +1095,12 @@
         return pts[pts.length - 1];
     }
 
+    function getFadeFactor(t, fadeWidth) {
+        const edgeDistance = Math.min(t, 1 - t);
+        const width = Math.max(0.01, fadeWidth || 0.15);
+        return Math.max(0, Math.min(1, edgeDistance / width));
+    }
+
     // ══════════════════════════════════════════════════════════
     //  Flow-Rendering
     // ══════════════════════════════════════════════════════════
@@ -895,14 +1114,15 @@
 
         for (const def of FLOWS) {
             const power = def.get(data);
+            const profile = getFlowVisualProfile(power);
             
             // Passe Pfad an Kreisgrenzen an
             const pts = adjustPathForCircles(def.path);
             const len = pathLen(pts);
             
-            // Stroke-Breite und Geschwindigkeit basierend auf Leistung
-            const sw  = power >= MIN_W ? Math.max(2, Math.min(6, 2 + power / 1500 * 4)) : 2;
-            const spd = power >= MIN_W ? Math.min(V_MAX, V_BASE + (power / 5000) * (V_MAX - V_BASE)) : 0;
+            // Diskrete Visualisierung nach Leistungsbereich (ohne direkte Kurve)
+            const sw  = profile.stroke;
+            const spd = profile.speed;
 
             // Leitungs-Linie (IMMER anzeigen, auch bei 0 W)
             const d = pts.map((p,i) => `${i?'L':'M'}${p.x},${p.y}`).join(' ');
@@ -917,18 +1137,20 @@
 
             // Partikel (IMMER erstellen, bewegen sich nur bei Power > MIN_W)
             const n = Math.max(2, Math.floor(len / GAP));
+            const baseOpacity = power >= MIN_W ? 0.9 : 0.3;
+            const fadeWidth = len < 70 ? 0.34 : (len < 130 ? 0.24 : 0.16);
             const dots = [];
             for (let i = 0; i < n; i++) {
                 const el = document.createElementNS(SVG_NS, 'circle');
-                el.setAttribute('r', Math.max(2.5, sw * 0.55));
+                el.setAttribute('r', profile.radius);
                 el.setAttribute('fill', def.color);
-                el.setAttribute('opacity', power >= MIN_W ? '0.9' : '0.3');  // Dezenter bei 0 W
+                el.setAttribute('opacity', String(baseOpacity));
                 el.setAttribute('filter', 'url(#glow)');
                 partG.appendChild(el);
                 dots.push({ el, t: i / n });
             }
 
-            activeFlows.push({ pts, len, spd, dots, power });
+            activeFlows.push({ pts, len, spd, dots, power, baseOpacity, fadeWidth });
         }
     }
 
@@ -947,6 +1169,7 @@
                     const pos = posAt(f.pts, p.t, f.len);
                     p.el.setAttribute('cx', pos.x);
                     p.el.setAttribute('cy', pos.y);
+                    p.el.setAttribute('opacity', String(f.baseOpacity * getFadeFactor(p.t, f.fadeWidth)));
                 }
             } else {
                 // Bei 0 W: Partikel bleiben stehen, aber werden angezeigt
@@ -954,6 +1177,7 @@
                     const pos = posAt(f.pts, p.t, f.len);
                     p.el.setAttribute('cx', pos.x);
                     p.el.setAttribute('cy', pos.y);
+                    p.el.setAttribute('opacity', String(f.baseOpacity));
                 }
             }
         }
@@ -964,7 +1188,11 @@
     //  Data Fetching + Smoothing + Labels
     // ══════════════════════════════════════════════════════════
 
+    let isFlowFetchInFlight = false;
+
     async function fetchFlow() {
+        if (isFlowFetchInFlight) return;
+        isFlowFetchInFlight = true;
         try {
             const r = await fetch(apiUrl('/api/flow_realtime'));
             if (!r.ok) throw new Error('API ' + r.status);
@@ -980,6 +1208,8 @@
         } catch (e) {
             console.error('Flow:', e);
             updateStatus('error');
+        } finally {
+            isFlowFetchInFlight = false;
         }
     }
 
@@ -1143,6 +1373,12 @@
             if (!r.ok) return;
             const d = await r.json();
             document.getElementById('bd-soh').textContent = d.soh != null ? d.soh : '--';
+
+            // PV-Prognose-Emoji setzen
+            if (d.pv_forecast_emoji) {
+                const emojiEl = document.getElementById('pv-forecast-emoji');
+                if (emojiEl) emojiEl.textContent = d.pv_forecast_emoji;
+            }
             // SOH-Quellen-Indikator
             const sohSrcEl = document.getElementById('bd-soh-source');
             if (sohSrcEl) {
@@ -1283,7 +1519,7 @@
     fetchBatteryDetail();
     fetchFailoverStatus();
     fetchBackupStatus();
-    setInterval(fetchFlow, 10000);
+    setInterval(fetchFlow, FLOW_POLL_MS);
     setInterval(fetchBatteryDetail, 10000);
     setInterval(fetchFailoverStatus, 60000);  // Failover-Check 1×/Min (SSH-basiert, Cache: 60s)
     setInterval(fetchBackupStatus, 600000);   // Backup-Check 1×/10 Min (SSH-basiert, Cache: 10 Min)
@@ -1297,11 +1533,15 @@
             // Nur Netz(200,225), PV(350,135), Hub(350,225), Batterie(350,315), Verbrauch(500,225)
             svg.setAttribute('viewBox', '80 80 500 300');
         } else {
-            svg.setAttribute('viewBox', '60 -30 750 420');
+            svg.setAttribute('viewBox', DEFAULT_VIEWBOX);
         }
     }
     adjustSvgForMobile();
-    window.addEventListener('resize', adjustSvgForMobile);
+    syncOverlayLayout();
+    window.addEventListener('resize', function() {
+        adjustSvgForMobile();
+        syncOverlayLayout();
+    });
     </script>
 
     {% include 'info_overlay.html' %}
