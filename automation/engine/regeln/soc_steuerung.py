@@ -434,31 +434,41 @@ class RegelKomfortReset(Regel):
         return False
 
     def _nachtladung_vermeidbar(self, obs: ObsState, matrix: dict) -> bool:
-        """Morgen-Prognose gut genug → keine erzwungene Nachtladung nötig.
+        """Prüft ob SOC_MIN-Reset auf 25% übersprungen werden kann.
 
-        Wenn die Batterie leer ist (SOC_MIN auf Stress) und morgen genug PV
-        kommt, ist ein SOC_MIN-Reset auf Komfort (25%) kontraproduktiv: Er
-        erzwingt sofortige Netzladung. Stattdessen bleibt SOC_MIN niedrig —
-        die PV morgen lädt die Batterie natürlich auf.
+        SOC_MIN bleibt nur dann bei 5% (kein Reset), wenn BEIDE Bedingungen
+        erfüllt sind:
+          1. Batterie hat noch genug Ladung (SOC > komfort_min) → kein
+             Langzeit-Stress bei niedrigem SOC über Nacht
+          2. Morgen-Prognose gut genug → PV morgen lädt natürlich auf
 
-        Bedingung:
-          - SOC_MIN aktuell auf Stress-Level (5%) → Morgen-Öffnung war aktiv
-          - forecast_tomorrow_kwh ≥ nachtlade_schwelle_kwh → PV morgen reicht
+        Ist SOC bereits ≤ komfort_min, wird IMMER auf Komfort zurückgesetzt
+        (Grid-Ladung), um stundenlangen Stress-Zustand zu vermeiden.
 
         Returns:
-            True → SOC_MIN-Reset überspringen (morgen genug PV).
+            True → SOC_MIN-Reset überspringen (SOC hoch + morgen genug PV).
         """
         komfort_min = get_param(matrix, self.regelkreis, 'komfort_min_pct', 25)
         if obs.soc_min is None or obs.soc_min >= komfort_min:
             return False  # SOC_MIN bereits auf Komfort → kein Thema
 
+        # ── SOC-Prüfung: Batterie bereits im Stress-Bereich? ──
+        # Wenn SOC ≤ komfort_min → Batterie ist leer, würde stundenlang
+        # auf Stress-Level bleiben → IMMER auf Komfort zurücksetzen.
+        soc = obs.batt_soc_pct
+        if soc is not None and soc <= komfort_min:
+            LOG.info(f"komfort_reset: SOC {soc:.0f}% ≤ {komfort_min}% "
+                     f"→ bereits im Stress-Bereich, Komfort-Reset nötig")
+            return False
+
+        # ── Prognose-Prüfung: Morgen genug PV? ──
         schwelle = get_param(matrix, self.regelkreis, 'nachtlade_schwelle_kwh', 20.0)
         morgen_kwh = obs.forecast_tomorrow_kwh
 
         if morgen_kwh is not None and morgen_kwh >= schwelle:
-            LOG.info(f"komfort_reset: Morgen-Prognose {morgen_kwh:.1f} kWh "
-                     f"≥ {schwelle:.0f} kWh → SOC_MIN-Reset übersprungen "
-                     f"(keine erzwungene Nachtladung)")
+            LOG.info(f"komfort_reset: SOC {soc:.0f}% > {komfort_min}%, "
+                     f"Morgen-Prognose {morgen_kwh:.1f} kWh ≥ {schwelle:.0f} kWh "
+                     f"→ SOC_MIN-Reset übersprungen (draint über Nacht)")
             return True
 
         if morgen_kwh is not None:
@@ -524,16 +534,21 @@ class RegelKomfortReset(Regel):
             })
             return aktionen
 
-        # Normaler Abend-Reset: alle Werte zurücksetzen
+        # Normaler Abend-Reset: SOC_MIN auf Komfort zurücksetzen,
+        # AUSSER die Batterie hat noch genug Ladung UND morgen kommt PV.
         #
-        # SOC_MIN-Reset: Nur wenn morgen NICHT genug PV kommt.
-        # Ansonsten bleibt SOC_MIN niedrig → PV morgen lädt natürlich,
-        # statt einer sinnlosen Netzladung heute Nacht.
+        # Batterie noch voll (SOC > 25%): SOC_MIN bei 5% lassen → draint
+        #   über Nacht, trifft 5% erst früh → kurzer Stress, Morgen-Algo
+        #   übernimmt.  Kein unnötiger Netzbezug heute Nacht.
+        # Batterie bereits leer (SOC ≤ 25%): SOC_MIN auf 25% → Grid-Ladung
+        #   über Nacht → verhindert stundenlangen Stress-Zustand.
         if obs.soc_min is not None and obs.soc_min != komfort_min:
             if self._nachtladung_vermeidbar(obs, matrix):
                 morgen_str = f"{obs.forecast_tomorrow_kwh:.0f}" if obs.forecast_tomorrow_kwh is not None else "?"
+                soc_str = f"{obs.batt_soc_pct:.0f}" if obs.batt_soc_pct is not None else "?"
                 LOG.info(f"Komfort-Reset {now_str}: SOC_MIN-Reset übersprungen "
-                         f"(Morgen-Prognose {morgen_str} kWh ausreichend)")
+                         f"(SOC {soc_str}% > {komfort_min}%, "
+                         f"Morgen-Prognose {morgen_str} kWh → draint über Nacht)")
             else:
                 aktionen.append({
                     'tier': 2, 'aktor': 'batterie',

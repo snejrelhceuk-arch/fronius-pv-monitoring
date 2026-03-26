@@ -93,6 +93,11 @@ class ForecastCollector:
         if self._sunrise_h is None:
             self._fetch_sunrise_sunset(obs)
 
+        # is_day muss in jedem Zyklus frisch berechnet werden, nicht nur bei
+        # Forecast-Fetch. Sonst bleibt der Tag/Nacht-Status zwischen Triggern
+        # stehen und Sunset-Übergänge werden verpasst.
+        self._refresh_is_day(obs)
+
         # ── Trigger-Prüfung ─────────────────────────────────
         should_fetch = False
         trigger_name = None
@@ -209,7 +214,18 @@ class ForecastCollector:
         self._sunset_h = 17.0
         obs.sunrise = 7.0
         obs.sunset = 17.0
+        now_h = datetime.now().hour + datetime.now().minute / 60.0
+        obs.is_day = 7.0 <= now_h <= 17.0
         LOG.warning("  Sunrise/Sunset Fallback auf Defaults: 07:00 / 17:00")
+
+    def _refresh_is_day(self, obs: ObsState):
+        """Aktualisiere Tag/Nacht-Status anhand bekannter Sunrise/Sunset-Zeiten."""
+        sunrise = self._sunrise_h if self._sunrise_h is not None else obs.sunrise
+        sunset = self._sunset_h if self._sunset_h is not None else obs.sunset
+        if sunrise is None or sunset is None:
+            return
+        now_h = datetime.now().hour + datetime.now().minute / 60.0
+        obs.is_day = sunrise <= now_h <= sunset
 
     def _do_fetch(self, obs: ObsState):
         """Vollständiger Forecast-Fetch → ObsState + forecast_daily DB."""
