@@ -257,28 +257,54 @@ Score um 16:30h:     55  (Deadline, voller Score)
 
 ---
 
-### 4.4 abend_entladerate — Nachtrationierung (Priorität 2)
+### 4.4 komfort_reset — Abend-Reset auf Komfortwerte (Priorität 2)
 
-**Zweck:** Abends und nachts die Entladerate begrenzen, damit die Batterie den ganzen Abend/die ganze Nacht durchhält. Spitzenlasten (Kochen, Backofen) gehen ans Netz.
+**Zweck:** Abends die Batterie-SOC-Grenzen auf den Komfort-Bereich (25–75%) zurücksetzen. Schützt LFP-Zellen vor dauerhaftem Stress-Zustand (z.B. SOC_MIN=5% über Nacht). Zusätzlich: intelligenter Früh-Reset am Nachmittag, wenn die PV-Restprognose nicht für eine Erholung reicht.
 
-**Score:** 65
+**Score:** 70
 **Zyklus:** fast
 
-| Parameter | Standard | Bereich | Wirkung |
-|-----------|----------|---------|---------|
-| abend_start | 15 h | 13–18 h | **Start der Abend-Drosselung.** Ab dieser Uhrzeit wird die maximale Entladerate begrenzt. Früher = mehr Netzanteil am Nachmittag, aber Batterie hält länger. |
-| abend_ende | 0 h | 0–2 h | **Ende der Abend-Phase** (0 = Mitternacht). |
-| abend_rate | 29% | 10–80% | **Maximale Entladerate am Abend.** 29% der 2× BYD HVS 20,48 kWh ≈ **5.9 kW**. Alles darüber wird aus dem Netz bezogen. Niedriger = mehr Netzanteil, Batterie hält länger. Höher = mehr Eigenverbrauch, aber Batterie könnte vor Mitternacht leer sein. ⚠️ *Regel aktuell deaktiviert (März 2026).* |
-| nacht_start | 0 h | 0–2 h | **Start der Nacht-Phase.** |
-| nacht_ende | 6 h | 4–8 h | **Ende der Nacht-Phase.** |
-| nacht_rate | 10% | 0–30% | **Maximale Entladerate in der Nacht.** 10% ≈ **1.0 kW** — reicht für Standby-Last (Kühlschrank, Heizung, WLAN). Spart die letzten kWh für den Morgen. |
-| kritisch_soc | 10% | 5–20% | **Entladesperre (Hold).** Unter diesem SOC wird die Batterie komplett gesperrt (0 W Entladung). Sicherheitsnetz damit die Batterie nie völlig leer wird. |
+**Entscheidungslogik (Abend-Reset):**
 
-**Rechenbeispiel:**
-- 18:00 Uhr: SOC = 80%, Kapazität 20.48 kWh × (80%–10%) = **14.3 kWh** nutzbar
-- Abend-Rate 3 kW → 7.2 kWh ÷ 3 kW = **2.4 Stunden** bei Volllast
-- Real: Grundlast ~400 W + Spitzen → Batterie hält bis ca. 2–4 Uhr nachts
-- Nacht-Rate 1 kW → restliche kWh reichen für Standby bis Sonnenaufgang
+| Abend-SOC | Morgen-Prognose | Entscheidung |
+|-----------|-----------------|-------------|
+| SOC > 25% | ≥ 20 kWh | SOC_MIN bleibt bei 5% — draint über Nacht, morgens Drain-Algo |
+| SOC > 25% | < 20 kWh | SOC_MIN → 25% (Nachtladung nötig) |
+| **SOC ≤ 25%** | **egal** | **SOC_MIN → 25% — Stress vermeiden!** |
+
+> **Kernregel:** Ist die Batterie abends bereits im Stress-Bereich (SOC ≤ komfort_min),
+> wird SOC_MIN **immer** auf Komfort zurückgesetzt. Nur wenn noch genug Ladung vorhanden
+> ist UND morgen genug PV kommt, darf SOC_MIN niedrig bleiben.
+
+**Früh-Reset (Nachmittag):**
+Wenn nachmittags (ab `frueh_reset_ab_h`) die PV-Restprognose unter `erholung_schwelle_kwh` fällt, wird SOC_MIN sofort auf 25% angehoben. Hysterese (`erholung_hysterese_kwh`) verhindert Flackern.
+
+| Parameter | Standard | Bereich | Wirkung |
+|-----------|----------|---------|--------|
+| komfort_min | 25% | 10–40% | **SOC_MIN im Normalzustand.** LFP-optimiert: unter 25% = Stress. |
+| komfort_max | 75% | 60–90% | **SOC_MAX im Normalzustand.** LFP-optimiert: über 75% = Stress. |
+| reset_nach_sunset_h | 0 h | 0–3 h | **Abend-Reset-Zeitpunkt.** 0 = sofort bei Sunset. |
+| frueh_reset_ab_h | 13 h | 11–16 h | **Frühester Zeitpunkt für Nachmittags-Früh-Reset.** |
+| erholung_schwelle | 10 kWh | 5–20 kWh | **Prognose-Rest < Schwelle → Früh-Reset (SOC_MIN sofort auf 25%).** |
+| erholung_hysterese | 2 kWh | 1–5 kWh | **Anti-Flicker:** Aufhebung erst bei Schwelle + Hysterese. |
+| nachtlade_schwelle | 20 kWh | 5–50 kWh | **Morgen-Prognose für Abend-Override.** Nur wenn SOC > komfort_min UND Morgen ≥ Schwelle bleibt SOC_MIN niedrig. |
+
+**Beispiel (sonniger Tag, Batterie leer):**
+```
+18:30 Uhr: SOC = 17%, Morgen-Prognose = 107 kWh
+→ SOC (17%) ≤ komfort_min (25%) → Komfort-Reset: SOC_MIN 5% → 25%
+→ Grid-Ladung über Nacht auf 25%, Stress-Zustand vermieden
+```
+
+**Beispiel (sonniger Tag, Batterie voll):**
+```
+18:30 Uhr: SOC = 45%, Morgen-Prognose = 107 kWh
+→ SOC (45%) > komfort_min (25%) UND Prognose (107) ≥ 20 kWh
+→ SOC_MIN bleibt bei 5% → draint über Nacht → morgens Drain-Algo
+```
+
+> ⚠️ **Vorgänger:** Sektion 4.4 war `abend_entladerate` (Nachtrationierung via OutWRte).
+> Entfernt am 2026-03-07 (GEN24 DC-DC-Wandler limitiert hardwareseitig).
 
 ---
 
@@ -300,6 +326,8 @@ Score um 16:30h:     55  (Deadline, voller Score)
 | spaetester_tag | 28 | 20–31 | **Spätester regulärer Monatstag.** Danach wird auf nächsten Monat verschoben (es sei denn, max_tage ist überschritten). |
 
 **Hinweis:** An Wintertagen mit nur 5–10 kWh Erzeugung wird die 50-kWh-Schwelle nie erreicht. Dann greift nach 45 Tagen die Notfall-Schwelle (25 kWh).
+
+**Zyklus-Erkennung (seit 2026-03-26):** Der Marker `last_balancing`/`letzter_ausgleich` wird automatisch gesetzt, wenn ein konservativ erkannter Vollzyklus vorliegt. Kriterien: Tages-`SOC_MIN` nahe `soc_min_waehrend`, Tages-`SOC_MAX` nahe `soc_max_waehrend`, ausreichende Spannweite und genug Messpunkte. Damit verhindern wir Fehltrigger durch kurze Peaks oder lückenhafte Daten.
 
 ---
 

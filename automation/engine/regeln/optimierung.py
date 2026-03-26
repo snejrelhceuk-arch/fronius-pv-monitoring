@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sqlite3
 from datetime import datetime, date
 from typing import Optional
 
@@ -53,9 +54,20 @@ class RegelZellausgleich(Regel):
     regelkreis = 'zellausgleich'
     engine_zyklus = 'strategic'
 
+    _DETECT_AFTER_H = 15.0
+    _LOW_MARGIN_PCT = 3.0
+    _HIGH_MARGIN_PCT = 2.0
+    _MIN_HIGH_SAMPLES = 30
+    _MIN_DAY_SAMPLES = 120
+
     def bewerte(self, obs: ObsState, matrix: dict) -> int:
         if not ist_aktiv(matrix, self.regelkreis):
             return 0
+
+        # Zyklus-Erkennung vor Trigger-Logik: reale Vollzyklen markieren,
+        # damit im laufenden Monat keine unnötigen Neu-Trigger entstehen.
+        self._erkenne_und_markiere_zyklus(matrix)
+
         if obs.forecast_kwh is None:
             return 0
 
@@ -115,6 +127,144 @@ class RegelZellausgleich(Regel):
             return cfg.get('zellausgleich', {}).get('letzter_ausgleich')
         except (FileNotFoundError, json.JSONDecodeError, OSError):
             return None
+
+    def _erkenne_und_markiere_zyklus(self, matrix: dict) -> None:
+        """Erkenne abgeschlossenen Tages-Vollzyklus und setze Marker.
+
+        Konservativ: Nur wenn Tages-SOC klar von unten bis oben gefahren wurde
+        und genügend Messpunkte vorliegen.
+        """
+        heute = date.today().isoformat()
+        if self._letzter_ausgleich() == heute:
+            return
+
+        now_h = datetime.now().hour + datetime.now().minute / 60.0
+        if now_h < self._DETECT_AFTER_H:
+            return
+
+        stats = self._lade_tages_soc_stats(matrix)
+        if not stats:
+            return
+
+        min_soc, max_soc, high_samples, total_samples = stats
+        if min_soc is None or max_soc is None:
+            return
+
+        if total_samples < self._MIN_DAY_SAMPLES:
+            return
+
+        soc_min_target = float(get_param(matrix, self.regelkreis, 'soc_min_waehrend_pct', 5))
+        soc_max_target = float(get_param(matrix, self.regelkreis, 'soc_max_waehrend_pct', 100))
+
+        low_ok = min_soc <= (soc_min_target + self._LOW_MARGIN_PCT)
+        high_threshold = max(95.0, soc_max_target - self._HIGH_MARGIN_PCT)
+        high_ok = max_soc >= high_threshold
+        span_ok = (max_soc - min_soc) >= (high_threshold - (soc_min_target + self._LOW_MARGIN_PCT))
+        samples_ok = high_samples >= self._MIN_HIGH_SAMPLES
+
+        if not (low_ok and high_ok and span_ok and samples_ok):
+            return
+
+        if self._setze_letzten_ausgleich(heute):
+            LOG.info(
+                'Zellausgleich-Zyklus automatisch erkannt: '
+                f'SOC min/max={min_soc:.1f}/{max_soc:.1f}%, '
+                f'high_samples={high_samples}, samples={total_samples} '
+                f'→ letzter_ausgleich={heute}'
+            )
+
+    @staticmethod
+    def _lade_tages_soc_stats(matrix: dict) -> Optional[tuple[Optional[float], Optional[float], int, int]]:
+        """Hole Tages-SOC-Statistik aus Collector-DB (RAM, fallback persist)."""
+        try:
+            import config as app_config
+            db_paths = [app_config.DB_PATH, app_config.DB_PERSIST_PATH]
+        except Exception:
+            db_paths = [
+                '/dev/shm/fronius_data.db',
+                os.path.join(_PROJECT_ROOT, 'data.db'),
+            ]
+
+        heute = date.today()
+        start_ts = datetime(heute.year, heute.month, heute.day).timestamp()
+        end_ts = start_ts + 86400
+
+        soc_max_target = float(get_param(matrix, 'zellausgleich', 'soc_max_waehrend_pct', 100))
+        high_threshold = max(95.0, soc_max_target - RegelZellausgleich._HIGH_MARGIN_PCT)
+
+        query = """
+            SELECT
+                MIN(SOC_Batt) AS min_soc,
+                MAX(SOC_Batt) AS max_soc,
+                SUM(CASE WHEN SOC_Batt >= ? THEN 1 ELSE 0 END) AS high_samples,
+                COUNT(SOC_Batt) AS total_samples
+            FROM raw_data
+            WHERE ts >= ?
+              AND ts < ?
+              AND SOC_Batt IS NOT NULL
+        """
+
+        for path in db_paths:
+            if not path or not os.path.exists(path):
+                continue
+            try:
+                conn = sqlite3.connect(path, timeout=2.0)
+                try:
+                    row = conn.execute(query, (high_threshold, start_ts, end_ts)).fetchone()
+                finally:
+                    conn.close()
+
+                if not row:
+                    continue
+
+                min_soc, max_soc, high_samples, total_samples = row
+                return (
+                    float(min_soc) if min_soc is not None else None,
+                    float(max_soc) if max_soc is not None else None,
+                    int(high_samples or 0),
+                    int(total_samples or 0),
+                )
+            except sqlite3.Error:
+                continue
+
+        return None
+
+    def _setze_letzten_ausgleich(self, iso_date: str) -> bool:
+        """Persistiere Datum in beiden Marker-Dateien (best effort, atomisch)."""
+        updated = False
+
+        state_path = os.path.join(_PROJECT_ROOT, 'config', 'battery_scheduler_state.json')
+        try:
+            with open(state_path) as f:
+                state = json.load(f)
+            if state.get('last_balancing') != iso_date:
+                state['last_balancing'] = iso_date
+                self._write_json_atomic(state_path, state)
+                updated = True
+        except (FileNotFoundError, json.JSONDecodeError, OSError) as e:
+            LOG.warning(f'Zellausgleich-Marker state nicht gesetzt ({state_path}): {e}')
+
+        cfg_path = os.path.join(_PROJECT_ROOT, 'config', 'battery_control.json')
+        try:
+            with open(cfg_path) as f:
+                cfg = json.load(f)
+            zellausgleich = cfg.setdefault('zellausgleich', {})
+            if zellausgleich.get('letzter_ausgleich') != iso_date:
+                zellausgleich['letzter_ausgleich'] = iso_date
+                self._write_json_atomic(cfg_path, cfg)
+                updated = True
+        except (FileNotFoundError, json.JSONDecodeError, OSError) as e:
+            LOG.warning(f'Zellausgleich-Marker cfg nicht gesetzt ({cfg_path}): {e}')
+
+        return updated
+
+    @staticmethod
+    def _write_json_atomic(path: str, data: dict) -> None:
+        tmp_path = f'{path}.tmp'
+        with open(tmp_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+            f.write('\n')
+        os.replace(tmp_path, path)
 
     def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
         soc_min = get_param(matrix, self.regelkreis, 'soc_min_waehrend_pct', 5)

@@ -326,7 +326,7 @@
           ],
           "einheit": "kWh",
           "obs_feld": "forecast_tomorrow_kwh",
-          "beschreibung": "Morgen-Prognose < Schwelle → erzwungene Nachtladung (SOC_MIN auf Komfort). Bei ≥ Schwelle: SOC_MIN bleibt niedrig, PV morgen reicht aus."
+          "beschreibung": "Abend-Reset-Logik: SOC_MIN wird auf Komfort (25%) zurückgesetzt, AUSSER: (a) aktueller SOC > komfort_min UND (b) Morgen-Prognose ≥ Schwelle. Dann draint die Batterie über Nacht natürlich ab. Ist SOC bereits ≤ komfort_min (Batterie leer), wird IMMER auf Komfort zurückgesetzt um stundenlangen Stress-Zustand zu vermeiden."
         }
       },
       "score_gewicht": 70,
