@@ -19,9 +19,7 @@ Siehe: doc/AUTOMATION_ARCHITEKTUR.md §6 (Aktoren)
 from __future__ import annotations
 
 import logging
-import os
 import time
-from typing import Optional
 
 LOG = logging.getLogger('aktor.batterie')
 

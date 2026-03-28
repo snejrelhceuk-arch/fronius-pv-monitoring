@@ -7,11 +7,10 @@ Enthält: /api/tag_visualization, /api/monat_visualization,
 Alle Perioden-APIs (monat/jahr/gesamt) liefern freq_extremes mit
 Netzfrequenz-Min/Max inkl. Zeitstempel aus data_1min.
 """
-import sqlite3
 import logging
 from datetime import datetime
 from flask import Blueprint, jsonify, request
-from routes.helpers import get_db_connection
+from routes.helpers import get_db_connection, api_error_response, validate_year_month
 
 bp = Blueprint('visualization', __name__)
 
@@ -285,8 +284,7 @@ def api_tag_visualization():
         return jsonify(result)
 
     except Exception as e:
-        logging.error(f"Tag-Visualisierung Fehler: {e}")
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e, "Tag-Visualisierung")
     finally:
         if 'conn' in locals() and conn:
             try:
@@ -307,6 +305,11 @@ def monat_visualization():
             now = datetime.now()
             year = now.year
             month = now.month
+
+        valid, err = validate_year_month(year, month)
+        if err:
+            return err
+        year, month = valid
 
         # Ersten und letzten Tag des Monats berechnen
         first_day = datetime(year, month, 1)
@@ -478,8 +481,7 @@ def monat_visualization():
         return jsonify(response)
 
     except Exception as e:
-        logging.error(f"Monat-Visualisierung Fehler: {e}")
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e, "Monat-Visualisierung")
     finally:
         if 'conn' in locals() and conn:
             try:
@@ -495,6 +497,11 @@ def jahr_visualization():
         year = request.args.get('year', type=int)
         if not year:
             year = datetime.now().year
+
+        valid, err = validate_year_month(year)
+        if err:
+            return err
+        year, _ = valid
 
         conn = get_db_connection()
         if not conn:
@@ -554,8 +561,7 @@ def jahr_visualization():
         return jsonify(response)
 
     except Exception as e:
-        logging.error(f"Jahr-Visualisierung Fehler: {e}")
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e, "Jahr-Visualisierung")
 
 
 @bp.route('/api/gesamt_visualization')
@@ -621,5 +627,4 @@ def gesamt_visualization():
         return jsonify(response)
 
     except Exception as e:
-        logging.error(f"Gesamt-Visualisierung Fehler: {e}")
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e, "Gesamt-Visualisierung")

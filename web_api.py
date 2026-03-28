@@ -18,6 +18,7 @@ Modulare Blueprint-Architektur:
   routes/forecast.py      — Prognose-APIs (Clear-Sky, Forecast)
 """
 from flask import Flask, jsonify, request, send_from_directory
+from markupsafe import escape as _html_escape
 import logging
 import os
 import time
@@ -56,19 +57,23 @@ def inject_mirror_info():
 
 @app.after_request
 def add_cors_headers(response):
-    """Erlaubt API-Aufrufe von externen Frontends (neuer Web-Server)."""
+    """Erlaubt API-Aufrufe von konfigurierten Origins (Standard: nur Same-Origin)."""
     if request.path.startswith('/api/'):
-        allow = os.environ.get('PV_API_CORS_ORIGINS', '*')
+        allow = os.environ.get('PV_API_CORS_ORIGINS', '')
         origin = request.headers.get('Origin')
-        if allow == '*':
+        if not allow or not origin:
+            # Kein CORS-Header → nur Same-Origin erlaubt
+            pass
+        elif allow == '*':
             response.headers['Access-Control-Allow-Origin'] = '*'
         else:
             allowed = [o.strip() for o in allow.split(',') if o.strip()]
             if origin in allowed:
                 response.headers['Access-Control-Allow-Origin'] = origin
                 response.headers['Vary'] = 'Origin'
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        if 'Access-Control-Allow-Origin' in response.headers:
+            response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
     return response
 
 @app.after_request
@@ -82,7 +87,7 @@ def add_mirror_banner(response):
             'background:linear-gradient(90deg,#ff6b00,#ff9500);color:#fff;'
             'text-align:center;padding:6px 12px;font-size:13px;font-weight:600;'
             'z-index:99999;box-shadow:0 2px 8px rgba(0,0,0,0.3);">'
-            f'&#x1F50D; SPIEGEL-MODUS &mdash; Datenquelle: {MIRROR_SOURCE} '
+            f'&#x1F50D; SPIEGEL-MODUS &mdash; Datenquelle: {_html_escape(MIRROR_SOURCE)} '
             f'| Letzte Sync: <span id="mirror-sync-age">?</span>'
             '<button onclick="this.parentElement.style.display=\'none\'" '
             'style="margin-left:16px;background:rgba(255,255,255,0.3);border:none;'
@@ -181,8 +186,8 @@ if __name__ == '__main__':
     if not _check_port_available(config.WEB_API_HOST, config.WEB_API_PORT):
         print(f"FEHLER: Port {config.WEB_API_PORT} ist bereits belegt!")
         print("  Vermutlich läuft pv-web.service bereits.")
-        print(f"  Prüfen:  sudo systemctl status pv-web.service")
-        print(f"  Stoppen: sudo systemctl stop pv-web.service")
+        print("  Prüfen:  sudo systemctl status pv-web.service")
+        print("  Stoppen: sudo systemctl stop pv-web.service")
         import sys
         sys.exit(1)
 

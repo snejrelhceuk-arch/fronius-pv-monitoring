@@ -18,13 +18,10 @@ Format fritzdect_readings:
 Siehe: doc/automation/fritzdect/FRITZDECT_PERFORMANCE.md
 """
 
-import os
 import sys
-import json
 import logging
 import sqlite3
 import time
-from datetime import datetime
 from pathlib import Path
 
 # Setup Logging (→ systemd journal)

@@ -94,25 +94,25 @@ def analyze_poll_cycles(hours=24):
     
     # Zusammenfassung
     print(f"\n{'='*60}")
-    print(f"🎯 ZUSAMMENFASSUNG")
+    print("🎯 ZUSAMMENFASSUNG")
     print(f"{'='*60}")
     print(f"  Analysierte Zeitspanne: {hours}h")
     print(f"  Anzahl Messungen:       {len(rows):,}")
-    print(f"")
-    print(f"  POLL_INTERVAL (Soll):   3.000 s")
+    print("")
+    print("  POLL_INTERVAL (Soll):   3.000 s")
     print(f"  Poll Duration (Ist):    {poll_avg:.3f} s (Datensammlung)")
     print(f"  Cycle Time (Ist):       {cycle_avg:.3f} s (echter Abstand)")
-    print(f"")
+    print("")
     print(f"  → Echter Zyklus = {cycle_avg:.3f}s")
     print(f"  → Für Integrationen Faktor verwenden: {cycle_avg:.3f}/3600 = {cycle_avg/3600:.6f} h/Zyklus")
     
     # Warnung bei großen Abweichungen
     if cycle_avg > 3.5:
         print(f"\n⚠️  WARNUNG: Zykluszeit {cycle_avg:.3f}s deutlich über Soll (3s)!")
-        print(f"   Mögliche Ursachen:")
-        print(f"   - CPU-Throttling (Hitze)")
-        print(f"   - Modbus-Timeouts")
-        print(f"   - Langsamer Pi4 vs Pi5")
+        print("   Mögliche Ursachen:")
+        print("   - CPU-Throttling (Hitze)")
+        print("   - Modbus-Timeouts")
+        print("   - Langsamer Pi4 vs Pi5")
     
     # Überprüfung auf große Lücken
     large_gaps = [ct for ct in cycle_times if ct > 10]
@@ -123,7 +123,7 @@ def analyze_poll_cycles(hours=24):
     
     # Verteilung anzeigen
     print(f"\n{'='*60}")
-    print(f"📈 VERTEILUNG (Cycle Time)")
+    print("📈 VERTEILUNG (Cycle Time)")
     print(f"{'='*60}")
     
     buckets = {

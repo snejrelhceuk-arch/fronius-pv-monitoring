@@ -62,6 +62,26 @@ Fritz!Box-Heartbeat + Tier-1-Alarm. Burst-State persistieren.
 **Empfehlung:** `ruff check --fix --select F401,F541,W292` (170+ Auto-Fixes).
 47× try-except-pass gezielt überprüfen.
 
+### 3.1  Durchgeführte Bereinigung (28. März 2026)
+
+**ruff --fix Auto-Fixes (169 Stellen):**
+- F401: 60 unbenutzte Imports entfernt
+- F541: 106 f-strings ohne Platzhalter bereinigt
+- E401: 3 Mehrfach-Imports aufgeteilt
+
+**Gezielte Fixes (8 Stellen):**
+- B904: 5× `raise X from exc` in `wattpilot_api.py` (Traceback-Kette bewahrt)
+- S311: 2× `random.randrange` → `secrets.token_hex` in Auth-Token-Generierung
+  (`wattpilot_api.py`, `tools/wattpilot_read.py`)
+- F601: 1× doppelter Dict-Key `'ust'` in `tools/wattpilot_read.py` entfernt
+
+**try-except-pass Review (47 Stellen):**
+- 46× als OK-OPTIONAL eingestuft (Cleanup-Blöcke, optionale Tabellen, graceful degradation)
+- 1× FIX-LOG: `automation_daemon.py` L322 — RAM-DB-Reconnect-Fehler wird jetzt geloggt
+
+**Ergebnis:** 273 Findings → 103 (davon 43 E402 bewusst, 31 F841 teils gewollt,
+23 E701 Stilwahl, 3 E702 Stilwahl, 3 E741 fachliche Variablennamen).
+
 ---
 
 ## 4  Sensible Daten in Commits
@@ -107,14 +127,18 @@ Datei-Diffs mit Providername:    0
 ### Kurzfristig
 
 - [ ] API-Authentifizierung implementieren (API-Key oder Token)
-- [ ] `html.escape(MIRROR_SOURCE)` in `web_api.py`
-- [ ] Null-Guards für `soc`, `ww_temp_c`, `sunrise/sunset` in Regeln
 - [ ] Fritz!Box-Heartbeat + Tier-1-Alarm bei Ausfall
-
-### Mittelfristig
-
-- [ ] Error-Responses generisch halten (kein `str(e)`)
-- [ ] CORS auf bekannte Origins einschränken
-- [ ] 47× try-except-pass überprüfen
 - [ ] Burst-State nach JSON persistieren
-- [ ] `ruff --fix` für 170+ Auto-Fixes
+
+### Erledigt (28. März 2026)
+
+- [x] `html.escape(MIRROR_SOURCE)` in `web_api.py` — XSS-Fix
+- [x] Error-Responses generisch (35 Stellen in 7 Dateien → `api_error_response()`)
+- [x] WW-Temp Null-Guard + 300s-Watchdog in `regeln/geraete.py`
+- [x] CORS default `*` → same-origin (explizites Opt-in via `PV_API_CORS_ORIGINS`)
+- [x] Input-Validierung `year`/`month` in 9 Endpoints (4 Blueprints + visualization)
+- [x] `/api/bulk_load` mit max 7d Zeitfenster + 200k Row-Limit + truncated-Flag
+- [x] `ruff --fix` für F401, F541, E401 (169 Auto-Fixes)
+- [x] 47× try-except-pass systematisch reviewt (1 gefixt, 46 bewusst OK)
+- [x] B904 (5×), S311 (2×), F601 (1×) — gezielte Einzelfixes
+- [x] `random` → `secrets` für Auth-Token-Generierung (Wattpilot)

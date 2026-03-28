@@ -218,7 +218,7 @@ def get_git_recent_changes(n: int = 20) -> str:
     """Hole die letzten n Git-Commit-Messages."""
     try:
         result = subprocess.run(
-            ['git', '--no-pager', 'log', f'--oneline', f'-{n}', '--no-decorate'],
+            ['git', '--no-pager', 'log', '--oneline', f'-{n}', '--no-decorate'],
             capture_output=True, text=True, cwd=str(BASE_DIR), timeout=10
         )
         return result.stdout.strip()

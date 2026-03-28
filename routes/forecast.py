@@ -15,6 +15,8 @@ from routes.helpers import (
     store_forecast_15min,
     _day_timestamps,
     _interpolate_series,
+    api_error_response,
+    validate_year_month,
 )
 
 bp = Blueprint('forecast', __name__)
@@ -60,8 +62,7 @@ def api_clearsky_day():
             'datapoints': curve,
         })
     except Exception as e:
-        logging.error(f"Clear-Sky Fehler: {e}")
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e, "Clear-Sky")
 
 
 @bp.route('/api/forecast_tag')
@@ -250,8 +251,7 @@ def api_forecast_tag():
         return jsonify(response_data)
 
     except Exception as e:
-        logging.error(f"Forecast Tag Fehler: {e}")
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e, "Forecast Tag")
 
 
 @bp.route('/api/stored_forecast')
@@ -276,8 +276,7 @@ def api_stored_forecast():
         return jsonify(stored)
 
     except Exception as e:
-        logging.error(f"Stored Forecast Fehler: {e}")
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e, "Stored Forecast")
 
 
 @bp.route('/api/forecast_monat')
@@ -295,6 +294,10 @@ def api_forecast_monat():
             now = datetime.now()
             year = now.year
             month = now.month
+        valid, err = validate_year_month(year, month)
+        if err:
+            return err
+        year, month = valid
 
         fc = get_forecast()
         if not fc:

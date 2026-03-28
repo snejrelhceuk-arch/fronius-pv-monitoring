@@ -10,7 +10,7 @@ import os
 import time
 from datetime import date
 from flask import Blueprint, jsonify, request
-from routes.helpers import get_db_connection, ram_db_lock, DB_FILE
+from routes.helpers import get_db_connection, ram_db_lock, api_error_response
 
 bp = Blueprint('realtime', __name__)
 
@@ -152,7 +152,7 @@ def api_zoom():
             "duration_hours": round(duration_hours, 2)
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e)
 
 
 @bp.route('/api/realtime_smart')
@@ -315,13 +315,15 @@ def api_realtime_smart():
             conn.close()
 
     except Exception as e:
-        logging.error(f"API realtime_smart error: {e}")
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e, "API realtime_smart")
 
 
 @bp.route('/api/bulk_load')
 def api_bulk_load():
     """Lädt ALLE Topics für ein Zeitfenster - volle Auflösung, kein Downsampling, keine Delta-Kompression"""
+    MAX_DURATION_S = 7 * 24 * 3600  # max 7 Tage
+    MAX_ROWS = 200_000              # ~28h bei 5s-Takt (75 Spalten)
+
     try:
         start = request.args.get('start', type=int)
         end = request.args.get('end', type=int)
@@ -329,7 +331,12 @@ def api_bulk_load():
         if not start or not end:
             return jsonify({"error": "start und end erforderlich"}), 400
 
+        if end <= start:
+            return jsonify({"error": "end muss größer als start sein"}), 400
+
         duration_seconds = end - start
+        if duration_seconds > MAX_DURATION_S:
+            return jsonify({"error": f"Zeitfenster zu groß (max {MAX_DURATION_S // 3600}h)"}), 400
         duration_hours = duration_seconds / 3600
 
         with ram_db_lock:
@@ -363,7 +370,8 @@ def api_bulk_load():
                     FROM raw_data
                     WHERE ts >= ? AND ts <= ?
                     ORDER BY ts ASC
-                """, (start, end))
+                    LIMIT ?
+                """, (start, end, MAX_ROWS))
 
                 rows = c.fetchall()
                 cols = [d[0] for d in c.description]
@@ -385,12 +393,13 @@ def api_bulk_load():
         return jsonify({
             "data": data,
             "points": len(data),
+            "truncated": len(data) >= MAX_ROWS,
             "duration_hours": round(duration_hours, 2),
             "topics": 75,
             "resolution": "full (~5s)"
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e)
 
 
 @bp.route('/api/zoom_compressed')
@@ -541,7 +550,7 @@ def api_zoom_compressed():
             "duration_hours": round(duration_hours, 2)
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e)
 
 
 @bp.route('/api/flow_realtime')
@@ -737,8 +746,7 @@ def api_flow_realtime():
         return jsonify(result)
 
     except Exception as e:
-        logging.error(f"Flow-API Fehler: {e}")
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e, "Flow-API")
 
 
 @bp.route('/api/polling_data')
@@ -829,4 +837,4 @@ def api_polling_data():
             'data': data
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e)

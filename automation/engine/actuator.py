@@ -16,7 +16,6 @@ import os
 import sqlite3
 import time
 from datetime import datetime
-from typing import Optional
 
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 from automation.engine.aktoren.aktor_batterie import AktorBatterie, AktorBase

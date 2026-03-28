@@ -13,7 +13,7 @@ from pathlib import Path
 from datetime import datetime
 from flask import Blueprint, jsonify, request
 import config
-from routes.helpers import get_db_connection, get_fronius_api, battery_cache, wattpilot_cache
+from routes.helpers import get_db_connection, get_fronius_api, battery_cache, wattpilot_cache, api_error_response, validate_year_month
 
 bp = Blueprint('system', __name__)
 
@@ -98,7 +98,7 @@ def api_battery_status():
         logging.error(f"Battery Status Fehler: {e}")
         if battery_cache['data']:
             return jsonify(battery_cache['data'])
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e)
 
 
 @bp.route('/api/flow_status')
@@ -122,7 +122,7 @@ def api_flow_status():
         logging.error(f"Flow Status Fehler: {e}")
         if _flow_cache['data']:
             return jsonify(_flow_cache['data'])
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e)
 
 
 # ── Hilfsfunktionen für api_battery_status / api_flow_status ─────────────────────
@@ -428,7 +428,7 @@ def _build_automation_phasen(now, result):
                 'status': 'pending',
                 'zeit': f'~{_sunset_zeit}' if _sunset_zeit else None,
                 'aktion': f'Grenzen → {_k_min}–{_k_max}%',
-                'grund': f'Komfort-Modus nach Sonnenuntergang'
+                'grund': 'Komfort-Modus nach Sonnenuntergang'
                          + (f' (~{_sunset_zeit})' if _sunset_zeit else ''),
                 'manuell': False,
             }
@@ -1009,7 +1009,7 @@ def _fetch_soh(result):
 @bp.route('/api/system_info')
 def api_system_info():
     """Live-Systeminfos: CPU, RAM, Temp, Uptime, DB-Größe."""
-    import subprocess, platform
+    import platform
     result = {}
     try:
         # CPU-Auslastung (1-min Load Average)
@@ -1096,8 +1096,7 @@ def api_system_info():
             result['disk'] = None
 
     except Exception as e:
-        logging.error(f"System Info Fehler: {e}")
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e, "System Info")
 
     return jsonify(result)
 
@@ -1141,6 +1140,10 @@ def wattpilot_history():
             now = datetime.now()
             year = now.year
             month = now.month
+        valid, err = validate_year_month(year, month)
+        if err:
+            return err
+        year, month = valid
 
         first_day = datetime(year, month, 1)
         if month == 12:
@@ -1192,8 +1195,7 @@ def wattpilot_history():
         })
 
     except Exception as e:
-        logging.error(f"Wattpilot History Fehler: {e}")
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e, "Wattpilot History")
 
 
 # ══════════════════════════════════════════════════════════════

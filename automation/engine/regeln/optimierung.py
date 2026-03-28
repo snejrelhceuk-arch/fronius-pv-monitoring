@@ -354,7 +354,7 @@ class RegelForecastPlausi(Regel):
                 aktionen.append({
                     'tier': 2, 'aktor': 'batterie',
                     'kommando': 'set_soc_mode', 'wert': 'manual',
-                    'grund': f'Forecast-Korrektur: SOC_MODE → manual',
+                    'grund': 'Forecast-Korrektur: SOC_MODE → manual',
                 })
             aktionen.append({
                 'tier': 2, 'aktor': 'batterie',

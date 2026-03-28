@@ -42,7 +42,7 @@ import json
 import os
 import logging
 import sys
-from datetime import datetime, date, timedelta, timezone
+from datetime import datetime, date, timedelta
 
 try:
     import numpy as np
@@ -1525,47 +1525,47 @@ def _cmd_config(args):
     """Aktuelle Konfiguration und alle justierbaren Parameter anzeigen."""
     config_exists = os.path.exists(GEOMETRY_CONFIG_FILE)
     
-    print(f"\n⚙️  Solar-Geometrie Konfiguration")
+    print("\n⚙️  Solar-Geometrie Konfiguration")
     print(f"   Config-Datei: {GEOMETRY_CONFIG_FILE}")
     print(f"   Status: {'✓ geladen' if config_exists else '✗ nicht vorhanden (Defaults)'}")
     
-    print(f"\n   ── System ──────────────────────────────")
+    print("\n   ── System ──────────────────────────────")
     print(f"   Performance Ratio:    {PERFORMANCE_RATIO}")
     print(f"   Temperaturkoeffizient:{TEMP_COEFF} /°C")
     print(f"   Bodenreflexion:       {GROUND_ALBEDO}")
     
-    print(f"\n   ── Atmosphäre ──────────────────────────")
+    print("\n   ── Atmosphäre ──────────────────────────")
     print(f"   Trübungsfaktor τ:     {ATMOSPHERIC_TURBIDITY}")
     print(f"   DHI-Koeffizient:      {DHI_COEFFICIENT}")
     print(f"   Klima-Diffusanteil:   {CLIMATE_DIFFUSE_FRACTION} ({CLIMATE_DIFFUSE_FRACTION*100:.0f}%)")
     
-    print(f"\n   ── Prognose-Korrekturen ────────────────")
+    print("\n   ── Prognose-Korrekturen ────────────────")
     print(f"   Global-Faktor:        {FORECAST_GLOBAL_FACTOR}")
     print(f"   Wolkenlinsen-Boost:   {FORECAST_CLOUD_ENHANCEMENT}")
     print(f"   Winter-Boost (Nov-Feb):{FORECAST_WINTER_BOOST}")
     print(f"   Sommer-Faktor (Mai-Aug):{FORECAST_SUMMER_FACTOR}")
     
-    print(f"\n   ── String-Korrekturfaktoren ────────────")
+    print("\n   ── String-Korrekturfaktoren ────────────")
     if STRING_FACTORS:
         for name, factor in STRING_FACTORS.items():
             if name.startswith('_'):
                 continue
-            marker = '' if factor == 1.0 else f'  ← angepasst!'
+            marker = '' if factor == 1.0 else '  ← angepasst!'
             print(f"   {name:24s} {factor:.3f}{marker}")
     else:
-        print(f"   (keine — alle Strings 1.000)")
+        print("   (keine — alle Strings 1.000)")
 
-    print(f"\n   ── Optimierer-Gain ───────────────────")
+    print("\n   ── Optimierer-Gain ───────────────────")
     if OPTIMIZER_GAIN:
         for name, gain in OPTIMIZER_GAIN.items():
             if name.startswith('_'):
                 continue
-            marker = '' if gain == 1.0 else f'  ← angepasst!'
+            marker = '' if gain == 1.0 else '  ← angepasst!'
             print(f"   {name:24s} {gain:.3f}{marker}")
     else:
-        print(f"   (keine — alle Strings 1.000)")
+        print("   (keine — alle Strings 1.000)")
     
-    print(f"\n   ── WR-Wirkungsgrade ────────────────────")
+    print("\n   ── WR-Wirkungsgrade ────────────────────")
     for inv in sorted(INVERTER_LIMITS.keys()):
         eff = INVERTER_EFFICIENCY.get(inv, 1.0)
         limit = INVERTER_LIMITS[inv]
@@ -1581,14 +1581,14 @@ def _cmd_config(args):
               f"(Az={s['azimuth']:+.1f}° Tilt={s['tilt']}°)")
     print(f"   {'Gesamt':24s} {total_kwp:.2f} kWp")
 
-    print(f"\n   ── Verschattung ───────────────────────")
+    print("\n   ── Verschattung ───────────────────────")
     if SHADING_MASK:
         print("   Verschattungsmaske: aktiv")
     else:
         print("   Verschattungsmaske: deaktiviert")
     
     print(f"\n   Zum Anpassen: {GEOMETRY_CONFIG_FILE} editieren,")
-    print(f"   dann --table --force / --clearsky --force neu generieren.\n")
+    print("   dann --table --force / --clearsky --force neu generieren.\n")
     
     if args.json:
         data = {
@@ -1638,21 +1638,21 @@ def _cmd_now(args):
         ghi, dni, dhi = clear_sky_irradiance(elev)
         power = plant_power_w(dni, dhi, ghi, elev, az)
         
-        print(f"\n   Clear-Sky-Strahlung:")
+        print("\n   Clear-Sky-Strahlung:")
         print(f"     GHI: {ghi:.0f} W/m²  (Global Horizontal)")
         print(f"     DNI: {dni:.0f} W/m²  (Direct Normal)")
         print(f"     DHI: {dhi:.0f} W/m²  (Diffuse Horizontal)")
         
-        print(f"\n   Clear-Sky-Leistung:")
+        print("\n   Clear-Sky-Leistung:")
         print(f"     DC gesamt: {power['total_dc']:.0f} W")
         print(f"     AC gesamt: {power['total_ac']:.0f} W")
         
-        print(f"\n   Pro Wechselrichter:")
+        print("\n   Pro Wechselrichter:")
         for inv, data in sorted(power['inverters'].items()):
             clip = " ⚡CLIPPING" if data.get('clipped') else ""
             print(f"     {inv}: {data['dc']:.0f} W DC → {data['ac']:.0f} W AC{clip}")
         
-        print(f"\n   Pro String:")
+        print("\n   Pro String:")
         for name, w in sorted(power['strings'].items()):
             aoi = "--"
             for s in PV_STRINGS:
@@ -1882,7 +1882,7 @@ def _cmd_validate(args):
         low_clip = [d for d in usable_days if d['clipping'] == 'wenig']
         high_clip = [d for d in usable_days if d['clipping'] == 'wahrscheinlich']
         
-        print(f"\n📊  Validierung: Tage-Qualität für Nulleinspeiser")
+        print("\n📊  Validierung: Tage-Qualität für Nulleinspeiser")
         print(f"   Gesamt: {len(usable_days)} Tage mit PV > 1 kWh")
         print(f"   ✓ Keine Abregelung (PV/Verbr < 80%): {len(no_clip)} Tage")
         print(f"   ~ Wenig Abregelung (80-95%):          {len(low_clip)} Tage")
@@ -1891,7 +1891,7 @@ def _cmd_validate(args):
         # Winter-Validierungstage (Nov-Feb) ohne Abregelung
         winter_good = [d for d in no_clip if d['month'] in (11, 12, 1, 2)]
         
-        print(f"\n   ── Winter-Validierungstage (Nov-Feb, keine Abregelung) ──")
+        print("\n   ── Winter-Validierungstage (Nov-Feb, keine Abregelung) ──")
         print(f"   {'Datum':>12s}  {'PV kWh':>7s}  {'Verbr.':>7s}  {'Ratio':>6s}  Bewertung")
         print("   " + "─" * 54)
         
@@ -1962,11 +1962,11 @@ def _cmd_validate(args):
             print(f"   Mittlerer Fehler (GHI×Faktor): {avg_err:+.1f}% "
                   f"({'Unterschätzung' if avg_err > 0 else 'Überschätzung'})")
             print(f"   Mittlerer Absolutfehler:        {abs_avg:.1f}%")
-            print(f"\n   Hinweis: Das ist die ALTE Methode (GHI×Multi-Faktor).")
-            print(f"   Die neue Geometrie-Methode validiert sich ab jetzt")
-            print(f"   Tag für Tag gegen die reale Produktion.")
-            print(f"\n   Parameter anpassen: config/geometry_config.json editieren,")
-            print(f"   z.B. 'performance_ratio', 'global_factor' oder String-Faktoren.")
+            print("\n   Hinweis: Das ist die ALTE Methode (GHI×Multi-Faktor).")
+            print("   Die neue Geometrie-Methode validiert sich ab jetzt")
+            print("   Tag für Tag gegen die reale Produktion.")
+            print("\n   Parameter anpassen: config/geometry_config.json editieren,")
+            print("   z.B. 'performance_ratio', 'global_factor' oder String-Faktoren.")
     
     except Exception as e:
         print(f"❌ Validierungsfehler: {e}")

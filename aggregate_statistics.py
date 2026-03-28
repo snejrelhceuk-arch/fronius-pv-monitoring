@@ -23,7 +23,7 @@ Mapping:
 
 import sys
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime
 import logging
 from host_role import is_failover
 

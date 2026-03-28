@@ -27,7 +27,6 @@ import sqlite3
 import sys
 import time
 from datetime import datetime, date, timedelta
-from pathlib import Path
 from typing import Optional, Tuple
 
 # ── Projekt-Root ermitteln ─────────────────────────────────────
@@ -37,8 +36,7 @@ sys.path.insert(0, PROJECT_ROOT)
 import config
 from automation.engine.param_matrix import (
     lade_matrix, validiere_matrix, alle_regelkreise,
-    get_param, ist_aktiv, get_score_gewicht,
-    DEFAULT_MATRIX_PATH,
+    get_param, DEFAULT_MATRIX_PATH,
 )
 
 # ── Konstanten ─────────────────────────────────────────────────
@@ -534,7 +532,7 @@ def _edit_parameter(rk_name: str, p_name: str):
         info += f'ObsState-Feld: {obs_feld}\n'
     if aktor:
         info += f'Aktor-Kommando: {aktor}\n'
-    info += f'\nNeuen Wert eingeben:'
+    info += '\nNeuen Wert eingeben:'
 
     neuer_wert_str = wt_inputbox(info, str(wert))
     if neuer_wert_str is None:
@@ -656,7 +654,7 @@ def _zeige_scheduler_status():
     )
 
     if sched:
-        text += f'\nScheduler-State:\n'
+        text += '\nScheduler-State:\n'
         for k, v in sorted(sched.items()):
             text += f'  {k}: {v}\n'
 
@@ -963,7 +961,7 @@ def _db_status():
         age_h = (time.time() - os.path.getmtime(persist_path)) / 3600
         text += f'Persist-Alter: {age_h:.1f}h\n'
     else:
-        text += f'Persist: NICHT VORHANDEN\n'
+        text += 'Persist: NICHT VORHANDEN\n'
 
     # WAL-Modus prüfen
     row = _query_one("PRAGMA journal_mode")
@@ -1707,7 +1705,7 @@ def _speichere_matrix(matrix: dict):
     fehler = validiere_matrix(matrix)
     if fehler:
         wt_msgbox(
-            f'⚠ VALIDIERUNGSFEHLER — Speichern abgebrochen!\n\n'
+            '⚠ VALIDIERUNGSFEHLER — Speichern abgebrochen!\n\n'
             + '\n'.join(f'• {f}' for f in fehler[:5])
         )
         return
@@ -1743,7 +1741,7 @@ def menu_schaltlog():
             ('1', 'Logbuch anzeigen (neueste zuerst)'),
             ('2', 'Logbuch anzeigen (letzte 100)'),
             ('3', 'Logbuch anzeigen (alle)'),
-            ('4', f'Status & Dateigröße'),
+            ('4', 'Status & Dateigröße'),
         ])
         if not choice:
             return
@@ -2040,7 +2038,7 @@ def hauptmenu():
         rc, choice = _wt(args, backtitle=backtitle)
 
         if rc != 0 or choice == 'q':
-            print(f'\npv-config beendet.\n')
+            print('\npv-config beendet.\n')
             break
 
         if choice == '1':
@@ -2090,7 +2088,7 @@ def main():
     try:
         lade_matrix()
     except FileNotFoundError:
-        print(f'Fehler: Parametermatrix nicht gefunden.')
+        print('Fehler: Parametermatrix nicht gefunden.')
         print(f'  Erwartet: {DEFAULT_MATRIX_PATH}')
         sys.exit(1)
 

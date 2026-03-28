@@ -18,7 +18,7 @@ import subprocess
 import sys
 import time
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from diagnos.config import (
     CPU_TEMP_CRIT_C, CPU_TEMP_WARN_C,

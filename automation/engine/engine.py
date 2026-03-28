@@ -22,7 +22,7 @@ import os
 import sqlite3
 
 import automation.engine.obs_state as obs_mod
-from automation.engine.obs_state import ObsState, read_obs_state
+from automation.engine.obs_state import read_obs_state
 from automation.engine.actuator import Actuator
 from automation.engine.param_matrix import (
     lade_matrix, get_score_gewicht, DEFAULT_MATRIX_PATH,

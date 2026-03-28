@@ -56,11 +56,9 @@ import os
 import json
 import time
 import sqlite3
-import hashlib
 import argparse
 import logging
 from datetime import datetime, date, timedelta
-from pathlib import Path
 
 # Encoding fix für RPi5
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -995,7 +993,7 @@ class SolarForecast:
         results['checks'].append({
             'name': 'API-Erreichbarkeit',
             'status': 'OK' if api_ok else 'FEHLER',
-            'detail': 'Open-Meteo antwortet' if api_ok else f'API nicht erreichbar'
+            'detail': 'Open-Meteo antwortet' if api_ok else 'API nicht erreichbar'
         })
         if not api_ok:
             results['healthy'] = False
@@ -1143,7 +1141,7 @@ def print_day_forecast(forecast, sf):
     print()
 
     if not f['api_healthy']:
-        print(f"  ⚠️  Daten aus Cache (API nicht erreichbar)")
+        print("  ⚠️  Daten aus Cache (API nicht erreichbar)")
     print()
 
 
@@ -1154,7 +1152,7 @@ def print_hourly_forecast(hours):
         return
 
     print(f"\n{'═' * 72}")
-    print(f"  STÜNDLICHE STRAHLUNG")
+    print("  STÜNDLICHE STRAHLUNG")
     print(f"{'═' * 72}")
     print(f"  {'Zeit':>5}  {'GHI':>6}  {'DNI':>6}  {'Diff':>5}  {'Wolken':>6}  {'Sonne':>5}  {'Temp':>5}  WMO")
     print(f"  {'':>5}  {'W/m²':>6}  {'W/m²':>6}  {'W/m²':>5}  {'%':>6}  {'min':>5}  {'°C':>5}")
@@ -1209,12 +1207,12 @@ def print_calibration(stats):
         return
 
     print(f"\n{'=' * 60}")
-    print(f"  KALIBRIERUNG: GHI -> PV-Ertrag")
+    print("  KALIBRIERUNG: GHI -> PV-Ertrag")
     print(f"{'=' * 60}")
     print(f"  Zeitraum:         {stats['date_range']}")
     print(f"  Datenpunkte:      {stats['count']}")
     print()
-    print(f"  --- Einfaches Modell (PV = factor * GHI) ---")
+    print("  --- Einfaches Modell (PV = factor * GHI) ---")
     print(f"  Median-Faktor:    {stats['median_factor']:.3f} kWh / (MJ/m2)")
     print(f"  Mittelwert:       {stats['mean_factor']:.3f}")
     print(f"  Standardabw.:     {stats['std_dev']:.3f}")
@@ -1223,7 +1221,7 @@ def print_calibration(stats):
     r2m = stats.get('r_squared_multi', 0)
     if r2m and r2m > 0:
         coeffs = stats.get('model_coeffs', {})
-        print(f"  --- Multi-Faktor (PV = a*GHI + b*Sunshine_h + c) ---")
+        print("  --- Multi-Faktor (PV = a*GHI + b*Sunshine_h + c) ---")
         print(f"  a (GHI):          {coeffs.get('a', '?')}")
         print(f"  b (Sonnenstd):    {coeffs.get('b', '?')}")
         print(f"  c (Basis):        {coeffs.get('c', '?')}")
@@ -1233,7 +1231,7 @@ def print_calibration(stats):
     print(f"  ==> Gewaehltes Modell: {chosen.upper()}")
     print(f"  Oe Fehler:         {stats['avg_error_pct']:.1f}%")
     print()
-    print(f"  Monatliche Faktoren:")
+    print("  Monatliche Faktoren:")
     for m, f in sorted(stats.get('monthly_factors', {}).items(), key=lambda x: int(x[0])):
         mname = ['', 'Jan', 'Feb', 'Maer', 'Apr', 'Mai', 'Jun',
                  'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'][int(m)]

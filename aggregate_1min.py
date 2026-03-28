@@ -11,7 +11,6 @@ KORRIGIERTE VORZEICHEN-KONVENTIONEN (10.01.2026):
 """
 
 import sys
-import sqlite3
 import time
 import config
 from host_role import is_failover

@@ -176,6 +176,8 @@ class RegelHeizpatrone(Regel):
         # Kurz-Burst-Schutz: nach 2x Burst < 5 min → 1h Sperre
         self._kurze_burst_zaehler: int = 0        # aufeinanderfolgende Kurz-Bursts
         self._kurz_burst_sperre_bis: float = 0    # Epoch: EIN-Sperre aktiv bis
+        # Watchdog: Notaus wenn WW-Temperatur länger als Schwelle unbekannt
+        self._ww_temp_letzte_gueltig: float = 0   # Epoch: letzte gültige ww_temp
 
     def _geraet_label(self) -> str:
         """Kurzlabel für menschenlesbare Extern-Logs."""
@@ -438,8 +440,20 @@ class RegelHeizpatrone(Regel):
             soc_schutz_abs = get_param(matrix, 'soc_schutz', 'stop_entladung_unter_pct', 5)
 
             # ── HARTE Kriterien: IMMER sofort, auch bei Extern ──
-            if obs.ww_temp_c is not None and obs.ww_temp_c >= temp_max:
-                return int(score * 1.5)
+            if obs.ww_temp_c is not None:
+                self._ww_temp_letzte_gueltig = time.time()
+                if obs.ww_temp_c >= temp_max:
+                    return int(score * 1.5)
+            else:
+                # Watchdog: WW-Temp unbekannt (Modbus-Ausfall) → Notaus nach Timeout
+                ww_watchdog_s = get_param(
+                    matrix, self.regelkreis, 'ww_temp_watchdog_s', 300
+                )
+                if (self._ww_temp_letzte_gueltig > 0
+                        and (time.time() - self._ww_temp_letzte_gueltig) > ww_watchdog_s):
+                    LOG.warning('HP-Notaus: WW-Temperatur seit %ds unbekannt (Modbus?)',
+                                int(time.time() - self._ww_temp_letzte_gueltig))
+                    return int(score * 1.5)
             if (obs.batt_soc_pct or 0) <= soc_schutz_abs:
                 return int(score * 1.5)
             # Extern-Autoritäts-Override: manuelle Einschaltung bei niedrigem SOC überstimmen

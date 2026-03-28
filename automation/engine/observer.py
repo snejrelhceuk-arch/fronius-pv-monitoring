@@ -209,7 +209,7 @@ class Observer:
                 LOG.info(f"  [DRY-RUN] Würde ausführen: {action}")
             else:
                 # TODO: An Actuator dispatchen (Phase 1: nur Logging)
-                LOG.info(f"  [PHASE-1] Actuator noch nicht verbunden — nur Log")
+                LOG.info("  [PHASE-1] Actuator noch nicht verbunden — nur Log")
 
     def stop(self):
         """Sauberes Shutdown."""

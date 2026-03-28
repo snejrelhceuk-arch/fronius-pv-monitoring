@@ -23,6 +23,7 @@ import re
 import threading
 import time
 from datetime import datetime
+from flask import jsonify
 import requests
 import config
 import db_init
@@ -32,6 +33,25 @@ DB_FILE = config.DB_PATH  # /dev/shm/fronius_data.db
 
 # Lock-Kompatibilität (Relikt, WAL regelt Concurrency)
 ram_db_lock = threading.Lock()
+
+
+def api_error_response(e: Exception, context: str = '') -> tuple:
+    """Generische API-Fehlerantwort — loggt Details intern, gibt nur Typ zurück."""
+    logging.error(f"API-Fehler{f' ({context})' if context else ''}: {e}", exc_info=True)
+    return jsonify({"error": "Interner Serverfehler", "type": type(e).__name__}), 500
+
+
+def validate_year_month(year, month=None):
+    """Validiert year/month-Parameter. Gibt (year, month) oder (None, error_response) zurück."""
+    now = datetime.now()
+    if year is None:
+        year = now.year
+    if year < 2020 or year > now.year + 1:
+        return None, (jsonify({"error": f"Ungültiges Jahr: {year}"}), 400)
+    if month is not None:
+        if month < 1 or month > 12:
+            return None, (jsonify({"error": f"Ungültiger Monat: {month}"}), 400)
+    return (year, month), None
 
 
 def get_db_connection():

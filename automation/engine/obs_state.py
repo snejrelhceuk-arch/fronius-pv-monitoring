@@ -15,8 +15,7 @@ import json
 import logging
 import os
 import sqlite3
-import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from datetime import datetime
 from typing import Optional
 

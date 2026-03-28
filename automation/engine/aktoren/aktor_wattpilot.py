@@ -21,8 +21,6 @@ Siehe: doc/automation/SCHUTZREGELN.md SR-SLS-01
 from __future__ import annotations
 
 import logging
-import os
-from typing import Optional
 
 from automation.engine.aktoren.aktor_batterie import AktorBase
 

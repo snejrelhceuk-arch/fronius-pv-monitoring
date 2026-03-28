@@ -91,24 +91,24 @@ def analyze_wattpilot_cycles(hours=24):
         charging_avg, charging_med = stats(charging_cycle_times, 
                                           "Cycle Time (während Ladung)", "s")
     else:
-        print(f"\n⚠️  Keine Ladezustände in diesem Zeitraum")
+        print("\n⚠️  Keine Ladezustände in diesem Zeitraum")
         charging_avg = overall_avg
         charging_med = overall_med
     
     # Zusammenfassung
     print(f"\n{'='*60}")
-    print(f"🎯 ZUSAMMENFASSUNG")
+    print("🎯 ZUSAMMENFASSUNG")
     print(f"{'='*60}")
     print(f"  Analysierte Zeitspanne: {hours}h")
     print(f"  Anzahl Messungen:       {len(rows):,}")
-    print(f"")
+    print("")
     print(f"  POLL_INTERVAL (Soll):   {config.WATTPILOT_POLL_INTERVAL:.3f} s")
     print(f"  Cycle Time (Ist):       {overall_avg:.3f} s")
     
     if charging_avg:
         print(f"  Cycle Time (Laden):     {charging_avg:.3f} s")
     
-    print(f"")
+    print("")
     print(f"  → Echter Zyklus = {overall_avg:.3f}s")
     print(f"  → Für charging_hours Faktor: {overall_avg:.3f}/3600 = {overall_avg/3600:.6f} h/Zyklus")
     
@@ -118,7 +118,7 @@ def analyze_wattpilot_cycles(hours=24):
     
     if abweichung > 1:
         print(f"\n⚠️  WARNUNG: Zykluszeit {overall_avg:.3f}s weicht um {abweichung:.1f}% vom Soll ({soll}s) ab!")
-        print(f"   → Empfehlung: wattpilot_collector.py korrigieren")
+        print("   → Empfehlung: wattpilot_collector.py korrigieren")
         print(f"   → ACTUAL_CYCLE_TIME = {overall_avg:.3f} in config.py ergänzen")
     else:
         print(f"\n✅ Zykluszeit liegt im Toleranzbereich ({abweichung:.1f}% Abweichung)")
@@ -132,7 +132,7 @@ def analyze_wattpilot_cycles(hours=24):
     
     # Verteilung anzeigen
     print(f"\n{'='*60}")
-    print(f"📈 VERTEILUNG (Cycle Time)")
+    print("📈 VERTEILUNG (Cycle Time)")
     print(f"{'='*60}")
     
     buckets = {
@@ -169,7 +169,7 @@ def analyze_wattpilot_cycles(hours=24):
     charging_pct = (charging_count / len(rows) * 100) if len(rows) > 0 else 0
     
     print(f"\n{'='*60}")
-    print(f"🔋 LADE-STATISTIK")
+    print("🔋 LADE-STATISTIK")
     print(f"{'='*60}")
     print(f"  Messungen mit car_state=2:  {charging_count:,} ({charging_pct:.1f}%)")
     print(f"  Geschätzte Ladezeit:        {charging_count * overall_avg / 3600:.1f}h")

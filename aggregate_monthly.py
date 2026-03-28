@@ -4,8 +4,7 @@ Monatliche Aggregation: data_15min → data_monthly
 Läuft alle 15min via Cron (aktualisiert laufenden Monat)
 """
 import sys
-import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging
 import config
 from host_role import is_failover

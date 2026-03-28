@@ -16,7 +16,6 @@ import asyncio
 import json
 import hashlib
 import base64
-import secrets
 import sys
 import os
 from datetime import datetime
@@ -48,7 +47,7 @@ def _load_password():
     print("FEHLER: Kein Wattpilot-Passwort gefunden!")
     print("  Entweder Umgebungsvariable setzen:")
     print("    export WATTPILOT_PASSWORD='...'")
-    print(f"  Oder in .secrets eintragen:")
+    print("  Oder in .secrets eintragen:")
     print("    WATTPILOT_PASSWORD=dein_passwort")
     sys.exit(1)
 
@@ -101,7 +100,6 @@ KNOWN_PROPS = {
     'adi':  'Adapter-In (16A, 32A)',
     'cae':  'Cloud API enabled',
     'lse':  'LED Stromspar-Modus',
-    'ust':  'Kabel-Lock (0=Normal, 1=AutoLock, 2=AlwaysLock)',
     'dto':  'Daily Timer Offset [min]',
     'nmo':  'Norwegen-Modus',
 }
@@ -123,10 +121,8 @@ def compute_auth(serial: str, password: str, token1: str, token2: str):
     hashed_pw = base64.b64encode(dk)[:32]  # bytes, 32 Zeichen
 
     # Schritt 2: token3 generieren (32 hex chars, wie in __on_auth)
-    import random
-    ran = random.randrange(10**80)
-    token3 = "%064x" % ran
-    token3 = token3[:32]
+    import secrets
+    token3 = secrets.token_hex(16)
 
     # Schritt 3: hash1 = SHA256(token1_bytes + hashed_password_bytes)
     hash1 = hashlib.sha256((token1.encode() + hashed_pw)).hexdigest()
@@ -196,16 +192,16 @@ async def read_all_properties():
                 print(f"  Auth-Response: {json.dumps(auth_resp, indent=2)}")
                 return None
             elif auth_resp.get('type') == 'authSuccess':
-                print(f"  [OK] Authentifizierung erfolgreich")
+                print("  [OK] Authentifizierung erfolgreich")
             elif auth_resp.get('type') in ('fullStatus', 'deltaStatus'):
                 # Manche FW-Versionen senden direkt Status ohne explizites authSuccess
-                print(f"  [OK] Auth implizit erfolgreich (direkt Status erhalten)")
+                print("  [OK] Auth implizit erfolgreich (direkt Status erhalten)")
                 # Diese Nachricht gleich verarbeiten
                 status = auth_resp.get('status', {})
                 full_status = dict(status)
                 msg_count = 1
                 # Weiter mit Status-Empfang
-                print(f"  Empfange Status-Daten ...")
+                print("  Empfange Status-Daten ...")
                 while True:
                     try:
                         raw = await asyncio.wait_for(ws.recv(), timeout=5)
@@ -230,7 +226,7 @@ async def read_all_properties():
 
             # 5) fullStatus sammeln
             full_status = {}
-            print(f"\n  Empfange Status-Daten ...")
+            print("\n  Empfange Status-Daten ...")
             msg_count = 0
 
             while True:
@@ -262,7 +258,7 @@ async def read_all_properties():
 
     except ConnectionRefusedError:
         print(f"\n  FEHLER: Verbindung abgelehnt auf {uri}")
-        print(f"  -> Ist der Wattpilot eingeschaltet und im Netzwerk?")
+        print("  -> Ist der Wattpilot eingeschaltet und im Netzwerk?")
         return None
     except asyncio.TimeoutError:
         print(f"\n  FEHLER: Timeout -- keine Antwort von {WATTPILOT_IP}")
@@ -298,7 +294,7 @@ def print_energy(status):
     print(f"  Auto-Status:            {CAR_STATES.get(car, car)}")
 
     if nrg and len(nrg) >= 16:
-        print(f"\n  Live-Messwerte (nrg):")
+        print("\n  Live-Messwerte (nrg):")
         print(f"    Spannung:   L1={nrg[0]}V  L2={nrg[1]}V  L3={nrg[2]}V  N={nrg[3]}V")
         print(f"    Strom:      L1={nrg[4]}A  L2={nrg[5]}A  L3={nrg[6]}A")
         print(f"    Leistung:   L1={nrg[7]}W  L2={nrg[8]}W  L3={nrg[9]}W  "

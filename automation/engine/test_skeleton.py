@@ -18,7 +18,6 @@ Aufruf:
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import sqlite3
@@ -30,10 +29,10 @@ from unittest.mock import patch
 # Projekt-Root
 from automation.engine.obs_state import (
     ObsState, init_ram_db, write_obs_state, read_obs_state,
-    write_heartbeat, load_param_matrix,
+    write_heartbeat,
 )
 from automation.engine.observer import Tier1Checker
-from automation.engine.actuator import Actuator, init_persist_log
+from automation.engine.actuator import Actuator
 from automation.engine.engine import (
     Engine, RegelMorgenSocMin,
     RegelNachmittagSocMax, RegelKomfortReset, RegelZellausgleich,
@@ -144,7 +143,7 @@ def test_tier1_temp_warn():
     assert obs.alarm_batt_temp, "Alarm-Flag nicht gesetzt"
     assert len(actions) == 0, f"Erwarte keine Aktionen (HW-Eingriffe entfernt), got {actions}"
 
-    LOG.info(f"✓ Alarm-Flag gesetzt, keine HW-Aktion (BMS regelt selbständig)")
+    LOG.info("✓ Alarm-Flag gesetzt, keine HW-Aktion (BMS regelt selbständig)")
     return True
 
 
@@ -163,7 +162,7 @@ def test_tier1_temp_alarm():
     assert obs.alarm_batt_temp
     assert len(actions) == 0, f"Erwarte keine Aktionen (HW-Eingriffe entfernt), got {actions}"
 
-    LOG.info(f"✓ ALARM-Flag gesetzt, keine HW-Aktion (BMS regelt selbständig)")
+    LOG.info("✓ ALARM-Flag gesetzt, keine HW-Aktion (BMS regelt selbständig)")
     return True
 
 
@@ -181,7 +180,7 @@ def test_tier1_temp_hysterese():
     actions = checker.check(obs)
     assert obs.alarm_batt_temp
     assert len(actions) == 0, "Keine HW-Aktionen erwartet"
-    LOG.info(f"  42°C → Alarm-Flag gesetzt")
+    LOG.info("  42°C → Alarm-Flag gesetzt")
 
     # Schritt 2: 37°C — Alarm gelöst
     obs2 = ObsState(batt_temp_max_c=37.0)
@@ -204,7 +203,7 @@ def test_tier1_soc_kritisch():
 
     assert obs.alarm_batt_kritisch
     assert len(actions) == 0, f"Erwarte keine Aktionen (SOC_MIN steuert implizit), got {actions}"
-    LOG.info(f"✓ SOC kritisch: Alarm-Flag gesetzt, keine HW-Aktion")
+    LOG.info("✓ SOC kritisch: Alarm-Flag gesetzt, keine HW-Aktion")
     return True
 
 

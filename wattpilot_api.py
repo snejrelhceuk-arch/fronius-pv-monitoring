@@ -86,16 +86,14 @@ def _compute_auth(serial: str, password: str, token1: str, token2: str):
     3. token3 = random 32 hex chars
     4. hash  = SHA256((token3 + token2 + hash1).encode())
     """
-    import random
+    import secrets
 
     # Schritt 1: Passwort-Hash
     dk = hashlib.pbkdf2_hmac('sha512', password.encode(), serial.encode(), 100000, 256)
     hashed_pw = base64.b64encode(dk)[:32]  # bytes, 32 Zeichen
 
     # Schritt 2: token3 generieren
-    ran = random.randrange(10**80)
-    token3 = "%064x" % ran
-    token3 = token3[:32]
+    token3 = secrets.token_hex(16)
 
     # Schritt 3: hash1
     hash1 = hashlib.sha256((token1.encode() + hashed_pw)).hexdigest()
@@ -148,11 +146,11 @@ class WattpilotClient:
         """
         try:
             import websockets
-        except ImportError:
-            raise ImportError("websockets nicht installiert: pip3 install websockets")
+        except ImportError as exc:
+            raise ImportError("websockets nicht installiert: pip3 install websockets") from exc
         
         uri = f"ws://{self.ip}/ws"
-        logger.debug(f"Verbinde mit {uri} ...")
+        logger.debug("Verbinde mit %s ...", uri)
         
         try:
             async with websockets.connect(uri, open_timeout=self.timeout) as ws:
@@ -212,15 +210,15 @@ class WattpilotClient:
                 self._last_read_time = datetime.now()
                 
                 return full_status
-        except ConnectionRefusedError:
+        except ConnectionRefusedError as exc:
             raise ConnectionRefusedError(
-                f"WebSocket {uri} verweigert — vermutlich externe App (go-e/Fronius) aktiv")
-        except ConnectionResetError:
+                f"WebSocket {uri} verweigert — vermutlich externe App (go-e/Fronius) aktiv") from exc
+        except ConnectionResetError as exc:
             raise ConnectionResetError(
-                f"WebSocket {uri} zurückgesetzt — Verbindung durch andere App verdrängt")
+                f"WebSocket {uri} zurückgesetzt — Verbindung durch andere App verdrängt") from exc
         except OSError as e:
             if 'Connection refused' in str(e) or 'Connection reset' in str(e):
-                raise ConnectionRefusedError(f"WebSocket {uri} nicht verfügbar: {e}")
+                raise ConnectionRefusedError(f"WebSocket {uri} nicht verfügbar: {e}") from e
             raise
     
     def read_status(self):
@@ -270,11 +268,11 @@ class WattpilotClient:
         import hmac as hmac_mod
         try:
             import websockets
-        except ImportError:
-            raise ImportError("websockets nicht installiert: pip3 install websockets")
+        except ImportError as exc:
+            raise ImportError("websockets nicht installiert: pip3 install websockets") from exc
 
         uri = f"ws://{self.ip}/ws"
-        logger.info(f"Wattpilot setValue: {key}={value} via {uri}")
+        logger.info("Wattpilot setValue: %s=%s via %s", key, value, uri)
 
         try:
             async with websockets.connect(uri, open_timeout=self.timeout) as ws:
@@ -615,13 +613,13 @@ if __name__ == '__main__':
                 print(f"  Firmware:      {summary['firmware']}")
                 print(f"  WLAN:          {summary['rssi_dbm']} dBm")
                 print(f"  Temperatur:    {summary['temperature_c']} °C")
-                print(f"")
+                print("")
                 print(f"  Auto-Status:   {summary['car_state_text']}")
                 print(f"  Lademodus:     {summary['charge_mode']}")
                 print(f"  Phasen:        {summary['phase_mode']}")
                 print(f"  Strom:         {summary['charge_current_a']} A (max {summary['max_current_a']} A)")
                 print(f"  Leistung:      {summary['power_w']:.0f} W")
-                print(f"")
+                print("")
                 print(f"  Session:       {summary['energy_session_kwh']:.3f} kWh")
                 print(f"  Zählerstand:   {summary['energy_total_kwh']:.3f} kWh")
             else:

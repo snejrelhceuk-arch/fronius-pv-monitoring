@@ -20,7 +20,6 @@ import logging
 import argparse
 import subprocess
 from pathlib import Path
-from datetime import datetime
 
 # Projekt-Root hinzufügen
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -67,7 +66,7 @@ def test_fritzdect_polling(duration_sec: int = 300, interval_sec: int = 10):
     from automation.engine.collectors.data_collector import DataCollector
     from automation.engine.obs_state import ObsState
     
-    LOG.info(f"═══ Fritz!DECT Performance-Test ═══")
+    LOG.info("═══ Fritz!DECT Performance-Test ═══")
     LOG.info(f"Duration: {duration_sec}s ({duration_sec//interval_sec} cycles)")
     LOG.info(f"Interval: {interval_sec}s")
     LOG.info("")
@@ -163,22 +162,22 @@ def test_fritzdect_polling(duration_sec: int = 300, interval_sec: int = 10):
         min_lat = min(latencies)
         
         LOG.info("")
-        LOG.info(f"Request-Latenz (ms):")
+        LOG.info("Request-Latenz (ms):")
         LOG.info(f"  Min:    {min_lat:6.1f}")
         LOG.info(f"  Avg:    {avg_lat:6.1f}")
         LOG.info(f"  Max:    {max_lat:6.1f}")
         
         if max_lat > 10000:
-            LOG.warning(f"⚠️  Max-Latenz >10s erkannt! Fritz!Box könnte überlastet sein.")
+            LOG.warning("⚠️  Max-Latenz >10s erkannt! Fritz!Box könnte überlastet sein.")
         elif max_lat > 3000:
-            LOG.warning(f"⚠️  Einige Requests >3s. Eventuell 10s Intervall zu aggressiv.")
+            LOG.warning("⚠️  Einige Requests >3s. Eventuell 10s Intervall zu aggressiv.")
         else:
             LOG.info("✓ Alle Latenz-Checks bestanden")
     
     # Power-Stabilität
     if results['hp_power'] and len(results['hp_power']) > 1:
         LOG.info("")
-        LOG.info(f"Heizpatrone Power-Stabilität:")
+        LOG.info("Heizpatrone Power-Stabilität:")
         hp_min = min(results['hp_power'])
         hp_max = max(results['hp_power'])
         hp_avg = sum(results['hp_power']) / len(results['hp_power'])
@@ -193,7 +192,7 @@ def test_fritzdect_polling(duration_sec: int = 300, interval_sec: int = 10):
     
     if results['klima_power'] and len(results['klima_power']) > 1:
         LOG.info("")
-        LOG.info(f"Klimaanlage Power-Stabilität:")
+        LOG.info("Klimaanlage Power-Stabilität:")
         kl_min = min(results['klima_power'])
         kl_max = max(results['klima_power'])
         kl_avg = sum(results['klima_power']) / len(results['klima_power'])

@@ -19,7 +19,6 @@ import json
 import logging
 import os
 import sys
-from typing import Optional
 
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 LOG = logging.getLogger('param_matrix')
@@ -162,7 +161,7 @@ def zeige_matrix(matrix: dict, farbig: bool = True):
               f"{RESET if farbig else ''}")
         print(f"│ {status} {rk.get('beschreibung', '')}")
         print(f"│ Score-Gewicht: {gewicht}   Zyklus: {zyklus}")
-        print(f"│")
+        print("│")
 
         # Parameter-Tabelle
         params = rk.get('parameter', {})
