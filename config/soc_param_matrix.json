@@ -855,6 +855,75 @@
           "aktor_kommando": "hp_aus",
           "beschreibung": "Netzbezug > dieser Wert (Ø7 Min Durchschnitt) → HP AUS"
         },
+        "notaus_netzbezug_aktuell_veto_w": {
+          "wert": 200,
+          "bereich": [
+            0,
+            1000
+          ],
+          "einheit": "W",
+          "obs_feld": "grid_power_w",
+          "beschreibung": "Aktueller Netzbezug unter diesem Wert blockiert HP-Netz-Notaus (Veto gegen veralteten Ø7-Min-Wert)"
+        },
+        "notaus_forecast_sicherheit_kwh": {
+          "wert": 5.0,
+          "bereich": [
+            0.0,
+            12.0
+          ],
+          "einheit": "kWh",
+          "obs_feld": "forecast_rest_kwh",
+          "beschreibung": "Feste Sicherheitsreserve für HP-Freigabe bei guter Prognose"
+        },
+        "notaus_forecast_haushalt_min_w": {
+          "wert": 500,
+          "bereich": [
+            100,
+            3000
+          ],
+          "einheit": "W",
+          "obs_feld": "house_load_w",
+          "beschreibung": "Mindest-Haushaltslast bis Sunset zur Restbedarf-Berechnung bei guter Prognose"
+        },
+        "notaus_forecast_batt_ziel_soc_pct": {
+          "wert": 100,
+          "bereich": [
+            75,
+            100
+          ],
+          "einheit": "%",
+          "obs_feld": "batt_soc_pct",
+          "beschreibung": "Ziel-SOC für Batterie-Bedarfsanteil in der Restbedarf-Berechnung"
+        },
+        "notaus_forecast_batt_ignore_ab_soc_pct": {
+          "wert": 95,
+          "bereich": [
+            80,
+            100
+          ],
+          "einheit": "%",
+          "obs_feld": "batt_soc_pct",
+          "beschreibung": "Ab diesem SOC wird kein zusätzlicher Batterie-Ladebedarf mehr für HP-Notaus berücksichtigt"
+        },
+        "notaus_forecast_klima_last_w": {
+          "wert": 1300,
+          "bereich": [
+            0,
+            3000
+          ],
+          "einheit": "W",
+          "obs_feld": "klima_aktiv",
+          "beschreibung": "Zusätzliche Last der Klimaanlage für Restbedarf-Berechnung (nur wenn Klima aktiv)"
+        },
+        "notaus_forecast_klima_plan_h": {
+          "wert": 4.0,
+          "bereich": [
+            0.0,
+            12.0
+          ],
+          "einheit": "h",
+          "beschreibung": "Maximaler Stundenanteil der Klima-Last, der zur Restbedarf-Berechnung addiert wird"
+        },
         "speicher_temp_max_c": {
           "wert": 78,
           "bereich": [
@@ -1142,7 +1211,7 @@
       "engine_zyklus": "fast"
     },
     "klimaanlage": {
-      "_doc": "Klimaanlage via Fritz!DECT als Thermoschutz im Heizhaus. Vor Sonnenaufgang nur mit Forecast 'gut' und Temp >= initial_temp_c. Nach Sonnenaufgang Start bei Temp >= initial_temp_c_maessig. Danach Durchlauf bis Sunset/SOC-Stop (sunset_soc_stop_pct).",
+      "_doc": "Klimaanlage via Fritz!DECT als Thermoschutz im Heizhaus. Vor Sonnenaufgang nur mit Forecast 'gut' und Temp >= initial_temp_c. Nach Sonnenaufgang Start je nach Prognose: gut -> initial_temp_c_gut_nach_sunrise, sonst initial_temp_c_maessig. Laufender Betrieb temperaturgeführt mit Hysterese temp_hysterese_k. Sunset/SOC-Stop bleibt aktiv.",
       "aktiv": true,
       "prioritaet": 2,
       "beschreibung": "Klima-Thermoschutz: Vor-Sunrise 15°C+Forecast, nach Sunrise ab 20°C, Sunset-SOC-Stopp parametrierbar",
@@ -1163,7 +1232,25 @@
             25
           ],
           "einheit": "°C",
-          "beschreibung": "Nach Sonnenaufgang: Einschalt-Temperatur für den sicheren Thermoschutzbetrieb (Standard 20°C). Gilt als Startkriterium; danach läuft die Klima bis Sunset/SOC-Stop weiter."
+          "beschreibung": "Nach Sonnenaufgang (Forecast nicht gut): Einschalt-Temperatur für den sicheren Thermoschutzbetrieb (Standard 20°C). Laufender Betrieb ist temperaturgeführt mit Hysterese temp_hysterese_k."
+        },
+        "initial_temp_c_gut_nach_sunrise": {
+          "wert": 15,
+          "bereich": [
+            12,
+            25
+          ],
+          "einheit": "°C",
+          "beschreibung": "Nach Sonnenaufgang bei Forecast 'gut': niedrigere Einschalt-Temperatur für frühere Kühlung (separat von initial_temp_c_maessig)."
+        },
+        "temp_hysterese_k": {
+          "wert": 1.0,
+          "bereich": [
+            0.2,
+            3.0
+          ],
+          "einheit": "K",
+          "beschreibung": "Ausschalt-Hysterese gegen die jeweilige Einschalt-Temperatur. Klima AUS wenn Temp unter (Startschwelle - Hysterese) fällt."
         },
         "sunset_soc_stop_pct": {
           "wert": 90,

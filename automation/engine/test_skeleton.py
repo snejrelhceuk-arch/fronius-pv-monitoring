@@ -36,7 +36,7 @@ from automation.engine.observer import Tier1Checker
 from automation.engine.actuator import Actuator, init_persist_log
 from automation.engine.engine import (
     Engine, RegelMorgenSocMin,
-    RegelNachmittagSocMax, RegelZellausgleich,
+    RegelNachmittagSocMax, RegelKomfortReset, RegelZellausgleich,
     RegelForecastPlausi,
     RegelWattpilotBattSchutz,
 )
@@ -372,6 +372,58 @@ def test_regel_morgen_soc_min():
         score3 = regel.bewerte(obs_bad, matrix)
         assert score3 == 0, f"Erwarte Score 0 bei PV@SR+1h < Schwelle, got {score3}"
         LOG.info(f"✓ PV@SR+1h=500W: Score {score3} (unter Schwelle)")
+
+    return True
+
+
+def test_regel_komfort_reset_morgen_sperre():
+    """Regressions-Test: Bei guter Prognose ab Sunrise-1h kein Komfort-Reset."""
+    _sep("6c2. RegelKomfortReset Morgen-Sperre")
+
+    matrix = lade_matrix(DEFAULT_MATRIX_PATH)
+    regel = RegelKomfortReset()
+
+    # 05:30, Sunrise=6.0 -> > Sunrise-1h, gute Prognose
+    # Erwartung: Komfort-Reset greift NICHT ein, SOC_MIN=5% bleibt unangetastet.
+    fake_time_block = datetime(2025, 6, 15, 5, 30)
+    with patch('automation.engine.regeln.soc_steuerung.datetime') as mock_dt:
+        mock_dt.now.return_value = fake_time_block
+        mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+
+        obs = ObsState(
+            forecast_quality='gut',
+            sunrise=6.0,
+            sunset=20.5,
+            soc_min=5,
+            soc_max=75,
+            soc_mode='manual',
+            batt_soc_pct=24,
+        )
+        score = regel.bewerte(obs, matrix)
+        assert score == 0, f"Erwarte Score 0 bei guter Prognose ab Sunrise-1h, got {score}"
+        aktionen = regel.erzeuge_aktionen(obs, matrix)
+        assert aktionen == [], f"Erwarte keine Aktionen, got {aktionen}"
+        LOG.info("✓ 05:30, forecast=gut: Komfort-Reset gesperrt")
+
+    # 04:30, Sunrise=6.0 -> vor Sunrise-1h
+    # Erwartung: Sperre greift noch nicht, Komfort-Reset darf bewerten.
+    fake_time_allow = datetime(2025, 6, 15, 4, 30)
+    with patch('automation.engine.regeln.soc_steuerung.datetime') as mock_dt:
+        mock_dt.now.return_value = fake_time_allow
+        mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+
+        obs2 = ObsState(
+            forecast_quality='gut',
+            sunrise=6.0,
+            sunset=20.5,
+            soc_min=5,
+            soc_max=75,
+            soc_mode='manual',
+            batt_soc_pct=24,
+        )
+        score2 = regel.bewerte(obs2, matrix)
+        assert score2 > 0, f"Erwarte Score >0 vor Sunrise-1h, got {score2}"
+        LOG.info(f"✓ 04:30, forecast=gut: Komfort-Reset aktiv (Score {score2})")
 
     return True
 
@@ -738,6 +790,7 @@ def main():
             # Regel-Level Tests (Phase 2)
             # Entfernt (2026-03-07): SOC-Schutz, Temp-Schutz, Abend-Entladerate, Laderate dynamisch
             ('Regel: Morgen SOC_MIN', test_regel_morgen_soc_min),
+            ('Regel: Komfort-Reset Morgen-Sperre', test_regel_komfort_reset_morgen_sperre),
             ('Regel: Nachmittag SOC_MAX', test_regel_nachmittag_soc_max),
             ('Regel: Zellausgleich', test_regel_zellausgleich),
             ('Regel: Nachmittag+Forecast', test_regel_nachmittag_forecast_rest),

@@ -28,7 +28,8 @@ Version 1.6 — Stand: 14. März 2026
 6. [Menü 4: System-Status](#6-menü-4-system-status)
 7. [Menü 5: Solar-Prognose](#7-menü-5-solar-prognose)
 8. [Menü 6: Heizpatrone (Fritz!DECT)](#8-menü-6-heizpatrone-fritzdect)
-9. [Grundlagenwissen](#9-grundlagenwissen)
+9. [Menü 9: Handbuch anzeigen](#9-menü-9-handbuch-anzeigen)
+10. [Grundlagenwissen](#10-grundlagenwissen)
 
 ---
 
@@ -62,6 +63,7 @@ Zeigt Live-Werte: PV-Leistung, Hausverbrauch, Netzfluss und Batterie-SOC.
 | System | Systemzustand, Warnungen, Prozess-Status |
 | Forecast | Solar-Prognose, Genauigkeit, Kalibrierung |
 | Heizpatrone | Fritz!DECT-Steckdose: Status, Konfiguration, Test, manuell EIN/AUS |
+| Handbuch | Öffnet dieses Handbuch direkt im pv-config Scroll-Dialog |
 | Beenden | Programm schließen |
 
 ---
@@ -443,8 +445,17 @@ Wenn `morgen_soc_min` den SOC_MIN früh auf 5% öffnet, entlädt sich die Batter
 | 4 | `rest_h < min_rest_h` (2h vor Sunset) | **DIFFERENZIERT** | **Pausiert** | Phase 4 Abend-Zyklus: SOC ≈ MAX + PV ok → HP erlaubt; sonst AUS |
 | 5 | Batterie entlädt — potenzialabhängig | **KONTEXT** | **Pausiert** | Abhängig von Potenzial und SOC_MAX (s.u.) |
 | 6 | Verbraucher-Konkurrenz (WP/EV) | **KONTEXT** | **Pausiert** | Abhängig von Potenzial-Stufe (s.u.) |
-| 7 | Netzbezug > 200 W | **KONTEXT** | **Pausiert** | Kurzzeitig normal bei HP-Zuschalten |
+| 7 | Netzbezug Ø7 Min > `notaus_netzbezug_w` | **KONTEXT** | **Pausiert** | Nur wenn weder Istwert-Veto noch Forecast-Veto greifen |
 | 8 | Burst-Timer abgelaufen | **KONTEXT** | **Pausiert** | Kein Timer bei manuellem Einschalten |
+
+**Netzbezug-Vetos (seit 2026-03-28):**
+- **Istwert-Veto:** Wenn aktueller Netzbezug `< notaus_netzbezug_aktuell_veto_w`, wird kein HP-Notaus ausgelöst.
+- **Forecast-Veto (nur bei `forecast_quality = gut`):** HP darf weiterlaufen, wenn `forecast_rest_kwh` den dynamischen Bedarf deckt:
+  `Batteriebedarf + Haushaltsbedarf bis Sunset + Sicherheitsreserve + optional Klima-Last`.
+
+Der Batteriebedarf ist SoC-abhängig: bei niedrigem SoC hoch (bis Volladung),
+ab `notaus_forecast_batt_ignore_ab_soc_pct` wird kein zusätzlicher
+Batterie-Ladebedarf mehr eingerechnet.
 
 **Autoritätsschaltung (seit 2026-03-14):** Bei manueller Einschaltung (Fritz!DECT Taster
 oder App) respektiert die Engine die Nutzer-Entscheidung für `extern_respekt_s`
@@ -491,7 +502,14 @@ SOC_MAX auf 100% geht (Nachmittag) wird die Batterie-Entladung strenger bewertet
 | max_wattpilot | 500 W | 0–5000 W | **Obergrenze EV-Ladung.** (Legacy, durch Potenzial-Logik ersetzt.) HP darf mit EV parallel laufen wenn Potenzial ≥ `gut`. |
 | batt_reserve | 2.0 kWh | 0.5–5.0 kWh | **Prognose-Reserve.** Restprognose muss Batterie-Volladung + diese Reserve decken, damit HP erlaubt wird. |
 | batt_reserve_nachmittag | 3.0 kWh | 1–8 kWh | **Größere Reserve nachmittags.** Weniger Restzeit → mehr Puffer für sichere Volladung. |
-| notaus_netzbezug | 200 W | 0–500 W | **Netzbezug-Schwelle (Ø5 Min).** Wenn der geglättete 5-Minuten-Durchschnitt des Netzbezugs diesen Wert überschreitet → HP AUS. Glättung verhindert Abschaltung durch kurzzeitige Leistungssprünge (±10 kW). |
+| notaus_netzbezug | 500 W | 0–500 W | **Netzbezug-Schwelle (Ø7 Min).** Basisgrenze für HP-Notaus durch Netzbezug. |
+| notaus_netzbezug_aktuell_veto_w | 200 W | 0–1000 W | **Istwert-Veto.** Wenn aktueller Netzbezug darunter liegt, blockiert das den HP-Netz-Notaus (Schutz gegen veralteten Durchschnitt). |
+| notaus_forecast_sicherheit_kwh | 5.0 kWh | 0–12 kWh | **Sicherheitsreserve.** Fester Zusatzpuffer im Forecast-Veto. |
+| notaus_forecast_haushalt_min_w | 500 W | 100–3000 W | **Haushalts-Mindestlast.** Untergrenze für den bis Sunset eingeplanten Haushaltsbedarf. |
+| notaus_forecast_batt_ziel_soc_pct | 100% | 75–100% | **Batterie-Ziel-SOC.** Bis zu diesem SOC wird Batteriebedarf in den Forecast-Bedarf einberechnet. |
+| notaus_forecast_batt_ignore_ab_soc_pct | 95% | 80–100% | **Batteriebedarf-Bypass.** Ab diesem SOC zählt kein zusätzlicher Batterie-Ladebedarf mehr. |
+| notaus_forecast_klima_last_w | 1300 W | 0–3000 W | **Klima-Zusatzlast.** Wird nur angerechnet, wenn die Klimaanlage aktuell läuft. |
+| notaus_forecast_klima_plan_h | 4.0 h | 0–12 h | **Klima-Planhorizont.** Maximaler Stundenanteil der Klima-Last in der Forecast-Bedarfsrechnung. |
 | speicher_temp_max | 78 °C | 60–85 °C | **Warmwasser-Übertemperatur.** HP sofort AUS bei ≥78 °C. Schutz vor Verbrühung/Überdruck. |
 | potenzial_gut_kwh | 30.0 kWh | 15–60 kWh | **Tagesprognose für Potenzial "gut".** Ab hier: HP + WP + EV alle parallel, Batterie-Entladung immer toleriert. |
 | potenzial_ausreichend_kwh | 20.0 kWh | 10–40 kWh | **Tagesprognose für "ausreichend".** HP + WP parallel (kein EV). Entladung toleriert wenn SOC_MAX ≤ 75%. |
@@ -571,8 +589,11 @@ temperaturgeführter Betrieb.
 **Bedingungslogik (vereinfacht):**
 - Startfreigabe erst ab `sunrise - 1h`.
 - **Vor Sonnenaufgang:** EIN nur bei `forecast_quality = gut` UND `Temp >= initial_temp_c`.
-- **Nach Sonnenaufgang:** EIN sobald `Temp >= initial_temp_c_maessig` (Standard 20°C), unabhängig von Forecast.
-- **Latch-Betrieb:** Nach erfolgreichem Start bleibt die Klima tagsüber EIN (kein temperaturbedingtes AUS).
+- **Nach Sonnenaufgang:**
+  - bei `forecast_quality = gut`: EIN ab `initial_temp_c_gut_nach_sunrise`
+  - sonst: EIN ab `initial_temp_c_maessig`
+- **Laufender Betrieb (vor/nach Sunrise):** temperaturgeführt mit Hysterese `temp_hysterese_k`.
+  AUS, wenn `Temp < (Startschwelle - Hysterese)`.
 - Abschalten: nach Sonnenuntergang UND `SOC < sunset_soc_stop_pct`.
 
 **Temperaturquelle:**
@@ -583,6 +604,8 @@ temperaturgeführter Betrieb.
 |-----------|----------|---------|---------|
 | initial_temp_c | 15 °C | 10–20 °C | Vor-Sunrise-Schwelle (nur mit Forecast gut) und Fallback, wenn kein Sensorwert vorhanden ist. |
 | initial_temp_c_maessig | 20 °C | 15–25 °C | Nach-Sunrise-Einschaltschwelle für sicheren Thermoschutzbetrieb. |
+| initial_temp_c_gut_nach_sunrise | 15 °C | 12–25 °C | Nach-Sunrise-Einschaltschwelle bei Forecast `gut` (früherer Start als maessig möglich). |
+| temp_hysterese_k | 1.0 K | 0.2–3.0 K | Temperatur-Hysterese gegen die jeweilige Einschalt-Schwelle. |
 | sunset_soc_stop_pct | 90% | 30–100% | Abschaltschwelle nach Sonnenuntergang: Klima AUS bei `SOC < Wert`. |
 
 ---
@@ -656,7 +679,13 @@ Steuert die 2-kW-Heizpatrone im Warmwasserspeicher über eine Fritz!DECT-Steckdo
 
 ---
 
-## 9. Grundlagenwissen
+## 9. Menü 9: Handbuch anzeigen
+
+Öffnet die Datei `doc/automation/PV_CONFIG_HANDBUCH.md` direkt in pv-config
+als scrollbaren Dialog. Damit sind Parameter-Hilfe und Bedienhinweise ohne
+Editor-Wechsel per SSH verfügbar.
+
+## 10. Grundlagenwissen
 
 ### SOC-Bereiche der 2× BYD HVS 20.48 kWh (LFP)
 
