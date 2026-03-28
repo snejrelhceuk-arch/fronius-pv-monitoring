@@ -268,6 +268,89 @@ class RegelHeizpatrone(Regel):
             return 0.0
         return sum(self._grid_history) / len(self._grid_history)
 
+    def _restbedarf_fuer_hp_kwh(self, obs: ObsState, matrix: dict, rest_h: float) -> float:
+        """Dynamischer Rest-Prognosebedarf für HP-Freigabe im Notaus-Kontext.
+
+        Bestandteile:
+          1) Batteriebedarf bis Ziel-SOC (bei hohem SOC optional ignorieren)
+          2) Haushalt bis Sonnenuntergang (mit Mindest-Grundlast)
+          3) Sicherheitsreserve
+          4) Optionaler Klima-Bedarf (wenn Klima aktuell läuft)
+        """
+        sicherheit_kwh = float(get_param(
+            matrix, self.regelkreis, 'notaus_forecast_sicherheit_kwh', 5.0
+        ))
+        haushalt_min_w = float(get_param(
+            matrix, self.regelkreis, 'notaus_forecast_haushalt_min_w', 500
+        ))
+
+        haus_netto_w = float(obs.house_load_w or 0)
+        if obs.heizpatrone_aktiv:
+            haus_netto_w = max(0.0, haus_netto_w - self.HP_NENN_W)
+        haus_plan_w = max(haushalt_min_w, haus_netto_w)
+        plan_h = max(0.0, rest_h)
+        haushalt_kwh = haus_plan_w * plan_h / 1000.0
+
+        soc_now = float(obs.batt_soc_pct if obs.batt_soc_pct is not None else 50.0)
+        batt_ignore_ab_soc = float(get_param(
+            matrix, self.regelkreis, 'notaus_forecast_batt_ignore_ab_soc_pct', 95
+        ))
+        batt_ziel_soc = float(get_param(
+            matrix, self.regelkreis, 'notaus_forecast_batt_ziel_soc_pct', 100
+        ))
+        if soc_now >= batt_ignore_ab_soc:
+            batt_bedarf_kwh = 0.0
+        else:
+            ziel_soc = max(soc_now, min(100.0, batt_ziel_soc))
+            batt_bedarf_kwh = max(0.0, (ziel_soc - soc_now) * config.PV_BATTERY_KWH / 100.0)
+
+        klima_kwh = 0.0
+        if bool(obs.klima_aktiv):
+            klima_last_w = float(get_param(
+                matrix, self.regelkreis, 'notaus_forecast_klima_last_w', 1300
+            ))
+            klima_plan_h = float(get_param(
+                matrix, self.regelkreis, 'notaus_forecast_klima_plan_h', 4.0
+            ))
+            klima_h = min(plan_h, max(0.0, klima_plan_h))
+            klima_kwh = klima_last_w * klima_h / 1000.0
+
+        return batt_bedarf_kwh + haushalt_kwh + sicherheit_kwh + klima_kwh
+
+    def _netzbezug_notaus_ausloesen(
+        self,
+        obs: ObsState,
+        matrix: dict,
+        rest_h: float,
+        grid_avg: float,
+        notaus_netz: float,
+    ) -> tuple[bool, str]:
+        """Entscheidet HP-Notaus wegen Netzbezug inkl. Forecast-/Ist-Vetos."""
+        grid_current = float(obs.grid_power_w or 0)
+        current_veto_w = float(get_param(
+            matrix, self.regelkreis, 'notaus_netzbezug_aktuell_veto_w', 200
+        ))
+
+        # Veto 1: aktueller Netzbezug ist klein → Durchschnitt kann veraltet sein
+        if grid_current < current_veto_w:
+            return False, ''
+
+        rest_kwh = obs.forecast_rest_kwh
+        if rest_kwh is None:
+            rest_kwh = obs.forecast_kwh or 0
+        forecast_quality = (obs.forecast_quality or '').lower()
+
+        # Veto 2: gute Prognose + ausreichend Rest für Batt+Haushalt+Reserve (+Klima)
+        if forecast_quality == 'gut':
+            mindest_rest_kwh = self._restbedarf_fuer_hp_kwh(obs, matrix, rest_h)
+            if rest_kwh >= mindest_rest_kwh:
+                return False, ''
+
+        if grid_avg > notaus_netz:
+            return True, (f'Netzbezug Ø{grid_avg:.0f}W > {notaus_netz:.0f}W '
+                          f'(aktuell {grid_current:.0f}W)')
+        return False, ''
+
     def _batt_entladung_toleriert(self, potenzial: str, soc_max_eff: int,
                                    obs: ObsState) -> bool:
         """Wird Batterie-Entladung toleriert (HP darf trotzdem laufen)?
@@ -409,7 +492,10 @@ class RegelHeizpatrone(Regel):
                     # Netzbezug während Drain → Energie kommt aus Netz, nicht PV
                     notaus_netz = get_param(matrix, self.regelkreis, 'notaus_netzbezug_w', 200)
                     grid_avg = self._grid_avg(obs)
-                    if grid_avg > notaus_netz:
+                    notaus_ausloesen, _ = self._netzbezug_notaus_ausloesen(
+                        obs, matrix, rest_h, grid_avg, float(notaus_netz)
+                    )
+                    if notaus_ausloesen:
                         return int(score * 1.5)
                     d_haus = get_param(matrix, self.regelkreis, 'drain_max_haushalt_w', 700)
                     d_wp = get_param(matrix, self.regelkreis, 'drain_max_wp_w', 500)
@@ -435,7 +521,10 @@ class RegelHeizpatrone(Regel):
                     # Netzbezug (5-Min-Durchschnitt)
                     notaus_netz = get_param(matrix, self.regelkreis, 'notaus_netzbezug_w', 200)
                     grid_avg = self._grid_avg(obs)
-                    if grid_avg > notaus_netz:
+                    notaus_ausloesen, _ = self._netzbezug_notaus_ausloesen(
+                        obs, matrix, rest_h, grid_avg, float(notaus_netz)
+                    )
+                    if notaus_ausloesen:
                         return int(score * 1.5)
 
                 # Burst-Timer abgelaufen
@@ -704,9 +793,11 @@ class RegelHeizpatrone(Regel):
                         if not notaus_grund:
                             notaus_netz = get_param(matrix, self.regelkreis, 'notaus_netzbezug_w', 200)
                             grid_avg = self._grid_avg(obs)
-                            if grid_avg > notaus_netz:
-                                notaus_grund = (f'Drain-Ende: Netzbezug Ø{grid_avg:.0f}W > '
-                                                f'{notaus_netz}W (Nachladung aus Netz)')
+                            notaus_ausloesen, netz_grund = self._netzbezug_notaus_ausloesen(
+                                obs, matrix, rest_h, grid_avg, float(notaus_netz)
+                            )
+                            if notaus_ausloesen:
+                                notaus_grund = f'Drain-Ende: {netz_grund}'
                         # Verbraucher-Checks
                         if not notaus_grund:
                             d_haus = get_param(matrix, self.regelkreis, 'drain_max_haushalt_w', 700)
@@ -741,9 +832,11 @@ class RegelHeizpatrone(Regel):
                     if not notaus_grund:
                         notaus_netz = get_param(matrix, self.regelkreis, 'notaus_netzbezug_w', 200)
                         grid_avg = self._grid_avg(obs)
-                        if grid_avg > notaus_netz:
-                            notaus_grund = (f'Netzbezug Ø{grid_avg:.0f}W > '
-                                            f'{notaus_netz}W (aktuell {obs.grid_power_w or 0:.0f}W)')
+                        notaus_ausloesen, netz_grund = self._netzbezug_notaus_ausloesen(
+                            obs, matrix, rest_h, grid_avg, float(notaus_netz)
+                        )
+                        if notaus_ausloesen:
+                            notaus_grund = netz_grund
 
                 # Burst-Timer abgelaufen
                 if not notaus_grund and self._burst_ende > 0 and time.time() >= self._burst_ende:
@@ -1038,6 +1131,14 @@ class RegelKlimaanlage(RegelHeizpatrone):
     def _forecast_ist_gut(self, obs: ObsState) -> bool:
         return (obs.forecast_quality or '').lower() == 'gut'
 
+    def _start_temp_nach_sunrise(self, obs: ObsState, matrix: dict) -> float:
+        """Start-Schwelle nach Sunrise abhängig von der Prognosequalität."""
+        if self._forecast_ist_gut(obs):
+            return float(get_param(
+                matrix, self.regelkreis, 'initial_temp_c_gut_nach_sunrise', 15
+            ))
+        return float(get_param(matrix, self.regelkreis, 'initial_temp_c_maessig', 20))
+
     def _sunset_soc_stop(self, obs: ObsState, matrix: dict) -> bool:
         soc_stop = float(get_param(matrix, self.regelkreis, 'sunset_soc_stop_pct', 90))
         sunset = obs.sunset if obs.sunset is not None else 20.0
@@ -1051,17 +1152,25 @@ class RegelKlimaanlage(RegelHeizpatrone):
         if self._sunset_soc_stop(obs, matrix):
             return False
 
-        # Latch-Betrieb: Wenn einmal EIN, dann bis Sunset/SOC-Stop durchlaufen lassen.
-        if bool(obs.klima_aktiv):
-            return True
-
         temp_ist = self._get_temp_ist_c(obs, matrix)
+        hyst_k = float(get_param(matrix, self.regelkreis, 'temp_hysterese_k', 1.0))
+
+        # Laufend EIN: Temperatur-Hysterese statt Tages-Latch
+        if bool(obs.klima_aktiv):
+            if self._ist_vor_sunrise(obs):
+                temp_start = float(get_param(matrix, self.regelkreis, 'initial_temp_c', 15))
+                temp_stop = temp_start - hyst_k
+                return self._forecast_ist_gut(obs) and temp_ist >= temp_stop
+
+            temp_start = self._start_temp_nach_sunrise(obs, matrix)
+            temp_stop = temp_start - hyst_k
+            return temp_ist >= temp_stop
 
         if self._ist_vor_sunrise(obs):
             temp_pre = float(get_param(matrix, self.regelkreis, 'initial_temp_c', 15))
             return self._forecast_ist_gut(obs) and temp_ist >= temp_pre
 
-        temp_tag = float(get_param(matrix, self.regelkreis, 'initial_temp_c_maessig', 20))
+        temp_tag = self._start_temp_nach_sunrise(obs, matrix)
         return temp_ist >= temp_tag
 
     def _startzeit_erreicht(self, obs: ObsState, matrix: dict) -> bool:
@@ -1112,8 +1221,10 @@ class RegelKlimaanlage(RegelHeizpatrone):
                 temp_pre = float(get_param(matrix, self.regelkreis, 'initial_temp_c', 15))
                 grund = (f'Klima EIN: Vor Sunrise, Forecast gut und Temp >= {temp_pre:.1f}°C')
             else:
-                temp_tag = float(get_param(matrix, self.regelkreis, 'initial_temp_c_maessig', 20))
-                grund = f'Klima EIN: Nach Sunrise, Temp >= {temp_tag:.1f}°C'
+                temp_tag = self._start_temp_nach_sunrise(obs, matrix)
+                fq = (obs.forecast_quality or 'unbekannt').lower()
+                grund = (f'Klima EIN: Nach Sunrise, Temp >= {temp_tag:.1f}°C '
+                         f'(Forecast={fq})')
             return [{
                 'tier': 2,
                 'aktor': 'fritzdect',
@@ -1122,6 +1233,8 @@ class RegelKlimaanlage(RegelHeizpatrone):
             }]
 
         if (not soll_laufen) and ist_an:
+            temp_ist = self._get_temp_ist_c(obs, matrix)
+            hyst_k = float(get_param(matrix, self.regelkreis, 'temp_hysterese_k', 1.0))
             if not self._startzeit_erreicht(obs, matrix):
                 grund = 'Klima AUS: Startfenster noch nicht offen (ab sunrise-1h)'
             elif self._sunset_soc_stop(obs, matrix):
@@ -1129,10 +1242,15 @@ class RegelKlimaanlage(RegelHeizpatrone):
             else:
                 if self._ist_vor_sunrise(obs):
                     temp_pre = float(get_param(matrix, self.regelkreis, 'initial_temp_c', 15))
-                    grund = (f'Klima AUS: Vor Sunrise nur mit Forecast gut und Temp >= {temp_pre:.1f}°C')
+                    temp_stop = temp_pre - hyst_k
+                    grund = (f'Klima AUS: Vor Sunrise Temp {temp_ist:.1f}°C < '
+                             f'{temp_stop:.1f}°C (Schwelle {temp_pre:.1f}°C, Hyst {hyst_k:.1f}K) '
+                             f'oder Forecast nicht gut')
                 else:
-                    temp_tag = float(get_param(matrix, self.regelkreis, 'initial_temp_c_maessig', 20))
-                    grund = f'Klima AUS: Nach Sunrise nur Sunset/SOC-Stop erlaubt (Temp-Schwelle {temp_tag:.1f}°C gilt nur zum Start)'
+                    temp_tag = self._start_temp_nach_sunrise(obs, matrix)
+                    temp_stop = temp_tag - hyst_k
+                    grund = (f'Klima AUS: Nach Sunrise Temp {temp_ist:.1f}°C < '
+                             f'{temp_stop:.1f}°C (Start {temp_tag:.1f}°C, Hyst {hyst_k:.1f}K)')
             return [{
                 'tier': 2,
                 'aktor': 'fritzdect',

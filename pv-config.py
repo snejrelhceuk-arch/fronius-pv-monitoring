@@ -46,6 +46,7 @@ VERSION = '1.2.0'
 TITLE = 'PV-System Konfiguration'
 BATTERY_CONFIG_PATH = os.path.join(PROJECT_ROOT, 'config', 'battery_control.json')
 SCHEDULER_STATE_PATH = os.path.join(PROJECT_ROOT, 'config', 'battery_scheduler_state.json')
+HANDBUCH_PATH = os.path.join(PROJECT_ROOT, 'doc', 'automation', 'PV_CONFIG_HANDBUCH.md')
 
 # Whiptail-Dimensionen — dynamisch ans Terminal angepasst
 def _terminal_size():
@@ -2000,6 +2001,18 @@ def _update_config_line(key: str, new_value: str):
         wt_msgbox(f'Fehler beim Speichern von config.py:\n\n{str(e)[:200]}')
 
 
+def menu_handbuch():
+    """PV-Config-Handbuch im Scroll-Dialog anzeigen."""
+    if not os.path.exists(HANDBUCH_PATH):
+        wt_msgbox(
+            'Handbuch nicht gefunden:\n\n'
+            f'{HANDBUCH_PATH}\n\n'
+            'Bitte prüfen, ob die Datei im Repository vorhanden ist.'
+        )
+        return
+    wt_textbox(HANDBUCH_PATH)
+
+
 # ═══════════════════════════════════════════════════════════════
 # Hauptmenü
 # ═══════════════════════════════════════════════════════════════
@@ -2020,6 +2033,7 @@ def hauptmenu():
             ('6', 'Heizpatrone (Fritz!DECT)'),
             ('7', 'Schalt-Logbuch'),
             ('8', 'Benachrichtigungen (E-Mail)'),
+            ('9', 'Handbuch anzeigen'),
             ('q', 'Beenden'),
         ]:
             args.extend([tag, desc])
@@ -2045,6 +2059,8 @@ def hauptmenu():
             menu_schaltlog()
         elif choice == '8':
             menu_benachrichtigung()
+        elif choice == '9':
+            menu_handbuch()
 
 
 # ═══════════════════════════════════════════════════════════════

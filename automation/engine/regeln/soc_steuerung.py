@@ -361,6 +361,22 @@ class RegelKomfortReset(Regel):
             return True
         return False
 
+    def _morgenfenster_sperrt_reset(self, obs: ObsState) -> bool:
+        """Sperrt Komfort-Reset bei guter Prognose ab Sunrise-1h.
+
+        Verhindert Konflikte mit der Morgen-Öffnung (SOC_MIN=5%), damit
+        SOC_MIN in der kritischen Vor-Sunrise-Phase nicht auf 25% zurückspringt.
+        """
+        if obs.forecast_quality != 'gut':
+            return False
+
+        sunrise = obs.sunrise
+        if sunrise is None:
+            return False
+
+        now_h = datetime.now().hour + datetime.now().minute / 60.0
+        return now_h > (sunrise - 1.0)
+
     def _frueh_reset_noetig(self, obs: ObsState, matrix: dict) -> bool:
         """Nachmittags: Prognose-Rest zu gering → SOC_MIN sofort auf 25%.
 
@@ -492,6 +508,9 @@ class RegelKomfortReset(Regel):
                       f'→ toleriert ({verbleibend}s verbleibend)')
             return 0
 
+        if self._morgenfenster_sperrt_reset(obs):
+            return 0
+
         score = get_score_gewicht(matrix, self.regelkreis)
 
         # ── Früh-Reset nachmittags (SOC niedrig + Prognose reicht nicht) ──
@@ -510,6 +529,9 @@ class RegelKomfortReset(Regel):
         komfort_max = get_param(matrix, self.regelkreis, 'komfort_max_pct', 75)
         aktionen = []
         now_str = f"{datetime.now().hour}:{datetime.now().minute:02d}"
+
+        if self._morgenfenster_sperrt_reset(obs):
+            return []
 
         frueh = self._frueh_reset_noetig(obs, matrix)
 
