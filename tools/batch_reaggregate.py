@@ -4,7 +4,6 @@ Batch Re-Aggregation mit modifiziertem aggregate_1min.py
 """
 import sys
 import time as time_module
-from datetime import datetime
 
 # Zeitstempel von Command Line
 if len(sys.argv) > 1:

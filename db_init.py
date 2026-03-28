@@ -29,7 +29,6 @@ import logging
 import time
 import threading
 import subprocess
-from datetime import datetime
 import config
 
 logger = logging.getLogger(__name__)
@@ -302,7 +301,7 @@ def ensure_tmpfs_db():
                             logger.info(f"tmpfs-DB aus pre_restore wiederhergestellt "
                                          f"({size_mb:.1f} MB, {diff_h:.1f}h neuer als GFS)")
                         elif rescue_max and current_max:
-                            logger.info(f"pre_restore nicht neuer als GFS — verwerfe")
+                            logger.info("pre_restore nicht neuer als GFS — verwerfe")
                     except Exception as e_rescue:
                         logger.warning(f"pre_restore Prüfung fehlgeschlagen: {e_rescue} — bleibe bei GFS")
 
@@ -500,7 +499,7 @@ def _persist_tmpfs_to_pi5(tmpfs_path):
     
     has_tables, tables = _db_has_tables(tmpfs_path)
     if not has_tables:
-        logger.warning(f"Pi5-Persist ÜBERSPRUNGEN: tmpfs-DB hat nicht die erwarteten Tabellen")
+        logger.warning("Pi5-Persist ÜBERSPRUNGEN: tmpfs-DB hat nicht die erwarteten Tabellen")
         return False
     
     tmp_file = '/dev/shm/pv_db_pi5_transfer.db'

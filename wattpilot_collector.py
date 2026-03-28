@@ -26,7 +26,6 @@ import logging
 import sys
 import os
 import atexit
-from datetime import datetime, timedelta
 from pathlib import Path
 
 import config
@@ -311,8 +310,8 @@ def run_daemon():
     """
     create_pid_file()
     logger.info(f"=== Wattpilot Collector gestartet (Intervall: {POLL_INTERVAL}s, Retry: {RETRY_INTERVAL}s) ===")
-    logger.info(f"WICHTIG: WebSocket erlaubt nur EINE Verbindung!")
-    logger.info(f"         Externe Apps (go-e, Fronius) können Konflikte verursachen → Auto-Retry aktiv")
+    logger.info("WICHTIG: WebSocket erlaubt nur EINE Verbindung!")
+    logger.info("         Externe Apps (go-e, Fronius) können Konflikte verursachen → Auto-Retry aktiv")
     init_db()
     
     tick = 0

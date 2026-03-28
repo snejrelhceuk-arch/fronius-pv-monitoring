@@ -33,7 +33,6 @@ import smtplib
 import socket
 import sqlite3
 import time
-from dataclasses import asdict
 from datetime import date, datetime, timedelta
 from email.mime.text import MIMEText
 from typing import Optional
@@ -375,20 +374,20 @@ class EventNotifier:
             autarkie = 0
 
         zeilen = [
-            f'PV-System Sunset-Tagesbericht',
-            f'',
+            'PV-System Sunset-Tagesbericht',
+            '',
             f'{start_str}  →  {end_str}  ({d["stunden"]}h Daten)',
             f'  SOC:   {_pct(d["soc_start"])} / {_pct(d["soc_end"])}',
             f'  (min/max  {_pct(d["soc_min"])} / {_pct(d["soc_max"])})',
             f'  Batt. Ladung:         {_fmt(d["batt_ladung_kwh"])}',
             f'  Batt. Entladung:      {_fmt(d["batt_entladung_kwh"])}',
-            f'',
+            '',
             f'  PV-Erzeug.:           {_fmt(d["pv_kwh"])}',
             f'  Verbrauch:            {_fmt(verbrauch)}',
             f'  Netzbezug:            {_fmt(d["netzbezug_kwh"])}',
             f'  Einspeisung:          {_fmt(d["einspeisung_kwh"])}',
             f'  Autarkie:             {autarkie:.0f}%',
-            f'',
+            '',
             f'  Wärmepumpe:           {_fmt(d["wp_kwh"])}',
         ]
 
@@ -398,9 +397,9 @@ class EventNotifier:
             )
 
         zeilen += [
-            f'',
-            f'Automatisch generiert bei Sonnenuntergang.',
-            f'Konfiguration: config.py → NOTIFICATION_EVENTS',
+            '',
+            'Automatisch generiert bei Sonnenuntergang.',
+            'Konfiguration: config.py → NOTIFICATION_EVENTS',
         ]
 
         return '\n'.join(zeilen)

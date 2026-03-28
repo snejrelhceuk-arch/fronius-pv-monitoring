@@ -13,10 +13,10 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from automation.engine.obs_state import ObsState
-from automation.engine.regeln.basis import Regel, _first_not_none
+from automation.engine.regeln.basis import Regel
 from automation.engine.regeln.soc_extern import soc_extern_tracker
 from automation.engine.param_matrix import (
-    ist_aktiv, get_param, get_score_gewicht, get_regelkreis,
+    ist_aktiv, get_param, get_score_gewicht,
 )
 
 LOG = logging.getLogger('engine')

@@ -29,7 +29,7 @@ import time
 from automation.engine.obs_state import ObsState
 from automation.engine.regeln.basis import Regel
 from automation.engine.param_matrix import (
-    ist_aktiv, get_param, get_score_gewicht,
+    get_param, get_score_gewicht,
 )
 
 LOG = logging.getLogger('engine')

@@ -158,13 +158,13 @@ class EnergyValidator:
                 print(f"   ... und {len(gaps)-10} weitere Lücken")
             self.warnings.extend([f"Gap in {table_name}: {g['start']} - {g['end']}" for g in gaps])
         else:
-            print(f"[OK] Keine Lücken gefunden")
+            print("[OK] Keine Lücken gefunden")
         
         self.stats[f'{table_name}_gaps'] = len(gaps)
     
     def validate_monthly_with_checkpoints(self):
         """Validiert Monats-Summen gegen Checkpoint-Differenzen"""
-        print(f"\n[CHECK] Validiere Monats-Summen mit Checkpoints...")
+        print("\n[CHECK] Validiere Monats-Summen mit Checkpoints...")
         
         cur = self.conn.cursor()
         
@@ -226,7 +226,7 @@ class EnergyValidator:
         print("[INFO] VALIDIERUNGS-REPORT")
         print("="*70)
         
-        print(f"\n[OK] Geprüfte Intervalle:")
+        print("\n[OK] Geprüfte Intervalle:")
         for key, value in self.stats.items():
             if '_checked' in key:
                 table = key.replace('_checked', '')

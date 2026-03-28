@@ -9,9 +9,7 @@ WICHTIG: Nur via systemd starten (pv-web.service)!
 Manueller Start (nohup gunicorn ...) ist NICHT erlaubt —
 führt zu Port-Konflikten mit dem systemd-Service.
 """
-import multiprocessing
 import os
-import sys
 from host_role import is_failover
 
 # --- Binding ---
@@ -50,7 +48,6 @@ def on_starting(server):
               Falls tmpfs noch leer (erster Start nach Reboot), einmalig
               aus SD-Kopie (data.db) laden als Fallback.
     """
-    import subprocess
     
     # --- Guard: Nur systemd darf Gunicorn starten ---
     if not os.environ.get("INVOCATION_ID"):

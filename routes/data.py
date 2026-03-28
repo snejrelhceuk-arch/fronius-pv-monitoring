@@ -6,7 +6,7 @@ Enthält: /api/15min, /api/hourly, /api/daily, /api/monthly, /api/yearly,
 """
 from datetime import date, timedelta
 from flask import Blueprint, jsonify, request
-from routes.helpers import get_db_connection
+from routes.helpers import get_db_connection, api_error_response
 
 bp = Blueprint('data', __name__)
 
@@ -33,7 +33,7 @@ def api_15min():
         data = [dict(zip(cols, row)) for row in rows]
         return jsonify(data)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e)
 
 
 @bp.route('/api/hourly')
@@ -63,7 +63,7 @@ def api_hourly():
         data = [dict(zip(cols, row)) for row in rows]
         return jsonify(data)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e)
 
 
 @bp.route('/api/daily')
@@ -110,7 +110,7 @@ def api_daily():
         data = [dict(zip(cols, row)) for row in rows]
         return jsonify(data)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e)
 
 
 @bp.route('/api/monthly')
@@ -156,7 +156,7 @@ def api_monthly():
         data = [dict(zip(cols, row)) for row in rows]
         return jsonify(data)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e)
 
 
 @bp.route('/api/yearly')
@@ -202,7 +202,7 @@ def api_yearly():
         data = [dict(zip(cols, row)) for row in rows]
         return jsonify(data)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e)
 
 
 @bp.route('/api/data_15min')
@@ -305,7 +305,7 @@ def api_data_15min():
             'data': data
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e)
 
 
 @bp.route('/api/data_hourly')
@@ -391,7 +391,7 @@ def api_data_hourly():
             'data': data
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e)
 
 
 @bp.route('/api/data_daily')
@@ -433,7 +433,7 @@ def api_data_daily():
         stats = {'anzahl_messwerte': len(data), 'anzahl_spalten': len(data[0]) if data else 0}
         return jsonify({'stats': stats, 'data': data})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e)
 
 
 @bp.route('/api/data_monthly')
@@ -487,4 +487,4 @@ def api_data_monthly():
         stats = {'anzahl_messwerte': len(data), 'anzahl_spalten': len(data[0]) if data else 0}
         return jsonify({'stats': stats, 'data': data})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e)

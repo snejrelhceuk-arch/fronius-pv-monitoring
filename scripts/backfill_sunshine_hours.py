@@ -20,11 +20,10 @@ Usage:
 """
 import sys
 import os
-import json
 import time
 import sqlite3
 import requests
-from datetime import date, timedelta
+from datetime import date
 from calendar import monthrange
 
 # Projekt-Pfad
@@ -140,7 +139,7 @@ def backfill():
             if current_ss is not None:
                 print(f"  [Update: {current_ss} → {total_hours}]", end="")
             else:
-                print(f"  [NEU]", end="")
+                print("  [NEU]", end="")
 
             if not DRY_RUN:
                 conn.execute(
@@ -225,7 +224,6 @@ def backfill():
     if db_path == DB_PATH and os.path.exists(DB_PERSIST_PATH):
         print(f"Kopiere Änderungen auch in persistente DB: {DB_PERSIST_PATH}")
         if not DRY_RUN:
-            import shutil
             # Statt Kopie: gleiche Updates auf persistente DB anwenden
             backfill_persist(DB_PERSIST_PATH, db_path)
 

@@ -309,7 +309,7 @@ class BatteryConfig:
             errors = body.get('validationErrors', [])
             
             if failures or errors:
-                print(f"\nTEILWEISE FEHLGESCHLAGEN:")
+                print("\nTEILWEISE FEHLGESCHLAGEN:")
                 if successes:
                     print(f"  Erfolgreich: {', '.join(successes)}")
                 if failures:

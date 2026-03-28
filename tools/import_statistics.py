@@ -6,7 +6,6 @@ Liest CSV-Dateien im Format: data_YYYY.csv
 
 import sqlite3
 import csv
-import sys
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent / "data.db"

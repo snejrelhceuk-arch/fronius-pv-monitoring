@@ -67,7 +67,7 @@ def test_sollwerte(ruecklauf_soll=30, ww_soll=50):
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         # 2. Neue Werte schreiben
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        LOG.info(f"\n[2] Neue Werte schreiben...")
+        LOG.info("\n[2] Neue Werte schreiben...")
         LOG.info(f"  → ruecklauf_soll = {ruecklauf_soll} °C (Reg. 53)")
         LOG.info(f"  → ww_soll = {ww_soll} °C (Reg. 5047)")
         

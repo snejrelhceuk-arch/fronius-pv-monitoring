@@ -30,7 +30,6 @@ import sys
 import threading
 import time
 import atexit
-from datetime import datetime, date
 from pathlib import Path
 from typing import Optional
 
@@ -320,8 +319,8 @@ class AutomationDaemon:
             # Verbindung neu aufbauen
             try:
                 self._db_conn = init_ram_db()
-            except Exception:
-                pass
+            except Exception as e_reconnect:
+                LOG.error("RAM-DB Reconnect fehlgeschlagen: %s", e_reconnect)
 
         # 4. Tier-1 Sofort-Aktionen
         if tier1_actions:
@@ -396,7 +395,7 @@ class AutomationDaemon:
         """Status-Ausgabe (für --once Modus)."""
         obs = self._obs
         print(f"\n{'=' * 60}")
-        print(f"  AUTOMATION DAEMON — Status")
+        print("  AUTOMATION DAEMON — Status")
         print(f"{'=' * 60}")
         print(f"  PV:      {obs.pv_total_w or 0:>7.0f} W  (heute: {obs.pv_today_kwh or 0:.1f} kWh)")
         print(f"  Netz:    {obs.grid_power_w or 0:>7.0f} W")
@@ -410,7 +409,7 @@ class AutomationDaemon:
         print(f"  SOC-Range: {obs.soc_min or '?'}–{obs.soc_max or '?'}% (Mode: {obs.soc_mode or '?'})")
         print(f"  Sunrise:  {obs.sunrise or '?'}h  Sunset: {obs.sunset or '?'}h")
         print(f"{'=' * 60}")
-        print(f"  ObsState JSON:")
+        print("  ObsState JSON:")
         print(json.dumps(json.loads(obs.to_json()), indent=2, ensure_ascii=False))
 
     def stop(self):

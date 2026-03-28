@@ -11,11 +11,12 @@ Diese Analyse zeigt:
 3. Wie viel Energie dadurch "fehlt" (→ Clear-Sky Überschätzung nachmittags)
 """
 
-import sys, os
+import sys
+import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import solar_geometry as sg
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 # String-Namen direkt aus PV_STRINGS
 SSO90_NAME = None
@@ -51,7 +52,7 @@ for d, label in test_dates:
     print(f"{max_elev:.1f}°")
     
     # WSW-90° Tagesverlauf (stündlich)
-    print(f"\n  Uhrzeit │ Gesamt │ WSW-90° │ SSO-90° │ Rest  │ SonnenAz │ Elev")
+    print("\n  Uhrzeit │ Gesamt │ WSW-90° │ SSO-90° │ Rest  │ SonnenAz │ Elev")
     print(f"  {'─'*70}")
     
     for p in curve:
@@ -82,7 +83,7 @@ for d, label in test_dates:
         ("100% ab 16:00", 16.0, 1.0),
     ]
     
-    print(f"\n  Beschattungs-Szenarien:")
+    print("\n  Beschattungs-Szenarien:")
     print(f"  {'Szenario':<25} │ {'Energie':>8} │ {'Diff':>6} │ {'CoP':>7} │ {'CoP-Shift':>9} │ {'Peak':>5} │ {'PkShift':>7}")
     print(f"  {'─'*85}")
     

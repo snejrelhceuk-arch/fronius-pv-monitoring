@@ -13,11 +13,12 @@ Analysiert für repräsentative Tage jedes Monats:
 - Verschiebung der Peak-Zeit durch 90°-Module
 """
 
-import sys, os
+import sys
+import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import solar_geometry as sg
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 # String-Indizes in PV_STRINGS identifizieren
 SSO90_IDX = None

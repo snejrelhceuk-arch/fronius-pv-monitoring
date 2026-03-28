@@ -5,10 +5,9 @@ Enthält: /api/verbraucher, /api/verbraucher/tag, /api/verbraucher/monat,
          /api/verbraucher/jahr, /api/verbraucher/gesamt
 """
 import re
-import logging
 from datetime import datetime, timezone
 from flask import Blueprint, jsonify, request
-from routes.helpers import get_db_connection
+from routes.helpers import get_db_connection, api_error_response, validate_year_month
 
 bp = Blueprint('verbraucher', __name__)
 
@@ -136,6 +135,10 @@ def verbraucher_chart():
             now = datetime.now()
             year = now.year
             month = now.month
+        valid, err = validate_year_month(year, month)
+        if err:
+            return err
+        year, month = valid
 
         first_day = datetime(year, month, 1)
         last_day = datetime(year + (1 if month == 12 else 0), (month % 12) + 1, 1)
@@ -226,8 +229,7 @@ def verbraucher_chart():
         })
 
     except Exception as e:
-        logging.error(f"Verbraucher-Chart Fehler: {e}")
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e, "Verbraucher-Chart")
 
 
 @bp.route('/api/verbraucher/tag')
@@ -389,8 +391,7 @@ def api_verbraucher_tag():
         })
 
     except Exception as e:
-        logging.error(f"Verbraucher-Tag Fehler: {e}")
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e, "Verbraucher-Tag")
 
 
 @bp.route('/api/verbraucher/monat')
@@ -405,6 +406,10 @@ def api_verbraucher_monat():
         if not year or not month:
             now = datetime.now()
             year, month = now.year, now.month
+        valid, err = validate_year_month(year, month)
+        if err:
+            return err
+        year, month = valid
 
         first_day = datetime(year, month, 1)
         last_day = datetime(year + (1 if month == 12 else 0), (month % 12) + 1, 1)
@@ -485,8 +490,7 @@ def api_verbraucher_monat():
         })
 
     except Exception as e:
-        logging.error(f"Verbraucher-Monat Fehler: {e}")
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e, "Verbraucher-Monat")
 
 
 @bp.route('/api/verbraucher/jahr')
@@ -496,6 +500,10 @@ def api_verbraucher_jahr():
         year = request.args.get('year', type=int)
         if not year:
             year = datetime.now().year
+        valid, err = validate_year_month(year)
+        if err:
+            return err
+        year, _ = valid
 
         conn = get_db_connection()
         if not conn:
@@ -546,8 +554,7 @@ def api_verbraucher_jahr():
         })
 
     except Exception as e:
-        logging.error(f"Verbraucher-Jahr Fehler: {e}")
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e, "Verbraucher-Jahr")
 
 
 @bp.route('/api/verbraucher/gesamt')
@@ -610,5 +617,4 @@ def api_verbraucher_gesamt():
         })
 
     except Exception as e:
-        logging.error(f"Verbraucher-Gesamt Fehler: {e}")
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e, "Verbraucher-Gesamt")

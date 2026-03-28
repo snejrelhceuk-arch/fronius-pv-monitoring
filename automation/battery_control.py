@@ -412,15 +412,15 @@ def print_status(client):
     wintms = read_raw(client, REG['InOutWRte_WinTms'])
     rvrttms = read_raw(client, REG['InOutWRte_RvrtTms'])
     rmptms = read_raw(client, REG['InOutWRte_RmpTms'])
-    print(f"\n── Timeouts (Read-Only, Fronius: not supported) ──────────")
+    print("\n── Timeouts (Read-Only, Fronius: not supported) ──────────")
     print(f"  WinTms:   {wintms}   RvrtTms: {rvrttms}   RmpTms: {rmptms}")
 
     # Fronius proprietary Register (nicht via SunSpec Chain erreichbar)
     # Reg 217 (F_Storage_Restrictions_View_Mode) liegt im Fronius-eigenen
     # Adressbereich und braucht spezielle Behandlung - hier uebersprungen
-    print(f"\n── Hinweis ────────────────────────────────────────────────")
-    print(f"  RvrtTms=0: Kein Auto-Revert! Geschriebene Werte bleiben")
-    print(f"  bis zum naechsten Schreibvorgang/Neustart bestehen.")
+    print("\n── Hinweis ────────────────────────────────────────────────")
+    print("  RvrtTms=0: Kein Auto-Revert! Geschriebene Werte bleiben")
+    print("  bis zum naechsten Schreibvorgang/Neustart bestehen.")
 
     print("\n" + "=" * 65)
     return True
@@ -521,7 +521,7 @@ Fronius HTTP-API (fronius_api.py) sind das korrekte Steuerungsinstrument.
 
         if args.set_min_soc is not None:
             if not 0 <= args.set_min_soc <= 100:
-                print(f"  [FEHLER] --set-min-soc muss zwischen 0 und 100 liegen")
+                print("  [FEHLER] --set-min-soc muss zwischen 0 und 100 liegen")
                 success = False
             else:
                 success = set_min_reserve(client, args.set_min_soc) and success

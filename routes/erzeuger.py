@@ -7,7 +7,7 @@ import re
 import logging
 from datetime import datetime
 from flask import Blueprint, jsonify, request
-from routes.helpers import get_db_connection, DB_FILE
+from routes.helpers import get_db_connection, api_error_response, validate_year_month
 
 bp = Blueprint('erzeuger', __name__)
 
@@ -147,8 +147,7 @@ def api_erzeuger_tag():
         return jsonify(result)
 
     except Exception as e:
-        logging.error(f"Erzeuger-Tag Fehler: {e}")
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e, "Erzeuger-Tag")
     finally:
         if conn:
             conn.close()
@@ -166,6 +165,10 @@ def api_erzeuger_monat():
         if not year or not month:
             now = datetime.now()
             year, month = now.year, now.month
+        valid, err = validate_year_month(year, month)
+        if err:
+            return err
+        year, month = valid
 
         first_day = datetime(year, month, 1)
         last_day = datetime(year + (1 if month == 12 else 0), (month % 12) + 1, 1)
@@ -227,8 +230,7 @@ def api_erzeuger_monat():
         })
 
     except Exception as e:
-        logging.error(f"Erzeuger-Monat Fehler: {e}")
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e, "Erzeuger-Monat")
 
 
 @bp.route('/api/erzeuger/jahr')
@@ -242,6 +244,10 @@ def api_erzeuger_jahr():
         year = request.args.get('year', type=int)
         if not year:
             year = datetime.now().year
+        valid, err = validate_year_month(year)
+        if err:
+            return err
+        year, _ = valid
 
         first_ts = int(datetime(year, 1, 1).timestamp())
         last_ts = int(datetime(year + 1, 1, 1).timestamp())
@@ -331,8 +337,7 @@ def api_erzeuger_jahr():
         })
 
     except Exception as e:
-        logging.error(f"Erzeuger-Jahr Fehler: {e}")
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e, "Erzeuger-Jahr")
 
 
 @bp.route('/api/erzeuger/gesamt')
@@ -403,5 +408,4 @@ def api_erzeuger_gesamt():
         })
 
     except Exception as e:
-        logging.error(f"Erzeuger-Gesamt Fehler: {e}")
-        return jsonify({"error": str(e)}), 500
+        return api_error_response(e, "Erzeuger-Gesamt")

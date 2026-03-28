@@ -5,7 +5,6 @@ Aggregiert: 5s → 15min → hourly
 Cleanup: raw_data >72h
 """
 import sys
-import sqlite3
 import time
 import logging
 import config
