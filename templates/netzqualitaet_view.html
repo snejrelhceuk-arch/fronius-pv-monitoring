@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Netzqualität - PV-System</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .top-nav {
+            display: flex;
+            align-items: center;
+            padding: 8px 16px;
+            background: rgba(15, 23, 42, 0.95);
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            gap: 12px;
+            flex-shrink: 0;
+        }
+        .top-nav a {
+            color: rgba(255,255,255,0.6);
+            text-decoration: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        .top-nav a:hover { color: #fff; background: rgba(255,255,255,0.1); }
+        .top-nav a.active {
+            color: #fff;
+            background: rgba(0, 175, 0, 0.25);
+            border: 1px solid rgba(0, 175, 0, 0.4);
+        }
+        .nav-separator {
+            width: 1px;
+            height: 20px;
+            background: rgba(255,255,255,0.15);
+        }
+        .nav-group { display: flex; gap: 4px; align-items: center; }
+        .nav-btn {
+            background: rgba(255,255,255,0.08);
+            color: rgba(255,255,255,0.7);
+            border: 1px solid rgba(255,255,255,0.12);
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .nav-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+        .date-label {
+            background: transparent;
+            color: #fff;
+            border: none;
+            padding: 5px 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .status-info {
+            margin-left: auto;
+            font-size: 11px;
+            color: rgba(255,255,255,0.4);
+        }
+
+        .chart-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 8px;
+            gap: 8px;
+            min-height: 0;
+        }
+        .chart-box {
+            flex: 1;
+            min-height: 0;
+            background: rgba(30, 41, 59, 0.6);
+            border-radius: 8px;
+            position: relative;
+        }
+        .chart-box .chart-title {
+            position: absolute;
+            top: 8px;
+            left: 14px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            z-index: 10;
+            pointer-events: none;
+        }
+        #voltageChart, #frequencyChart {
+            width: 100%;
+            height: 100%;
+        }
+
+        .future-hint {
+            text-align: center;
+            padding: 16px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.3);
+            flex-shrink: 0;
+        }
+        .future-hint a {
+            color: rgba(0, 175, 0, 0.6);
+            text-decoration: none;
+        }
+        .future-hint a:hover { color: rgba(0, 175, 0, 0.9); }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: rgba(255,255,255,0.5);
+            font-size: 14px;
+        }
+
+        @media (max-width: 600px) {
+            .top-nav { padding: 6px 8px; gap: 6px; }
+            .top-nav a { font-size: 11px; padding: 4px 8px; }
+            .chart-area { padding: 4px; gap: 4px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="top-nav">
+        <a href="/">Flow</a>
+        <a href="/monitoring">Monitoring</a>
+        <a href="/maschinenraum">Maschinenraum</a>
+        <div class="nav-separator"></div>
+        <a href="/netzqualitaet" class="active">Netzqualität</a>
+        <div class="nav-separator"></div>
+        <div class="nav-group">
+            <button class="nav-btn" id="navPrev" onclick="navigateDay(-1)">◀</button>
+            <button class="date-label" id="dateDisplay" onclick="navigateToToday()">Heute</button>
+            <button class="nav-btn" id="navNext" onclick="navigateDay(1)">▶</button>
+        </div>
+        <span class="status-info" id="statusInfo">Lädt...</span>
+    </div>
+
+    <div class="chart-area">
+        <div class="chart-box" style="flex: 2;">
+            <span class="chart-title">Leiterspannungen L-L [V]</span>
+            <div id="voltageChart"></div>
+            <div class="loading" id="loadingVoltage">Lade Spannungsdaten...</div>
+        </div>
+        <div class="chart-box" style="flex: 1;">
+            <span class="chart-title">Netzfrequenz [Hz]</span>
+            <div id="frequencyChart"></div>
+            <div class="loading" id="loadingFrequency" style="display:none;"></div>
+        </div>
+    </div>
+
+    <div class="future-hint">
+        Phase 1: Tagesprofil · <a href="#">Musteranalyse</a> (geplant)
+    </div>
+
+    <script>
+        let voltageChart = null;
+        let frequencyChart = null;
+        let currentDate = new Date();
+        let isToday = true;
+
+        function formatDateISO(d) {
+            return d.getFullYear() + '-' +
+                String(d.getMonth() + 1).padStart(2, '0') + '-' +
+                String(d.getDate()).padStart(2, '0');
+        }
+
+        function updateDateDisplay() {
+            const el = document.getElementById('dateDisplay');
+            const today = new Date();
+            if (formatDateISO(currentDate) === formatDateISO(today)) {
+                el.textContent = 'Heute';
+                isToday = true;
+            } else {
+                el.textContent = currentDate.toLocaleDateString('de-DE', {
+                    weekday: 'short', day: '2-digit', month: '2-digit'
+                });
+                isToday = false;
+            }
+            document.getElementById('navNext').disabled =
+                formatDateISO(currentDate) >= formatDateISO(today);
+        }
+
+        function navigateDay(offset) {
+            currentDate.setDate(currentDate.getDate() + offset);
+            updateDateDisplay();
+            loadData();
+        }
+
+        function navigateToToday() {
+            currentDate = new Date();
+            updateDateDisplay();
+            loadData();
+        }
+
+        function getDayBounds(dateStr) {
+            const d = new Date(dateStr + 'T00:00:00');
+            return {
+                min: d.getTime(),
+                max: d.getTime() + 24 * 3600 * 1000
+            };
+        }
+
+        async function loadData() {
+            const dateStr = formatDateISO(currentDate);
+            const statusEl = document.getElementById('statusInfo');
+            statusEl.textContent = 'Lädt...';
+
+            document.getElementById('loadingVoltage').style.display = 'block';
+            document.getElementById('loadingFrequency').style.display = 'block';
+
+            try {
+                const resp = await fetch(`/api/netzqualitaet/tag?date=${dateStr}`);
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const data = await resp.json();
+
+                document.getElementById('loadingVoltage').style.display = 'none';
+                document.getElementById('loadingFrequency').style.display = 'none';
+
+                renderVoltageChart(data, dateStr);
+                renderFrequencyChart(data, dateStr);
+
+                statusEl.textContent = `${data.datapoints.length} Messpunkte · ${data.source}`;
+            } catch (err) {
+                console.error('Netzqualität Fehler:', err);
+                statusEl.textContent = 'Fehler: ' + err.message;
+                document.getElementById('loadingVoltage').textContent = 'Fehler beim Laden';
+                document.getElementById('loadingFrequency').style.display = 'none';
+            }
+        }
+
+        function renderVoltageChart(data, dateStr) {
+            const dom = document.getElementById('voltageChart');
+            if (voltageChart) voltageChart.dispose();
+            voltageChart = echarts.init(dom);
+
+            const bounds = getDayBounds(dateStr);
+            const tsL1L2 = [], tsL2L3 = [], tsL3L1 = [];
+
+            data.datapoints.forEach(dp => {
+                const t = dp.ts * 1000;
+                if (dp.u_l1_l2 != null) tsL1L2.push([t, dp.u_l1_l2]);
+                if (dp.u_l2_l3 != null) tsL2L3.push([t, dp.u_l2_l3]);
+                if (dp.u_l3_l1 != null) tsL3L1.push([t, dp.u_l3_l1]);
+            });
+
+            const seriesBase = {
+                type: 'line', smooth: true, symbol: 'none',
+                lineStyle: { width: 1.5 }
+            };
+
+            voltageChart.setOption({
+                grid: { left: 50, right: 20, top: 30, bottom: 30 },
+                tooltip: {
+                    trigger: 'axis',
+                    formatter: params => {
+                        const t = new Date(params[0].value[0]);
+                        const time = t.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                        let lines = [`<b>${time}</b>`];
+                        params.forEach(p => {
+                            lines.push(`${p.marker} ${p.seriesName}: ${p.value[1].toFixed(1)} V`);
+                        });
+                        return lines.join('<br>');
+                    }
+                },
+                legend: {
+                    data: ['L1-L2', 'L2-L3', 'L3-L1'],
+                    textStyle: { color: '#94a3b8', fontSize: 11 },
+                    top: 4, right: 16
+                },
+                xAxis: {
+                    type: 'time', min: bounds.min, max: bounds.max,
+                    axisLabel: { color: '#64748b', fontSize: 10,
+                        formatter: v => new Date(v).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+                    },
+                    splitLine: { show: false }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: 'V',
+                    nameTextStyle: { color: '#64748b', fontSize: 10 },
+                    axisLabel: { color: '#64748b', fontSize: 10 },
+                    splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } }
+                },
+                series: [
+                    { ...seriesBase, name: 'L1-L2', data: tsL1L2, itemStyle: { color: '#4646FF' } },
+                    { ...seriesBase, name: 'L2-L3', data: tsL2L3, itemStyle: { color: '#6E6EFF' } },
+                    { ...seriesBase, name: 'L3-L1', data: tsL3L1, itemStyle: { color: '#8C8CFF' } }
+                ]
+            });
+        }
+
+        function renderFrequencyChart(data, dateStr) {
+            const dom = document.getElementById('frequencyChart');
+            if (frequencyChart) frequencyChart.dispose();
+            frequencyChart = echarts.init(dom);
+
+            const bounds = getDayBounds(dateStr);
+            const tsFreq = data.datapoints
+                .filter(dp => dp.f_netz != null)
+                .map(dp => [dp.ts * 1000, dp.f_netz]);
+
+            frequencyChart.setOption({
+                grid: { left: 50, right: 20, top: 30, bottom: 30 },
+                tooltip: {
+                    trigger: 'axis',
+                    formatter: params => {
+                        const t = new Date(params[0].value[0]);
+                        const time = t.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                        return `<b>${time}</b><br>${params[0].marker} ${params[0].value[1].toFixed(3)} Hz`;
+                    }
+                },
+                visualMap: {
+                    type: 'piecewise', show: false, dimension: 1,
+                    pieces: [
+                        { min: 49.0, max: 49.8, color: '#fc8d59' },
+                        { min: 49.8, max: 49.95, color: '#fee08b' },
+                        { min: 49.95, max: 50.05, color: '#1a9850' },
+                        { min: 50.05, max: 50.2, color: '#fee08b' },
+                        { min: 50.2, max: 51.0, color: '#fc8d59' }
+                    ]
+                },
+                xAxis: {
+                    type: 'time', min: bounds.min, max: bounds.max,
+                    axisLabel: { color: '#64748b', fontSize: 10,
+                        formatter: v => new Date(v).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+                    },
+                    splitLine: { show: false }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: 'Hz',
+                    min: 49.9, max: 50.1,
+                    nameTextStyle: { color: '#64748b', fontSize: 10 },
+                    axisLabel: { color: '#64748b', fontSize: 10,
+                        formatter: v => v.toFixed(2)
+                    },
+                    splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } }
+                },
+                series: [{
+                    type: 'line', smooth: true, symbol: 'none',
+                    lineStyle: { width: 1.5 },
+                    data: tsFreq
+                }]
+            });
+        }
+
+        // Resize
+        window.addEventListener('resize', () => {
+            if (voltageChart) voltageChart.resize();
+            if (frequencyChart) frequencyChart.resize();
+        });
+
+        // Init
+        updateDateDisplay();
+        loadData();
+    </script>
+</body>
+</html>
