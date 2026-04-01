@@ -50,10 +50,17 @@ def monitoring():
     return render_template('tag_view.html')
 
 
-@bp.route('/echtzeit')
-def echtzeit():
-    """Echtzeit-Analyse (detaillierte Diagramme)"""
+@bp.route('/maschinenraum')
+@bp.route('/echtzeit')  # Redirect-Kompatibilität
+def maschinenraum():
+    """Maschinenraum (ehem. Echtzeit-Analyse) — detaillierte Diagramme"""
     return render_template('echtzeit_view.html')
+
+
+@bp.route('/netzqualitaet')
+def netzqualitaet():
+    """Netzqualität — Leiterspannungen, Netzfrequenz, Musteranalyse"""
+    return render_template('netzqualitaet_view.html')
 
 
 @bp.route('/verbraucher')

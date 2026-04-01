@@ -145,6 +145,7 @@ from routes.verbraucher import bp as verbraucher_bp
 from routes.erzeuger import bp as erzeuger_bp
 from routes.system import bp as system_bp
 from routes.forecast import bp as forecast_bp
+from routes.netzqualitaet import bp as netzqualitaet_bp
 
 app.register_blueprint(pages_bp)
 app.register_blueprint(data_bp)
@@ -154,6 +155,7 @@ app.register_blueprint(verbraucher_bp)
 app.register_blueprint(erzeuger_bp)
 app.register_blueprint(system_bp)
 app.register_blueprint(forecast_bp)
+app.register_blueprint(netzqualitaet_bp)
 
 # Forecast-Tabelle sicherstellen (idempotent)
 from routes.helpers import ensure_forecast_table

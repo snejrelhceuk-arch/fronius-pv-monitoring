@@ -83,10 +83,7 @@
             background: rgba(15, 23, 42, 0.35);
         }
 
-        body.embed-mode #frequencyChart {
-            height: 48px;
-            border-radius: 6px;
-        }
+
 
         body.embed-mode #mainChart {
             flex: 1;
@@ -94,29 +91,7 @@
             border-radius: 6px;
         }
 
-        #frequencyChart {
-            width: 100%;
-            height: 80px;
-            flex-shrink: 0;
-            background: white;
-            border-radius: 8px;
-        }
 
-        #freqInfoLine {
-            width: 100%;
-            flex-shrink: 0;
-            background: rgba(15, 23, 42, 0.85);
-            border-radius: 8px;
-            padding: 6px 14px;
-            font-size: 13px;
-            color: #ffffff;
-            text-align: center;
-            display: none;
-            font-weight: normal;
-        }
-        #freqInfoLine .freq-label { color: #ffffff; }
-        #freqInfoLine .freq-max { color: #ffffff; font-weight: normal; }
-        #freqInfoLine .freq-min { color: #ffffff; font-weight: normal; }
 
         #mainChart {
             width: 100%;
@@ -131,10 +106,7 @@
                 padding: 6px 2px;
                 gap: 4px;
             }
-            #frequencyChart {
-                height: 50px;
-                border-radius: 4px;
-            }
+
             #mainChart {
                 border-radius: 4px;
             }
@@ -188,8 +160,7 @@
         <div class="chart-container">
             <div id="loading" class="loading">Lade Daten...</div>
             <div id="error" class="error" style="display:none;"></div>
-            <div id="frequencyChart" style="display:none;"></div>
-            <div id="freqInfoLine" style="display:none;"></div>
+
             <div id="mainChart" style="display:none;"></div>
         </div>
         
@@ -204,7 +175,7 @@
         let currentYear = new Date().getFullYear();
         let currentMonth = new Date().getMonth() + 1;
         let chart = null;
-        let frequencyChart = null;
+
         let chartData = null;
         let forecastData = null;  // Separate forecast for background overlay
         let clearSkyData = null;  // Clear-Sky reference curve
@@ -816,35 +787,14 @@
             return `${year}-${month}-${day}`;
         }
         
-        function renderFreqInfoLine(freqExtremes) {
-            const el = document.getElementById('freqInfoLine');
-            if (!freqExtremes || (!freqExtremes.f_min && !freqExtremes.f_max)) {
-                el.style.display = 'none';
-                return;
-            }
-            let parts = [];
-            if (freqExtremes.f_max != null) {
-                parts.push(`<span class="freq-max">Max. ${freqExtremes.f_max.toFixed(3).replace('.', ',')} Hz</span> (${freqExtremes.f_max_date}, ${freqExtremes.f_max_time} Uhr)`);
-            }
-            if (freqExtremes.f_min != null) {
-                parts.push(`<span class="freq-min">Min. ${freqExtremes.f_min.toFixed(3).replace('.', ',')} Hz</span> (${freqExtremes.f_min_date}, ${freqExtremes.f_min_time} Uhr)`);
-            }
-            el.innerHTML = `<span class="freq-label">Netzfrequenz:</span> ${parts.join(' · ')}`;
-            el.style.display = 'block';
-        }
+
 
         async function loadData() {
             try {
                 scheduleAutoRefresh();
                 document.getElementById('loading').style.display = 'block';
                 document.getElementById('error').style.display = 'none';
-                document.getElementById('frequencyChart').style.display = 'none';
-                document.getElementById('freqInfoLine').style.display = 'none';
                 document.getElementById('mainChart').style.display = 'none';
-                
-                // Stale-State verhindern: immer zurücksetzen vor neuem Laden
-                forecastData = null;
-                clearSkyData = null;
                 
                 const dateStr = formatDateISO(currentDate);
                 
@@ -959,12 +909,6 @@
                 document.getElementById('btnNext').disabled = daysAhead >= 5;
                 
                 document.getElementById('loading').style.display = 'none';
-                // Frequenz-Chart nur bei echten Messdaten anzeigen
-                if (chartData.forecast) {
-                    document.getElementById('frequencyChart').style.display = 'none';
-                } else {
-                    document.getElementById('frequencyChart').style.display = 'block';
-                }
                 document.getElementById('mainChart').style.display = 'block';
                 
                 updateChart();
@@ -991,30 +935,18 @@
                          chartData.forecast ? '(PROGNOSE)' : '');
             
             const chartDom = document.getElementById('mainChart');
-            const freqDom = document.getElementById('frequencyChart');
             
             if (chart) {
                 chart.dispose();
             }
-            if (frequencyChart) {
-                frequencyChart.dispose();
-            }
             
             chart = echarts.init(chartDom);
             
-            // Prognose: Spezial-Chart, kein Frequenz-Chart
+            // Prognose: Spezial-Chart
             if (chartData.forecast) {
                 createForecastChart();
                 return;
             }
-            
-            frequencyChart = echarts.init(freqDom);
-            
-            console.log('Charts initialisiert');
-            
-            createFrequencyChart();
-            
-            console.log('Frequenz-Chart erstellt');
             
             if (currentView === 'ertrag') {
                 createErtragChart();
@@ -1190,75 +1122,7 @@
             console.log('Forecast-Chart erstellt:', times.length, 'Stunden');
         }
         
-        function createFrequencyChart() {
-            try {
-                // Time-axis data: [timestamp_ms, frequency] pairs
-                const freqTimeSeries = chartData.datapoints.map(dp => 
-                    [dp.timestamp * 1000, dp.f_netz_avg || 50.0]
-                );
-                
-                // Feste 24h-Achse (synchron mit Hauptchart)
-                const bounds = getDayBounds();
-                const xMin = bounds.min;
-                const xMax = bounds.max;
-                
-                const option = {
-                    grid: {
-                        left: '3%',
-                        right: '5%',
-                        top: '10%',
-                        bottom: '10%',
-                        containLabel: false
-                    },
-                    visualMap: {
-                        type: 'piecewise',
-                        show: false,
-                        min: 49.2,
-                        max: 50.8,
-                        dimension: 1,
-                        pieces: [
-                            { min: 49.2, max: 49.4, color: '#d73027' },  // ROT: kritisch niedrig
-                            { min: 49.4, max: 49.8, color: '#fc8d59' },  // ORANGE: Warnung niedrig
-                            { min: 49.8, max: 49.95, color: '#fee08b' }, // GELB: Grenzbereich niedrig
-                            { min: 49.95, max: 50.05, color: '#1a9850' },// GRÜN: optimal ±0.05 Hz
-                            { min: 50.05, max: 50.2, color: '#fee08b' }, // GELB: Grenzbereich hoch
-                            { min: 50.2, max: 50.6, color: '#fc8d59' },  // ORANGE: Warnung hoch
-                            { min: 50.6, max: 50.8, color: '#d73027' }   // ROT: kritisch hoch
-                        ]
-                    },
-                    xAxis: {
-                        type: 'time',
-                        show: false,
-                        boundaryGap: false,
-                        min: xMin,
-                        max: xMax
-                    },
-                    yAxis: {
-                        type: 'value',
-                        min: 49.2,
-                        max: 50.8,
-                        show: false
-                    },
-                    series: [
-                        {
-                            type: 'line',
-                            smooth: true,
-                            symbol: 'none',
-                            showSymbol: false,
-                            lineStyle: {
-                                width: 2
-                            },
-                            data: freqTimeSeries
-                        }
-                    ]
-                };
-                
-                frequencyChart.setOption(option);
-                console.log('Frequenz-Option gesetzt, Daten:', freqTimeSeries.length, 'Punkte');
-            } catch (error) {
-                console.error('Fehler in createFrequencyChart:', error);
-            }
-        }
+
         
         // ═══════════════════════════════════════════════════════
         // HELPER: Build time-based data arrays for charts
@@ -1815,8 +1679,6 @@
             try {
                 document.getElementById('loading').style.display = 'block';
                 document.getElementById('error').style.display = 'none';
-                document.getElementById('frequencyChart').style.display = 'none';
-                document.getElementById('freqInfoLine').style.display = 'none';
                 document.getElementById('mainChart').style.display = 'none';
                 
                 const url = `/api/monat_visualization?year=${currentYear}&month=${currentMonth}`;
@@ -1880,9 +1742,6 @@
                 
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('mainChart').style.display = 'block';
-
-                // Frequenz-Infozeile statt Chart
-                renderFreqInfoLine(chartData.freq_extremes);
                 
                 createMonthChart();
                 
@@ -1898,8 +1757,6 @@
             try {
                 document.getElementById('loading').style.display = 'block';
                 document.getElementById('error').style.display = 'none';
-                document.getElementById('frequencyChart').style.display = 'none';
-                document.getElementById('freqInfoLine').style.display = 'none';
                 document.getElementById('mainChart').style.display = 'none';
                 
                 const url = `/api/jahr_visualization?year=${currentYear}`;
@@ -1916,9 +1773,6 @@
                 
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('mainChart').style.display = 'block';
-
-                // Frequenz-Infozeile
-                renderFreqInfoLine(chartData.freq_extremes);
                 
                 createYearChart();
                 
@@ -1934,8 +1788,6 @@
             try {
                 document.getElementById('loading').style.display = 'block';
                 document.getElementById('error').style.display = 'none';
-                document.getElementById('frequencyChart').style.display = 'none';
-                document.getElementById('freqInfoLine').style.display = 'none';
                 document.getElementById('mainChart').style.display = 'none';
                 
                 const url = '/api/gesamt_visualization';
@@ -1950,9 +1802,6 @@
                 
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('mainChart').style.display = 'block';
-
-                // Frequenz-Infozeile
-                renderFreqInfoLine(chartData.freq_extremes);
                 
                 createGesamtChart();
                 
@@ -2701,9 +2550,6 @@
                     } else if (currentPeriod === 'gesamt') {
                         createGesamtChart();
                     }
-                }
-                if (frequencyChart) {
-                    frequencyChart.resize();
                 }
             }, 250);
         });
