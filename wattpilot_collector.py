@@ -45,6 +45,15 @@ PID_FILE = Path(__file__).parent / 'wattpilot_collector.pid'
 
 
 # ─── Single Instance Protection ───
+def _is_wattpilot_process(pid):
+    """Prüft ob der Prozess mit dieser PID tatsächlich ein Wattpilot-Collector ist"""
+    try:
+        with open(f'/proc/{pid}/cmdline', 'r') as f:
+            cmdline = f.read()
+        return 'wattpilot_collector' in cmdline
+    except (FileNotFoundError, PermissionError):
+        return False
+
 def create_pid_file():
     """Erstellt PID-File und prüft auf laufende Instanz."""
     if PID_FILE.exists():
@@ -52,13 +61,17 @@ def create_pid_file():
             with open(PID_FILE, 'r') as f:
                 old_pid = int(f.read().strip())
             
-            # Prüfe ob Prozess existiert
+            # Prüfe ob Prozess existiert UND ein Wattpilot-Collector ist
             try:
                 os.kill(old_pid, 0)
-                logger.error(f"Wattpilot-Collector läuft bereits (PID {old_pid})")
-                logger.error(f"   Stoppen Sie den Prozess mit: kill {old_pid}")
-                logger.error(f"   Oder erzwingen: rm {PID_FILE}")
-                sys.exit(1)
+                if _is_wattpilot_process(old_pid):
+                    logger.error(f"Wattpilot-Collector läuft bereits (PID {old_pid})")
+                    logger.error(f"   Stoppen Sie den Prozess mit: kill {old_pid}")
+                    logger.error(f"   Oder erzwingen: rm {PID_FILE}")
+                    sys.exit(1)
+                else:
+                    logger.warning(f"PID {old_pid} lebt, ist aber kein Wattpilot-Collector — entferne stale PID-File")
+                    PID_FILE.unlink()
             except OSError:
                 logger.warning(f"Entferne verwaistes PID-File (PID {old_pid})")
                 PID_FILE.unlink()

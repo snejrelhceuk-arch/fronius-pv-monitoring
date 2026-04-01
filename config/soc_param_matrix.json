@@ -1,7 +1,7 @@
 {
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
-  "_updated": "2026-03-22",
+  "_updated": "2026-03-30",
   "regelkreise": {
     "soc_extern": {
       "_doc": "Toleranz für extern geänderte SOC-Werte (z.B. manuell via Fronius App). Wenn SOC_MIN oder SOC_MAX außerhalb der Automation geändert werden, respektiert die Engine die Werte für die konfigurierte Dauer.",
@@ -489,7 +489,7 @@
     "temp_schutz": {
       "_doc": "Gradueller Laderate-Schutz nach Zelltemperatur (Tier-2, ergänzt Tier-1 Interrupt)",
       "_entfernt": "2026-03-07: BMS regelt Temperatur-Schutz selbständig (LFP-Zellchemie); InWRte-Schreiben wirkungslos",
-      "aktiv": true,
+      "aktiv": false,
       "prioritaet": 1,
       "beschreibung": "Laderate stufenweise reduzieren bei steigender Batterie-Temperatur",
       "parameter": {
@@ -808,7 +808,7 @@
           "beschreibung": "Burst-Dauer bei mäßiger Prognose oder nachmittags spät (15 Min)"
         },
         "min_pause_s": {
-          "wert": 300,
+          "wert": 600,
           "bereich": [
             60,
             600
@@ -1051,7 +1051,7 @@
           "beschreibung": "SOC-Schwelle für Autoritäts-Override: Wird HP manuell eingeschaltet, überstimmt die Engine bei SOC ≤ diesem Wert und schaltet HP aus (Batterieschutz). Standard 15%."
         },
         "potenzial_gut_kwh": {
-          "wert": 30.0,
+          "wert": 60.0,
           "bereich": [
             15.0,
             60.0
@@ -1060,7 +1060,7 @@
           "beschreibung": "Tagesprognose ab der HP parallel mit WP+EV laufen darf und Batterie-Entladung immer toleriert wird"
         },
         "potenzial_ausreichend_kwh": {
-          "wert": 20.0,
+          "wert": 40.0,
           "bereich": [
             10.0,
             40.0
@@ -1069,7 +1069,7 @@
           "beschreibung": "Tagesprognose ab der HP parallel mit WP laufen darf (nicht EV). Entladung toleriert wenn SOC_MAX ≤ 75%"
         },
         "potenzial_maessig_kwh": {
-          "wert": 15.0,
+          "wert": 20.0,
           "bereich": [
             5.0,
             30.0

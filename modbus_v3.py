@@ -40,6 +40,15 @@ FRONIUS_API_BASE = config.FRONIUS_API_BASE
 PID_FILE = config.PID_FILE
 
 # --- PID-FILE SCHUTZ (Single Instance) ---
+def _is_collector_process(pid):
+    """Prüft ob der Prozess mit dieser PID tatsächlich ein Collector ist"""
+    try:
+        with open(f'/proc/{pid}/cmdline', 'r') as f:
+            cmdline = f.read()
+        return 'collector.py' in cmdline or 'modbus_v3' in cmdline
+    except (FileNotFoundError, PermissionError):
+        return False
+
 def create_pid_file():
     """Erstellt PID-File und prüft auf laufende Instanz"""
     if os.path.exists(PID_FILE):
@@ -48,13 +57,17 @@ def create_pid_file():
             with open(PID_FILE, 'r') as f:
                 old_pid = int(f.read().strip())
             
-            # Prüfe ob Prozess existiert
+            # Prüfe ob Prozess existiert UND ein Collector ist
             try:
                 os.kill(old_pid, 0)  # Signal 0 = Prüfe Existenz
-                print(f"[ERROR] collector.py laeuft bereits (PID {old_pid})")
-                print(f"   Beenden Sie den Prozess mit: kill {old_pid}")
-                print(f"   Oder erzwingen Sie Start mit: rm {PID_FILE}")
-                sys.exit(1)
+                if _is_collector_process(old_pid):
+                    print(f"[ERROR] collector.py laeuft bereits (PID {old_pid})")
+                    print(f"   Beenden Sie den Prozess mit: kill {old_pid}")
+                    print(f"   Oder erzwingen Sie Start mit: rm {PID_FILE}")
+                    sys.exit(1)
+                else:
+                    print(f"[WARN] PID {old_pid} lebt, ist aber kein Collector — entferne stale PID-File")
+                    os.remove(PID_FILE)
             except OSError:
                 # Prozess existiert nicht mehr → Stale PID-File
                 print(f"[WARN] Entferne verwaistes PID-File (PID {old_pid} existiert nicht)")
