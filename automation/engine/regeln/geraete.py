@@ -370,6 +370,11 @@ class RegelHeizpatrone(Regel):
             return soc_max_eff <= 75
         return False  # niedrig → keine Toleranz
 
+    def _drain_soc_freigegeben(self, obs: ObsState, matrix: dict) -> bool:
+        """Phase 0 nur bei bereits geöffneter Batterie erlauben."""
+        stress = get_param(matrix, 'morgen_soc_min', 'stress_min_pct', 5)
+        return obs.soc_min is not None and obs.soc_min <= stress
+
     def bewerte(self, obs: ObsState, matrix: dict) -> int:
         """Score für HP-Steuerung.
 
@@ -605,8 +610,9 @@ class RegelHeizpatrone(Regel):
         drain_min_sunshine_h = get_param(matrix, self.regelkreis, 'drain_min_sunshine_h', 5.0)
         sunshine_h = obs.sunshine_hours or 0
         if now_h >= (sunrise_h - drain_fruehstart_h) and now_h < drain_fenster:
-            # Sonnenstunden-Guard: kein Drain bei zu wenig prognostizierter Sonne
-            if sunshine_h < drain_min_sunshine_h:
+            if not self._drain_soc_freigegeben(obs, matrix):
+                LOG.debug('Phase 0 blockiert: SOC_MIN=%s%% > Stress-SOC', obs.soc_min)
+            elif sunshine_h < drain_min_sunshine_h:
                 LOG.debug(f'Phase 0 blockiert: Sonnenstunden {sunshine_h:.1f}h '
                           f'< {drain_min_sunshine_h:.1f}h Minimum')
             else:
@@ -960,7 +966,9 @@ class RegelHeizpatrone(Regel):
         drain_min_sunshine_h = get_param(matrix, self.regelkreis, 'drain_min_sunshine_h', 5.0)
         sunshine_h = obs.sunshine_hours or 0
         if now_h >= (sunrise_h - drain_fruehstart_h) and now_h < drain_fenster:
-            if sunshine_h < drain_min_sunshine_h:
+            if not self._drain_soc_freigegeben(obs, matrix):
+                LOG.debug('Phase 0 Schalt-Log blockiert: SOC_MIN=%s%% > Stress-SOC', obs.soc_min)
+            elif sunshine_h < drain_min_sunshine_h:
                 LOG.debug(f'Phase 0 Schalt-Log blockiert: Sonnenstunden {sunshine_h:.1f}h '
                           f'< {drain_min_sunshine_h:.1f}h')
             else:

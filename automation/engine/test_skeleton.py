@@ -39,6 +39,7 @@ from automation.engine.engine import (
     RegelForecastPlausi,
     RegelWattpilotBattSchutz,
 )
+from automation.engine.regeln.geraete import RegelHeizpatrone
 from automation.engine.param_matrix import (
     lade_matrix, validiere_matrix, get_param, ist_aktiv,
     get_score_gewicht, DEFAULT_MATRIX_PATH,
@@ -427,6 +428,114 @@ def test_regel_komfort_reset_morgen_sperre():
     return True
 
 
+def test_regel_morgen_soc_min_nachtlast_oeffnung():
+    """Regression: Gute Prognose + Nacht-Netzbezug am SOC_MIN → früh öffnen."""
+    _sep("6c3. RegelMorgenSocMin Nachtlast-Öffnung")
+
+    matrix = lade_matrix(DEFAULT_MATRIX_PATH)
+    regel = RegelMorgenSocMin()
+
+    fake_time = datetime(2025, 3, 29, 3, 35)
+    with patch('automation.engine.regeln.soc_steuerung.datetime') as mock_dt:
+        mock_dt.now.return_value = fake_time
+        mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+
+        obs = ObsState(
+            forecast_quality='gut',
+            sunrise=6.33,
+            soc_min=25,
+            soc_max=75,
+            soc_mode='manual',
+            batt_soc_pct=25.0,
+            grid_power_w=1450.0,
+            wp_power_w=1800.0,
+            pv_at_sunrise_1h_w=280.0,
+        )
+
+        score = regel.bewerte(obs, matrix)
+        assert score > 0, f"Erwarte Score > 0 bei Nachtlast-Öffnung, got {score}"
+
+        aktionen = regel.erzeuge_aktionen(obs, matrix)
+        assert len(aktionen) >= 1, f"Erwarte Aktionen für frühe Öffnung, got {aktionen}"
+        assert any(a['kommando'] == 'set_soc_min' and a['wert'] == 5 for a in aktionen)
+        LOG.info("✓ 03:35, Grid/WP aktiv bei SOC_MIN=25%: Nachtlast-Öffnung greift")
+
+    return True
+
+
+def test_regel_heizpatrone_phase0_braucht_offene_batterie():
+    """Regression: Phase 0 darf nicht bei SOC_MIN=25% starten."""
+    _sep("6h2. RegelHeizpatrone Phase 0 braucht offene Batterie")
+
+    matrix = lade_matrix(DEFAULT_MATRIX_PATH)
+    regel = RegelHeizpatrone()
+    regel._letzter_hp_zustand = False
+    regel._letzte_aus = 0
+
+    forecast_profile = [
+        {'hour': 6, 'total_ac_w': 3500},
+        {'hour': 7, 'total_ac_w': 6500},
+        {'hour': 8, 'total_ac_w': 9000},
+    ]
+
+    fake_time = datetime(2025, 3, 29, 5, 50)
+    with patch('automation.engine.regeln.geraete.datetime') as mock_dt:
+        mock_dt.now.return_value = fake_time
+        mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+
+        obs_geschlossen = ObsState(
+            sunrise=6.33,
+            sunset=19.5,
+            soc_min=25,
+            soc_max=75,
+            batt_soc_pct=25.0,
+            batt_power_w=0.0,
+            house_load_w=320.0,
+            wp_power_w=0.0,
+            ev_power_w=0.0,
+            forecast_quality='gut',
+            sunshine_hours=8.0,
+            forecast_rest_kwh=80.0,
+            forecast_power_profile=forecast_profile,
+            heizpatrone_aktiv=False,
+        )
+
+        score_geschlossen = regel.bewerte(obs_geschlossen, matrix)
+        aktionen_geschlossen = regel.erzeuge_aktionen(obs_geschlossen, matrix)
+        assert score_geschlossen == 0, (
+            f"Erwarte Score 0 ohne offene Batterie, got {score_geschlossen}"
+        )
+        assert aktionen_geschlossen == [], (
+            f"Erwarte keine Phase-0-Aktion bei SOC_MIN=25%, got {aktionen_geschlossen}"
+        )
+
+        obs_offen = ObsState(
+            sunrise=6.33,
+            sunset=19.5,
+            soc_min=5,
+            soc_max=75,
+            batt_soc_pct=25.0,
+            batt_power_w=0.0,
+            house_load_w=320.0,
+            wp_power_w=0.0,
+            ev_power_w=0.0,
+            forecast_quality='gut',
+            sunshine_hours=8.0,
+            forecast_rest_kwh=80.0,
+            forecast_power_profile=forecast_profile,
+            heizpatrone_aktiv=False,
+        )
+
+        score_offen = regel.bewerte(obs_offen, matrix)
+        aktionen_offen = regel.erzeuge_aktionen(obs_offen, matrix)
+        assert score_offen > 0, f"Erwarte Score > 0 bei offener Batterie, got {score_offen}"
+        assert aktionen_offen, "Erwarte Phase-0-Aktion bei offener Batterie"
+        assert aktionen_offen[0]['kommando'] == 'hp_ein'
+        LOG.info("✓ Phase 0 blockiert bei SOC_MIN=25%, erlaubt bei SOC_MIN=5%")
+
+    return True
+
+
 def test_regel_nachmittag_soc_max():
     """Test 6d: RegelNachmittagSocMax — SOC_MAX nachmittags erhöhen."""
     _sep("6d. RegelNachmittagSocMax")
@@ -790,11 +899,13 @@ def main():
             # Entfernt (2026-03-07): SOC-Schutz, Temp-Schutz, Abend-Entladerate, Laderate dynamisch
             ('Regel: Morgen SOC_MIN', test_regel_morgen_soc_min),
             ('Regel: Komfort-Reset Morgen-Sperre', test_regel_komfort_reset_morgen_sperre),
+            ('Regel: Morgen SOC_MIN Nachtlast', test_regel_morgen_soc_min_nachtlast_oeffnung),
             ('Regel: Nachmittag SOC_MAX', test_regel_nachmittag_soc_max),
             ('Regel: Zellausgleich', test_regel_zellausgleich),
             ('Regel: Nachmittag+Forecast', test_regel_nachmittag_forecast_rest),
             ('Regel: Forecast-Plausi', test_regel_forecast_plausi),
             ('Regel: WattPilot BattSchutz', test_regel_wattpilot_battschutz),
+            ('Regel: Heizpatrone Phase0 Gating', test_regel_heizpatrone_phase0_braucht_offene_batterie),
             # Integration Tests (Phase 2)
             ('Engine Zyklus-Filter', lambda: test_engine_zyklusfilter(ram_db, persist_db)),
             ('Multi-Aktions-Plan', lambda: test_engine_multi_aktion(ram_db, persist_db)),

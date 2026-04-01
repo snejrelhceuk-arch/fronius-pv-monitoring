@@ -21,6 +21,44 @@ from automation.engine.param_matrix import (
 
 LOG = logging.getLogger('engine')
 
+NACHTLAST_FENSTER_H = 3.0
+NACHTLAST_GRID_TRIGGER_W = 300
+
+
+def _jetzt_h() -> float:
+    now = datetime.now()
+    return now.hour + now.minute / 60.0
+
+
+def _nachtlast_oeffnung_noetig(obs: ObsState, matrix: dict) -> bool:
+    """Frühe Öffnung bei guter Prognose und echtem Nacht-Netzbezug.
+
+    Wenn die Batterie bereits am aktuellen SOC_MIN hängt und in den letzten
+    Stunden vor Sunrise Netzbezug entsteht, wird SOC_MIN frühzeitig geöffnet.
+    So bleibt Nachtlast bei gutem Forecast nicht unnötig am Netz.
+    """
+    if (obs.forecast_quality or '').lower() != 'gut':
+        return False
+
+    sunrise = obs.sunrise
+    soc_min = obs.soc_min
+    soc = obs.batt_soc_pct
+    if sunrise is None or soc_min is None or soc is None:
+        return False
+
+    stress = get_param(matrix, 'morgen_soc_min', 'stress_min_pct', 5)
+    if soc_min <= stress:
+        return False
+
+    now_h = _jetzt_h()
+    if not ((sunrise - NACHTLAST_FENSTER_H) <= now_h < sunrise):
+        return False
+
+    if soc > soc_min + 1.0:
+        return False
+
+    return float(obs.grid_power_w or 0) > NACHTLAST_GRID_TRIGGER_W
+
 
 # ═════════════════════════════════════════════════════════════
 # MORGEN SOC_MIN (P2 — Steuerung, fast)
@@ -47,8 +85,7 @@ class RegelMorgenSocMin(Regel):
 
     def _im_zeitfenster(self, obs: ObsState, matrix: dict) -> bool:
         """(Sunrise - Vorlauf) bis Sunrise + fenster_ende_h."""
-        now = datetime.now()
-        hr = now.hour + now.minute / 60.0
+        hr = _jetzt_h()
         sunrise = obs.sunrise or 7.0
         vorlauf_h = get_param(matrix, self.regelkreis, 'morgen_vorlauf_min', 15) / 60.0
         ende_h = get_param(matrix, self.regelkreis, 'fenster_ende_nach_sunrise_h', 3)
@@ -57,7 +94,8 @@ class RegelMorgenSocMin(Regel):
     def bewerte(self, obs: ObsState, matrix: dict) -> int:
         if not ist_aktiv(matrix, self.regelkreis):
             return 0
-        if not self._im_zeitfenster(obs, matrix):
+        nachtlast_oeffnung = _nachtlast_oeffnung_noetig(obs, matrix)
+        if not self._im_zeitfenster(obs, matrix) and not nachtlast_oeffnung:
             return 0
 
         # ── SOC-Extern-Toleranz ──
@@ -71,6 +109,12 @@ class RegelMorgenSocMin(Regel):
 
         stress = get_param(matrix, self.regelkreis, 'stress_min_pct', 5)
         score = get_score_gewicht(matrix, self.regelkreis)
+
+        if nachtlast_oeffnung:
+            LOG.info("morgen_soc_min: Nachtlast-Öffnung bei SOC_MIN=%s%% "
+                     "(SOC=%.1f%%, Grid=%.0fW)",
+                     obs.soc_min, obs.batt_soc_pct or -1, obs.grid_power_w or 0)
+            return score
 
         # ── HALTE-MODUS: SOC_MIN bereits geöffnet ──
         if obs.soc_min is not None and obs.soc_min <= stress:
@@ -361,21 +405,24 @@ class RegelKomfortReset(Regel):
             return True
         return False
 
-    def _morgenfenster_sperrt_reset(self, obs: ObsState) -> bool:
+    def _morgenfenster_sperrt_reset(self, obs: ObsState, matrix: dict) -> bool:
         """Sperrt Komfort-Reset bei guter Prognose ab Sunrise-1h.
 
         Verhindert Konflikte mit der Morgen-Öffnung (SOC_MIN=5%), damit
         SOC_MIN in der kritischen Vor-Sunrise-Phase nicht auf 25% zurückspringt.
         """
-        if obs.forecast_quality != 'gut':
+        if (obs.forecast_quality or '').lower() != 'gut':
             return False
 
         sunrise = obs.sunrise
         if sunrise is None:
             return False
 
-        now_h = datetime.now().hour + datetime.now().minute / 60.0
-        return now_h > (sunrise - 1.0)
+        now_h = _jetzt_h()
+        if now_h > (sunrise - 1.0):
+            return True
+
+        return _nachtlast_oeffnung_noetig(obs, matrix)
 
     def _frueh_reset_noetig(self, obs: ObsState, matrix: dict) -> bool:
         """Nachmittags: Prognose-Rest zu gering → SOC_MIN sofort auf 25%.
@@ -508,7 +555,7 @@ class RegelKomfortReset(Regel):
                       f'→ toleriert ({verbleibend}s verbleibend)')
             return 0
 
-        if self._morgenfenster_sperrt_reset(obs):
+        if self._morgenfenster_sperrt_reset(obs, matrix):
             return 0
 
         score = get_score_gewicht(matrix, self.regelkreis)
@@ -530,7 +577,7 @@ class RegelKomfortReset(Regel):
         aktionen = []
         now_str = f"{datetime.now().hour}:{datetime.now().minute:02d}"
 
-        if self._morgenfenster_sperrt_reset(obs):
+        if self._morgenfenster_sperrt_reset(obs, matrix):
             return []
 
         frueh = self._frueh_reset_noetig(obs, matrix)

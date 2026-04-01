@@ -14,3 +14,6 @@ Geänderte Quellen: automation/engine/engine.py, doc/FELDNAMEN_REFERENZ.md, doc/
 
 ## 2026-03-08 19:04 (Hash: 621fff7714a74995)
 Geänderte Quellen: wattpilot_collector.py, config.py, README.md, automation/engine/automation_daemon.py, automation/engine/engine.py
+
+## 2026-03-28 16:20 (Hash: 7141c1ca2b10731c)
+Geänderte Quellen: README.md, aggregate.py, config.py, solar_forecast.py, automation/engine/automation_daemon.py, automation/engine/engine.py, web_api.py, fronius_api.py, wattpilot_collector.py
