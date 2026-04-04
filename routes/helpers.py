@@ -54,6 +54,29 @@ def validate_year_month(year, month=None):
     return (year, month), None
 
 
+# ─── Counter-Plausibilität ──────────────────────────────────
+_COUNTER_PLAUSIBILITY_FACTOR = 3.0
+_MIN_DELTA_WH = 50.0
+
+
+def plausible_counter_delta(start, end, fallback):
+    """Berechne Counter-Delta mit Plausibilitätsprüfung.
+
+    Wenn Start/End vorhanden sind, wird End−Start berechnet.
+    Falls das Ergebnis negativ ist oder um Faktor > 3 vom Fallback (SUM Δ)
+    abweicht, wird der Fallback-Wert (bereits reset-korrigiert) verwendet.
+    """
+    if start is not None and end is not None:
+        delta = end - start
+        fb = fallback or 0
+        if delta < -_MIN_DELTA_WH:
+            return fb
+        if abs(fb) > _MIN_DELTA_WH and delta > _COUNTER_PLAUSIBILITY_FACTOR * abs(fb):
+            return fb
+        return delta
+    return fallback or 0
+
+
 def get_db_connection():
     """Verbindung zur tmpfs-DB (RAM-Dateisystem).
 

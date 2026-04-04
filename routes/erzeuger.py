@@ -7,7 +7,7 @@ import re
 import logging
 from datetime import datetime
 from flask import Blueprint, jsonify, request
-from routes.helpers import get_db_connection, api_error_response, validate_year_month
+from routes.helpers import get_db_connection, api_error_response, validate_year_month, plausible_counter_delta
 
 bp = Blueprint('erzeuger', __name__)
 
@@ -97,38 +97,46 @@ def api_erzeuger_tag():
                 'p_gesamt': round(p_f1 + p_f2 + p_f3, 1),
             })
 
-        # Totals in kWh — try counter-based (exact) first
+        # Totals in kWh — counter-based mit Plausibilitätsprüfung
         counter_totals = None
         try:
+            _EZ_RAW = ['W_DC1', 'W_DC2', 'W_Exp_F2', 'W_Exp_F3']
+            _EZ_DELTA = ['W_DC1_delta', 'W_DC2_delta', 'W_Exp_F2_delta', 'W_Exp_F3_delta']
+            raw_cols = ', '.join(_EZ_RAW)
+            fb_sums = ', '.join(f'SUM({c})' for c in _EZ_DELTA)
+
             if date_param:
-                ct_query = """
-                    SELECT
-                        (MAX(W_DC1) - MIN(W_DC1)) / 1000.0,
-                        (MAX(W_DC2) - MIN(W_DC2)) / 1000.0,
-                        (MAX(W_Exp_F2) - MIN(W_Exp_F2)) / 1000.0,
-                        (MAX(W_Exp_F3) - MIN(W_Exp_F3)) / 1000.0,
-                        COUNT(*)
-                    FROM raw_data
-                    WHERE datetime(ts, 'unixepoch', 'localtime') >= date(?, 'start of day')
-                      AND datetime(ts, 'unixepoch', 'localtime') < date(?, '+1 day', 'start of day')
-                """
-                cursor.execute(ct_query, (date_param, date_param))
+                where_ct = ("datetime(ts, 'unixepoch', 'localtime') >= date(?, 'start of day') "
+                            "AND datetime(ts, 'unixepoch', 'localtime') < date(?, '+1 day', 'start of day')")
+                ct_params = (date_param, date_param)
             else:
-                ct_query = """
-                    SELECT
-                        (MAX(W_DC1) - MIN(W_DC1)) / 1000.0,
-                        (MAX(W_DC2) - MIN(W_DC2)) / 1000.0,
-                        (MAX(W_Exp_F2) - MIN(W_Exp_F2)) / 1000.0,
-                        (MAX(W_Exp_F3) - MIN(W_Exp_F3)) / 1000.0,
-                        COUNT(*)
-                    FROM raw_data
-                    WHERE datetime(ts, 'unixepoch', 'localtime') >= date('now', 'localtime', 'start of day')
-                """
-                cursor.execute(ct_query)
-            ct_row = cursor.fetchone()
-            if ct_row and ct_row[4] and ct_row[4] > 100:
-                dc1, dc2, f2, f3, cnt = ct_row
-                dc1 = dc1 or 0; dc2 = dc2 or 0; f2 = f2 or 0; f3 = f3 or 0
+                where_ct = "datetime(ts, 'unixepoch', 'localtime') >= date('now', 'localtime', 'start of day')"
+                ct_params = ()
+
+            cursor.execute(f"SELECT COUNT(*) FROM raw_data WHERE {where_ct}", ct_params)
+            raw_count = cursor.fetchone()[0]
+
+            if raw_count > 100:
+                cursor.execute(
+                    f"SELECT {raw_cols} FROM raw_data WHERE {where_ct} ORDER BY ts ASC LIMIT 1",
+                    ct_params)
+                first_row = cursor.fetchone()
+                cursor.execute(
+                    f"SELECT {raw_cols} FROM raw_data WHERE {where_ct} ORDER BY ts DESC LIMIT 1",
+                    ct_params)
+                last_row = cursor.fetchone()
+                cursor.execute(
+                    f"SELECT {fb_sums} FROM data_1min WHERE {where_ct}", ct_params)
+                fb_row = cursor.fetchone()
+
+                deltas = []
+                for i in range(len(_EZ_RAW)):
+                    s = first_row[i] if first_row else None
+                    e = last_row[i] if last_row else None
+                    fb = abs(fb_row[i] or 0) if fb_row else 0
+                    deltas.append(plausible_counter_delta(s, e, fb))
+
+                dc1, dc2, f2, f3 = [d / 1000.0 for d in deltas]
                 counter_totals = {
                     'f1': round(dc1 + dc2, 2),
                     'f2': round(f2, 2),

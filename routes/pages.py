@@ -12,6 +12,15 @@ from routes.helpers import get_db_connection, get_strompreis_fuer_monat
 bp = Blueprint('pages', __name__)
 
 
+def _get_installed_kwp_for_month(year, month):
+    """Installierte PV-Leistung (kWp) je Monat gemäß Ausbaustufen."""
+    if (year, month) <= (2025, 4):
+        return 21.40
+    if (year, month) <= (2025, 9):
+        return 26.07
+    return config.PV_KWP_TOTAL
+
+
 def _get_nav_context(args):
     """Normalisiere den UI-Zeitkontext für Links zwischen verwandten Ansichten."""
     now = datetime.now()
@@ -208,8 +217,8 @@ def analyse():
         else:
             avg_strompreis = get_strompreis_fuer_monat(year, 6)  # Jahresmitte als Fallback
 
-        # Autarkie: Anteil des selbst erzeugten Stroms am Gesamtverbrauch
-        autarkie = (data['solar'] / data['gesamt_verbr'] * 100) if data['gesamt_verbr'] > 0 else 0
+        # Autarkie: Anteil des Verbrauchs, der nicht aus dem Netz stammt
+        autarkie = ((1 - (data['netz_bezug'] / data['gesamt_verbr'])) * 100) if data['gesamt_verbr'] > 0 else 0
 
         # Batterie-Wirkungsgrad
         batt_wirkungsgrad = (data['batt_entl'] / data['batt_lad'] * 100) if data['batt_lad'] > 0 else 0
@@ -257,6 +266,14 @@ def analyse():
         # GESAMT-Ersparnis (Strom-Netto + Heizung + Benzin)
         netto_ersparnis = netto_ersparnis_strom + heiz_ersparnis + benzin_ersparnis
 
+        # Spezifischer Ertrag (kWh/kWp): jahresbezogen, monatsweise nach Ausbauphase gewichtet
+        kwp_month_sum = sum(
+            _get_installed_kwp_for_month(year, month)
+            for month in range(1, 13)
+        )
+        avg_kwp_year = (kwp_month_sum / 12.0) if kwp_month_sum > 0 else config.PV_KWP_TOTAL
+        spezifischer_ertrag = (data['solar'] / avg_kwp_year) if avg_kwp_year > 0 else 0
+
         # Erweiterte Daten speichern
         data['autarkie'] = autarkie
         data['batt_wirkungsgrad'] = batt_wirkungsgrad
@@ -267,6 +284,7 @@ def analyse():
         data['benzin_ersparnis'] = benzin_ersparnis
         data['km_gefahren'] = km_gefahren
         data['netto_ersparnis'] = netto_ersparnis
+        data['spez_ertrag'] = spezifischer_ertrag
 
     # ========================================
     # PV-AMORTISATION (nur PV-Anlage, Brutto)
@@ -404,9 +422,14 @@ def analyse():
         'sonnenstunden': sum(d.get('sonnenstunden', 0) or 0 for d in years_data.values()),
         'monate': sum(d['monate'] for d in years_data.values()),
     }
-    totals['autarkie'] = (totals['solar'] / totals['gesamt_verbr'] * 100) if totals['gesamt_verbr'] > 0 else 0
+    totals['autarkie'] = ((1 - (totals['netz_bezug'] / totals['gesamt_verbr'])) * 100) if totals['gesamt_verbr'] > 0 else 0
     totals['batt_wirkungsgrad'] = (totals['batt_entl'] / totals['batt_lad'] * 100) if totals['batt_lad'] > 0 else 0
     totals['km_gefahren'] = sum(d.get('km_gefahren', 0) or 0 for d in years_data.values())
+    weighted_kwp_sum = sum(
+        _get_installed_kwp_for_month(row[0], row[1])
+        for row in monthly_rows
+    )
+    totals['spez_ertrag'] = (totals['solar'] / (weighted_kwp_sum / 12.0)) if weighted_kwp_sum > 0 else 0
 
     # Aktuelle Werte für Info-Cards
     current_year = max(years_data.keys())

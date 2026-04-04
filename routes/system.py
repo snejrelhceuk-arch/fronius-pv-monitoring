@@ -877,11 +877,37 @@ def _fetch_hp_status(now, result):
         result['hp_bursts_heute'] = sum(
             1 for a in hp_aktionen
             if a['kommando'] == 'hp_ein' and a['ergebnis'] == 'OK')
+
+        # ── WP-Sollwert-Schaltaktionen (set_ww_soll, set_heiz_soll) ──
+        wp_aktionen = []
+        _wp_pattern = _re_hp.compile(
+            r'^\s*(\d{4}-\d{2}-\d{2}),\s*(\d{2}:\d{2}:\d{2})\s+'
+            r'ENGINE\s+waermepumpe\s+'
+            r'(set_ww_soll|set_heiz_soll)=(\S+)\s+'
+            r'(OK|FEHLER)\s*(.*)')
+        if os.path.exists(_schaltlog_path):
+            with open(_schaltlog_path, 'r') as _wlf:
+                for _wline in _wlf:
+                    _mw = _wp_pattern.match(_wline)
+                    if _mw:
+                        _datum, _zeit, _cmd, _wert, _erg, _grund = _mw.groups()
+                        if _datum == _today_str and _erg == 'OK':
+                            wp_aktionen.append({
+                                'ts': f'{_datum} {_zeit[:5]}',
+                                'kommando': _cmd,
+                                'wert': _wert,
+                                'grund': (_grund or '').strip()[:120],
+                            })
+            wp_aktionen.reverse()
+            wp_aktionen = wp_aktionen[:20]
+        result['wp_aktionen'] = wp_aktionen
+
     except Exception as _he:
         logging.debug(f"HP-Log (schaltlog): {_he}")
         result['hp_aktionen'] = []
         result['klima_aktionen'] = []
         result['hp_bursts_heute'] = 0
+        result['wp_aktionen'] = []
 
     # Live-Status von Fritz!Box (eigener Cache 120s)
     try:
@@ -968,6 +994,7 @@ def _fetch_wp_status(result):
                     'quelle_ein': 'wp_quelle_ein_c',
                     'quelle_aus': 'wp_quelle_aus_c',
                     'ww_soll': 'wp_ww_soll_c',
+                    'heiz_soll': 'wp_heiz_soll_c',
                 }
                 for api_key, obs_key in _field_map.items():
                     val = _obs_wp.get(obs_key)

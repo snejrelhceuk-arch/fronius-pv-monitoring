@@ -151,6 +151,8 @@
         }
 
         .monitor-overlay-close {
+            position: relative;
+            z-index: 2;
             border: 1px solid rgba(255,255,255,0.25);
             background: rgba(255,255,255,0.08);
             color: rgba(255,255,255,0.9);
@@ -158,6 +160,18 @@
             font-size: 10px;
             line-height: 1;
             padding: 2px 5px;
+            cursor: pointer;
+        }
+
+        .monitor-overlay-cover {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            cursor: pointer;
+            border-radius: inherit;
+        }
+
+        .flow-clickable {
             cursor: pointer;
         }
 
@@ -210,7 +224,7 @@
             .flow-chart.has-monitor-overlay {
                 --monitor-overlay-w: clamp(260px, 34vw, 400px);
                 --monitor-overlay-gap: 4px;
-                --monitor-overlay-h: min(56vh, calc(100% - 178px));
+                --monitor-overlay-h: min(42vh, calc((100% - 178px) * 0.75));
             }
         }
 
@@ -454,7 +468,7 @@
             .flow-chart.has-monitor-overlay {
                 --monitor-overlay-w: clamp(220px, 35vw, 320px);
                 --monitor-overlay-gap: 4px;
-                --monitor-overlay-h: min(50vh, calc(100% - 160px));
+                --monitor-overlay-h: min(37.5vh, calc((100% - 160px) * 0.75));
             }
         }
 
@@ -578,6 +592,7 @@
                     loading="lazy"
                     title="Monitoring Tag Live"
                 ></iframe>
+                <a id="monitorOverlayLink" class="monitor-overlay-cover" href="/monitoring?period=tag" aria-label="Monitoring in Tagesansicht öffnen"></a>
             </div>
 
             <svg id="flow-svg" viewBox="130 -24 590 402" preserveAspectRatio="xMinYMin meet">
@@ -627,9 +642,71 @@
                 <text x="200" y="250" text-anchor="middle"
                       fill="#ef4444" font-size="13" font-weight="700" id="sub-netz">0 kWh</text>
 
-                    <!-- PV Prognose Emoji (links vom PV-Kreis, über Netz-Kreis) -->
-                    <text x="250" y="110" text-anchor="middle"
-                        fill="#fbbf24" font-size="32" font-weight="700" id="pv-forecast-emoji" style="pointer-events:none;">☀️</text>
+                    <!-- PV Prognose-Icon (font-unabhaengig, links vom PV-Kreis, ueber Netz-Kreis) -->
+                    <g id="pv-forecast-icon" transform="translate(250 110)" style="pointer-events:none;">
+                        <title id="pv-forecast-icon-title">PV-Prognose: gut</title>
+                        <defs>
+                            <radialGradient id="pv-sun-core" cx="35%" cy="35%" r="70%">
+                                <stop offset="0%" stop-color="#fde68a"></stop>
+                                <stop offset="65%" stop-color="#fbbf24"></stop>
+                                <stop offset="100%" stop-color="#f59e0b"></stop>
+                            </radialGradient>
+                            <linearGradient id="pv-cloud-fill" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#f8fafc"></stop>
+                                <stop offset="100%" stop-color="#cbd5e1"></stop>
+                            </linearGradient>
+                            <linearGradient id="pv-cloud-fill-dark" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#cbd5e1"></stop>
+                                <stop offset="100%" stop-color="#94a3b8"></stop>
+                            </linearGradient>
+                            <filter id="pv-icon-shadow" x="-80%" y="-80%" width="260%" height="260%">
+                                <feDropShadow dx="0" dy="1.2" stdDeviation="1.6" flood-color="rgba(0,0,0,0.35)"></feDropShadow>
+                            </filter>
+                        </defs>
+                        <g id="pv-forecast-icon-good" filter="url(#pv-icon-shadow)">
+                            <g stroke="#fbbf24" stroke-width="2.2" stroke-linecap="round" opacity="0.95">
+                                <line x1="0" y1="-15" x2="0" y2="-24"></line>
+                                <line x1="0" y1="15" x2="0" y2="24"></line>
+                                <line x1="-15" y1="0" x2="-24" y2="0"></line>
+                                <line x1="15" y1="0" x2="24" y2="0"></line>
+                                <line x1="-11" y1="-11" x2="-18" y2="-18"></line>
+                                <line x1="11" y1="-11" x2="18" y2="-18"></line>
+                                <line x1="-11" y1="11" x2="-18" y2="18"></line>
+                                <line x1="11" y1="11" x2="18" y2="18"></line>
+                            </g>
+                            <circle cx="0" cy="0" r="11.5" fill="url(#pv-sun-core)"></circle>
+                            <circle cx="-3.5" cy="-4" r="3.5" fill="rgba(255,255,255,0.28)"></circle>
+                        </g>
+                        <g id="pv-forecast-icon-medium" style="display:none;" filter="url(#pv-icon-shadow)">
+                            <g opacity="0.98">
+                                <g stroke="#fbbf24" stroke-width="2" stroke-linecap="round">
+                                    <line x1="-6" y1="-16" x2="-6" y2="-23"></line>
+                                    <line x1="-19" y1="-3" x2="-26" y2="-3"></line>
+                                    <line x1="7" y1="-3" x2="14" y2="-3"></line>
+                                    <line x1="-15" y1="-12" x2="-21" y2="-18"></line>
+                                    <line x1="2" y1="-12" x2="8" y2="-18"></line>
+                                </g>
+                                <circle cx="-6" cy="-3" r="10.5" fill="url(#pv-sun-core)"></circle>
+                                <circle cx="-9" cy="-6" r="3.2" fill="rgba(255,255,255,0.28)"></circle>
+                            </g>
+                            <g transform="translate(-2 8)">
+                                <path d="M-15 6 C-15 0 -10 -4 -4 -4 C-2 -10 4 -14 10 -14 C18 -14 24 -10 26 -3 C32 -2 37 3 37 9 C37 16 31 20 24 20 L-6 20 C-12 20 -17 15 -17 9 C-17 8 -16 7 -15 6 Z"
+                                      fill="url(#pv-cloud-fill)" stroke="rgba(148,163,184,0.45)" stroke-width="1"></path>
+                                <ellipse cx="2" cy="3" rx="16" ry="8" fill="rgba(255,255,255,0.18)"></ellipse>
+                            </g>
+                        </g>
+                        <g id="pv-forecast-icon-bad" style="display:none;" filter="url(#pv-icon-shadow)">
+                            <g transform="translate(0 4)">
+                                <path d="M-20 7 C-20 0 -14 -6 -6 -6 C-4 -13 3 -18 11 -18 C20 -18 27 -13 30 -5 C38 -4 44 2 44 10 C44 19 37 24 28 24 L-9 24 C-17 24 -24 18 -24 10 C-24 9 -23 8 -20 7 Z"
+                                      fill="url(#pv-cloud-fill-dark)" stroke="rgba(71,85,105,0.55)" stroke-width="1.1"></path>
+                                <ellipse cx="5" cy="5" rx="19" ry="9" fill="rgba(255,255,255,0.1)"></ellipse>
+                            </g>
+                        </g>
+                        <g id="pv-forecast-icon-unknown" style="display:none;" filter="url(#pv-icon-shadow)">
+                            <circle cx="0" cy="0" r="15" fill="rgba(148,163,184,0.08)" stroke="#94a3b8" stroke-width="1.6"></circle>
+                            <text x="0" y="6" text-anchor="middle" fill="#cbd5e1" font-size="18" font-weight="700">?</text>
+                        </g>
+                    </g>
 
                     <!-- PV Gesamt -->
                     <circle cx="350" cy="135" r="58" fill="none"
@@ -667,6 +744,12 @@
                       fill="white" font-size="18" font-weight="700" id="value-consumption">0 W</text>
                 <text x="500" y="251" text-anchor="middle"
                       fill="#60a5fa" font-size="13" font-weight="700" id="sub-consumption">0 kWh</text>
+
+                <!-- ═══ KLICKBARE OVERLAY-KREISE (Navigation) ═══ -->
+                <circle cx="350" cy="135" r="58" fill="transparent"
+                        class="flow-clickable" id="click-pv"/>
+                <circle cx="500" cy="225" r="62" fill="transparent"
+                        class="flow-clickable" id="click-consumption"/>
 
                 <!-- ═══ SUB-ERZEUGER (kurze Linien, Fluss immer → PV) ═══ -->
                 <g class="sub-producers">
@@ -861,6 +944,25 @@
     overlayToggleEl.addEventListener('click', function() {
         setOverlayHidden(false);
         syncOverlayLayout();
+    });
+
+    /* ── Klick-Navigationen (Flow → Analyse-Seiten) ── */
+
+    function todayParam() {
+        var d = new Date();
+        return 'period=tag&date=' + d.getFullYear() + '-' +
+               String(d.getMonth()+1).padStart(2,'0') + '-' +
+               String(d.getDate()).padStart(2,'0');
+    }
+
+    document.getElementById('monitorOverlayLink').href = '/monitoring?' + todayParam();
+
+    document.getElementById('click-pv').addEventListener('click', function() {
+        window.location.href = '/erzeuger?' + todayParam();
+    });
+
+    document.getElementById('click-consumption').addEventListener('click', function() {
+        window.location.href = '/verbraucher?' + todayParam();
     });
 
     const N = {  // Knoten-Koordinaten + Radien
@@ -1367,6 +1469,38 @@
     // ══════════════════════════════════════════════════════════
     //  Battery Detail (SOH, Ladung/Entladung, SOC-Range)
     // ══════════════════════════════════════════════════════════
+    function setPvForecastIcon(quality, emoji) {
+        const states = {
+            good: document.getElementById('pv-forecast-icon-good'),
+            medium: document.getElementById('pv-forecast-icon-medium'),
+            bad: document.getElementById('pv-forecast-icon-bad'),
+            unknown: document.getElementById('pv-forecast-icon-unknown'),
+        };
+        const titleEl = document.getElementById('pv-forecast-icon-title');
+
+        let normalized = 'unknown';
+        if (quality === 'gut') normalized = 'good';
+        else if (quality === 'mittel') normalized = 'medium';
+        else if (quality === 'schlecht') normalized = 'bad';
+        else if (emoji === '☀️') normalized = 'good';
+        else if (emoji === '⛅') normalized = 'medium';
+        else if (emoji === '☁️') normalized = 'bad';
+
+        Object.entries(states).forEach(([key, el]) => {
+            if (el) el.style.display = key === normalized ? '' : 'none';
+        });
+
+        if (titleEl) {
+            const label = {
+                good: 'PV-Prognose: gut',
+                medium: 'PV-Prognose: mittel',
+                bad: 'PV-Prognose: schlecht',
+                unknown: 'PV-Prognose: unbekannt',
+            }[normalized];
+            titleEl.textContent = label;
+        }
+    }
+
     async function fetchBatteryDetail() {
         try {
             const r = await fetch(apiUrl('/api/flow_status'));
@@ -1374,11 +1508,8 @@
             const d = await r.json();
             document.getElementById('bd-soh').textContent = d.soh != null ? d.soh : '--';
 
-            // PV-Prognose-Emoji setzen
-            if (d.pv_forecast_emoji) {
-                const emojiEl = document.getElementById('pv-forecast-emoji');
-                if (emojiEl) emojiEl.textContent = d.pv_forecast_emoji;
-            }
+            // PV-Prognose-Icon setzen
+            setPvForecastIcon(d.pv_forecast_quality, d.pv_forecast_emoji);
             // SOH-Quellen-Indikator
             const sohSrcEl = document.getElementById('bd-soh-source');
             if (sohSrcEl) {
@@ -1503,9 +1634,25 @@
                 const wrs = wp.ruecklauf_soll != null ? wp.ruecklauf_soll : '--';
                 const wwi = wp.ww_ist != null ? wp.ww_ist : '--';
                 const wws = wp.ww_soll != null ? wp.ww_soll : '--';
+                const whs = wp.heiz_soll != null ? wp.heiz_soll : '--';
                 const wqe = wp.quelle_ein != null ? wp.quelle_ein : '--';
                 const wqa = wp.quelle_aus != null ? wp.quelle_aus : '--';
-                wpBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#14b8a6">WP:</span> VL <span class="ap-wp-val">${wv}°</span> <span class="ap-sep">·</span> RL <span class="ap-wp-val">${wr}°</span>/<span class="ap-wp-val">${wrs}°</span> <span class="ap-sep">·</span> WW <span class="ap-wp-val">${wwi}°</span>/<span class="ap-wp-val">${wws}°</span> <span class="ap-sep">·</span> Quelle <span class="ap-wp-val">${wqe}°</span>/<span class="ap-wp-val">${wqa}°</span>`;
+
+                // WP-Schaltaktionen (Sollwert-Änderungen) als Mini-Timeline
+                const wpAkt = d.wp_aktionen || [];
+                let wpTimeline = '';
+                if (wpAkt.length > 0) {
+                    const tl = wpAkt.slice(0, 10).reverse().map(a => {
+                        const zeit = a.ts ? a.ts.substring(11, 16) : '?';
+                        const isWw = a.kommando === 'set_ww_soll';
+                        const label = isWw ? 'WW' : 'Hz';
+                        const color = isWw ? '#14b8a6' : '#8b5cf6';
+                        return `<span style="color:${color}" title="${a.kommando}=${a.wert}°C: ${a.grund || ''}">${zeit}${label}→${a.wert}°</span>`;
+                    });
+                    wpTimeline = ` <span class="ap-sep">│</span> ${tl.join(' ')}`;
+                }
+
+                wpBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#14b8a6">WP:</span> VL <span class="ap-wp-val">${wv}°</span> <span class="ap-sep">·</span> RL <span class="ap-wp-val">${wr}°</span>/<span class="ap-wp-val">${wrs}°</span> <span class="ap-sep">·</span> WW <span class="ap-wp-val">${wwi}°</span>/<span class="ap-wp-val">${wws}°</span> <span class="ap-sep">·</span> Heiz <span class="ap-wp-val">${whs}°</span> <span class="ap-sep">·</span> Quelle <span class="ap-wp-val">${wqe}°</span>/<span class="ap-wp-val">${wqa}°</span>${wpTimeline}`;
             }
 
             // ── Zeile 6: Temperaturen (Batt-Temp bereits im HTML integriert) ──
