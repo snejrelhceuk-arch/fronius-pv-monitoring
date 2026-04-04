@@ -1,0 +1,16 @@
+{
+  "initialized_ts": 1775233661,
+  "last_seen_ts": 1775233661,
+  "version_snapshot": {
+    "inverter_sn": "35237382",
+    "inverter_vr": "1.40.8-1",
+    "prim_sm_sn": "3250192887",
+    "prim_sm_vr": "1.10",
+    "sec_sm_f2_sn": "2255290865",
+    "sec_sm_f2_vr": "1.3",
+    "sec_sm_f3_sn": "4269213103",
+    "sec_sm_f3_vr": "1.5",
+    "sec_sm_wp_sn": "3122660779",
+    "sec_sm_wp_vr": "1.4"
+  }
+}
