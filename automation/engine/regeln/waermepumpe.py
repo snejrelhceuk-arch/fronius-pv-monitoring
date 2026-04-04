@@ -230,6 +230,10 @@ class RegelHeizAbsenkung(Regel):
         if _verschoben['heiz_aktiv']:
             return 0
 
+        # Pflichtlauf-Boost aktiv → nicht gegenarbeiten
+        if _pflichtlauf['boost_aktiv']:
+            return 0
+
         ziel = self._ziel_temp(matrix)
         aktuell = obs.wp_heiz_soll_c
 
@@ -741,34 +745,34 @@ class RegelWwBoost(Regel):
 
 # Pflichtlauf-Status (modul-global)
 _pflichtlauf = {
-    'heute_gelaufen': False,
-    'wp_lief_waehrend_boost': False,  # WP tatsächlich aktiv gewesen während Boost
     'letzter_tag': None,         # date — für Tageswechsel-Reset
+    'pruefung_erledigt': False,  # Einmalige Prüfung pro Tag
     'boost_aktiv': False,
     'boost_seit': None,
+    'wp_lief_waehrend_boost': False,
 }
 
 
 class RegelWpPflichtlauf(Regel):
-    """WP täglicher Pflichtlauf: Heiz-Soll kurzzeitig boosten.
+    """WP-Pflichtlauf: Heiz-Soll kurzzeitig boosten wenn WP lange nicht lief.
 
-    Zweck: Sicherstellen dass die WP mindestens einmal täglich den
-    Kompressor startet (Schmierung, Ventilbewegung, Leckprüfung).
-    Im Sommer bei hohen Außentemp. und Heizpatrone am gleichen Sensor
-    würde die WP sonst tagelang stillstehen.
+    Zweck: Sicherstellen dass die WP regelmäßig den Kompressor startet
+    (Schmierung, Ventilbewegung). Im Sommer bei Heizpatrone am gleichen
+    Sensor könnte die WP sonst tagelang stillstehen.
 
     Logik:
-      - Prüft ob WP heute schon gelaufen ist (wp_active war True)
-      - Nach pflichtlauf_ab_h (Default 12:00) Heiz-Soll auf
-        boost_temp_c (45°C — unter 50°C damit HP-Sensor nicht stört)
-      - Mindestlaufzeit min_lauf_min (5min): Erst nach 5min WP-Lauf
-        wird der Boost als erfolgreich gewertet und zurückgesetzt
-      - Timeout max_boost_min (30min): Boost endet spätestens hier
-      - Wenn WP nach Timeout NICHT gelaufen ist → WARNING-Log +
-        Notification (über Event-System)
+      - Einmalige Prüfung pro Tag in den späten Morgenstunden
+        (pruef_start_h bis pruef_ende_h, Default 9-10 Uhr)
+      - Prüft WP-Energieverbrauch der letzten 30h (wp_last30h_kwh)
+      - Wenn ≥ wp_min_30h_kwh (0.5 kWh): WP lief → nichts tun
+      - Wenn < Schwelle: Heiz-Boost auf boost_temp_c (45°C)
+      - Boost läuft max max_boost_min (30min)
+      - Selbstlaufend saisonal: Im Winter läuft die WP sowieso →
+        30h-Prüfung findet immer Verbrauch → Boost wird nie nötig.
+        Nur im Sommer bei HP-Dominanz kann der Boost triggern.
 
-    Koordination: Setzt _verschoben['heiz_aktiv'] NICHT — läuft
-                  parallel zur Absenkung (hat höheren Score).
+    Koordination: _pflichtlauf['boost_aktiv'] wird von
+                  RegelHeizAbsenkung gelesen → gibt nach während Boost.
     """
 
     name = 'wp_pflichtlauf'
@@ -780,10 +784,10 @@ class RegelWpPflichtlauf(Regel):
         """Reset bei Tageswechsel."""
         heute = datetime.now().date()
         if _pflichtlauf['letzter_tag'] != heute:
-            _pflichtlauf['heute_gelaufen'] = False
-            _pflichtlauf['wp_lief_waehrend_boost'] = False
+            _pflichtlauf['pruefung_erledigt'] = False
             _pflichtlauf['boost_aktiv'] = False
             _pflichtlauf['boost_seit'] = None
+            _pflichtlauf['wp_lief_waehrend_boost'] = False
             _pflichtlauf['letzter_tag'] = heute
 
     def bewerte(self, obs: ObsState, matrix: dict) -> int:
@@ -792,49 +796,51 @@ class RegelWpPflichtlauf(Regel):
 
         self._tageswechsel_prüfen()
 
-        # WP lief heute schon → nichts zu tun
-        if obs.wp_active:
-            _pflichtlauf['heute_gelaufen'] = True
-            if _pflichtlauf['boost_aktiv']:
-                _pflichtlauf['wp_lief_waehrend_boost'] = True
-        if _pflichtlauf['heute_gelaufen'] and not _pflichtlauf['boost_aktiv']:
+        # Bereits geprüft heute (egal ob Boost lief oder nicht) → fertig
+        if _pflichtlauf['pruefung_erledigt'] and not _pflichtlauf['boost_aktiv']:
             return 0
 
-        # Boost läuft → prüfe Ende
+        # ── Laufender Boost verwalten ──
         if _pflichtlauf['boost_aktiv']:
+            # WP-Lauf während Boost erkennen
+            if obs.wp_active:
+                _pflichtlauf['wp_lief_waehrend_boost'] = True
+
             max_min = get_param(matrix, self.regelkreis, 'max_boost_min', 30)
             min_lauf = get_param(matrix, self.regelkreis, 'min_lauf_min', 5)
             seit = _pflichtlauf['boost_seit']
             if seit:
                 dauer_min = (datetime.now() - seit).total_seconds() / 60
 
-                # WP hat gelaufen UND Mindestlaufzeit erreicht → Erfolg
+                # WP hat gelaufen UND Mindestlaufzeit → Erfolg
                 if _pflichtlauf['wp_lief_waehrend_boost'] and dauer_min >= min_lauf:
                     _pflichtlauf['boost_aktiv'] = False
                     _pflichtlauf['boost_seit'] = None
                     LOG.info(f"WP-Pflichtlauf: Erfolg nach {dauer_min:.0f}min "
                              f"— WP-Kompressor hat gelaufen")
+                    # Standard wiederherstellen
+                    standard = int(get_param(matrix, 'heiz_absenkung',
+                                             'standard_temp_c', 37))
                     aktuell = obs.wp_heiz_soll_c
-                    standard = int(get_param(matrix, 'heiz_absenkung', 'standard_temp_c', 37))
                     if aktuell is not None and int(aktuell) != standard:
                         return get_score_gewicht(matrix, self.regelkreis)
                     return 0
 
-                # Timeout ohne WP-Lauf → WARNUNG
+                # Timeout → Boost beenden
                 if dauer_min >= max_min:
                     _pflichtlauf['boost_aktiv'] = False
                     _pflichtlauf['boost_seit'] = None
                     if not _pflichtlauf['wp_lief_waehrend_boost']:
-                        LOG.warning(f"WP-Pflichtlauf: FEHLGESCHLAGEN — WP hat nach "
-                                    f"{dauer_min:.0f}min Boost NICHT gestartet! "
-                                    f"Heiz-Soll war auf boost_temp gesetzt, aber "
-                                    f"wp_active wurde nie True. Bitte prüfen!")
+                        LOG.warning(f"WP-Pflichtlauf: FEHLGESCHLAGEN — WP hat "
+                                    f"nach {dauer_min:.0f}min Boost NICHT "
+                                    f"gestartet! Bitte prüfen.")
                     else:
-                        LOG.info(f"WP-Pflichtlauf: Boost beendet nach {dauer_min:.0f}min "
-                                 f"(WP lief: {_pflichtlauf['wp_lief_waehrend_boost']})")
+                        LOG.info(f"WP-Pflichtlauf: Boost beendet nach "
+                                 f"{dauer_min:.0f}min")
                     # Standard wiederherstellen
+                    standard = int(get_param(matrix, 'heiz_absenkung',
+                                             'standard_temp_c', 37))
                     aktuell = obs.wp_heiz_soll_c
-                    standard = int(get_param(matrix, 'heiz_absenkung', 'standard_temp_c', 37))
                     if aktuell is not None and int(aktuell) != standard:
                         return get_score_gewicht(matrix, self.regelkreis)
                     return 0
@@ -846,18 +852,31 @@ class RegelWpPflichtlauf(Regel):
                 return get_score_gewicht(matrix, self.regelkreis)
             return 0
 
-        # WP lief heute noch nicht + nach pflichtlauf_ab_h → Boost starten
-        ab_h = get_param(matrix, self.regelkreis, 'pflichtlauf_ab_h', 12)
+        # ── Einmalige Morgen-Prüfung ──
+        pruef_start = get_param(matrix, self.regelkreis, 'pruef_start_h', 9)
+        pruef_ende = get_param(matrix, self.regelkreis, 'pruef_ende_h', 10)
         now_h = datetime.now().hour + datetime.now().minute / 60.0
-        if now_h >= ab_h:
-            _pflichtlauf['boost_aktiv'] = True
-            _pflichtlauf['boost_seit'] = datetime.now()
-            _pflichtlauf['wp_lief_waehrend_boost'] = False
-            LOG.info(f"WP-Pflichtlauf: Boost gestartet (WP heute noch nicht gelaufen, "
-                     f"ab {ab_h:.0f}h)")
-            return get_score_gewicht(matrix, self.regelkreis)
+        if now_h < pruef_start or now_h >= pruef_ende:
+            return 0
 
-        return 0
+        # Prüfungsfenster erreicht — 30h-Verbrauch auswerten
+        _pflichtlauf['pruefung_erledigt'] = True
+
+        wp_min = get_param(matrix, self.regelkreis, 'wp_min_30h_kwh', 0.5)
+        wp_30h = obs.wp_last30h_kwh
+
+        if wp_30h is not None and wp_30h >= wp_min:
+            LOG.info(f"WP-Pflichtlauf: WP lief in letzten 30h "
+                     f"({wp_30h:.1f} kWh ≥ {wp_min} kWh) — kein Boost nötig")
+            return 0
+
+        # WP hat in 30h nicht genug verbraucht → Boost starten
+        _pflichtlauf['boost_aktiv'] = True
+        _pflichtlauf['boost_seit'] = datetime.now()
+        _pflichtlauf['wp_lief_waehrend_boost'] = False
+        LOG.info(f"WP-Pflichtlauf: Boost gestartet "
+                 f"(wp_last30h={wp_30h or 0:.1f} kWh < {wp_min} kWh)")
+        return get_score_gewicht(matrix, self.regelkreis)
 
     def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
         aktuell = obs.wp_heiz_soll_c
@@ -870,7 +889,7 @@ class RegelWpPflichtlauf(Regel):
                 'kommando': 'set_heiz_soll',
                 'wert': ziel,
                 'grund': (f'WP-Pflichtlauf: Heiz-Boost {aktuell}°C → {ziel}°C '
-                          f'(WP heute noch nicht gelaufen)'),
+                          f'(WP letzte 30h: {obs.wp_last30h_kwh or 0:.1f} kWh)'),
             }]
         else:
             standard = int(get_param(matrix, 'heiz_absenkung', 'standard_temp_c', 37))
