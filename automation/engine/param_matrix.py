@@ -71,6 +71,16 @@ def validiere_matrix(matrix: dict) -> list[str]:
                         f"{rk_name}.{p_name}: {wert} außerhalb [{lo}..{hi}]"
                     )
 
+    hp_params = regelkreise.get('heizpatrone', {}).get('parameter', {})
+    maessig = hp_params.get('potenzial_maessig_kwh', {}).get('wert')
+    ausreichend = hp_params.get('potenzial_ausreichend_kwh', {}).get('wert')
+    gut = hp_params.get('potenzial_gut_kwh', {}).get('wert')
+    if None not in (maessig, ausreichend, gut) and not (maessig < ausreichend < gut):
+        fehler.append(
+            'heizpatrone: potenzial_maessig_kwh < potenzial_ausreichend_kwh < '
+            'potenzial_gut_kwh muss gelten'
+        )
+
     return fehler
 
 

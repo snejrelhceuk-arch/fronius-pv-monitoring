@@ -120,9 +120,10 @@ class RegelHeizpatrone(Regel):
     Kontextabhängig: SOC_MAX-Phase, Verbraucher, Tageszeit.
 
     Potenzial-Skala (konfigurierbar):
-      < 15 kWh (mäßig)  — HP nur solo, kein Parallel-Betrieb
-      15–30 kWh (ausreichend) — HP + WP ok, EV → HP pausiert
-      ≥ 30 kWh (gut+)   — HP parallel mit allen Verbrauchern
+            < 20 kWh (niedrig)      — HP nur explizit/manuell, kein Parallel-Betrieb
+            20–40 kWh (mäßig)       — HP nur solo, kein Parallel-Betrieb
+            40–60 kWh (ausreichend) — HP + WP ok, EV → HP pausiert
+            ≥ 60 kWh (gut)          — HP parallel mit allen Verbrauchern
 
     6 Phasen:
       Phase 0:  Morgen-Drain — Batterie leeren ab sunrise-1h, prognosegetrieben
@@ -198,9 +199,9 @@ class RegelHeizpatrone(Regel):
         if rest_kwh is None:
             rest_kwh = obs.forecast_kwh or 0
 
-        gut = get_param(matrix, self.regelkreis, 'potenzial_gut_kwh', 30.0)
-        ausreichend = get_param(matrix, self.regelkreis, 'potenzial_ausreichend_kwh', 20.0)
-        maessig = get_param(matrix, self.regelkreis, 'potenzial_maessig_kwh', 15.0)
+        gut = get_param(matrix, self.regelkreis, 'potenzial_gut_kwh', 60.0)
+        ausreichend = get_param(matrix, self.regelkreis, 'potenzial_ausreichend_kwh', 40.0)
+        maessig = get_param(matrix, self.regelkreis, 'potenzial_maessig_kwh', 20.0)
 
         if rest_kwh >= gut:
             return 'gut'
@@ -227,10 +228,10 @@ class RegelHeizpatrone(Regel):
         """Darf HP parallel mit WP/EV laufen?
 
         Potenzial:
-          gut (≥30 kWh):       HP + WP + EV alles gleichzeitig
-          ausreichend (20-30): HP + WP ok, HP + EV → HP pausiert
-          mäßig (15-20):       HP nur solo (kein WP, kein EV)
-          niedrig (<15):       HP nicht automatisch (nur Extern)
+                    gut (≥60 kWh):          HP + WP + EV alles gleichzeitig
+                    ausreichend (40-60):    HP + WP ok, HP + EV → HP pausiert
+                    mäßig (20-40):          HP nur solo (kein WP, kein EV)
+                    niedrig (<20):          HP nicht automatisch (nur Extern)
         """
         if potenzial == 'gut':
             return True  # Alles parallel erlaubt
@@ -358,7 +359,7 @@ class RegelHeizpatrone(Regel):
         """Wird Batterie-Entladung toleriert (HP darf trotzdem laufen)?
 
         Kontext-Logik:
-          gut (≥ 30 kWh):       toleriert (ausreichend PV um nachzuladen)
+                    gut (≥ 60 kWh):       toleriert (ausreichend PV um nachzuladen)
           ausreichend/mäßig:    toleriert WENN SOC_MAX ≤ 75% (Batt gedeckelt,
                                 füllen noch nicht nötig)
           niedrig:              nie toleriert
@@ -641,7 +642,15 @@ class RegelHeizpatrone(Regel):
                             prognose_stark = True
                             break
 
-                if all([haushalt_ok, wp_ok, ev_ok, soc_ok, forecast_ok, prognose_stark]):
+                # Phase 0 ist Vor-PV-Drain. Wenn Batterie bereits stark
+                # von PV lädt, ist PV dominant → Drain kontraproduktiv.
+                # Phase 1/1b übernimmt dann den Überschuss.
+                drain_skip_w = get_param(matrix, self.regelkreis, 'drain_skip_bei_ladung_w', 2000)
+                pv_laedt_bereits = p_batt > drain_skip_w
+                if pv_laedt_bereits:
+                    LOG.debug(f'Phase 0 übersprungen: P_Batt={p_batt:.0f}W > '
+                              f'{drain_skip_w}W → PV lädt bereits')
+                elif all([haushalt_ok, wp_ok, ev_ok, soc_ok, forecast_ok, prognose_stark]):
                     return score
 
         # Phase 1: Vormittags
@@ -892,8 +901,34 @@ class RegelHeizpatrone(Regel):
                                 f'(min {probe_pv_min}W), Grid={grid_jetzt:.0f}W '
                                 f'(max {probe_grid_max}W) → Cooldown {probe_cd}s')
                     else:
-                        notaus_grund = (f'Burst-Timer abgelaufen '
-                                        f'({int((time.time() - self._burst_start) / 60)} Min)')
+                        # ── Auto-Verlängerung bei Phase 1b auf starkem Sonnentag ──
+                        # Nach erfolgreichem Probe-Burst: statt abschalten und
+                        # 10 Min später erneut proben → direkt verlängern wenn
+                        # SOC noch nahe MAX, Grid nicht im Bezug, genug Prognose.
+                        auto_verlaengert = False
+                        if self._letzte_phase == 'phase1b':
+                            grid_ok_tol = get_param(matrix, self.regelkreis,
+                                                    'grid_ok_toleranz_w', 500)
+                            grid_jetzt = obs.grid_power_w or 0
+                            soc_nah_max = soc >= (soc_max_eff - 3)
+                            grid_ok = grid_jetzt < grid_ok_tol
+                            reserve = get_param(matrix, self.regelkreis,
+                                                'batt_reserve_kwh', 2.0)
+                            rest_ok = rest_kwh > reserve + 5.0
+                            if soc_nah_max and grid_ok and rest_ok:
+                                verlaengern_s = get_param(matrix, self.regelkreis,
+                                                          'burst_dauer_lang_s', 1800)
+                                self._burst_ende = time.time() + verlaengern_s
+                                auto_verlaengert = True
+                                laufzeit = int((time.time() - self._burst_start) / 60)
+                                LOG.info(
+                                    f'Phase 1b Auto-Verlängerung ({laufzeit} Min): '
+                                    f'SOC={soc:.0f}%, Grid={grid_jetzt:.0f}W, '
+                                    f'rest_kwh={rest_kwh:.1f} '
+                                    f'→ +{verlaengern_s // 60} Min')
+                        if not auto_verlaengert:
+                            notaus_grund = (f'Burst-Timer abgelaufen '
+                                            f'({int((time.time() - self._burst_start) / 60)} Min)')
 
             if notaus_grund:
                 # Kurz-Burst-Erkennung: War die HP kürzer als kurz_burst_max_s an?
@@ -993,11 +1028,22 @@ class RegelHeizpatrone(Regel):
                             prognose_stark = True
                             break
 
-                if all([haushalt_ok, wp_ok, ev_ok, soc_ok, forecast_ok, prognose_stark]):
+                # Phase 0 ist Vor-PV-Drain: Batterie bereits stark von
+                # PV geladen → Drain kontraproduktiv, Phase 1/1b übernimmt.
+                drain_skip_w = get_param(matrix, self.regelkreis, 'drain_skip_bei_ladung_w', 2000)
+                pv_laedt_bereits = p_batt > drain_skip_w
+                if pv_laedt_bereits:
+                    LOG.info(f'Phase 0 übersprungen: P_Batt={p_batt:.0f}W > '
+                             f'{drain_skip_w}W → PV lädt bereits, kein Drain')
+                elif all([haushalt_ok, wp_ok, ev_ok, soc_ok, forecast_ok, prognose_stark]):
                     self._burst_start = time.time()
                     self._burst_ende = time.time() + drain_burst
                     self._drain_modus = True
                     self._letzte_phase = 'phase0'
+                    # Erwarteten Zustand vormerken: Observer hat HP=AUS gesehen
+                    # (vor Actuator-Aktion), daher manuell auf True setzen,
+                    # damit nächster Zyklus Extern-AUS erkennt wenn User abschaltet.
+                    self._letzter_hp_zustand = True
                     return [{
                         'tier': 2, 'aktor': 'fritzdect',
                         'kommando': 'hp_ein',
@@ -1119,6 +1165,8 @@ class RegelHeizpatrone(Regel):
                 self._letzte_phase = 'phase4'
             else:
                 self._letzte_phase = ''
+            # Erwarteten Zustand vormerken (wie Phase 0 oben)
+            self._letzter_hp_zustand = True
             return [{
                 'tier': 2, 'aktor': 'fritzdect',
                 'kommando': 'hp_ein',
