@@ -632,15 +632,22 @@ class RegelHeizpatrone(Regel):
                 soc_ok = soc > drain_start_soc
                 forecast_ok = (obs.forecast_quality or '') in ('gut', 'mittel')
 
-                # Prognose zeigt ≥ drain_min_prognose_kw in kommenden Stunden
+                # Prognose zeigt ≥ drain_min_prognose_kw zeitnah (sunrise + Horizont)
+                # Nicht den ganzen Tag prüfen — Nachmittagssonne rechtfertigt
+                # keinen Morgen-Drain bei bewölktem Vormittag.
                 prognose_stark = False
+                d_horizont_h = get_param(matrix, self.regelkreis, 'drain_prognose_horizont_h', 3.0)
+                horizont_bis_h = int(sunrise_h + d_horizont_h)
                 if obs.forecast_power_profile:
                     now_h_int = int(now_h)
                     for entry in obs.forecast_power_profile:
                         h = entry.get('hour', 0)
-                        if h > now_h_int and entry.get('total_ac_w', 0) >= d_prognose_kw * 1000:
+                        if h > now_h_int and h <= horizont_bis_h and entry.get('total_ac_w', 0) >= d_prognose_kw * 1000:
                             prognose_stark = True
                             break
+                if not prognose_stark:
+                    LOG.debug(f'Phase 0 blockiert: keine Stunde mit ≥{d_prognose_kw:.0f}kW '
+                              f'bis {horizont_bis_h}:00 (sunrise + {d_horizont_h:.0f}h)')
 
                 # Phase 0 ist Vor-PV-Drain. Wenn Batterie bereits stark
                 # von PV lädt, ist PV dominant → Drain kontraproduktiv.
@@ -901,12 +908,12 @@ class RegelHeizpatrone(Regel):
                                 f'(min {probe_pv_min}W), Grid={grid_jetzt:.0f}W '
                                 f'(max {probe_grid_max}W) → Cooldown {probe_cd}s')
                     else:
-                        # ── Auto-Verlängerung bei Phase 1b auf starkem Sonnentag ──
-                        # Nach erfolgreichem Probe-Burst: statt abschalten und
-                        # 10 Min später erneut proben → direkt verlängern wenn
-                        # SOC noch nahe MAX, Grid nicht im Bezug, genug Prognose.
+                        # ── Auto-Verlängerung bei laufendem Burst ──
+                        # Statt abschalten und 10 Min später neu starten:
+                        # direkt verlängern wenn Bedingungen weiterhin gut.
+                        # Gilt für Phase 1b, 2 und 3 (SOC≈MAX-Phasen).
                         auto_verlaengert = False
-                        if self._letzte_phase == 'phase1b':
+                        if self._letzte_phase in ('phase1b', 'phase2', 'phase3'):
                             grid_ok_tol = get_param(matrix, self.regelkreis,
                                                     'grid_ok_toleranz_w', 500)
                             grid_jetzt = obs.grid_power_w or 0
@@ -922,7 +929,8 @@ class RegelHeizpatrone(Regel):
                                 auto_verlaengert = True
                                 laufzeit = int((time.time() - self._burst_start) / 60)
                                 LOG.info(
-                                    f'Phase 1b Auto-Verlängerung ({laufzeit} Min): '
+                                    f'{self._letzte_phase} Auto-Verlängerung '
+                                    f'({laufzeit} Min): '
                                     f'SOC={soc:.0f}%, Grid={grid_jetzt:.0f}W, '
                                     f'rest_kwh={rest_kwh:.1f} '
                                     f'→ +{verlaengern_s // 60} Min')
@@ -1019,12 +1027,15 @@ class RegelHeizpatrone(Regel):
                 soc_ok = soc > drain_start_soc
                 forecast_ok = (obs.forecast_quality or '') in ('gut', 'mittel')
 
+                # Prognose zeitnah: nur Stunden bis sunrise + Horizont
                 prognose_stark = False
+                d_horizont_h = get_param(matrix, self.regelkreis, 'drain_prognose_horizont_h', 3.0)
+                horizont_bis_h = int(sunrise_h + d_horizont_h)
                 if obs.forecast_power_profile:
                     now_h_int = int(now_h)
                     for entry in obs.forecast_power_profile:
                         h = entry.get('hour', 0)
-                        if h > now_h_int and entry.get('total_ac_w', 0) >= d_prognose_kw * 1000:
+                        if h > now_h_int and h <= horizont_bis_h and entry.get('total_ac_w', 0) >= d_prognose_kw * 1000:
                             prognose_stark = True
                             break
 
@@ -1161,6 +1172,10 @@ class RegelHeizpatrone(Regel):
                 self._letzte_phase = 'phase1'
             elif 'Phase 1b' in grund:
                 self._letzte_phase = 'phase1b'
+            elif 'Phase 2' in grund:
+                self._letzte_phase = 'phase2'
+            elif 'Phase 3' in grund:
+                self._letzte_phase = 'phase3'
             elif 'Phase 4' in grund:
                 self._letzte_phase = 'phase4'
             else:
