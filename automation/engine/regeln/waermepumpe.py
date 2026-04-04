@@ -315,22 +315,21 @@ class RegelWwVerschiebung(Regel):
         soc_schwelle = get_param(matrix, self.regelkreis, 'soc_schwelle_pct', 10)
         pv_min = get_param(matrix, self.regelkreis, 'pv_min_w', 2000)
         forecast_min = get_param(matrix, self.regelkreis, 'forecast_rest_min_kwh', 10)
-        ww_min = get_param(matrix, self.regelkreis, 'ww_min_c', 45)
+        ww_min = get_param(matrix, self.regelkreis, 'ww_min_c', 50)
 
-        # Sunset-Ausnahme: <2h vor Sonnenuntergang → Forecast-Schwelle halbieren
-        # Analog HP Phase 3/4-Logik: kurz vor Sunset weniger Rest-Forecast nötig
-        forecast_eff = forecast_min
+        # Sunset-Sperre: <2h vor Sonnenuntergang → keine neue Verschiebung
+        # Begründung: So kurz vor Nacht muss die WP noch heizen können
         if obs.sunset is not None:
             now_h = datetime.now().hour + datetime.now().minute / 60.0
             rest_h = obs.sunset - now_h
             if 0 < rest_h < 2.0:
-                forecast_eff = forecast_min / 2
-                LOG.debug(f"WW-Verschiebung: Sunset-Ausnahme aktiv "
-                          f"(rest_h={rest_h:.1f}, forecast_min={forecast_eff:.1f}kWh)")
+                LOG.debug(f"WW-Verschiebung: Sunset-Sperre aktiv "
+                          f"(rest_h={rest_h:.1f} — keine Verschiebung <2h vor Sunset)")
+                return False
 
         return (soc < soc_schwelle
                 and pv < pv_min
-                and forecast > forecast_eff
+                and forecast > forecast_min
                 and ww_ist > ww_min)
 
     def _soll_zuruecknehmen(self, obs: ObsState, matrix: dict) -> bool:
@@ -474,17 +473,16 @@ class RegelHeizVerschiebung(Regel):
         pv_min = get_param(matrix, self.regelkreis, 'pv_min_w', 2000)
         forecast_min = get_param(matrix, self.regelkreis, 'forecast_rest_min_kwh', 10)
 
-        # Sunset-Ausnahme: <2h vor Sonnenuntergang → Forecast-Schwelle halbieren
-        forecast_eff = forecast_min
+        # Sunset-Sperre: <2h vor Sonnenuntergang → keine neue Verschiebung
         if obs.sunset is not None:
             now_h = datetime.now().hour + datetime.now().minute / 60.0
             rest_h = obs.sunset - now_h
             if 0 < rest_h < 2.0:
-                forecast_eff = forecast_min / 2
+                return False
 
         return (soc < soc_schwelle
                 and pv < pv_min
-                and forecast > forecast_eff)
+                and forecast > forecast_min)
 
     def _soll_zuruecknehmen(self, obs: ObsState, matrix: dict) -> bool:
         pv_restore = get_param(matrix, self.regelkreis, 'pv_restore_w', 3000)
@@ -592,12 +590,12 @@ class RegelWwBoost(Regel):
 
       AKTIVIERUNG (alle müssen zutreffen):
         1. Batterie-SOC > soc_min_pct               → Batterie fast voll
-        2. Grid-Power   < -grid_export_min_w         → Einspeisung (neg!)
+        2. Batterie lädt NICHT (batt_power ≤ 200W)  → Ladeschutz
         3. WW-Ist       < ww_max_c                   → noch Platz für Wärme
         4. is_day = True                              → nur tagsüber
 
       RÜCKNAHME (einer reicht):
-        a. Grid-Power   > grid_restore_w              → Einspeisung weg
+        a. Batterie lädt (batt_power > 200W)          → Ladeschutz
         b. WW-Ist       > ww_max_c                    → WW warm genug
         c. Batterie-SOC < soc_abbruch_pct             → Batterie braucht Strom
         d. Dauer        > max_boost_h                  → Timeout
@@ -619,26 +617,28 @@ class RegelWwBoost(Regel):
     def _soll_boosten(self, obs: ObsState, matrix: dict) -> bool:
         """Prüfe ob WW-Boost angebracht ist."""
         soc = obs.batt_soc_pct
-        grid = obs.grid_power_w  # negativ = Einspeisung
+        batt_p = obs.batt_power_w  # positiv = Laden, negativ = Entladen
         ww_ist = obs.ww_temp_c
 
-        if any(v is None for v in (soc, grid, ww_ist)):
+        if any(v is None for v in (soc, ww_ist)):
             return False
         if not obs.is_day:
             return False
 
         soc_min = get_param(matrix, self.regelkreis, 'soc_min_pct', 90)
-        export_min = get_param(matrix, self.regelkreis, 'grid_export_min_w', 2000)
         ww_max = get_param(matrix, self.regelkreis, 'ww_max_c', 60)
 
+        # Ladeschutz: Kein Boost solange Batterie aktiv lädt
+        # (Verschiebung ist erlaubt, Boost nicht — Batterie hat Vorrang)
+        if batt_p is not None and batt_p > 200:
+            return False
+
         return (soc >= soc_min
-                and grid < -export_min  # Einspeisung > export_min
                 and ww_ist < ww_max)
 
     def _soll_zuruecknehmen(self, obs: ObsState, matrix: dict) -> bool:
         """Prüfe ob Boost aufzuheben ist."""
         max_h = get_param(matrix, self.regelkreis, 'max_boost_h', 2)
-        grid_restore = get_param(matrix, self.regelkreis, 'grid_restore_w', 0)
         ww_max = get_param(matrix, self.regelkreis, 'ww_max_c', 60)
         soc_abbruch = get_param(matrix, self.regelkreis, 'soc_abbruch_pct', 80)
 
@@ -649,8 +649,9 @@ class RegelWwBoost(Regel):
                 LOG.info(f"WW-Boost: Timeout nach {dauer_h:.1f}h")
                 return True
 
-        # Keine Einspeisung mehr (grid_power > grid_restore → Netzbezug)
-        if obs.grid_power_w is not None and obs.grid_power_w > grid_restore:
+        # Batterie lädt → sofort aufhören (Ladeschutz)
+        if obs.batt_power_w is not None and obs.batt_power_w > 200:
+            LOG.info(f"WW-Boost: Abbruch — Batterie lädt ({obs.batt_power_w}W)")
             return True
 
         # WW warm genug
@@ -703,7 +704,7 @@ class RegelWwBoost(Regel):
                 _boost['ww_aktiv'] = True
                 _boost['ww_seit'] = datetime.now()
                 LOG.info(f"WW-Boost: Aktiviert "
-                         f"(SOC={obs.batt_soc_pct}%, Grid={obs.grid_power_w}W, "
+                         f"(SOC={obs.batt_soc_pct}%, Batt={obs.batt_power_w}W, "
                          f"WW={obs.ww_temp_c}°C)")
                 return get_score_gewicht(matrix, self.regelkreis)
             return 0
@@ -719,8 +720,8 @@ class RegelWwBoost(Regel):
                 'kommando': 'set_ww_soll',
                 'wert': ziel,
                 'grund': (f'WW-Boost: {aktuell}°C → {ziel}°C '
-                          f'(SOC={obs.batt_soc_pct}%, Grid={obs.grid_power_w}W, '
-                          f'WW={obs.ww_temp_c}°C — PV-Überschuss thermisch puffern)'),
+                          f'(SOC={obs.batt_soc_pct}%, Batt={obs.batt_power_w}W, '
+                          f'WW={obs.ww_temp_c}°C — Batterie voll, thermisch puffern)'),
             }]
         else:
             standard = self._standard_temp(matrix)
@@ -730,17 +731,18 @@ class RegelWwBoost(Regel):
                 'kommando': 'set_ww_soll',
                 'wert': standard,
                 'grund': (f'WW-Boost aufgehoben: {aktuell}°C → {standard}°C '
-                          f'(Grid={obs.grid_power_w}W, SOC={obs.batt_soc_pct}%)'),
+                          f'(SOC={obs.batt_soc_pct}%)'),
             }]
 
 
 # ═════════════════════════════════════════════════════════════
-# WP täglicher Pflichtlauf (P2, strategic-Zyklus)
+# WP täglicher Pflichtlauf (P2, fast-Zyklus)
 # ═════════════════════════════════════════════════════════════
 
 # Pflichtlauf-Status (modul-global)
 _pflichtlauf = {
     'heute_gelaufen': False,
+    'wp_lief_waehrend_boost': False,  # WP tatsächlich aktiv gewesen während Boost
     'letzter_tag': None,         # date — für Tageswechsel-Reset
     'boost_aktiv': False,
     'boost_seit': None,
@@ -752,14 +754,18 @@ class RegelWpPflichtlauf(Regel):
 
     Zweck: Sicherstellen dass die WP mindestens einmal täglich den
     Kompressor startet (Schmierung, Ventilbewegung, Leckprüfung).
-    Im Sommer bei hohen Außentemp. würde die WP sonst tagelang
-    stillstehen.
+    Im Sommer bei hohen Außentemp. und Heizpatrone am gleichen Sensor
+    würde die WP sonst tagelang stillstehen.
 
     Logik:
       - Prüft ob WP heute schon gelaufen ist (wp_active war True)
       - Nach pflichtlauf_ab_h (Default 12:00) Heiz-Soll auf
-        boost_temp_c (max 55°C) setzen für max max_boost_min
-      - Rücknahme nach Boost-Dauer oder wenn WP angesprungen ist
+        boost_temp_c (45°C — unter 50°C damit HP-Sensor nicht stört)
+      - Mindestlaufzeit min_lauf_min (5min): Erst nach 5min WP-Lauf
+        wird der Boost als erfolgreich gewertet und zurückgesetzt
+      - Timeout max_boost_min (30min): Boost endet spätestens hier
+      - Wenn WP nach Timeout NICHT gelaufen ist → WARNING-Log +
+        Notification (über Event-System)
 
     Koordination: Setzt _verschoben['heiz_aktiv'] NICHT — läuft
                   parallel zur Absenkung (hat höheren Score).
@@ -775,6 +781,7 @@ class RegelWpPflichtlauf(Regel):
         heute = datetime.now().date()
         if _pflichtlauf['letzter_tag'] != heute:
             _pflichtlauf['heute_gelaufen'] = False
+            _pflichtlauf['wp_lief_waehrend_boost'] = False
             _pflichtlauf['boost_aktiv'] = False
             _pflichtlauf['boost_seit'] = None
             _pflichtlauf['letzter_tag'] = heute
@@ -788,28 +795,52 @@ class RegelWpPflichtlauf(Regel):
         # WP lief heute schon → nichts zu tun
         if obs.wp_active:
             _pflichtlauf['heute_gelaufen'] = True
+            if _pflichtlauf['boost_aktiv']:
+                _pflichtlauf['wp_lief_waehrend_boost'] = True
         if _pflichtlauf['heute_gelaufen'] and not _pflichtlauf['boost_aktiv']:
             return 0
 
         # Boost läuft → prüfe Ende
         if _pflichtlauf['boost_aktiv']:
             max_min = get_param(matrix, self.regelkreis, 'max_boost_min', 30)
+            min_lauf = get_param(matrix, self.regelkreis, 'min_lauf_min', 5)
             seit = _pflichtlauf['boost_seit']
             if seit:
                 dauer_min = (datetime.now() - seit).total_seconds() / 60
-                if dauer_min >= max_min or _pflichtlauf['heute_gelaufen']:
+
+                # WP hat gelaufen UND Mindestlaufzeit erreicht → Erfolg
+                if _pflichtlauf['wp_lief_waehrend_boost'] and dauer_min >= min_lauf:
                     _pflichtlauf['boost_aktiv'] = False
                     _pflichtlauf['boost_seit'] = None
-                    LOG.info(f"WP-Pflichtlauf: Boost beendet nach {dauer_min:.0f}min "
-                             f"(WP lief: {_pflichtlauf['heute_gelaufen']})")
+                    LOG.info(f"WP-Pflichtlauf: Erfolg nach {dauer_min:.0f}min "
+                             f"— WP-Kompressor hat gelaufen")
+                    aktuell = obs.wp_heiz_soll_c
+                    standard = int(get_param(matrix, 'heiz_absenkung', 'standard_temp_c', 37))
+                    if aktuell is not None and int(aktuell) != standard:
+                        return get_score_gewicht(matrix, self.regelkreis)
+                    return 0
+
+                # Timeout ohne WP-Lauf → WARNUNG
+                if dauer_min >= max_min:
+                    _pflichtlauf['boost_aktiv'] = False
+                    _pflichtlauf['boost_seit'] = None
+                    if not _pflichtlauf['wp_lief_waehrend_boost']:
+                        LOG.warning(f"WP-Pflichtlauf: FEHLGESCHLAGEN — WP hat nach "
+                                    f"{dauer_min:.0f}min Boost NICHT gestartet! "
+                                    f"Heiz-Soll war auf boost_temp gesetzt, aber "
+                                    f"wp_active wurde nie True. Bitte prüfen!")
+                    else:
+                        LOG.info(f"WP-Pflichtlauf: Boost beendet nach {dauer_min:.0f}min "
+                                 f"(WP lief: {_pflichtlauf['wp_lief_waehrend_boost']})")
                     # Standard wiederherstellen
                     aktuell = obs.wp_heiz_soll_c
                     standard = int(get_param(matrix, 'heiz_absenkung', 'standard_temp_c', 37))
                     if aktuell is not None and int(aktuell) != standard:
                         return get_score_gewicht(matrix, self.regelkreis)
                     return 0
+
             # Boost noch aktiv → Konsistenz sicherstellen
-            boost_temp = int(get_param(matrix, self.regelkreis, 'boost_temp_c', 55))
+            boost_temp = int(get_param(matrix, self.regelkreis, 'boost_temp_c', 45))
             aktuell = obs.wp_heiz_soll_c
             if aktuell is not None and int(aktuell) != boost_temp:
                 return get_score_gewicht(matrix, self.regelkreis)
@@ -821,6 +852,7 @@ class RegelWpPflichtlauf(Regel):
         if now_h >= ab_h:
             _pflichtlauf['boost_aktiv'] = True
             _pflichtlauf['boost_seit'] = datetime.now()
+            _pflichtlauf['wp_lief_waehrend_boost'] = False
             LOG.info(f"WP-Pflichtlauf: Boost gestartet (WP heute noch nicht gelaufen, "
                      f"ab {ab_h:.0f}h)")
             return get_score_gewicht(matrix, self.regelkreis)
@@ -831,7 +863,7 @@ class RegelWpPflichtlauf(Regel):
         aktuell = obs.wp_heiz_soll_c
 
         if _pflichtlauf['boost_aktiv']:
-            ziel = int(get_param(matrix, self.regelkreis, 'boost_temp_c', 55))
+            ziel = int(get_param(matrix, self.regelkreis, 'boost_temp_c', 45))
             return [{
                 'tier': 2,
                 'aktor': 'waermepumpe',

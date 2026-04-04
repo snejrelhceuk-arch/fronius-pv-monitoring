@@ -6,7 +6,7 @@ Speichert Geheimnisse (z.B. SMTP-Passwort) AES-verschlüsselt in
 so dass die verschlüsselte Datei auf keinem anderen Host entschlüsselt
 werden kann.
 
-Ablage:  /etc/pv-system/<name>.key   (root:root 0600)
+Ablage:  /etc/pv-system/<name>.key   (admin:admin 0600)
 Schlüssel: PBKDF2-HMAC-SHA256(machine-id, salt=festes Projekt-Salt)
            → Fernet-Key (AES-128-CBC + HMAC-SHA256)
 
@@ -17,8 +17,8 @@ Nutzung:
     pw = lade('smtp_pass')                         # liest + entschlüsselt → str | None
 
 Hinweis: speichere() braucht root-Rechte (für /etc/pv-system/).
-         lade() braucht Leserechte auf die .key-Datei.
-         Der Daemon läuft als root → beides OK.
+         Dateien werden automatisch admin:admin gesetzt (Daemon-Zugriff).
+         lade() braucht Leserechte auf die .key-Datei (admin genügt).
 
 Sicherheitsmodell:
   ✅ Geschützt gegen: Git-Leak, Backup-Diebstahl, SD-Card-Klon auf anderen Pi
@@ -89,14 +89,33 @@ def speichere(name: str, klartext: str) -> Path:
         PermissionError: Ohne root-Rechte
         RuntimeError: Kein /etc/machine-id
     """
+    import grp
+    import pwd
+
     STORE_DIR.mkdir(parents=True, exist_ok=True)
-    os.chmod(STORE_DIR, 0o700)
+
+    # Verzeichnis: root:admin 0750 — root darf alles, admin darf lesen
+    # (Daemon läuft als admin und muss lade() aufrufen können)
+    try:
+        admin_gid = grp.getgrnam('admin').gr_gid
+        os.chown(STORE_DIR, 0, admin_gid)
+    except (KeyError, PermissionError):
+        pass  # Fallback: bestehende Ownership behalten
+    os.chmod(STORE_DIR, 0o750)
 
     fernet = Fernet(_derive_key())
     token = fernet.encrypt(klartext.encode('utf-8'))
 
     ziel = _key_path(name)
     ziel.write_bytes(token)
+
+    # Datei: admin:admin 0600 — nur der Daemon-User darf lesen
+    try:
+        admin_uid = pwd.getpwnam('admin').pw_uid
+        admin_gid = grp.getgrnam('admin').gr_gid
+        os.chown(ziel, admin_uid, admin_gid)
+    except (KeyError, PermissionError):
+        pass  # Fallback: bestehende Ownership behalten
     os.chmod(ziel, 0o600)
 
     LOG.info(f'Credential gespeichert: {ziel} ({len(token)} Bytes)')
