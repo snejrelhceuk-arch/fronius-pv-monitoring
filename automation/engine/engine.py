@@ -44,6 +44,11 @@ from automation.engine.regeln import (          # noqa: E402
     RegelKlimaanlage,
     RegelWwAbsenkung,
     RegelHeizAbsenkung,
+    RegelWwVerschiebung,
+    RegelHeizVerschiebung,
+    RegelWwBoost,
+    RegelWpPflichtlauf,
+    RegelHeizBedarf,
 )
 
 LOG = logging.getLogger('engine')
@@ -66,6 +71,25 @@ def _registriere_erfolgreiche_soc_aktionen(aktionen: list[dict],
         kommando = aktion.get('kommando', '')
         if kommando in ('set_soc_min', 'set_soc_max'):
             soc_extern_tracker.registriere_aktion(kommando, aktion.get('wert'))
+
+
+def _registriere_erfolgreiche_wp_aktionen(aktionen: list[dict],
+                                          ergebnisse: list[dict]) -> None:
+    """WP-Sollwerte beim Extern-Respekt-Tracker registrieren — NUR nach Actuator-Erfolg.
+
+    Korrektur K2 (adaptiert von SOC): Vorher wurden Engine-Werte in
+    erzeuge_aktionen() registriert (vor Ausführung). Race-Condition bei
+    Actuator-Fehler → falsche Extern-Erkennung im nächsten Zyklus.
+    """
+    from automation.engine.regeln.waermepumpe import _registriere_engine_wert
+    for aktion, ergebnis in zip(aktionen, ergebnisse):
+        if not ergebnis.get('ok'):
+            continue
+        kommando = aktion.get('kommando', '')
+        if kommando == 'set_ww_soll':
+            _registriere_engine_wert('ww', aktion.get('wert'))
+        elif kommando == 'set_heiz_soll':
+            _registriere_engine_wert('heiz', aktion.get('wert'))
 
 
 class Engine:
@@ -123,6 +147,11 @@ class Engine:
             RegelWattpilotBattSchutz(),
             RegelKlimaanlage(),
             RegelHeizpatrone(),
+            RegelWwVerschiebung(),
+            RegelHeizVerschiebung(),
+            RegelWwBoost(),
+            RegelWpPflichtlauf(),
+            RegelHeizBedarf(),
             RegelWwAbsenkung(),
             RegelHeizAbsenkung(),
         ]
@@ -201,7 +230,10 @@ class Engine:
                 return True
             # Zeitgesteuerte WP-Sollwertregeln sollen unabhängig von
             # Optimierungs-Gewinnern zuverlässig laufen.
-            if regel.name in ('ww_absenkung', 'heiz_absenkung'):
+            if regel.name in ('ww_absenkung', 'heiz_absenkung',
+                              'ww_verschiebung', 'heiz_verschiebung',
+                              'ww_boost', 'wp_pflichtlauf',
+                              'heiz_bedarf'):
                 return True
             # HP-Notaus: fritzdect-Aktor mit erhöhtem Score (>score_gewicht)
             if regel.aktor == 'fritzdect' and score > get_score_gewicht(self._matrix, regel.regelkreis):
@@ -214,16 +246,29 @@ class Engine:
         ergebnisse = []
 
         # 4a. Alle aktiven Schutz-Regeln ausführen (absteigend nach Score)
+        #     Deduplizierung: pro Kommando (z.B. set_ww_soll) gewinnt die
+        #     höchst-scorende Regel — nachfolgende werden übersprungen.
         schutz_scores.sort(key=lambda x: x[0], reverse=True)
+        schutz_kommandos_erledigt: set[str] = set()
         for score, regel in schutz_scores:
             LOG.info(f"Zyklus '{zyklus_typ}': Schutz-Regel '{regel.name}' (Score {score})")
             try:
                 aktionen = regel.erzeuge_aktionen(obs, self._matrix)
                 if aktionen:
-                    teil_ergebnisse = self.actuator.ausfuehren_plan(aktionen)
-                    _registriere_erfolgreiche_soc_aktionen(aktionen, teil_ergebnisse)
-                    for e in teil_ergebnisse:
+                    # Deduplizierung: bereits geschriebene Kommandos filtern
+                    aktionen_neu = [a for a in aktionen
+                                    if a.get('kommando') not in schutz_kommandos_erledigt]
+                    if not aktionen_neu:
+                        LOG.info(f"  '{regel.name}' übersprungen — "
+                                 f"Kommando(s) bereits durch höher-scorende Regel bedient")
+                        continue
+                    teil_ergebnisse = self.actuator.ausfuehren_plan(aktionen_neu)
+                    _registriere_erfolgreiche_soc_aktionen(aktionen_neu, teil_ergebnisse)
+                    _registriere_erfolgreiche_wp_aktionen(aktionen_neu, teil_ergebnisse)
+                    for a, e in zip(aktionen_neu, teil_ergebnisse):
                         LOG.info(f"  → {e.get('kommando')} = {'OK' if e.get('ok') else 'FEHLER'}")
+                        if e.get('ok'):
+                            schutz_kommandos_erledigt.add(a.get('kommando'))
                     ergebnisse.extend(teil_ergebnisse)
             except Exception as e:
                 LOG.error(f"Aktionen erzeugen fehlgeschlagen '{regel.name}': {e}")
@@ -249,6 +294,7 @@ class Engine:
                     # 6. An Actuator dispatchen
                     teil_ergebnisse = self.actuator.ausfuehren_plan(aktionen)
                     _registriere_erfolgreiche_soc_aktionen(aktionen, teil_ergebnisse)
+                    _registriere_erfolgreiche_wp_aktionen(aktionen, teil_ergebnisse)
                     for e in teil_ergebnisse:
                         LOG.info(f"  → {e.get('kommando')} = {'OK' if e.get('ok') else 'FEHLER'}")
                     ergebnisse.extend(teil_ergebnisse)

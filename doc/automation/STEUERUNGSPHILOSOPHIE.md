@@ -89,7 +89,7 @@ nicht P_PV oder P_Netz.
 Regeln nutzen `forecast_rest_kwh`, `forecast_power_profile` und
 `forecast_quality` für Voraus-Entscheidungen:
 - Morgen-Drain: Nur bei guter/mittlerer Prognose
-- Phase 1 (Vormittag): rest_kwh > 20 kWh
+- Phase 1 (Vormittag): rest_kwh ≥ `potenzial_maessig_kwh` (Standard 20 kWh)
 - Phase 4 (Abend): Forecast-Stundenleistung als PV-Proxy
 
 ---

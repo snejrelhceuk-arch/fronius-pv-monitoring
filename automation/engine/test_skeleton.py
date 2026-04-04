@@ -315,6 +315,29 @@ def test_matrix_laden_validieren():
     return True
 
 
+def test_matrix_heizpatrone_potenzial_reihenfolge():
+    """Test 5b: Heizpatrone-Potenzialschwellen müssen streng aufsteigend sein."""
+    _sep("5b. Heizpatrone-Potenzial-Reihenfolge")
+
+    matrix = lade_matrix(DEFAULT_MATRIX_PATH)
+    hp = matrix['regelkreise']['heizpatrone']['parameter']
+    assert hp['potenzial_maessig_kwh']['wert'] == 20.0
+    assert hp['potenzial_ausreichend_kwh']['wert'] == 40.0
+    assert hp['potenzial_gut_kwh']['wert'] == 60.0
+
+    invalid_matrix = lade_matrix(DEFAULT_MATRIX_PATH)
+    invalid_hp = invalid_matrix['regelkreise']['heizpatrone']['parameter']
+    invalid_hp['potenzial_maessig_kwh']['wert'] = 45.0
+    invalid_hp['potenzial_ausreichend_kwh']['wert'] = 40.0
+
+    fehler = validiere_matrix(invalid_matrix)
+    assert any('potenzial_maessig_kwh < potenzial_ausreichend_kwh < potenzial_gut_kwh' in f
+               for f in fehler), f"Reihenfolgefehler nicht erkannt: {fehler}"
+    LOG.info("✓ Heizpatrone-Potenzialschwellen validiert")
+
+    return True
+
+
 # ═════════════════════════════════════════════════════════════
 # Regel-Level Tests (isoliert, ohne Engine)
 # ═════════════════════════════════════════════════════════════
@@ -405,8 +428,9 @@ def test_regel_komfort_reset_morgen_sperre():
         assert aktionen == [], f"Erwarte keine Aktionen, got {aktionen}"
         LOG.info("✓ 05:30, forecast=gut: Komfort-Reset gesperrt")
 
-    # 04:30, Sunrise=6.0 -> vor Sunrise-1h
-    # Erwartung: Sperre greift noch nicht, Komfort-Reset darf bewerten.
+    # 04:30, Sunrise=6.0 -> vor Sunrise-1h, SOC_MIN=5% (Stress)
+    # Erwartung: Guard greift trotzdem, weil SOC_MIN bereits auf Stress steht
+    # und wir im Nachtlast-Fenster (SR-3h bis SR) sind → Ping-Pong-Schutz.
     fake_time_allow = datetime(2025, 6, 15, 4, 30)
     with patch('automation.engine.regeln.soc_steuerung.datetime') as mock_dt:
         mock_dt.now.return_value = fake_time_allow
@@ -422,8 +446,28 @@ def test_regel_komfort_reset_morgen_sperre():
             batt_soc_pct=24,
         )
         score2 = regel.bewerte(obs2, matrix)
-        assert score2 > 0, f"Erwarte Score >0 vor Sunrise-1h, got {score2}"
-        LOG.info(f"✓ 04:30, forecast=gut: Komfort-Reset aktiv (Score {score2})")
+        assert score2 == 0, f"Erwarte Score 0 bei SOC_MIN=Stress im Nachtlast-Fenster, got {score2}"
+        LOG.info("✓ 04:30, forecast=gut, SOC_MIN=5%%: Komfort-Reset gesperrt (Ping-Pong-Schutz)")
+
+    # 04:30, Sunrise=6.0 -> vor Sunrise-1h, SOC_MIN=25% (Komfort)
+    # Erwartung: Komfort-Reset darf bewerten (SOC_MIN nicht auf Stress,
+    # keine Morgen-Öffnung aktiv). SOC weicht nicht ab → Score 0.
+    with patch('automation.engine.regeln.soc_steuerung.datetime') as mock_dt:
+        mock_dt.now.return_value = fake_time_allow
+        mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+
+        obs3 = ObsState(
+            forecast_quality='gut',
+            sunrise=6.0,
+            sunset=20.5,
+            soc_min=25,
+            soc_max=75,
+            soc_mode='manual',
+            batt_soc_pct=30,
+        )
+        score3 = regel.bewerte(obs3, matrix)
+        assert score3 == 0, f"Erwarte Score 0 bei SOC_MIN=Komfort (keine Abweichung), got {score3}"
+        LOG.info("✓ 04:30, forecast=gut, SOC_MIN=25%%: kein Reset nötig (bereits Komfort)")
 
     return True
 
@@ -895,6 +939,7 @@ def main():
             ('Engine-Zyklus', lambda: test_engine_zyklus(ram_db, persist_db)),
             # Parametermatrix Tests (Phase 2)
             ('Matrix laden+validieren', test_matrix_laden_validieren),
+            ('Matrix Heizpatrone-Potenzial', test_matrix_heizpatrone_potenzial_reihenfolge),
             # Regel-Level Tests (Phase 2)
             # Entfernt (2026-03-07): SOC-Schutz, Temp-Schutz, Abend-Entladerate, Laderate dynamisch
             ('Regel: Morgen SOC_MIN', test_regel_morgen_soc_min),

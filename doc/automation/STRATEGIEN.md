@@ -142,7 +142,7 @@ BEI MASSIVEM PV-ÜBERSCHUSS:
 ```
 MORGENS (Sonnenaufgang + 2h):
     → Prüfe WW-Temperatur via Modbus (Register 3), WW-Solltemp = 65°C
-    → Prüfe Speicher_oben (MEGA-BAS Thermistor). Wenn < 45°C UND Prognose > 20 kWh:
+  → Prüfe Speicher_oben (MEGA-BAS Thermistor). Wenn < 45°C UND Prognose ≥ potenzial_maessig_kwh (Standard 20 kWh):
        → Heizpatrone EIN sobald PV_Überschuss > 2 kW
 
 TAGSÜBER (PV-Überschuss > 3 kW):
@@ -252,7 +252,7 @@ WENN now_h >= (sunrise - 1h) UND now_h < 10:00:
 #   SOC muss nahe SOC_MAX sein (Überlaufventil-Prinzip: erst Batterie
 #   füllen, dann HP als Senke). Bei Wiedereintritt nach Burst-Pause:
 #   Schwelle um HP_NENN_W reduziert.
-WENN rest_h > 5 UND rest_kwh > 20:
+WENN rest_h > 5 UND rest_kwh ≥ potenzial_maessig_kwh (Standard 20):
     UND SOC >= SOC_MAX - 5%:        ← NEU: SOC≈MAX erforderlich
     UND P_Batt > Schwelle (3000W initial, 1000W bei Wiedereintritt):
     → HP EIN (Burst: 30 Min)
