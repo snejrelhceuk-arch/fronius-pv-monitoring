@@ -21,6 +21,7 @@ STATE_DIR="${STATE_DIR:-${_SCRIPT_BASE}/.state}"
 LOG_FILE="/tmp/pv_failover_health.log"
 RECOMMEND_FILE="${STATE_DIR}/failover_recommendation"
 SYNC_MARKER_FILE="${STATE_DIR}/last_mirror_sync.ok"
+ALARM_SENT_FILE="${STATE_DIR}/failover_alarm_sent"
 
 mkdir -p "$STATE_DIR"
 
@@ -78,9 +79,75 @@ if [ -n "$reason" ]; then
   msg="FAILOVER-EMPFEHLUNG: ${reason}. Prüfen und ggf. aktivieren: ${_SCRIPT_BASE}/scripts/failover_activate.sh"
   echo "$msg" > "$RECOMMEND_FILE"
   log "WARN $msg"
+
+  # Mail-Alarm nur vom Failover, dedupliziert 1× pro Tag
+  if [ "$IS_PRIMARY" = false ]; then
+    TODAY=$(date '+%Y-%m-%d')
+    LAST_SENT=""
+    [ -f "$ALARM_SENT_FILE" ] && LAST_SENT=$(cat "$ALARM_SENT_FILE" 2>/dev/null)
+
+    if [ "$LAST_SENT" != "$TODAY" ]; then
+      python3 - "$reason" "${PV_NOTIFICATION_EMAIL:-}" "${PV_NOTIFICATION_SMTP_HOST:-}" \
+        "${PV_NOTIFICATION_SMTP_USER:-}" "${_SCRIPT_BASE}" <<'PYMAIL'
+import sys, smtplib, socket, os
+from email.mime.text import MIMEText
+from datetime import datetime
+
+reason, to_addr, smtp_host, smtp_user, base_dir = sys.argv[1:6]
+if not to_addr or not smtp_host:
+    print("SMTP nicht konfiguriert, keine Mail", file=sys.stderr)
+    sys.exit(0)
+
+# Passwort aus credential_store (gleicher Pfad wie Primary)
+smtp_pass = None
+for p in ['/etc/pv-system/smtp_pass.key', os.path.join(base_dir, '.credentials', 'smtp_pass.key')]:
+    if os.path.isfile(p):
+        smtp_pass = open(p).read().strip()
+        break
+if not smtp_pass:
+    print("SMTP-Passwort nicht gefunden", file=sys.stderr)
+    sys.exit(1)
+
+hostname = socket.gethostname()
+now_str = datetime.now().strftime('%d.%m.%Y %H:%M')
+body = (
+    f"FAILOVER-ALARM von {hostname}\n"
+    f"Zeitpunkt: {now_str}\n\n"
+    f"Primary-System NICHT erreichbar!\n"
+    f"Grund: {reason}\n\n"
+    f"Empfehlung: System prüfen, ggf. Failover aktivieren.\n"
+    f"\nDiese Meldung wird 1x pro Tag gesendet.\n"
+)
+
+msg = MIMEText(body, 'plain', 'utf-8')
+msg['Subject'] = f'[PV-System ALARM] Primary nicht erreichbar — {reason}'
+msg['From'] = smtp_user
+msg['To'] = to_addr
+
+try:
+    smtp = smtplib.SMTP_SSL(smtp_host, 465, timeout=15)
+    smtp.login(smtp_user, smtp_pass)
+    smtp.sendmail(smtp_user, [to_addr], msg.as_string())
+    smtp.quit()
+    print(f"Failover-Alarm gesendet → {to_addr}")
+except Exception as e:
+    print(f"Mail-Versand fehlgeschlagen: {e}", file=sys.stderr)
+    sys.exit(1)
+PYMAIL
+
+      if [ $? -eq 0 ]; then
+        echo "$TODAY" > "$ALARM_SENT_FILE"
+        log "ALARM Mail gesendet: ${reason}"
+      fi
+    else
+      log "ALARM bereits heute gesendet, unterdrückt"
+    fi
+  fi
+
   exit 1
 fi
 
-rm -f "$RECOMMEND_FILE"
+# Alles OK → Alarm-Sperre aufheben (damit morgen erneut gemeldet wird)
+rm -f "$RECOMMEND_FILE" "$ALARM_SENT_FILE"
 log "OK primär erreichbar, mirror aktuell (${sync_age}s)"
 exit 0

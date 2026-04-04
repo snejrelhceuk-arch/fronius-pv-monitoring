@@ -342,6 +342,18 @@ class AutomationDaemon:
             except Exception as e:
                 LOG.error(f"Event-Notifier Fehler: {e}")
 
+            # Integrity-Alarme (gedrosselt: alle 10 min)
+            if not hasattr(self, '_last_integrity_alarm_check'):
+                self._last_integrity_alarm_check = 0
+            if now - self._last_integrity_alarm_check >= 600:
+                self._last_integrity_alarm_check = now
+                try:
+                    alarme = self._notifier.pruefe_integrity_alarme()
+                    if alarme:
+                        LOG.warning(f"Integrity-Alarm: {', '.join(alarme)}")
+                except Exception as e:
+                    LOG.error(f"Integrity-Alarm Fehler: {e}")
+
         # 5. Matrix-Reload bei SIGHUP
         if self._reload_requested:
             self._reload_requested = False
