@@ -56,6 +56,24 @@
             font-size: 12px;
         }
         .nav-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+        .toggle-group { display: flex; gap: 0; }
+        .toggle-btn {
+            background: rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.5);
+            border: 1px solid rgba(255,255,255,0.12);
+            padding: 5px 12px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        .toggle-btn:first-child { border-radius: 5px 0 0 5px; }
+        .toggle-btn:last-child { border-radius: 0 5px 5px 0; border-left: none; }
+        .toggle-btn.active {
+            background: rgba(70, 70, 255, 0.25);
+            color: #fff;
+            border-color: rgba(70, 70, 255, 0.5);
+        }
+        .toggle-btn:hover:not(.active) { background: rgba(255,255,255,0.12); color: #ccc; }
         .date-label {
             background: transparent;
             color: #fff;
@@ -95,7 +113,7 @@
             z-index: 10;
             pointer-events: none;
         }
-        #voltageChart, #frequencyChart {
+        #mainChart {
             width: 100%;
             height: 100%;
         }
@@ -137,6 +155,13 @@
         <div class="nav-separator"></div>
         <a href="/netzqualitaet" class="active">Netzqualität</a>
         <div class="nav-separator"></div>
+        <div class="toggle-group">
+            <button class="toggle-btn active" id="btnLokal" onclick="setViewMode('lokal')">Lokal</button>
+            <button class="toggle-btn" id="btnNetz" onclick="setViewMode('netz')">Netz</button>
+        </div>
+        <div class="nav-separator"></div>
+        <button class="toggle-btn active" id="btnAnalyse" onclick="toggleAnalysis()" style="border-radius:5px">15min</button>
+        <div class="nav-separator"></div>
         <div class="nav-group">
             <button class="nav-btn" id="navPrev" onclick="navigateDay(-1)">◀</button>
             <button class="date-label" id="dateDisplay" onclick="navigateToToday()">Heute</button>
@@ -146,27 +171,42 @@
     </div>
 
     <div class="chart-area">
-        <div class="chart-box" style="flex: 2;">
-            <span class="chart-title">Leiterspannungen L-L [V]</span>
-            <div id="voltageChart"></div>
-            <div class="loading" id="loadingVoltage">Lade Spannungsdaten...</div>
-        </div>
-        <div class="chart-box" style="flex: 1;">
-            <span class="chart-title">Netzfrequenz [Hz]</span>
-            <div id="frequencyChart"></div>
-            <div class="loading" id="loadingFrequency" style="display:none;"></div>
+        <div class="chart-box">
+            <span class="chart-title" id="chartTitle">Leiterspannungen L-L [V] · Netzfrequenz [Hz]</span>
+            <div id="mainChart"></div>
+            <div class="loading" id="loadingMain">Lade Netzqualitätsdaten...</div>
         </div>
     </div>
 
     <div class="future-hint">
-        Phase 1: Tagesprofil · <a href="#">Musteranalyse</a> (geplant)
+        Phase 1b: Tagesprofil + 15min-Musteranalyse · ▲ DFD-Events (rot: Netz, gelb: lokal)
     </div>
 
     <script>
-        let voltageChart = null;
-        let frequencyChart = null;
+        let mainChart = null;
         let currentDate = new Date();
         let isToday = true;
+        let viewMode = 'lokal';  // 'lokal' = 3 Phasen, 'netz' = 1 Mittelwert
+        let currentData = null;
+        let currentDateStr = null;
+        let analysisData = null;
+        let showAnalysis = true;
+
+        function setViewMode(mode) {
+            viewMode = mode;
+            document.getElementById('btnLokal').classList.toggle('active', mode === 'lokal');
+            document.getElementById('btnNetz').classList.toggle('active', mode === 'netz');
+            document.getElementById('chartTitle').textContent = mode === 'lokal'
+                ? 'Leiterspannungen L-L [V] · Netzfrequenz [Hz]'
+                : 'Netzspannung (bereinigt) [V] · Netzfrequenz [Hz]';
+            if (currentData && currentDateStr) renderChart(currentData, currentDateStr);
+        }
+
+        function toggleAnalysis() {
+            showAnalysis = !showAnalysis;
+            document.getElementById('btnAnalyse').classList.toggle('active', showAnalysis);
+            if (currentData && currentDateStr) renderChart(currentData, currentDateStr);
+        }
 
         function formatDateISO(d) {
             return d.getFullYear() + '-' +
@@ -214,52 +254,139 @@
             const dateStr = formatDateISO(currentDate);
             const statusEl = document.getElementById('statusInfo');
             statusEl.textContent = 'Lädt...';
-
-            document.getElementById('loadingVoltage').style.display = 'block';
-            document.getElementById('loadingFrequency').style.display = 'block';
+            document.getElementById('loadingMain').style.display = 'block';
 
             try {
-                const resp = await fetch(`/api/netzqualitaet/tag?date=${dateStr}`);
+                const [resp, respA] = await Promise.all([
+                    fetch(`/api/netzqualitaet/tag?date=${dateStr}`),
+                    fetch(`/api/netzqualitaet/analyse?date=${dateStr}`)
+                ]);
                 if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
                 const data = await resp.json();
+                analysisData = respA.ok ? await respA.json() : null;
 
-                document.getElementById('loadingVoltage').style.display = 'none';
-                document.getElementById('loadingFrequency').style.display = 'none';
+                document.getElementById('loadingMain').style.display = 'none';
+                currentData = data;
+                currentDateStr = dateStr;
+                renderChart(data, dateStr);
 
-                renderVoltageChart(data, dateStr);
-                renderFrequencyChart(data, dateStr);
-
-                statusEl.textContent = `${data.datapoints.length} Messpunkte · ${data.source}`;
+                let status = `${data.datapoints.length} Messpunkte · ${data.source}`;
+                if (analysisData && analysisData.summary) {
+                    const s = analysisData.summary;
+                    status += ` · DFD Ø${Math.round(s.dfd_mean)} mHz (max ${Math.round(s.dfd_max)})`;
+                    if (s.local_events > 0)
+                        status += ` · ${s.local_events} lokale Events`;
+                }
+                statusEl.textContent = status;
             } catch (err) {
                 console.error('Netzqualität Fehler:', err);
                 statusEl.textContent = 'Fehler: ' + err.message;
-                document.getElementById('loadingVoltage').textContent = 'Fehler beim Laden';
-                document.getElementById('loadingFrequency').style.display = 'none';
+                document.getElementById('loadingMain').textContent = 'Fehler beim Laden';
             }
         }
 
-        function renderVoltageChart(data, dateStr) {
-            const dom = document.getElementById('voltageChart');
-            if (voltageChart) voltageChart.dispose();
-            voltageChart = echarts.init(dom);
+        function buildAnalysisOverlay() {
+            // 15-min Raster: vertikale Linien, farbcodiert nach Grenztyp
+            // + DFD-Event-Marker auf der Frequenzkurve
+            const markLines = [];
+            const markPoints = [];
+            if (!analysisData || !analysisData.available || !analysisData.boundaries) return { markLines, markPoints };
+
+            analysisData.boundaries.forEach(b => {
+                const t = b.boundary_ts * 1000;
+                // Rasterlinien nach Typ
+                let color, width, dashType;
+                if (b.boundary_type === 'full_hour') {
+                    color = 'rgba(255,255,255,0.18)'; width = 1.2; dashType = 'solid';
+                } else if (b.boundary_type === 'half_hour') {
+                    color = 'rgba(255,255,255,0.09)'; width = 0.8; dashType = [4, 4];
+                } else {
+                    color = 'rgba(255,255,255,0.04)'; width = 0.5; dashType = [2, 4];
+                }
+                markLines.push({
+                    xAxis: t,
+                    lineStyle: { color, width, type: dashType }
+                });
+
+                // DFD-Event-Marker (>60 mHz)
+                if (b.dfd_mHz >= 60) {
+                    const isLocal = b.local_impact >= 0.1;
+                    markPoints.push({
+                        coord: [t, b.f_nadir],
+                        symbol: 'triangle',
+                        symbolSize: Math.min(6 + b.dfd_mHz / 20, 14),
+                        itemStyle: {
+                            color: isLocal ? '#facc15' : '#ef4444',
+                            borderColor: isLocal ? '#a16207' : '#991b1b',
+                            borderWidth: 1
+                        },
+                        name: `DFD ${b.dfd_mHz} mHz ${b.boundary_type.replace('_', ' ')}${isLocal ? ' (lokal)' : ''}`
+                    });
+                }
+            });
+            return { markLines, markPoints };
+        }
+
+        function renderChart(data, dateStr) {
+            const dom = document.getElementById('mainChart');
+            if (mainChart) mainChart.dispose();
+            mainChart = echarts.init(dom);
 
             const bounds = getDayBounds(dateStr);
-            const tsL1L2 = [], tsL2L3 = [], tsL3L1 = [];
+            const tsL1L2 = [], tsL2L3 = [], tsL3L1 = [], tsFreq = [], tsNetz = [];
 
             data.datapoints.forEach(dp => {
                 const t = dp.ts * 1000;
                 if (dp.u_l1_l2 != null) tsL1L2.push([t, dp.u_l1_l2]);
                 if (dp.u_l2_l3 != null) tsL2L3.push([t, dp.u_l2_l3]);
                 if (dp.u_l3_l1 != null) tsL3L1.push([t, dp.u_l3_l1]);
+                if (dp.f_netz != null) tsFreq.push([t, dp.f_netz]);
+                // Gemittelte Netzspannung: eliminiert lokale Lasteffekte (ΣΔI=0)
+                if (dp.u_l1_l2 != null && dp.u_l2_l3 != null && dp.u_l3_l1 != null) {
+                    const avg = (dp.u_l1_l2 + dp.u_l2_l3 + dp.u_l3_l1) / 3;
+                    tsNetz.push([t, Math.round(avg * 10) / 10]);
+                }
             });
+
+            const overlay = showAnalysis ? buildAnalysisOverlay() : { markLines: [], markPoints: [] };
 
             const seriesBase = {
                 type: 'line', smooth: true, symbol: 'none',
                 lineStyle: { width: 1.5 }
             };
 
-            voltageChart.setOption({
-                grid: { left: 50, right: 20, top: 30, bottom: 30 },
+            // Frequenz-Serie mit Analyse-Markern
+            const freqSeries = {
+                ...seriesBase, name: 'Frequenz', data: tsFreq, yAxisIndex: 1,
+                itemStyle: { color: '#e8915a' }, lineStyle: { width: 1.5, type: 'solid' },
+                markLine: overlay.markLines.length > 0 ? {
+                    silent: true,
+                    symbol: 'none',
+                    label: { show: false },
+                    data: overlay.markLines
+                } : undefined,
+                markPoint: overlay.markPoints.length > 0 ? {
+                    data: overlay.markPoints,
+                    label: { show: false },
+                    tooltip: {
+                        formatter: p => p.name
+                    }
+                } : undefined
+            };
+
+            const voltageSeries = viewMode === 'lokal'
+                ? [
+                    { ...seriesBase, name: 'L1-L2', data: tsL1L2, yAxisIndex: 0, itemStyle: { color: '#4646FF' } },
+                    { ...seriesBase, name: 'L2-L3', data: tsL2L3, yAxisIndex: 0, itemStyle: { color: '#6E6EFF' } },
+                    { ...seriesBase, name: 'L3-L1', data: tsL3L1, yAxisIndex: 0, itemStyle: { color: '#8C8CFF' } }
+                ]
+                : [
+                    { ...seriesBase, name: 'Netzspannung', data: tsNetz, yAxisIndex: 0,
+                      itemStyle: { color: '#22d3ee' }, lineStyle: { width: 2 } }
+                ];
+
+            mainChart.setOption({
+                grid: { left: 55, right: 55, top: 40, bottom: 30 },
                 tooltip: {
                     trigger: 'axis',
                     formatter: params => {
@@ -267,15 +394,21 @@
                         const time = t.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
                         let lines = [`<b>${time}</b>`];
                         params.forEach(p => {
-                            lines.push(`${p.marker} ${p.seriesName}: ${p.value[1].toFixed(1)} V`);
+                            if (p.seriesName === 'Frequenz') {
+                                lines.push(`${p.marker} ${p.seriesName}: ${p.value[1].toFixed(3)} Hz`);
+                            } else {
+                                lines.push(`${p.marker} ${p.seriesName}: ${p.value[1].toFixed(1)} V`);
+                            }
                         });
                         return lines.join('<br>');
                     }
                 },
                 legend: {
-                    data: ['L1-L2', 'L2-L3', 'L3-L1'],
+                    data: viewMode === 'lokal'
+                        ? ['L1-L2', 'L2-L3', 'L3-L1', 'Frequenz']
+                        : ['Netzspannung', 'Frequenz'],
                     textStyle: { color: '#94a3b8', fontSize: 11 },
-                    top: 4, right: 16
+                    top: 4, right: 60
                 },
                 xAxis: {
                     type: 'time', min: bounds.min, max: bounds.max,
@@ -284,80 +417,33 @@
                     },
                     splitLine: { show: false }
                 },
-                yAxis: {
-                    type: 'value',
-                    name: 'V',
-                    nameTextStyle: { color: '#64748b', fontSize: 10 },
-                    axisLabel: { color: '#64748b', fontSize: 10 },
-                    splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } }
-                },
-                series: [
-                    { ...seriesBase, name: 'L1-L2', data: tsL1L2, itemStyle: { color: '#4646FF' } },
-                    { ...seriesBase, name: 'L2-L3', data: tsL2L3, itemStyle: { color: '#6E6EFF' } },
-                    { ...seriesBase, name: 'L3-L1', data: tsL3L1, itemStyle: { color: '#8C8CFF' } }
-                ]
-            });
-        }
-
-        function renderFrequencyChart(data, dateStr) {
-            const dom = document.getElementById('frequencyChart');
-            if (frequencyChart) frequencyChart.dispose();
-            frequencyChart = echarts.init(dom);
-
-            const bounds = getDayBounds(dateStr);
-            const tsFreq = data.datapoints
-                .filter(dp => dp.f_netz != null)
-                .map(dp => [dp.ts * 1000, dp.f_netz]);
-
-            frequencyChart.setOption({
-                grid: { left: 50, right: 20, top: 30, bottom: 30 },
-                tooltip: {
-                    trigger: 'axis',
-                    formatter: params => {
-                        const t = new Date(params[0].value[0]);
-                        const time = t.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-                        return `<b>${time}</b><br>${params[0].marker} ${params[0].value[1].toFixed(3)} Hz`;
+                yAxis: [
+                    {
+                        type: 'value',
+                        name: 'V',
+                        min: 360, max: 440,
+                        nameTextStyle: { color: '#64748b', fontSize: 10 },
+                        axisLabel: { color: '#64748b', fontSize: 10 },
+                        splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } }
+                    },
+                    {
+                        type: 'value',
+                        name: 'Hz',
+                        min: 47, max: 52,
+                        nameTextStyle: { color: '#e8915a', fontSize: 10 },
+                        axisLabel: { color: '#e8915a', fontSize: 10,
+                            formatter: v => v.toFixed(1)
+                        },
+                        splitLine: { show: false }
                     }
-                },
-                visualMap: {
-                    type: 'piecewise', show: false, dimension: 1,
-                    pieces: [
-                        { min: 49.0, max: 49.8, color: '#fc8d59' },
-                        { min: 49.8, max: 49.95, color: '#fee08b' },
-                        { min: 49.95, max: 50.05, color: '#1a9850' },
-                        { min: 50.05, max: 50.2, color: '#fee08b' },
-                        { min: 50.2, max: 51.0, color: '#fc8d59' }
-                    ]
-                },
-                xAxis: {
-                    type: 'time', min: bounds.min, max: bounds.max,
-                    axisLabel: { color: '#64748b', fontSize: 10,
-                        formatter: v => new Date(v).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
-                    },
-                    splitLine: { show: false }
-                },
-                yAxis: {
-                    type: 'value',
-                    name: 'Hz',
-                    min: 49.9, max: 50.1,
-                    nameTextStyle: { color: '#64748b', fontSize: 10 },
-                    axisLabel: { color: '#64748b', fontSize: 10,
-                        formatter: v => v.toFixed(2)
-                    },
-                    splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } }
-                },
-                series: [{
-                    type: 'line', smooth: true, symbol: 'none',
-                    lineStyle: { width: 1.5 },
-                    data: tsFreq
-                }]
+                ],
+                series: [...voltageSeries, freqSeries]
             });
         }
 
         // Resize
         window.addEventListener('resize', () => {
-            if (voltageChart) voltageChart.resize();
-            if (frequencyChart) frequencyChart.resize();
+            if (mainChart) mainChart.resize();
         });
 
         // Init
