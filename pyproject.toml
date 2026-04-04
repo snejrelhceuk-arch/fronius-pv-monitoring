@@ -1,6 +1,6 @@
 [project]
 name = "pv-system"
-version = "1.2.0"
+version = "1.3.0"
 description = "PV-Monitoring & Automation für Fronius GEN24 + BYD HVS"
 requires-python = ">=3.9"
 
@@ -12,10 +12,12 @@ build-backend = "setuptools.backends._legacy:_Backend"
 # Projekt-Root ist direkt importierbar (flache Struktur, kein src/)
 py-modules = ["config", "db_utils", "db_init", "fronius_api", "modbus_v3",
               "solar_geometry", "solar_forecast", "collector", "web_api",
-              "wattpilot_api", "wattpilot_collector", "host_role",
+              "wattpilot_api", "wattpilot_collector", "fritzdect_collector",
+              "host_role",
               "aggregate", "aggregate_1min", "aggregate_daily",
               "aggregate_monthly", "aggregate_statistics",
               "modbus_quellen", "gunicorn_config"]
 packages = ["routes", "automation", "automation.engine",
             "automation.engine.regeln", "automation.engine.aktoren",
-            "automation.engine.collectors"]
+            "automation.engine.collectors",
+            "netzqualitaet", "diagnos"]

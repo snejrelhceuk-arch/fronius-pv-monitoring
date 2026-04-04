@@ -1,7 +1,8 @@
 # Diagnos-Konzept — Schicht D
 
-**Stand:** 16. Maerz 2026  
-**Status:** Planungsdokument
+**Stand:** April 2026  
+**Status:** Konzept & Roadmap (In Planung)  
+**Aktueller Stand:** Phase 0 (Begriffe, Rollenmodell) definiert. Health-Checks (Phase 1) teilweise in `diagnos/health.py` umgesetzt.
 
 ---
 

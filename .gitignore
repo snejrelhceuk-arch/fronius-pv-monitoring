@@ -76,6 +76,7 @@ ollama/Modelfile
 ollama/server_README.md
 scripts/windows/
 scripts/filter-expressions.txt
+doc/archive/
 doc/system/SYSTEM_ARCHITECTURE.md
 doc/system/DUAL_HOST_ARCHITECTURE.md
 doc/system/GIT_WORKFLOW.md
