@@ -60,7 +60,12 @@
             <div class="summary-card">
                 <div class="label">Ø Autarkie</div>
                 <div class="value accent">{{ "%.1f"|format(totals.autarkie) }}%</div>
-                <div class="sub">Solar / Verbrauch</div>
+                <div class="sub">1 − Netzbezug / Verbrauch</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">Spez. Ertrag</div>
+                <div class="value accent">{{ "%.0f"|format(totals.spez_ertrag) }} kWh/kWp</div>
+                <div class="sub">über den verfügbaren Zeitraum</div>
             </div>
         </div>
 
@@ -71,6 +76,7 @@
                     <tr>
                         <th>Jahr</th>
                         <th>Solar-Erzeugung</th>
+                        <th>Spez. Ertrag</th>
                         <th>Direktverbrauch</th>
                         <th>Batt.-Ladung</th>
                         <th>Batt.-Entladung</th>
@@ -86,6 +92,7 @@
                     <tr>
                         <td><strong>{{ year.year }}</strong></td>
                         <td><strong>{{ "{:,.0f}".format(year.solar) }} kWh</strong></td>
+                        <td><strong>{{ "%.0f"|format(year.spez_ertrag) }} kWh/kWp</strong></td>
                         <td><strong>{{ "{:,.0f}".format(year.direkt) }} kWh</strong></td>
                         <td><strong>{{ "{:,.0f}".format(year.batt_lad) }} kWh</strong></td>
                         <td><strong>{{ "{:,.0f}".format(year.batt_entl) }} kWh</strong></td>
@@ -101,6 +108,7 @@
                     <tr>
                         <td>Gesamt</td>
                         <td>{{ "{:,.0f}".format(totals.solar) }} kWh</td>
+                        <td>{{ "%.0f"|format(totals.spez_ertrag) }} kWh/kWp</td>
                         <td>{{ "{:,.0f}".format(totals.direkt) }} kWh</td>
                         <td>{{ "{:,.0f}".format(totals.batt_lad) }} kWh</td>
                         <td>{{ "{:,.0f}".format(totals.batt_entl) }} kWh</td>
@@ -159,7 +167,7 @@
             <h4>PV-Berechnungsgrundlagen:</h4>
             <ul style="margin: 10px 0; padding-left: 20px;">
                 <li><strong>Energiebilanz</strong>: Solar = Direktverbrauch + Batterieladung + Einspeisung</li>
-                <li><strong>Autarkie</strong> = Solar-Erzeugung / Gesamt-Verbrauch × 100</li>
+                <li><strong>Autarkie</strong> = (1 − Netzbezug / Gesamt-Verbrauch) × 100</li>
                 <li><strong>Batteriewirkungsgrad</strong> = Entladung / Ladung × 100</li>
                 <li><strong>Brutto-Ersparnis</strong> = Solar × Strompreis (Nulleinspeiser)</li>
                 <li><strong>Netto-Strom</strong> = Brutto-Ersparnis − Netzkosten</li>

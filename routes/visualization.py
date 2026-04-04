@@ -10,34 +10,9 @@ Netzfrequenz-Min/Max inkl. Zeitstempel aus data_1min.
 import logging
 from datetime import datetime
 from flask import Blueprint, jsonify, request
-from routes.helpers import get_db_connection, api_error_response, validate_year_month
+from routes.helpers import get_db_connection, api_error_response, validate_year_month, plausible_counter_delta
 
 bp = Blueprint('visualization', __name__)
-
-# Plausibilitätsfaktor: Counter-Delta darf max. diesen Faktor × Fallback betragen
-_COUNTER_PLAUSIBILITY_FACTOR = 3.0
-_MIN_DELTA_WH = 50.0
-
-
-def _plausible_counter_delta(start, end, fallback):
-    """Berechne Counter-Delta mit Plausibilitätsprüfung.
-
-    Wenn Start/End vorhanden sind, wird End−Start berechnet.
-    Falls das Ergebnis negativ ist oder um Faktor > 3 vom Fallback (SUM Δ)
-    abweicht, wird der Fallback-Wert (bereits reset-korrigiert) verwendet.
-    """
-    if start is not None and end is not None:
-        delta = end - start
-        fb = fallback or 0
-        # Negativer Counter → Zähler-Reset
-        if delta < -_MIN_DELTA_WH:
-            return fb
-        # Counter viel größer als SUM(Δ) → Zähler-Sprint
-        if abs(fb) > _MIN_DELTA_WH and delta > _COUNTER_PLAUSIBILITY_FACTOR * abs(fb):
-            return fb
-        # Plausibel
-        return delta
-    return fallback or 0
 
 
 def _get_freq_extremes(cursor, ts_start, ts_end):
@@ -215,61 +190,74 @@ def api_tag_visualization():
             })
 
         # ─── Counter-basierte Tages-Totals (exakt wie Solarweb) ────────
+        # Verwendet first/last Zählerstand + Plausibilitätsprüfung gegen
+        # data_1min-Deltas, um Glitch-Werte (z.B. kurzzeitig 0 nach
+        # Firmware-Update) abzufangen.
         counter_totals = None
         try:
-            if date_param:
-                ct_query = """
-                    SELECT
-                        (MAX(W_DC1) - MIN(W_DC1)) / 1000.0,
-                        (MAX(W_DC2) - MIN(W_DC2)) / 1000.0,
-                        (MAX(W_Exp_F2) - MIN(W_Exp_F2)) / 1000.0,
-                        (MAX(W_Exp_F3) - MIN(W_Exp_F3)) / 1000.0,
-                        (MAX(W_Imp_Netz) - MIN(W_Imp_Netz)) / 1000.0,
-                        (MAX(W_Exp_Netz) - MIN(W_Exp_Netz)) / 1000.0,
-                        (MAX(W_AC_Inv) - MIN(W_AC_Inv)) / 1000.0,
-                        (MAX(W_Imp_WP) - MIN(W_Imp_WP)) / 1000.0,
-                        COUNT(*)
-                    FROM raw_data
-                    WHERE datetime(ts, 'unixepoch', 'localtime') >= date(?, 'start of day')
-                      AND datetime(ts, 'unixepoch', 'localtime') < date(?, '+1 day', 'start of day')
-                """
-                cursor.execute(ct_query, (date_param, date_param))
-            else:
-                ct_query = """
-                    SELECT
-                        (MAX(W_DC1) - MIN(W_DC1)) / 1000.0,
-                        (MAX(W_DC2) - MIN(W_DC2)) / 1000.0,
-                        (MAX(W_Exp_F2) - MIN(W_Exp_F2)) / 1000.0,
-                        (MAX(W_Exp_F3) - MIN(W_Exp_F3)) / 1000.0,
-                        (MAX(W_Imp_Netz) - MIN(W_Imp_Netz)) / 1000.0,
-                        (MAX(W_Exp_Netz) - MIN(W_Exp_Netz)) / 1000.0,
-                        (MAX(W_AC_Inv) - MIN(W_AC_Inv)) / 1000.0,
-                        (MAX(W_Imp_WP) - MIN(W_Imp_WP)) / 1000.0,
-                        COUNT(*)
-                    FROM raw_data
-                    WHERE datetime(ts, 'unixepoch', 'localtime') >= date('now', 'localtime', 'start of day')
-                """
-                cursor.execute(ct_query)
+            _CT_RAW_COLS = ['W_DC1', 'W_DC2', 'W_Exp_F2', 'W_Exp_F3',
+                            'W_Imp_Netz', 'W_Exp_Netz', 'W_AC_Inv', 'W_Imp_WP']
+            _CT_DELTA_COLS = ['W_DC1_delta', 'W_DC2_delta', 'W_Exp_F2_delta',
+                              'W_Exp_F3_delta', 'W_Imp_Netz_delta',
+                              'W_Exp_Netz_delta', 'W_AC_Inv_delta',
+                              'W_Imp_WP_delta']
 
-            ct_row = cursor.fetchone()
-            if ct_row and ct_row[8] and ct_row[8] > 100:
-                dc1, dc2, exp_f2, exp_f3, imp_netz, exp_netz, ac_inv, imp_wp, cnt = ct_row
-                ertrag = (dc1 or 0) + (dc2 or 0) + (exp_f2 or 0) + (exp_f3 or 0)
-                einspeis = exp_netz or 0
-                bezug = imp_netz or 0
+            raw_cols_str = ', '.join(_CT_RAW_COLS)
+            fb_sums_str = ', '.join(f'SUM({c})' for c in _CT_DELTA_COLS)
+
+            if date_param:
+                where_raw = ("datetime(ts, 'unixepoch', 'localtime') >= date(?, 'start of day') "
+                             "AND datetime(ts, 'unixepoch', 'localtime') < date(?, '+1 day', 'start of day')")
+                ct_params = (date_param, date_param)
+            else:
+                where_raw = "datetime(ts, 'unixepoch', 'localtime') >= date('now', 'localtime', 'start of day')"
+                ct_params = ()
+
+            cursor.execute(f"SELECT COUNT(*) FROM raw_data WHERE {where_raw}", ct_params)
+            raw_count = cursor.fetchone()[0]
+
+            if raw_count > 100:
+                cursor.execute(
+                    f"SELECT {raw_cols_str} FROM raw_data WHERE {where_raw} ORDER BY ts ASC LIMIT 1",
+                    ct_params)
+                first_row = cursor.fetchone()
+
+                cursor.execute(
+                    f"SELECT {raw_cols_str} FROM raw_data WHERE {where_raw} ORDER BY ts DESC LIMIT 1",
+                    ct_params)
+                last_row = cursor.fetchone()
+
+                cursor.execute(
+                    f"SELECT {fb_sums_str} FROM data_1min WHERE {where_raw}",
+                    ct_params)
+                fb_row = cursor.fetchone()
+
+                deltas_wh = []
+                for i in range(len(_CT_RAW_COLS)):
+                    start_val = first_row[i] if first_row else None
+                    end_val = last_row[i] if last_row else None
+                    fallback = abs(fb_row[i] or 0) if fb_row else 0
+                    deltas_wh.append(plausible_counter_delta(start_val, end_val, fallback))
+
+                dc1, dc2, exp_f2, exp_f3, imp_netz, exp_netz, ac_inv, imp_wp = [
+                    d / 1000.0 for d in deltas_wh]
+
+                ertrag = dc1 + dc2 + exp_f2 + exp_f3
+                einspeis = exp_netz
+                bezug = imp_netz
                 verbrauch = ertrag + bezug - einspeis
                 counter_totals = {
                     'ertrag_kwh': round(ertrag, 3),
                     'einspeis_kwh': round(einspeis, 3),
                     'bezug_kwh': round(bezug, 3),
                     'verbrauch_kwh': round(verbrauch, 3),
-                    'dc1_kwh': round(dc1 or 0, 3),
-                    'dc2_kwh': round(dc2 or 0, 3),
-                    'exp_f2_kwh': round(exp_f2 or 0, 3),
-                    'exp_f3_kwh': round(exp_f3 or 0, 3),
-                    'ac_inv_kwh': round(ac_inv or 0, 3),
-                    'waermepumpe_kwh': round(imp_wp or 0, 3),
-                    'raw_count': cnt
+                    'dc1_kwh': round(dc1, 3),
+                    'dc2_kwh': round(dc2, 3),
+                    'exp_f2_kwh': round(exp_f2, 3),
+                    'exp_f3_kwh': round(exp_f3, 3),
+                    'ac_inv_kwh': round(ac_inv, 3),
+                    'waermepumpe_kwh': round(imp_wp, 3),
+                    'raw_count': raw_count
                 }
         except Exception as e:
             logging.warning(f"Counter-Totals Fehler: {e}")
@@ -412,8 +400,8 @@ def monat_visualization():
                 # PV: IMMER Fallback (W_PV_total) verwenden, da W_AC_Inv nur F1
                 # (DC1+DC2) trackt, W_PV_total dagegen alle 3 Inverter enthält.
                 w_pv = w_pv_fallback or 0
-                w_exp = _plausible_counter_delta(w_exp_start, w_exp_end, w_exp_fallback)
-                w_imp = _plausible_counter_delta(w_imp_start, w_imp_end, w_imp_fallback)
+                w_exp = plausible_counter_delta(w_exp_start, w_exp_end, w_exp_fallback)
+                w_imp = plausible_counter_delta(w_imp_start, w_imp_end, w_imp_fallback)
 
             # Verbrauchskomponenten berechnen
             w_erzeugung_kwh = (w_pv or 0) / 1000

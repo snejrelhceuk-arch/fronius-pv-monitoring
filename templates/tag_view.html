@@ -455,19 +455,22 @@
                 // Today with separate forecast: show monitoring + forecast expected
                 if (chartData.has_forecast && forecastData) {
                     // Prefer counter-based totals (exact, = Solarweb) over P×t sums
-                    let realErtrag_kwh, realVerbrauch_kwh;
+                    let realErtrag_kwh, realVerbrauch_kwh, realBezug_kwh;
                     const ct = chartData.counter_totals;
                     if (ct) {
                         realErtrag_kwh = ct.ertrag_kwh;
                         realVerbrauch_kwh = ct.verbrauch_kwh;
+                        realBezug_kwh = ct.bezug_kwh;
                     } else {
                         const realErtrag_wh = chartData.datapoints.reduce((s, dp) => s + (dp.w_ertrag || 0), 0);
                         const realVerbrauch_wh = chartData.datapoints.reduce((s, dp) => s + (dp.w_verbrauch || 0), 0);
+                        const realBezug_wh = chartData.datapoints.reduce((s, dp) => s + (dp.w_bezug || 0), 0);
                         realErtrag_kwh = realErtrag_wh / 1000;
                         realVerbrauch_kwh = realVerbrauch_wh / 1000;
+                        realBezug_kwh = realBezug_wh / 1000;
                     }
                     const fcErtrag_kwh = (forecastData.expected_kwh || 0);
-                    const autarkie = realVerbrauch_kwh > 0 ? Math.min(100, (realErtrag_kwh / realVerbrauch_kwh * 100)) : 0;
+                    const autarkie = realVerbrauch_kwh > 0 ? Math.min(100, Math.max(0, (1 - (realBezug_kwh / realVerbrauch_kwh)) * 100)) : 0;
                     
                     if (currentView === 'ertrag') {
                         showSummary(`${formatEnergy(realErtrag_kwh)} / ${formatEnergy(fcErtrag_kwh)} ☀`);
@@ -479,18 +482,21 @@
                 
                 // Tag-Ansicht: Direkte Summierung
                 // Prefer counter-based totals (exact) over P×t sums
-                let ertrag_kwh, verbrauch_kwh;
+                let ertrag_kwh, verbrauch_kwh, bezug_kwh;
                 const ct2 = chartData.counter_totals;
                 if (ct2) {
                     ertrag_kwh = ct2.ertrag_kwh;
                     verbrauch_kwh = ct2.verbrauch_kwh;
+                    bezug_kwh = ct2.bezug_kwh;
                 } else {
                     const ertrag_wh = chartData.datapoints.reduce((sum, dp) => sum + (dp.w_ertrag || 0), 0);
                     const verbrauch_wh = chartData.datapoints.reduce((sum, dp) => sum + (dp.w_verbrauch || 0), 0);
+                    const bezug_wh = chartData.datapoints.reduce((sum, dp) => sum + (dp.w_bezug || 0), 0);
                     ertrag_kwh = ertrag_wh / 1000;
                     verbrauch_kwh = verbrauch_wh / 1000;
+                    bezug_kwh = bezug_wh / 1000;
                 }
-                const autarkie = verbrauch_kwh > 0 ? Math.min(100, (ertrag_kwh / verbrauch_kwh * 100)) : 0;
+                const autarkie = verbrauch_kwh > 0 ? Math.min(100, Math.max(0, (1 - (bezug_kwh / verbrauch_kwh)) * 100)) : 0;
                 
                 if (currentView === 'ertrag') {
                     let text = `${formatEnergy(ertrag_kwh)} · ${autarkie.toFixed(0)}%`;
@@ -509,9 +515,39 @@
                 const verbrauchTotal = chartData.datapoints.filter(dp => !dp.is_forecast).reduce((sum, dp) => {
                     return sum + (dp.w_gesamtverbrauch || 0);
                 }, 0);
-                const autarkiePeriod = verbrauchTotal > 0 ? Math.min(100, (ertragTotal / verbrauchTotal * 100)) : 0;
+                const einspeisTotal = chartData.datapoints.filter(dp => !dp.is_forecast).reduce((sum, dp) => {
+                    return sum + (dp.w_einspeisung || 0);
+                }, 0);
+                const eigenverbrauchTotal = Math.max(0, ertragTotal - einspeisTotal);
+                const autarkiePeriod = verbrauchTotal > 0 ? Math.min(100, (eigenverbrauchTotal / verbrauchTotal * 100)) : 0;
+
+                let kwpRef = null;
+                if (currentPeriod === 'monat') {
+                    kwpRef = getInstalledKwpForMonth(currentYear, currentMonth);
+                } else if (currentPeriod === 'jahr') {
+                    const monthsWithData = chartData.datapoints.filter(dp => !dp.is_forecast && (dp.w_pv_total || 0) > 0);
+                    if (monthsWithData.length > 0) {
+                        const kwpSum = monthsWithData.reduce((sum, dp) => {
+                            const m = dp.month || 0;
+                            return sum + (m >= 1 && m <= 12 ? getInstalledKwpForMonth(currentYear, m) : 0);
+                        }, 0);
+                        kwpRef = kwpSum > 0 ? (kwpSum / monthsWithData.length) : getAverageInstalledKwpForYear(currentYear);
+                    } else {
+                        kwpRef = getAverageInstalledKwpForYear(currentYear);
+                    }
+                } else if (currentPeriod === 'gesamt') {
+                    const yearsWithData = chartData.datapoints.filter(dp => !dp.is_forecast && dp.year);
+                    if (yearsWithData.length > 0) {
+                        const kwpYearSum = yearsWithData.reduce((sum, dp) => sum + getAverageInstalledKwpForYear(dp.year), 0);
+                        kwpRef = kwpYearSum / yearsWithData.length;
+                    } else {
+                        kwpRef = 37.59;
+                    }
+                }
+
+                const specificText = kwpRef ? formatSpecificYield(ertragTotal, kwpRef) : '–';
                 
-                let summaryText = `${formatEnergy(ertragTotal)} / ${formatEnergy(verbrauchTotal)} · ${autarkiePeriod.toFixed(0)}%`;
+                let summaryText = `${formatEnergy(ertragTotal)} / ${formatEnergy(verbrauchTotal)} · ${autarkiePeriod.toFixed(0)}% · ${specificText}`;
                 
                 // Jahr-Ansicht: Sonnenstunden anzeigen (aus API-Daten)
                 if (currentPeriod === 'jahr' && chartData.sonnenstunden) {
@@ -760,6 +796,30 @@
         /** Kurzform für Energiewerte (kWh). */
         function formatEnergy(value, forceDecimals) {
             return formatValue(value, 'kWh', forceDecimals);
+        }
+
+        function getInstalledKwpForMonth(year, month) {
+            // Ausbauphasen: bis 04/2025 = 21.40, 05-09/2025 = 26.07, ab 10/2025 = 37.59
+            if (year < 2025 || (year === 2025 && month <= 4)) return 21.40;
+            if (year === 2025 && month <= 9) return 26.07;
+            return 37.59;
+        }
+
+        function getInstalledKwpForDate(dateObj) {
+            return getInstalledKwpForMonth(dateObj.getFullYear(), dateObj.getMonth() + 1);
+        }
+
+        function getAverageInstalledKwpForYear(year) {
+            let sum = 0;
+            for (let month = 1; month <= 12; month++) {
+                sum += getInstalledKwpForMonth(year, month);
+            }
+            return sum / 12;
+        }
+
+        function formatSpecificYield(kwh, kwp) {
+            if (!kwp || kwp <= 0 || !Number.isFinite(kwh)) return '–';
+            return `${(kwh / kwp).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kWh/kWp`;
         }
 
         /**
@@ -1993,9 +2053,11 @@
                         
                         // Prognose-Tage speziell kennzeichnen
                         if (dp.is_forecast) {
+                            const spezForecast = formatSpecificYield(dp.w_pv_total || 0, getInstalledKwpForDate(datum));
                             let result = `<strong>${datumStr}</strong> ☀️ <em>Prognose</em><br/><br/>`;
                             result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(255,152,0,0.6);border:2px dashed #FF9800;margin-right:5px;"></span>`;
                             result += `PV-Prognose: <strong>${formatEnergy(dp.w_pv_total)}</strong><br/>`;
+                            result += `Spez. Prognose: <strong>${spezForecast}</strong><br/>`;
                             if (dp.quality) result += `Qualität: ${dp.quality}<br/>`;
                             if (dp.weather_text) result += `Wetter: ${dp.weather_text}`;
                             return result;
@@ -2039,6 +2101,7 @@
                             result += ` <span style="color:#FF9800">(Prog. ${formatEnergy(fcTotal)})</span>`;
                         }
                         result += '<br/>';
+                        result += `<strong>Spez. Ertrag:</strong> ${formatSpecificYield(dp.w_pv_total || 0, getInstalledKwpForDate(datum))}<br/>`;
                         result += `<strong>Verbrauch:</strong> ${formatEnergy(dp.w_gesamtverbrauch)}<br/>`;
                         result += `<strong>Autarkie:</strong> ${dp.autarkie} %`;
                         
@@ -2365,6 +2428,14 @@
                         
                         result += '<hr style="border:none;border-top:1px solid #ccc;margin:8px 0;"/>';
                         result += `<strong>Erzeugung:</strong> ${formatEnergy(dp.w_pv_total)}<br/>`;
+                        let kwpRef = 37.59;
+                        if (currentPeriod === 'jahr') {
+                            const monthForDp = dp.month || (i + 1);
+                            kwpRef = getInstalledKwpForMonth(currentYear, monthForDp);
+                        } else if (currentPeriod === 'gesamt') {
+                            kwpRef = getAverageInstalledKwpForYear(dp.year || currentYear);
+                        }
+                        result += `<strong>Spez. Ertrag:</strong> ${formatSpecificYield(dp.w_pv_total || 0, kwpRef)}<br/>`;
                         result += `<strong>Verbrauch:</strong> ${formatEnergy(dp.w_gesamtverbrauch)}<br/>`;
                         result += `<strong>Autarkie:</strong> ${dp.autarkie} %`;
                         

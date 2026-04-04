@@ -80,6 +80,7 @@
         // ═══════════════════════════════════════
         const COLORS = { f1: '#2E7D32', f2: '#4CAF50', f3: '#81C784', gesamt: '#E6DFA8' };
         const NAMES  = { f1: 'F1 (DC1+DC2)', f2: 'F2 (SmartMeter)', f3: 'F3 (SmartMeter)' };
+        const KWP = { f1: 19.32, f2: 12.42, f3: 5.85, gesamt: 37.59 };
 
         let currentView = 'tag';
         let currentDate = new Date();
@@ -347,6 +348,11 @@
             return `${(watts / 1000).toFixed(2)} kW`;
         }
 
+        function formatSpecificYield(kwh, kwp) {
+            if (!kwp || kwp <= 0) return '-';
+            return `${(kwh / kwp).toFixed(1)} kWh/kWp`;
+        }
+
         function updateSummary(totals) {
             if (!totals) return;
             const grid = document.getElementById('summaryGrid');
@@ -356,32 +362,37 @@
             const pctF2 = (totals.f2 / gesamt * 100).toFixed(0);
             const pctF3 = (totals.f3 / gesamt * 100).toFixed(0);
             const pctF23 = (f23 / gesamt * 100).toFixed(0);
+            const showSpecific = currentView !== 'tag';
 
             grid.innerHTML = `
                 <div class="status-chip f1">
                     <span class="label">F1</span>
                     <span class="val">${formatEnergy(totals.f1)}</span>
                     <span class="pct">${pctF1}%</span>
+                    ${showSpecific ? `<span class="split">${formatSpecificYield(totals.f1, KWP.f1)}</span>` : ''}
                 </div>
                 <div class="status-chip f2">
                     <span class="label">F2</span>
                     <span class="val">${formatEnergy(totals.f2)}</span>
                     <span class="pct">${pctF2}%</span>
+                    ${showSpecific ? `<span class="split">${formatSpecificYield(totals.f2, KWP.f2)}</span>` : ''}
                 </div>
                 <div class="status-chip f3">
                     <span class="label">F3</span>
                     <span class="val">${formatEnergy(totals.f3)}</span>
                     <span class="pct">${pctF3}%</span>
+                    ${showSpecific ? `<span class="split">${formatSpecificYield(totals.f3, KWP.f3)}</span>` : ''}
                 </div>
                 <div class="status-chip f23">
                     <span class="label">F2+F3</span>
                     <span class="val">${formatEnergy(f23)}</span>
                     <span class="pct">${pctF23}%</span>
+                    ${showSpecific ? `<span class="split">${formatSpecificYield(f23, KWP.f2 + KWP.f3)}</span>` : ''}
                 </div>
                 <div class="status-chip gesamt">
                     <span class="label">Gesamt</span>
                     <span class="val">${formatEnergy(totals.gesamt)}</span>
-                    <span class="split">F1 ${pctF1}% · F2/F3 ${pctF23}%</span>
+                    <span class="split">F1 ${pctF1}% · F2/F3 ${pctF23}%${showSpecific ? ` · ${formatSpecificYield(totals.gesamt, KWP.gesamt)}` : ''}</span>
                 </div>
             `;
         }
