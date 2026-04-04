@@ -7,8 +7,8 @@ Before=shutdown.target reboot.target halt.target poweroff.target
 [Service]
 Type=oneshot
 User=admin
-WorkingDirectory=/home/admin/Dokumente/PVAnlage/pv-system
-ExecStart=/bin/bash /home/admin/Dokumente/PVAnlage/pv-system/scripts/persist_on_shutdown.sh
+WorkingDirectory=/srv/pv-system
+ExecStart=/bin/bash /srv/pv-system/scripts/persist_on_shutdown.sh
 TimeoutStartSec=120
 
 [Install]

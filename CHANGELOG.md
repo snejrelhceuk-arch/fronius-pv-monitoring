@@ -11,6 +11,29 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/).
 - MEGA-BAS Rollout: I2C-HAT-Inbetriebnahme mit zusätzlicher Temperatur-Sensorik und vorbereiteter Aktorik für kommende Hardware-Phasen.
 - 3-Phasen-Heizpatrone (Zukunftsphase): Konzept für stufenweise Zuschaltung und Schützstrategie als nächster Ausbauschritt.
 
+---
+
+## v1.3.0 — 2026-04-04
+
+### Features
+- **Netzqualitäts-Modul (Phase 1):** Tagesprofil-API (`/api/netzqualitaet/tag`), 5min-Buckets aus raw_data mit Fallback auf data_1min, L-L-Spannungen und Frequenz-Charts.
+- **Netzqualitäts-UI:** Eigene Seite mit Tagesprofilansicht, erreichbar über Maschinenraum-Header.
+- **Netzqualitäts-Export:** CSV/JSON-Export der Tagesdaten.
+
+### Dokumentation
+- **Release-Bereinigung:** Entwicklungs-Journale, Audit-Prozessdokumentation und geklärte Fragen aus Fachdokus entfernt — nur IST-Zustand und Roadmap verbleiben.
+- `TIEFENPRUEFUNG_2026-03-08.md` archiviert (→ `doc/archive/`).
+- `SYSTEM_AUDIT_2026-03-24.md` auf Kernbefunde komprimiert (§3-5 gestrafft).
+- `OFFENE_FRAGEN.md` auf tatsächlich offene Fragen reduziert (F1/F3/F4 entfernt).
+- `DIAGNOS_KONZEPT.md` und `UMSETZUNGSPLAN.md` mit Status-Disclaimer versehen.
+- `automation/README.md` Hardware-Narrative gestrafft.
+
+### Projekt
+- `pyproject.toml`: Fehlende Module ergänzt (`fritzdect_collector`, `netzqualitaet`, `diagnos`).
+- `monitor.sh`: Deprecation-Hinweis (ersetzt durch `scripts/monitor_health.sh` + `diagnos/health.py`).
+
+---
+
 ## v1.2.1 — 2026-03-24
 
 ### Features

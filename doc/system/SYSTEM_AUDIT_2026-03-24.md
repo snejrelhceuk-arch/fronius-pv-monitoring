@@ -42,49 +42,23 @@ Fritz!Box-Heartbeat + Tier-1-Alarm. Burst-State persistieren.
 
 ---
 
-## 3  Code-Qualität (ruff, 369 Findings)
+## 3  Code-Qualität — Ergebnis
 
-| Kategorie | Anzahl | Bewertung |
-|-----------|--------|-----------|
-| f-string ohne Platzhalter (F541) | 106 | Kosmetisch |
-| Unbenutzte Imports (F401) | 59 | `ruff --fix` |
-| `try-except-pass` (S110) | **47** | **Risiko: stille Fehler** |
-| Unbenutzte Variablen (F841) | 31 | Teils gewollt |
-| MD5-Nutzung (S324) | 6 | Protokollbedingt (Fritz, Fronius Digest Auth) |
-| `raise` ohne `from` (B904) | 5 | Traceback geht verloren |
-| `random` statt `secrets` (S311) | 2 | Token-Generierung |
-| Doppelter Dict-Key (F601) | 1 | Bug in `tools/wattpilot_read.py` |
-| Bind `0.0.0.0` (S104) | 1 | Bewusst, aber ohne Firewall riskant |
+Bereinigung durchgeführt am 28. März 2026 (ruff --fix + gezielte Einzelfixes).
 
-**Top-10 nach Dateigröße:** `pv-config.py` (2085 Z.), `solar_geometry.py` (1979 Z.),
-`solar_forecast.py` (1353 Z.), `routes/system.py` (1349 Z.), `regeln/geraete.py` (1143 Z.).
+**Ausgangslage:** 369 Findings → **Ergebnis:** 103 verbleibend
+(davon 43 E402 bewusst, 31 F841 teils gewollt, 23 E701/E702 Stilwahl,
+3 E741 fachliche Variablennamen, 6 S324 protokollbedingt MD5).
 
-**Empfehlung:** `ruff check --fix --select F401,F541,W292` (170+ Auto-Fixes).
-47× try-except-pass gezielt überprüfen.
-
-### 3.1  Durchgeführte Bereinigung (28. März 2026)
-
-**ruff --fix Auto-Fixes (169 Stellen):**
-- F401: 60 unbenutzte Imports entfernt
-- F541: 106 f-strings ohne Platzhalter bereinigt
-- E401: 3 Mehrfach-Imports aufgeteilt
-
-**Gezielte Fixes (8 Stellen):**
-- B904: 5× `raise X from exc` in `wattpilot_api.py` (Traceback-Kette bewahrt)
-- S311: 2× `random.randrange` → `secrets.token_hex` in Auth-Token-Generierung
-  (`wattpilot_api.py`, `tools/wattpilot_read.py`)
-- F601: 1× doppelter Dict-Key `'ust'` in `tools/wattpilot_read.py` entfernt
-
-**try-except-pass Review (47 Stellen):**
-- 46× als OK-OPTIONAL eingestuft (Cleanup-Blöcke, optionale Tabellen, graceful degradation)
-- 1× FIX-LOG: `automation_daemon.py` L322 — RAM-DB-Reconnect-Fehler wird jetzt geloggt
-
-**Ergebnis:** 273 Findings → 103 (davon 43 E402 bewusst, 31 F841 teils gewollt,
-23 E701 Stilwahl, 3 E702 Stilwahl, 3 E741 fachliche Variablennamen).
+Wesentliche Fixes:
+- 60 unbenutzte Imports entfernt (F401)
+- 106 f-strings ohne Platzhalter bereinigt (F541)
+- 5× `raise X from exc` (B904), 2× `random` → `secrets` (S311)
+- 47× try-except-pass reviewt (1 gefixt, 46 bewusst OK)
 
 ---
 
-## 4  Sensible Daten in Commits
+## 4  Sensible Daten
 
 | Prüfpunkt | Ergebnis |
 |-----------|----------|
@@ -92,53 +66,15 @@ Fritz!Box-Heartbeat + Tier-1-Alarm. Burst-State persistieren.
 | E-Mail-Adressen | ✅ `@example.invalid` |
 | `.secrets`-Datei | ✅ In `.gitignore`, nie committet |
 | `fritz_config.json` | ✅ In `.gitignore`, nie committet |
-| Fritz!DECT AINs | ✅ Nur Platzhalter `00000 0000000` |
-| Fritz!Box-Default-IP `192.168.178.1` | ⚠️ Standard, kein echter Leak |
-| **SMTP-Provider (Name redacted)** | **🔴 War in 1 Commit-Message + 3 Datei-Diffs** |
+| Fritz!DECT AINs | ✅ Nur Platzhalter in tracked Files |
+| SMTP-Provider | ✅ Bereinigt (History + Dateien) |
 
-### Durchgeführte Bereinigung
-
-1. **Docstring** in `pv-config.py` L1874: Providername entfernt → „konfigurierten SMTP-Server"
-2. **Git-History** vollständig umgeschrieben via `git filter-repo --replace-text --replace-message`
-   - Ersetzungen: Providername → generische Bezeichnung in allen Varianten
-   - Betroffen: 3 Commits (Blobs) + 1 Commit-Message
-   - Backup-Tag: `backup/pre-filter-smtp-provider` (alte Hashes, lokal)
-3. **`.publish-guard`** erweitert um Providername-Pattern (case-insensitive)
-4. **`commit-msg`-Hook** erstellt — prüft Commit-Messages gegen dieselben Sperrmuster
-
-### Verifizierung nach Bereinigung
-
-```
-Commit-Messages mit Providername: 0
-Datei-Diffs mit Providername:    0
-.publish-guard Pattern-Test:  ✅ blockiert
-```
+Schutzmaßnahmen: `.publish-guard` Pattern-Matching + `commit-msg`-Hook aktiv.
 
 ---
 
 ## 5  Offene Maßnahmen
 
-### Sofort nötig
-
-- [ ] `chmod +x .git/hooks/commit-msg` (Hook muss ausführbar sein)
-- [ ] `git push --force-with-lease origin main` (umgeschriebene History publizieren)
-- [ ] Failover-Host: `git fetch origin && git reset --hard origin/main`
-
-### Kurzfristig
-
 - [ ] API-Authentifizierung implementieren (API-Key oder Token)
 - [ ] Fritz!Box-Heartbeat + Tier-1-Alarm bei Ausfall
 - [ ] Burst-State nach JSON persistieren
-
-### Erledigt (28. März 2026)
-
-- [x] `html.escape(MIRROR_SOURCE)` in `web_api.py` — XSS-Fix
-- [x] Error-Responses generisch (35 Stellen in 7 Dateien → `api_error_response()`)
-- [x] WW-Temp Null-Guard + 300s-Watchdog in `regeln/geraete.py`
-- [x] CORS default `*` → same-origin (explizites Opt-in via `PV_API_CORS_ORIGINS`)
-- [x] Input-Validierung `year`/`month` in 9 Endpoints (4 Blueprints + visualization)
-- [x] `/api/bulk_load` mit max 7d Zeitfenster + 200k Row-Limit + truncated-Flag
-- [x] `ruff --fix` für F401, F541, E401 (169 Auto-Fixes)
-- [x] 47× try-except-pass systematisch reviewt (1 gefixt, 46 bewusst OK)
-- [x] B904 (5×), S311 (2×), F601 (1×) — gezielte Einzelfixes
-- [x] `random` → `secrets` für Auth-Token-Generierung (Wattpilot)

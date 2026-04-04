@@ -6,13 +6,13 @@ Messrauschen nicht mit Erkenntnis verwechseln.
 
 ---
 
-## 1. Sofortmaßnahme (✅ erledigt)
+## 1. Sofortmaßnahmen (abgeschlossen in v1.2.1)
 
-- [x] Netzfrequenzlinie aus `tag_view.html` ersatzlos entfernt
-- [x] `createFrequencyChart()` und alle Referenzen entfernt
-- [x] Button „Echtzeit" in Flow → „Maschinenraum" umbenannt
-- [x] Route `/maschinenraum` + Kompatibilitätsroute `/echtzeit`
-- [x] Button „Netzqualität" im Maschinenraum-Header eingefügt
+- Netzfrequenzlinie aus `tag_view.html` ersatzlos entfernt
+- `createFrequencyChart()` und alle Referenzen entfernt
+- Button „Echtzeit" in Flow → „Maschinenraum" umbenannt
+- Route `/maschinenraum` + Kompatibilitätsroute `/echtzeit`
+- Button „Netzqualität" im Maschinenraum-Header eingefügt
 
 ## 2. Phase-1-Datenvertrag
 

@@ -1,6 +1,6 @@
 # Home Automation — PV-gesteuertes Energiemanagement
 
-> **Stand:** 2026-02-14
+> **Stand:** April 2026
 > **Hardware:** Sequent Microsystems MEGA-BAS REV-3.3 auf Raspberry Pi 4
 > **Ziel:** Eigenverbrauchsmaximierung durch automatische Steuerung von
 > Heizpatrone, Klimaanlage, Wärmepumpen-Bypass, Lüftungsanlage und Brandschutzklappen.
@@ -16,94 +16,20 @@
 
 | Ressource | Anzahl | Spezifikation |
 |-----------|--------|---------------|
-| **TRIAC-Ausgänge** | 4 | **1A / max. 120VAC** (lt. HW-Spec v4.2) — ⚠️ brauchen AC! |
+| **TRIAC-Ausgänge** | 4 | 1A / max. 120VAC — nicht nutzbar (24VDC-Bus, kein AC) |
 | **0-10V Ausgänge** | 4 | Steuerungssignale |
 | **Universaleingänge** | 8 | Software-konfigurierbar: 0-10V, 1K/10K Thermistor, Dry Contact |
-| **RS485/Modbus** | 1 | Erweiterungskommunikation |
+| **RS485/Modbus** | 1 | Erweiterungskommunikation (WP-Anbindung via LWPM 410) |
 | **1-Wire** | 1 | Digitale Temperatursensoren (DS18B20) |
-| **RTC** | 1 | Batterie-gepuffert (CR2032 vorhanden) |
+| **RTC** | 1 | Batterie-gepuffert (CR2032) |
 | **Watchdog** | 1 | Hardware — Neustart bei Software-Hänger |
 
-### ⚠️ KRITISCH: TRIAC-Ausgänge brauchen AC-Quelle!
+**TRIAC-Einschränkung:** Die TRIACs sind AC-Halbleiterschalter und benötigen
+eine AC-Quelle im Lastkreis. Da das System über einen 24VDC-Bus versorgt wird,
+sind die TRIAC-Ausgänge nicht nutzbar.
 
-Die TRIACs auf der MEGA-BAS sind Halbleiter-AC-Schalter (lt. HW-Spec v4.2: **1A / max. 120V**).
-Sie sind **KEINE potentialfreien Kontakte** wie Relais!
-
-**Problem:** Das Board wird mit **24VDC** betrieben (vorhandener DC-Bus).
-TRIACs schalten bei AC-Nulldurchgang ab — bei DC gibt es keinen Nulldurchgang.
-→ **TRIAC-Ausgänge sind mit 24VDC unbenutzbar!**
-
-**Lösung: Eight Relays HAT** ($45) — stackbar, potentialfreie Kontakte,
-schalten AC und DC, 8 Ausgänge. Alternativ: Separater 24VAC-Trafo für TRIACs.
-
-Die MEGA-BAS bleibt nützlich für: 8 Universal-Eingänge (Thermistoren, 0-10V),
-4x 0-10V-Ausgänge, RS485/Modbus, 1-Wire, RTC, Hardware-Watchdog.
-
-### Spitzensperrspannung & Überspannungsschutz (nur relevant falls 24VAC-Trafo verwendet wird)
-
-Die auf der MEGA-BAS verbauten TRIACs sind typisch **Z0109MA** oder vergleichbar:
-
-| Parameter | Wert | Bemerkung |
-|-----------|------|----------|
-| $V_{DRM}$ (Spitzensperrspannung) | **600V** | Repetitive peak off-state voltage |
-| $I_{T(RMS)}$ | 1A | Dauerstrom |
-| $I_{TSM}$ | ~10A | Stoßstrom (nicht-repetitiv) |
-| **Max. Ausgangsspannung** | **120V AC** | Lt. HW-Spec v4.2 |
-| Betriebsspannung | Abh. von AC-Quelle | 24VAC typisch, bis 120VAC möglich |
-
-> **Hinweis:** Falls ein 24VAC-Trafo für die TRIACs beschafft wird, gelten die
-> bisherigen Snubber-Empfehlungen (100Ω + 100nF) für induktive Lasten.
-> Bei Nutzung des **Eight Relays HAT** statt TRIACs ist dieser Abschnitt irrelevant.
-
-**Induktive Lasten (Schützspulen) — Analyse:**
-
-Beim Abschalten einer induktiven Last (Schützspule) entsteht ein
-Spannungspuls durch $V = -L \cdot \frac{di}{dt}$.
-
-- **24VAC Schützspule**, typisch 3–10 VA → $L$ ≈ 1–5 H, $I$ ≈ 0,1–0,4A
-- **Rückspannungspuls** bei 24VAC: typisch 80–150V Spitze
-- **Sicherheitsabstand:** 600V $V_{DRM}$ vs. ~150V Spitze = **Faktor 4**
-
-**Bewertung:** Bei 24VAC-Betrieb ist die Spitzensperrspannung von 600V
-**ausreichend** — ein RC-Snubber ist nicht zwingend nötig, aber empfohlen
-für maximale TRIAC-Lebensdauer und EMV:
-
-```
-Empfohlener Snubber über Schützspule:
-  R = 100Ω (0,5W)  in Reihe mit  C = 100nF (250V AC, X2-Klasse)
-
-  Alternative: Varistor S07K30 (Klemmspannung ~47V) parallel zur Spule
-```
-
-> **Wäre die Betriebsspannung 230VAC**: Dann wäre ein Snubber **Pflicht**, da
-> Rückspannungspulse bis 600–1000V auftreten können. Aber wir arbeiten mit
-> 24VAC — hier ist der Deckel bei ~150V, weit unter 600V $V_{DRM}$.
-
-### 1.2 Stromversorgung & TRIAC-Problem
-
-| Aspekt | Ist-Zustand | Konsequenz |
-|--------|-------------|------------|
-| **Board-Versorgung** | **24VDC-Bus** (im Haus vorhanden) | Board läuft, I2C, I/O ok |
-| **TRIAC-Ausgänge** | Brauchen **AC**, schalten bei Nulldurchgang ab | **Funktionieren NICHT mit 24VDC!** |
-| **TRIAC Max-Rating** | 1A / **120V AC** (lt. HW-Spec v4.2) | Könnten bis 120VAC schalten! |
-
-**TRIACs sind KEINE potentialfreien Kontakte!**
-Sie sind Halbleiter-Inline-Schalter, die AC durchleiten und beim Nulldurchgang
-abschalten. Bei DC-Versorgung fehlt der Nulldurchgang → TRIAC schaltet nicht ab.
-
-**Lösungsoptionen:**
-
-| Option | Kosten | Bewertung |
-|--------|--------|-----------|
-| **A: Eight Relays HAT** stacken | ~$45 | ✅ **Empfohlen!** Potentialfreie Kontakte, 4A/120V, schalten AC+DC, 24VDC-Bus nutzbar |
-| B: 24VAC-Trafo für TRIACs | ~15€ | Funktioniert, aber "Retro" — zusätzlicher Trafo 230V→24VAC |
-| C: 24VDC-Relaismodule extern | ~10€ | MEGA-BAS 0-10V-Ausgang treibt Transistor → 24VDC-Relais |
-| D: Board mit 24VAC betreiben | 0€ | Nur wenn 24VAC-Trafo eh beschafft wird; 24VDC-Bus dann nicht nutzbar |
-
-> **Empfehlung Option A:** Sequent Microsystems [Eight Relays HAT](https://sequentmicrosystems.com/products/eight-relays-stackable-card-for-raspberry-pi)
-> — stackbar auf gleichen Pi, gleiche I2C-Architektur, 8 potentialfreie
-> Relaiskontakte (N.O./N.C., 4A/120VAC). Schalten problemlos 24VDC-Relais/Schütze.
-> Plus: 4 Relais übrig für Bypass-Ventil und Reserven.
+**Lösung:** Sequent Microsystems **Eight Relays HAT** (~$45) — stackbar,
+potentialfreie Kontakte (4A/120VAC), schalten AC und DC. Python-Library: `lib8relay`.
 
 ---
 
@@ -311,21 +237,9 @@ HOCH                    Heizpatrone → E-Auto → Batterie → (Einspeisung=0)
 
 ---
 
-## 4. I/O-Planung (Vorläufig)
+## 4. I/O-Planung
 
-### ⚠️ TRIAC-Ausgänge — NICHT NUTZBAR mit 24VDC!
-
-Die 4 TRIAC-Ausgänge der MEGA-BAS (max 120V, 1A) sind **AC-Halbleiterschalter**.
-Sie sind **KEINE potentialfreien Kontakte** — sie benötigen eine AC-Quelle im Lastkreis.
-Da das Board über den 24VDC-Bus versorgt wird, fehlt die AC-Quelle → **TRIACs sind tot.**
-
-### ✅ Lösung: Sequent Microsystems Eight Relays HAT (~$45)
-
-- 8 **potentialfreie** Relais-Kontakte (N.O. + N.C.)
-- **4A / 120VAC** pro Kontakt — schaltbar AC und DC
-- Stackbar auf demselben Pi (gleiche I2C-Architektur)
-- Python-Library: `lib8relay`
-- Shop: https://sequentmicrosystems.com/products/eight-relays-8-layer-stackable-hat-for-raspberry-pi
+### Eight Relays HAT (stackbar, I2C)
 
 | Relais | Funktion | Last | Bemerkung |
 |--------|----------|------|-----------|

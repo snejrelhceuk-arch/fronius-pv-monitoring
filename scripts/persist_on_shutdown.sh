@@ -23,7 +23,7 @@ python3 - <<'PY' || rc=$?
 import os
 import sys
 
-base_dir = os.environ.get('PV_BASE_DIR', '/home/admin/Dokumente/PVAnlage/pv-system')
+base_dir = os.environ.get('PV_BASE_DIR', '/srv/pv-system')
 if base_dir not in sys.path:
     sys.path.insert(0, base_dir)
 

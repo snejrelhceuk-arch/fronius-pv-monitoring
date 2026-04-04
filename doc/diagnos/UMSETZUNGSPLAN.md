@@ -1,7 +1,8 @@
 # Umsetzungsplan — Diagnos D
 
-**Stand:** 16. Maerz 2026  
-**Status:** Planungsdokument
+**Stand:** April 2026  
+**Status:** Roadmap (In Planung)  
+**Aktueller Stand:** Phase 0 abgeschlossen (Begriffe, Rollenmodell), Phase 1 teilweise umgesetzt (health.py).
 
 ---
 

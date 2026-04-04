@@ -21,7 +21,7 @@ Analyse-Bausteine:
 Datenquelle: netzqualitaet/db/nq_YYYY-MM.db (aus nq_export.py)
 
 Cron-Empfehlung:
-  20 1 * * *  cd /home/admin/Dokumente/PVAnlage/pv-system && .venv/bin/python netzqualitaet/nq_analysis.py >> /tmp/nq_analysis.log 2>&1
+  20 1 * * *  cd <PV_REPO> && .venv/bin/python netzqualitaet/nq_analysis.py >> /tmp/nq_analysis.log 2>&1
 
 ABCD-Rollenmodell: Säule A (Analyse, read-only auf NQ-DB, write Ergebnistabellen).
 """

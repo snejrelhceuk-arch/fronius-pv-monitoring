@@ -1,4 +1,8 @@
 #!/bin/bash
+# ⚠️ VERALTET — Ersetzt durch scripts/monitor_health.sh + diagnos/health.py
+# Dieses Script bleibt als Schnelltest erhalten, ist aber nicht mehr
+# die primäre Monitoring-Lösung.
+#
 # Monitoring-Script für Fronius PV-System
 # Prüft Prozess-Status, Logs und System-Health
 

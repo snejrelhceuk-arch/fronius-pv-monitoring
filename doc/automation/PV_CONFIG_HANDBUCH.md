@@ -768,7 +768,7 @@ und es draußen kalt ist, den Heiz-Soll anheben oder auf Standard halten.
 Überstimmt Absenkung/Verschiebung per Kommando-Deduplizierung (höchster WP-Score).
 
 **Datenquellen:**
-- FBH-Status: Fritz!DECT Steckdose „Fußbodenheizung" (AIN 11657 0600249), State 0/1
+- FBH-Status: Fritz!DECT Steckdose „Fußbodenheizung" (AIN lt. fritz_config.json), State 0/1
 - Außentemperatur: WP-Sensor (Dimplex SIK 11 TES, Modbus Reg 1)
 
 **Score:** 50 (höchster aller WP-Regeln)

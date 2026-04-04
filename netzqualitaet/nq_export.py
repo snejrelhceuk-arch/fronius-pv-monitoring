@@ -9,7 +9,7 @@ Spalten: ts, f_netz, u_l1_l2, u_l2_l3, u_l3_l1, i_l1, i_l2, i_l3
 Auflösung: Original 3-Sekunden-Intervall (wie im SmartMeter)
 
 Cron-Empfehlung:
-  10 1 * * *  cd /home/admin/Dokumente/PVAnlage/pv-system && .venv/bin/python netzqualitaet/nq_export.py >> /tmp/nq_export.log 2>&1
+  10 1 * * *  cd <PV_REPO> && .venv/bin/python netzqualitaet/nq_export.py >> /tmp/nq_export.log 2>&1
 
 ABCD-Rollenmodell: Säule B (read-only auf Haupt-DB, write auf NQ-DB).
 """
