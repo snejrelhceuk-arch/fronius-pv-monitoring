@@ -1,0 +1,14 @@
+{
+    "_comment": "Netz-Schleifenimpedanz am Hausanschluss, gemessen 2026-04-02",
+    "_methode": "HP (ohmisch, L1) -> R direkt; WP (3-phasig, induktiv) -> X via Z_eff",
+    "_einheit": "alle Werte in Milliohm (mΩ)",
+    "R_mOhm": 163,
+    "X_mOhm": 251,
+    "Z_abs_mOhm": 299,
+    "R_X_ratio": 0.6,
+    "hp_phase": "L1",
+    "hp_delta_I_A": 7.9,
+    "messdatum": "2026-04-02",
+    "n_events_hp": 71,
+    "n_events_wp": 7
+}
