@@ -71,6 +71,7 @@ class DataCollector:
         self._collect_battery_settings(obs)
         self._collect_pv_today(obs)
         self._collect_wp_today(obs)
+        self._collect_wp_last30h(obs)
         self._collect_fritzdect(obs)
         self._collect_wp_modbus(obs)
 
@@ -338,6 +339,24 @@ class DataCollector:
                 obs.wp_today_kwh = round(row[0], 2)
         except Exception as e:
             LOG.debug(f"wp_today: {e}")
+        finally:
+            conn.close()
+
+    def _collect_wp_last30h(self, obs: ObsState):
+        """WP-Verbrauch der letzten 30 Stunden (für Pflichtlauf-Prüfung)."""
+        conn = self._get_conn()
+        if not conn:
+            return
+        try:
+            ts_30h_ago = int(time.time()) - 30 * 3600
+            row = conn.execute(
+                "SELECT SUM(W_Imp_WP_delta) / 1000.0 FROM data_1min WHERE ts >= ?",
+                (ts_30h_ago,)
+            ).fetchone()
+            if row and row[0] is not None:
+                obs.wp_last30h_kwh = round(row[0], 2)
+        except Exception as e:
+            LOG.debug(f"wp_last30h: {e}")
         finally:
             conn.close()
 

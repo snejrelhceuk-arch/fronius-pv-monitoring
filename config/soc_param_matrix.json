@@ -1632,19 +1632,38 @@
       "engine_zyklus": "fast"
     },
     "wp_pflichtlauf": {
-      "_doc": "Täglicher WP-Pflichtlauf: Heiz-Soll auf boost_temp_c (45°C, unter 50°C damit HP-Sensor nicht stört) anheben. Kompressor muss mindestens min_lauf_min (5min) tatsächlich laufen (wp_active=True). Warnung wenn WP nach Timeout nicht gestartet hat.",
+      "_doc": "WP-Pflichtlauf: Einmalige Morgenprüfung ob WP in letzten 30h gelaufen ist (wp_last30h_kwh). Falls nicht → Heiz-Boost auf 45°C. Selbstlaufend saisonal: Im Winter ergibt die 30h-Prüfung immer Verbrauch → Boost wird nie nötig. Nur im Sommer bei HP-Dominanz kann der Boost triggern.",
       "aktiv": true,
       "prioritaet": 2,
-      "beschreibung": "WP täglicher Pflichtlauf via Heiz-Boost (45°C, min 5min verifiziert)",
+      "beschreibung": "WP-Pflichtlauf: 30h-Verbrauchsprüfung morgens, Heiz-Boost nur wenn nötig",
       "parameter": {
-        "pflichtlauf_ab_h": {
-          "wert": 12,
+        "pruef_start_h": {
+          "wert": 9,
           "bereich": [
-            8,
-            16
+            7,
+            12
           ],
           "einheit": "h",
-          "beschreibung": "Ab dieser Uhrzeit: Pflichtlauf starten wenn WP heute noch nicht lief"
+          "beschreibung": "Beginn des Prüfungsfensters (einmalig pro Tag)"
+        },
+        "pruef_ende_h": {
+          "wert": 10,
+          "bereich": [
+            8,
+            13
+          ],
+          "einheit": "h",
+          "beschreibung": "Ende des Prüfungsfensters — nach dieser Uhrzeit keine Prüfung mehr"
+        },
+        "wp_min_30h_kwh": {
+          "wert": 0.5,
+          "bereich": [
+            0.1,
+            3.0
+          ],
+          "einheit": "kWh",
+          "obs_feld": "wp_last30h_kwh",
+          "beschreibung": "Schwellwert: WP-Verbrauch in 30h ab dem kein Boost nötig ist"
         },
         "boost_temp_c": {
           "wert": 45,

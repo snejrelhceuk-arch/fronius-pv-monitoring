@@ -88,6 +88,7 @@ class ObsState:
     wp_active: Optional[bool] = None      # WP läuft gerade (P_WP > Schwelle)
     wp_power_avg30_w: Optional[float] = None  # WP 30-min Mittelwert [W]
     wp_today_kwh: Optional[float] = None  # WP-Verbrauch heute [kWh]
+    wp_last30h_kwh: Optional[float] = None  # WP-Verbrauch letzte 30h [kWh]
     ev_power_avg30_w: Optional[float] = None  # EV 30-min Mittelwert [W]
     ww_temp_c: Optional[float] = None     # Warmwasserspeicher [°C] (WP Modbus Reg 3)
     wp_vorlauf_c: Optional[float] = None  # WP Vorlauf [°C] (WP Modbus Reg 5)
