@@ -386,22 +386,35 @@ class RegelKomfortReset(Regel):
 
     def __init__(self):
         self._frueh_reset_aktiv = False  # Hysterese-State für Früh-Reset (K4)
+        self._nacht_drain_entschieden = False  # True wenn Abend-Reset SOC_MIN-Skip beschlossen hat
 
     def _im_reset_fenster(self, obs: ObsState, matrix: dict) -> bool:
-        """Prüfe ob aktuelle Uhrzeit im Abend-Reset-Fenster liegt."""
+        """Prüfe ob aktuelle Uhrzeit im Abend-Reset-Fenster liegt.
+
+        Fenster: sunset(+offset) bis sunrise - NACHTLAST_FENSTER_H.
+        Danach übernimmt der Morgen-Algorithmus (RegelMorgenSocMin).
+
+        Korrektur 2026-04-04: Fenster-Ende war 'sunrise' — das führte dazu,
+        dass der Komfort-Reset in der Pre-Sunrise-Phase noch aktiv war und
+        bei SOC ≤ 25% die bewusste Nacht-Drain-Entscheidung rückgängig machte.
+        Jetzt endet das Fenster 3h vor Sunrise (= Nachtlast-Fenster-Beginn).
+        """
         now = datetime.now()
         hr = now.hour + now.minute / 60.0
         sunset = obs.sunset or 17.0
         sunrise = obs.sunrise or 7.0
         offset = get_param(matrix, self.regelkreis, 'reset_nach_sunset_h', 0)
         start = sunset + offset
+        # Fenster endet 3h vor Sunrise — ab dort gehört die SOC-Steuerung
+        # dem Morgen-Algorithmus.
+        ende = sunrise - NACHTLAST_FENSTER_H
 
         if start >= 24:
             start -= 24
-            return hr >= start or hr < sunrise
+            return hr >= start or hr < ende
         if hr >= start:
             return True
-        if hr < sunrise:
+        if hr < ende:
             return True
         return False
 
@@ -410,6 +423,13 @@ class RegelKomfortReset(Regel):
 
         Verhindert Konflikte mit der Morgen-Öffnung (SOC_MIN=5%), damit
         SOC_MIN in der kritischen Vor-Sunrise-Phase nicht auf 25% zurückspringt.
+
+        Erweitert (2026-04-02): Auch im Nachtlast-Fenster (SR-3h bis SR)
+        sperren, wenn SOC_MIN bereits auf Stress steht. Die Morgen-Öffnung
+        kann über den Nachtlast-Bypass ab SR-3h triggern; ohne diesen Guard
+        entsteht ein Ping-Pong zwischen Morgen-Öffnung (→5%) und
+        Komfort-Reset (→25%), weil der HALTE-MODUS der Morgen-Öffnung
+        leere Aktionen erzeugt und die Engine zum Komfort-Reset cascadiert.
         """
         if (obs.forecast_quality or '').lower() != 'gut':
             return False
@@ -420,6 +440,16 @@ class RegelKomfortReset(Regel):
 
         now_h = _jetzt_h()
         if now_h > (sunrise - 1.0):
+            return True
+
+        # Morgen-Öffnung kann via Nachtlast-Bypass ab sunrise-3h triggern.
+        # Wenn SOC_MIN bereits auf Stress steht (Morgen-Öffnung hat gewirkt
+        # oder Nacht-Drain war korrekt), Reset sperren.
+        stress = get_param(matrix, 'morgen_soc_min', 'stress_min_pct', 5)
+        if (obs.soc_min is not None and obs.soc_min <= stress
+                and (sunrise - NACHTLAST_FENSTER_H) <= now_h < sunrise):
+            LOG.info("komfort_reset: Morgen-Öffnung aktiv (SOC_MIN=%s%% ≤ %s%%), "
+                     "Reset gesperrt im Nachtlast-Fenster", obs.soc_min, stress)
             return True
 
         return _nachtlast_oeffnung_noetig(obs, matrix)
@@ -507,6 +537,9 @@ class RegelKomfortReset(Regel):
 
         Ist SOC bereits ≤ komfort_min, wird IMMER auf Komfort zurückgesetzt
         (Grid-Ladung), um stundenlangen Stress-Zustand zu vermeiden.
+        AUSNAHME: Wurde bereits eine 'draint über Nacht'-Entscheidung
+        getroffen (_nacht_drain_entschieden), bleibt diese gültig —
+        das planmäßige Erreichen von SOC ≤ 25% ist erwartet.
 
         Returns:
             True → SOC_MIN-Reset überspringen (SOC hoch + morgen genug PV).
@@ -514,6 +547,15 @@ class RegelKomfortReset(Regel):
         komfort_min = get_param(matrix, self.regelkreis, 'komfort_min_pct', 25)
         if obs.soc_min is None or obs.soc_min >= komfort_min:
             return False  # SOC_MIN bereits auf Komfort → kein Thema
+
+        # ── Drain-Entscheidung steht: SOC sinkt planmäßig ──
+        # Wenn abends entschieden wurde "draint über Nacht", ist das
+        # Erreichen von SOC ≤ 25% erwartet und kein Grund für Reset.
+        if self._nacht_drain_entschieden:
+            LOG.debug("komfort_reset: Nacht-Drain-Entscheidung aktiv "
+                      "→ SOC_MIN bleibt bei %s%% (planmäßiger Drain)",
+                      obs.soc_min)
+            return True
 
         # ── SOC-Prüfung: Batterie bereits im Stress-Bereich? ──
         # Wenn SOC ≤ komfort_min → Batterie ist leer, würde stundenlang
@@ -532,6 +574,7 @@ class RegelKomfortReset(Regel):
             LOG.info(f"komfort_reset: SOC {soc:.0f}% > {komfort_min}%, "
                      f"Morgen-Prognose {morgen_kwh:.1f} kWh ≥ {schwelle:.0f} kWh "
                      f"→ SOC_MIN-Reset übersprungen (draint über Nacht)")
+            self._nacht_drain_entschieden = True
             return True
 
         if morgen_kwh is not None:
@@ -545,6 +588,12 @@ class RegelKomfortReset(Regel):
     def bewerte(self, obs: ObsState, matrix: dict) -> int:
         if not ist_aktiv(matrix, self.regelkreis):
             return 0
+
+        # ── Drain-Entscheidung zurücksetzen wenn Morgen-Phase SOC_MIN angehoben hat ──
+        if self._nacht_drain_entschieden:
+            komfort_min = get_param(matrix, self.regelkreis, 'komfort_min_pct', 25)
+            if obs.soc_min is not None and obs.soc_min >= komfort_min:
+                self._nacht_drain_entschieden = False
 
         # ── SOC-Extern-Toleranz ──
         soc_extern_tracker.aktualisiere(obs, matrix)
