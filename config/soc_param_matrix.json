@@ -1024,6 +1024,15 @@
           "obs_feld": "forecast_power_profile",
           "beschreibung": "Prognose muss ≥ diesen Wert in kommenden Stunden zeigen"
         },
+        "drain_prognose_horizont_h": {
+          "wert": 3.0,
+          "bereich": [
+            2.0,
+            5.0
+          ],
+          "einheit": "h",
+          "beschreibung": "Prognose-Horizont ab Sunrise: nur Stunden bis sunrise + X werden geprüft. Nachmittagssonne allein rechtfertigt keinen Morgen-Drain."
+        },
         "drain_fenster_ende_h": {
           "wert": 10.0,
           "bereich": [

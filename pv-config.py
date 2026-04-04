@@ -1229,6 +1229,7 @@ def _speichere_fritz_config(cfg: dict):
             json.dump(save_cfg, f, indent=2, ensure_ascii=False)
             f.write('\n')
         os.replace(tmp, FRITZ_CONFIG_PATH)
+        _fix_ownership(FRITZ_CONFIG_PATH)
     except Exception as e:
         wt_msgbox(f'Fehler beim Speichern:\n\n{str(e)[:200]}')
         if os.path.exists(tmp):
@@ -1696,6 +1697,21 @@ def _notify_daemon_reload():
 # Matrix speichern (atomar)
 # ═══════════════════════════════════════════════════════════════
 
+def _fix_ownership(path: str):
+    """Datei-Owner auf SUDO_USER zurücksetzen wenn unter sudo gelaufen.
+
+    Verhindert root:root-Ownership bei Config-Dateien die mit
+    sudo python3 pv-config.py geschrieben werden.
+    """
+    sudo_uid = os.environ.get('SUDO_UID')
+    sudo_gid = os.environ.get('SUDO_GID')
+    if sudo_uid and sudo_gid:
+        try:
+            os.chown(path, int(sudo_uid), int(sudo_gid))
+        except OSError:
+            pass
+
+
 def _speichere_matrix(matrix: dict):
     """Matrix atomar speichern (write-to-temp + rename)."""
     # Zeitstempel aktualisieren
@@ -1716,6 +1732,7 @@ def _speichere_matrix(matrix: dict):
             json.dump(matrix, f, indent=2, ensure_ascii=False)
             f.write('\n')
         os.replace(tmp_path, DEFAULT_MATRIX_PATH)
+        _fix_ownership(DEFAULT_MATRIX_PATH)
         _notify_daemon_reload()
     except Exception as e:
         wt_msgbox(f'Fehler beim Speichern:\n\n{str(e)[:200]}')
