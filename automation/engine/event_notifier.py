@@ -8,7 +8,8 @@ Prüft ObsState gegen konfigurierte Schwellwerte und sendet einmalig
 Sunset-Tagesbericht:
   Eigenständige Zusammenfassung der letzten ~24h (Sunset gestern → Sunset heute).
   Wird beim Komfort-Reset (= Sunset-Erkennung) ausgelöst.
-  Datenquelle: hourly_data direkt — KEINE Vermischung mit Monitoring/Analyse.
+    Energiedaten aus hourly_data direkt; read-only Diagnos-Snapshot optional
+    als Zusatz zum Versandzeitpunkt.
 
 Konfiguration:
   config.py:
@@ -40,6 +41,8 @@ from typing import Optional
 import config as app_config
 from automation.engine import credential_store
 from automation.engine.obs_state import ObsState
+from diagnos.health import run_all as run_diagnos_health
+from diagnos.integrity import run_all as run_diagnos_integrity
 
 LOG = logging.getLogger('event_notifier')
 
@@ -226,7 +229,9 @@ class EventNotifier:
                 LOG.warning("Sunset-Bericht: Keine Daten verfügbar")
                 return False
 
-            koerper = self._formatiere_sunset_bericht(daten, obs)
+            health_data = self._hole_diagnos_snapshot()
+            integrity_data = self._hole_integrity_snapshot()
+            koerper = self._formatiere_sunset_bericht(daten, obs, health_data, integrity_data)
             self._sende_sunset_mail(koerper)
             self._gesendet[event_key] = heute
             LOG.info(f"Sunset-Tagesbericht gesendet → {self._email}")
@@ -345,10 +350,307 @@ class EventNotifier:
         finally:
             conn.close()
 
-    def _formatiere_sunset_bericht(self, d: dict, obs: ObsState) -> str:
-        """Formatiere den Sunset-Bericht als E-Mail-Text."""
+    def _hole_diagnos_snapshot(self) -> Optional[dict]:
+        """Lese einen kompakten read-only Diagnos-Snapshot zum Versandzeitpunkt."""
+        try:
+            return run_diagnos_health()
+        except Exception as e:
+            LOG.warning(f"Sunset-Bericht: Diagnos-Snapshot nicht verfügbar: {e}")
+            return None
+
+    def _hole_integrity_snapshot(self) -> Optional[dict]:
+        """Lese einen kompakten read-only Diagnos-Integritätssnapshot zum Versandzeitpunkt."""
+        try:
+            return run_diagnos_integrity()
+        except Exception as e:
+            LOG.warning(f"Sunset-Bericht: Integritäts-Snapshot nicht verfügbar: {e}")
+            return None
+
+    def pruefe_integrity_alarme(self) -> list[str]:
+        """Prüfe Integrity-Daten auf sofortige Warn-Bedingungen.
+
+        Sofort-Alarme (1× pro Tag pro Alarm-Key):
+          - collector_inaktiv: last_poll_age_s > 300
+          - collector_fehlerstrang: consecutive_errors >= 5
+          - reconnect_fehlgeschlagen: last_reconnect.success == False
+
+        Returns: Liste ausgelöster Alarm-Keys.
+        """
+        if not self._email:
+            return []
+
+        try:
+            integrity = run_diagnos_integrity()
+        except Exception as e:
+            LOG.debug(f"Integrity-Alarm-Check fehlgeschlagen: {e}")
+            return []
+
+        checks = integrity.get('checks', [])
+        attachment = next(
+            (c for c in checks if c.get('check') == 'integrity:fronius_attachment_state'),
+            {},
+        )
+
+        ausgeloest = []
+
+        # Alarm 1: Collector inaktiv
+        poll_age = attachment.get('last_poll_age_s')
+        if poll_age is not None and poll_age > 300:
+            alarm_key = 'integrity:collector_inaktiv'
+            if self._sende_integrity_alarm(
+                alarm_key,
+                f'Collector seit {poll_age}s inaktiv (>300s)',
+                attachment,
+            ):
+                ausgeloest.append(alarm_key)
+
+        # Alarm 2: Fehlerstrang
+        consec = attachment.get('consecutive_errors', 0)
+        if consec >= 5:
+            alarm_key = 'integrity:collector_fehlerstrang'
+            if self._sende_integrity_alarm(
+                alarm_key,
+                f'{consec} aufeinanderfolgende Poll-Fehler',
+                attachment,
+            ):
+                ausgeloest.append(alarm_key)
+
+        # Alarm 3: Reconnect fehlgeschlagen
+        reconnect = attachment.get('last_reconnect')
+        if reconnect and not reconnect.get('success', True):
+            alarm_key = 'integrity:reconnect_fehlgeschlagen'
+            if self._sende_integrity_alarm(
+                alarm_key,
+                f'Reconnect-Retry fehlgeschlagen (Trigger: {reconnect.get("trigger", "?")})',
+                attachment,
+            ):
+                ausgeloest.append(alarm_key)
+
+        return ausgeloest
+
+    def _sende_integrity_alarm(self, alarm_key: str, text: str, attachment: dict) -> bool:
+        """Sende Integrity-Warn-Mail (dedupliziert 1× pro Tag pro Alarm-Key)."""
+        heute = date.today().isoformat()
+        if self._gesendet.get(alarm_key) == heute:
+            return False
+
         now_str = datetime.now().strftime('%d.%m.%Y %H:%M')
         hostname = socket.gethostname()
+
+        koerper = (
+            f'Integrity-Alarm von {hostname}\n'
+            f'Zeitpunkt: {now_str}\n'
+            f'\n'
+            f'Alarm:     {text}\n'
+            f'\n'
+            f'── Attachment-State ──\n'
+            f'WR-Version F1:     {attachment.get("inverter_vr", "—")}\n'
+            f'Collector live:    {attachment.get("collector_live", "—")}\n'
+            f'Letzter Poll:      {attachment.get("last_poll_age_s", "—")}s\n'
+            f'Fehler in Folge:   {attachment.get("consecutive_errors", 0)}\n'
+            f'Reconnect:         {attachment.get("last_reconnect") or "—"}\n'
+            f'Assessment:        {attachment.get("assessment", "—")}\n'
+            f'\n'
+            f'Diese Meldung wird 1× pro Tag pro Alarm gesendet.\n'
+        )
+
+        betreff = f'[PV-System WARN] {text}'
+        msg = MIMEText(koerper, 'plain', 'utf-8')
+        msg['Subject'] = betreff
+        msg['From'] = self._from
+        msg['To'] = self._email
+        msg['X-PV-Event'] = alarm_key
+
+        try:
+            smtp_pass = credential_store.lade('smtp_pass')
+            if self._smtp_user and not smtp_pass:
+                LOG.error(f"Integrity-Alarm FEHLGESCHLAGEN: {alarm_key} — SMTP-Passwort fehlt")
+                return False
+
+            if self._smtp_port == 465:
+                smtp = smtplib.SMTP_SSL(self._smtp_host, self._smtp_port, timeout=15)
+            else:
+                smtp = smtplib.SMTP(self._smtp_host, self._smtp_port, timeout=15)
+                if self._smtp_port == 587:
+                    smtp.starttls()
+
+            try:
+                if self._smtp_user and smtp_pass:
+                    smtp.login(self._smtp_user, smtp_pass)
+                smtp.sendmail(self._from, [self._email], msg.as_string())
+            finally:
+                try:
+                    smtp.quit()
+                except Exception:
+                    pass
+
+            self._gesendet[alarm_key] = heute
+            LOG.warning(f"Integrity-Alarm gesendet: {alarm_key} → {self._email}")
+            return True
+        except Exception as e:
+            LOG.error(f"Integrity-Alarm FEHLGESCHLAGEN: {alarm_key}: {e}")
+            return False
+
+    def _format_diagnos_summary(self, health_data: Optional[dict]) -> list[str]:
+        """Formatiere Diagnos-Daten kompakt für den Tagesbericht."""
+        if not health_data:
+            return [
+                '',
+                'Systemgesundheit (Diagnos D)',
+                '  Snapshot:            nicht verfügbar',
+            ]
+
+        severity_map = {'ok': 'OK', 'warn': 'WARN', 'crit': 'KRIT', 'fail': 'FAIL'}
+        checks = health_data.get('checks', [])
+        by_name = {c.get('check'): c for c in checks}
+        bad_checks = [c for c in checks if c.get('severity') in ('warn', 'crit', 'fail')]
+
+        def _fmt_sev(value: Optional[str]) -> str:
+            return severity_map.get(value or '', value or '—')
+
+        def _fmt_age_s(check_name: str) -> str:
+            check = by_name.get(check_name, {})
+            age_s = check.get('age_s')
+            if age_s is None:
+                return '—'
+            if age_s < 3600:
+                return f'{int(age_s // 60)} min'
+            return f'{age_s / 3600:.1f} h'
+
+        def _fmt_value(check_name: str, key: str, unit: str = '') -> str:
+            check = by_name.get(check_name, {})
+            value = check.get(key)
+            if value is None:
+                return '—'
+            return f'{value}{unit}'
+
+        lines = [
+            '',
+            'Systemgesundheit (Diagnos D)',
+            f'  Gesamt:              {_fmt_sev(health_data.get("overall"))}',
+            f'  CPU / RAM / Disk:    {_fmt_value("cpu_temp", "value_c", "°C")} / '
+            f'{_fmt_value("ram", "used_pct", "%")} / {_fmt_value("disk_root", "used_pct", "%")}',
+            f'  Freshness raw/1m:    {_fmt_age_s("freshness:raw_data")} / {_fmt_age_s("freshness:data_1min")}',
+            f'  Freshness 15m/day:   {_fmt_age_s("freshness:data_15min")} / {_fmt_age_s("freshness:daily_data")}',
+            f'  Lokales GFS-Backup:  {_fmt_value("backup_local_gfs_daily", "age_h", " h")}',
+        ]
+
+        mirror_check = by_name.get('mirror_sync_age')
+        if mirror_check and not mirror_check.get('skipped'):
+            lines.append(
+                f'  Mirror-Sync:         {_fmt_value("mirror_sync_age", "age_s", " s")} '
+                f'({_fmt_sev(mirror_check.get("severity"))})'
+            )
+
+        if bad_checks:
+            lines.append('')
+            lines.append('Auffaelligkeiten')
+            for check in bad_checks[:6]:
+                detail = check.get('error')
+                if detail is None and 'age_s' in check:
+                    detail = f'age={check.get("age_s")}s'
+                elif detail is None and 'age_h' in check:
+                    detail = f'age={check.get("age_h")}h'
+                elif detail is None and 'state' in check:
+                    detail = f'state={check.get("state")}'
+                elif detail is None:
+                    detail = 'siehe Diagnos-Report'
+                lines.append(f'  [{_fmt_sev(check.get("severity"))}] {check.get("check")}: {detail}')
+
+        return lines
+
+    def _format_integrity_summary(self, integrity_data: Optional[dict]) -> list[str]:
+        """Formatiere Diagnos-Integritätsdaten kompakt für den Tagesbericht."""
+        if not integrity_data:
+            return [
+                '',
+                'Datenintegritaet (Diagnos D)',
+                '  Snapshot:            nicht verfügbar',
+            ]
+
+        severity_map = {'ok': 'OK', 'warn': 'WARN', 'crit': 'KRIT', 'fail': 'FAIL'}
+        checks = integrity_data.get('checks', [])
+        by_name = {c.get('check'): c for c in checks}
+        bad_checks = [c for c in checks if c.get('severity') in ('warn', 'crit', 'fail')]
+
+        def _fmt_sev(value: Optional[str]) -> str:
+            return severity_map.get(value or '', value or '—')
+
+        attachment = by_name.get('integrity:fronius_attachment_state', {})
+
+        # Collector-Liveness
+        poll_age = attachment.get('last_poll_age_s')
+        if poll_age is not None:
+            collector_str = f'aktiv (Poll vor {poll_age}s)' if attachment.get('collector_live') else f'INAKTIV seit {poll_age}s!'
+        else:
+            collector_str = '—'
+
+        consec = attachment.get('consecutive_errors', 0)
+        reconnect = attachment.get('last_reconnect')
+
+        lines = [
+            '',
+            'Datenintegritaet (Diagnos D)',
+            f'  Gesamt:              {_fmt_sev(integrity_data.get("overall"))}',
+            f'  Tagesbilanz:         {_fmt_sev((by_name.get("integrity:daily_energy_balance") or {}).get("severity"))}',
+            f'  Monats-/Jahresrolle: {_fmt_sev((by_name.get("integrity:monthly_rollup") or {}).get("severity"))} / '
+            f'{_fmt_sev((by_name.get("integrity:yearly_rollup") or {}).get("severity"))}',
+            f'  WR-Version F1:       {attachment.get("inverter_vr") or "—"}',
+            f'  WR-Anknuepfungen:    {attachment.get("assessment") or "—"}',
+            f'  WR-API / Batt-API:   '
+            f'{"OK" if attachment.get("internal_api_ok") else "—"} / '
+            f'{"OK" if attachment.get("battery_api_ok") else "—"}',
+            f'  Collector:           {collector_str}',
+        ]
+
+        if consec > 0:
+            lines.append(f'  Fehlerstrang:        {consec} Polls in Folge')
+
+        if reconnect:
+            rc_ok = 'OK' if reconnect.get('success') else 'FEHLER'
+            lines.append(
+                f'  Letzter Reconnect:   {reconnect.get("trigger", "?")} → {rc_ok}'
+            )
+
+        gap_checks = [
+            by_name.get('integrity:gaps:raw_data'),
+            by_name.get('integrity:gaps:data_1min'),
+            by_name.get('integrity:gaps:data_15min'),
+            by_name.get('integrity:gaps:hourly_data'),
+        ]
+        for gap_check in [c for c in gap_checks if c]:
+            if gap_check.get('gap_count', 0) <= 0:
+                continue
+            lines.append('')
+            lines.append(
+                f'  [{_fmt_sev(gap_check.get("severity"))}] {gap_check.get("check")}: '
+                f'{gap_check.get("gap_count")} Lücke(n), max {gap_check.get("max_gap_s")} s'
+            )
+            if gap_check.get('followup_assessment'):
+                lines.append(f'    Folge: {gap_check.get("followup_assessment")}')
+            notes = gap_check.get('neutralization_notes') or []
+            for note in notes[:3]:
+                lines.append(f'    Kontext: {note}')
+
+        if not bad_checks:
+            lines.append('')
+            lines.append('  Keine Integritätsabweichungen im aktuellen Prüffenster.')
+
+        lines += [
+            '',
+            '  Referenzbetrieb: Regelmäßiger Solarweb-Abgleich bis 31.12.2026 vorgesehen.',
+        ]
+
+        return lines
+
+    def _formatiere_sunset_bericht(
+        self,
+        d: dict,
+        obs: ObsState,
+        health_data: Optional[dict] = None,
+        integrity_data: Optional[dict] = None,
+    ) -> str:
+        """Formatiere den Sunset-Bericht als E-Mail-Text."""
         start_str = datetime.fromtimestamp(d['start_ts']).strftime('%d.%m. %H:%M')
         end_str = datetime.fromtimestamp(d['end_ts']).strftime('%d.%m. %H:%M')
 
@@ -361,9 +663,6 @@ class EventNotifier:
             if val is None:
                 return '—'
             return f"{val:.1f}%"
-
-        sunrise_str = f"{d['sunrise_h']:.1f}h" if d.get('sunrise_h') else '?'
-        sunset_str = f"{d['sunset_h']:.1f}h" if d.get('sunset_h') else '?'
 
         # Verbrauch = PV + Bezug - Einspeisung
         verbrauch = d['pv_kwh'] + d['netzbezug_kwh'] - d['einspeisung_kwh']
@@ -395,6 +694,9 @@ class EventNotifier:
             zeilen.append(
                 f'  Wattpilot (EV):       {_fmt(d["wattpilot_kwh"])}'
             )
+
+        zeilen += self._format_diagnos_summary(health_data)
+        zeilen += self._format_integrity_summary(integrity_data)
 
         zeilen += [
             '',

@@ -17,14 +17,23 @@ import sqlite3
 import subprocess
 import sys
 import time
+from glob import glob
 from datetime import datetime, timezone
 from typing import List, Optional
 
 from diagnos.config import (
+    BACKUP_CRIT_HOURS,
+    BACKUP_WARN_HOURS,
     CPU_TEMP_CRIT_C, CPU_TEMP_WARN_C,
     CRIT, DB_PATH, DISK_CRIT_PCT, DISK_WARN_PCT, FAIL,
+    FRESHNESS_TABLES,
     FRESHNESS_CRIT_S, FRESHNESS_WARN_S,
+    LOCAL_GFS_DAILY_GLOB,
+    MIRROR_CRIT_S,
+    MIRROR_SYNC_MARKER,
+    MIRROR_WARN_S,
     OK, RAM_WARN_PCT, SERVICES, WARN,
+    ROLE_FILE,
 )
 
 # ═══════════════════════════════════════════════════════════
@@ -212,7 +221,12 @@ def _db_readonly():
         return None
 
 
-def check_freshness(table: str = 'raw_data', ts_col: str = 'ts') -> dict:
+def check_freshness(
+    table: str = 'raw_data',
+    ts_col: str = 'ts',
+    warn_s: float = FRESHNESS_WARN_S,
+    crit_s: float = FRESHNESS_CRIT_S,
+) -> dict:
     """Alter des letzten Eintrags in einer Tabelle (ts = Unix-Epoch REAL)."""
     conn = _db_readonly()
     if conn is None:
@@ -229,9 +243,9 @@ def check_freshness(table: str = 'raw_data', ts_col: str = 'ts') -> dict:
         epoch = float(row[0])
         age_s = time.time() - epoch
         severity = OK
-        if age_s > FRESHNESS_CRIT_S:
+        if age_s > crit_s:
             severity = CRIT
-        elif age_s > FRESHNESS_WARN_S:
+        elif age_s > warn_s:
             severity = WARN
 
         return {
@@ -248,6 +262,73 @@ def check_freshness(table: str = 'raw_data', ts_col: str = 'ts') -> dict:
             conn.close()
         except Exception:
             pass
+
+
+def _read_role() -> str:
+    """Liest die lokale Host-Rolle aus .role (Fallback: primary)."""
+    try:
+        if not os.path.exists(ROLE_FILE):
+            return 'primary'
+        with open(ROLE_FILE, 'r', encoding='utf-8') as f:
+            role = f.readline().strip().lower()
+        return role if role in ('primary', 'failover') else 'primary'
+    except OSError:
+        return 'primary'
+
+
+def check_mirror_sync_age() -> dict:
+    """Prüft Alter des Mirror-Sync-Markers (nur für Failover relevant)."""
+    role = _read_role()
+    if role != 'failover':
+        return {
+            'check': 'mirror_sync_age',
+            'role': role,
+            'severity': OK,
+            'skipped': True,
+            'detail': 'nur auf failover relevant',
+        }
+
+    if not os.path.exists(MIRROR_SYNC_MARKER):
+        return {
+            'check': 'mirror_sync_age',
+            'role': role,
+            'severity': CRIT,
+            'error': 'Sync-Marker fehlt',
+        }
+
+    try:
+        age_s = time.time() - os.path.getmtime(MIRROR_SYNC_MARKER)
+        return {
+            'check': 'mirror_sync_age',
+            'role': role,
+            'age_s': round(age_s),
+            'severity': _classify(age_s, MIRROR_WARN_S, MIRROR_CRIT_S),
+        }
+    except OSError as exc:
+        return {'check': 'mirror_sync_age', 'role': role, 'severity': FAIL, 'error': str(exc)}
+
+
+def check_local_gfs_backup_age() -> dict:
+    """Prüft Alter des jüngsten lokalen GFS-Daily-Backups."""
+    try:
+        files = [p for p in glob(LOCAL_GFS_DAILY_GLOB) if os.path.isfile(p)]
+        if not files:
+            return {
+                'check': 'backup_local_gfs_daily',
+                'severity': WARN,
+                'error': 'Kein lokales Daily-GFS-Backup gefunden',
+            }
+
+        newest = max(files, key=os.path.getmtime)
+        age_h = (time.time() - os.path.getmtime(newest)) / 3600.0
+        return {
+            'check': 'backup_local_gfs_daily',
+            'latest_file': os.path.basename(newest),
+            'age_h': round(age_h, 1),
+            'severity': _classify(age_h, BACKUP_WARN_HOURS, BACKUP_CRIT_HOURS),
+        }
+    except OSError as exc:
+        return {'check': 'backup_local_gfs_daily', 'severity': FAIL, 'error': str(exc)}
 
 
 # ═══════════════════════════════════════════════════════════
@@ -270,8 +351,12 @@ def run_all() -> dict:
     checks.extend(check_all_services())
 
     # Freshness
-    checks.append(check_freshness('raw_data'))
-    checks.append(check_freshness('data_1min'))
+    for table, ts_col, warn_s, crit_s in FRESHNESS_TABLES:
+        checks.append(check_freshness(table, ts_col, warn_s, crit_s))
+
+    # Backup / Failover-Mirror
+    checks.append(check_mirror_sync_age())
+    checks.append(check_local_gfs_backup_age())
 
     # Gesamtbewertung
     severity_order = {OK: 0, WARN: 1, CRIT: 2, FAIL: 3}

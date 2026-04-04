@@ -241,6 +241,45 @@ def _save_attachment_state():
         logging.warning(f"Attachment-State speichern fehlgeschlagen: {e}")
 
 
+# Gedrosselter Save: attachment_state alle 60s persistieren (nicht bei jedem 3s-Poll)
+_last_attachment_save_ts = 0
+_ATTACHMENT_SAVE_INTERVAL = 60
+
+
+def _update_poll_success():
+    """Merke letzten erfolgreichen Poll-Zeitpunkt (in-memory, Save gedrosselt)."""
+    global _last_attachment_save_ts
+    now = int(time.time())
+    with attachment_state_lock:
+        attachment_state['last_successful_poll_ts'] = now
+        attachment_state['consecutive_errors'] = 0
+    if now - _last_attachment_save_ts >= _ATTACHMENT_SAVE_INTERVAL:
+        _save_attachment_state()
+        _last_attachment_save_ts = now
+
+
+def _update_poll_error():
+    """Inkrementiere Fehlerzähler (in-memory, Save nur bei Schwelle)."""
+    with attachment_state_lock:
+        prev = attachment_state.get('consecutive_errors', 0)
+        attachment_state['consecutive_errors'] = prev + 1
+    # Sofort persistieren bei erster Fehlersträhne (>= 3)
+    if prev + 1 == 3:
+        _save_attachment_state()
+
+
+def _update_reconnect_event(trigger: str, success: bool):
+    """Persistiere Reconnect-Event sofort (selten, wichtig)."""
+    now = int(time.time())
+    with attachment_state_lock:
+        attachment_state['last_reconnect_event'] = {
+            'ts': now,
+            'trigger': trigger,
+            'success': success,
+        }
+    _save_attachment_state()
+
+
 def _safe_common_value(devices, key, field):
     try:
         return devices.get(key, {}).get('common', {}).get(field, {}).get('value')
@@ -887,27 +926,32 @@ def poll_once():
             return False
 
         if missing_critical:
+            trigger = ','.join(missing_critical)
             logging.warning(
                 "Kritische SunSpec-Daten fehlen (%s) - Reconnect-Retry",
-                ','.join(missing_critical)
+                trigger
             )
             with modbus_lock:
                 client.close()
                 client = RawModbusClient(IP_ADDRESS, port=PORT, timeout=5.0)
                 if not client.connect():
                     logging.error("Modbus Reconnect Failed nach fehlendem Header")
+                    _update_reconnect_event(trigger, success=False)
                     return False
 
             time.sleep(0.1)
             devices, missing_critical_retry = _read_poll_devices(client)
             if devices is None:
+                _update_reconnect_event(trigger, success=False)
                 return False
             if missing_critical_retry:
                 logging.error(
                     "Kritische SunSpec-Daten weiterhin fehlend (%s) - Poll verworfen",
                     ','.join(missing_critical_retry)
                 )
+                _update_reconnect_event(trigger, success=False)
                 return False
+            _update_reconnect_event(trigger, success=True)
         
         # Batterieleistung berechnen
         def get_val(dev_key, model_key, field_key, default=0):
@@ -1017,10 +1061,14 @@ def poll_once():
         if int(poll_end) % 60 < POLL_INTERVAL:
             save_energy_state()
         
+        # Erfolgreichen Poll im Attachment-State tracken (gedrosselt)
+        _update_poll_success()
+        
         return True
         
     except Exception as e:
         logging.error(f"Poll Error: {e}")
+        _update_poll_error()
         return False
     
     finally:

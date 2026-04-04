@@ -1,6 +1,8 @@
 {
+  "consecutive_errors": 0,
   "initialized_ts": 1775233661,
-  "last_seen_ts": 1775233661,
+  "last_seen_ts": 1775328259,
+  "last_successful_poll_ts": 1775328443,
   "version_snapshot": {
     "inverter_sn": "35237382",
     "inverter_vr": "1.40.8-1",
