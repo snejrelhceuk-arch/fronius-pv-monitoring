@@ -426,6 +426,9 @@ class DataCollector:
                     obs.heizpatrone_power_w = power_w
                     # energy_wh → today_kwh (wird später aus Aggregation gefüllt)
                 
+                elif dev_id == 'fussbodenheizung':
+                    obs.fbh_aktiv = state_1
+
                 elif dev_id == 'klimaanlage':
                     obs.klima_aktiv = state_1
                     obs.klima_power_w = power_w
@@ -516,6 +519,8 @@ class DataCollector:
                 obs.wp_ww_soll_c = wp['ww_soll']
             if wp.get('heiz_soll') is not None:
                 obs.wp_heiz_soll_c = wp['heiz_soll']
+            if wp.get('aussen_temp') is not None:
+                obs.wp_aussen_temp_c = wp['aussen_temp']
 
             self._wp_modbus_cache_ts = now
 

@@ -24,6 +24,13 @@ Version 1.6 — Stand: 14. März 2026
    - [4.9 wattpilot_battschutz — EV-Ladeschutz](#49-wattpilot_battschutz--ev-ladeschutz-priorität-1)
    - [4.10 heizpatrone — HP-Burst-Steuerung](#410-heizpatrone--hp-burst-steuerung-priorität-2)
   - [4.11 klimaanlage — Temperatur- und Prognosesteuerung](#411-klimaanlage--temperatur--und-prognosesteuerung-priorität-2)
+   - [4.12 ww_absenkung — WW-Nachtabsenkung](#412-ww_absenkung--ww-nachtabsenkung-priorität-2)
+   - [4.13 heiz_absenkung — Heiz-Nachtabsenkung](#413-heiz_absenkung--heiz-nachtabsenkung-priorität-2)
+   - [4.14 ww_verschiebung — WW-Bereitung verschieben](#414-ww_verschiebung--ww-bereitung-verschieben-priorität-2)
+   - [4.15 heiz_verschiebung — Heiz-Soll verschieben](#415-heiz_verschiebung--heiz-soll-verschieben-priorität-2)
+   - [4.16 ww_boost — WW-Soll bei PV-Überschuss](#416-ww_boost--ww-soll-bei-pv-überschuss-anheben-priorität-2)
+   - [4.17 wp_pflichtlauf — WP Täglicher Pflichtlauf](#417-wp_pflichtlauf--wp-täglicher-pflichtlauf-priorität-2)
+   - [4.18 heiz_bedarf — FBH-Heizbedarf nach Außentemperatur](#418-heiz_bedarf--fbh-heizbedarf-nach-außentemperatur-priorität-2)
 5. [Menü 3: Batterie-Automation](#5-menü-3-batterie-automation)
 6. [Menü 4: System-Status](#6-menü-4-system-status)
 7. [Menü 5: Solar-Prognose](#7-menü-5-solar-prognose)
@@ -412,7 +419,7 @@ Wenn nachmittags (ab `frueh_reset_ab_h`) die PV-Restprognose unter `erholung_sch
 | Phase | Bedingung | Burst-Dauer | Zweck |
 |-------|-----------|-------------|-------|
 | **0 — Morgen-Drain** | ab sunrise−1h, sunshine_h ≥ 5, SOC > 20%, Prognose gut, Forecast ≥ 4 kW | 45 Min. | Batterie gezielt leeren — Warmwasser als Senke |
-| **1 — Vormittag** | **SOC ≥ MAX−5%**, rest_h > 5, rest_kwh > 20, P_Batt > 3 kW | 30 Min. | Überlaufventil: Batterie am Deckel, HP nutzt Restkapazität |
+| **1 — Vormittag** | **SOC ≥ MAX−5%**, rest_h > 5, rest_kwh ≥ `potenzial_maessig_kwh` (Standard 20), P_Batt > 3 kW | 30 Min. | Überlaufventil: Batterie am Deckel, HP nutzt Restkapazität |
 | **1b — Nulleinspeiser-Probe** | SOC ≥ MAX−2%, Batt idle, Forecast ≥ HP-Last | 120 s (Probe) → 30 Min. bei Erfolg | WR-Drosselung erkennen, stille PV-Kapazität nutzen |
 | **2 — Mittags** | **SOC ≥ MAX−5%**, P_Batt > min_lade, rest_kwh deckt Batt + Reserve | 30 Min. | Hauptphase bei Batterie-Sättigung |
 | **3 — Nachmittags** | **SOC ≥ MAX−5%**, rest_h < 3 und ≥ 2, konservativ | 15 Min. | Kurze Restzeit → nur kurze Bursts |
@@ -471,10 +478,12 @@ die Regeln daran an:
 
 | Stufe | Schwelle | Parallel-Betrieb | Batterie-Entladung toleriert? |
 |-------|----------|-------------------|-------------------------------|
-| `niedrig` | < 15 kWh | HP nur solo (kein WP/EV) | **Nie** — HP immer AUS bei Entladung |
-| `maessig` | 15–20 kWh | HP nur solo (kein WP/EV) | Nur wenn SOC_MAX ≤ 75% (Batterie noch nicht voll angefordert) |
-| `ausreichend` | 20–30 kWh | HP + WP parallel, EV blockiert | Nur wenn SOC_MAX ≤ 75% |
-| `gut` | ≥ 30 kWh | HP + WP + EV alle parallel | **Immer** — genug Sonne für alles |
+| `niedrig` | < `potenzial_maessig_kwh` | HP nur solo (kein WP/EV) | **Nie** — HP immer AUS bei Entladung |
+| `maessig` | `potenzial_maessig_kwh` bis < `potenzial_ausreichend_kwh` | HP nur solo (kein WP/EV) | Nur wenn SOC_MAX ≤ 75% (Batterie noch nicht voll angefordert) |
+| `ausreichend` | `potenzial_ausreichend_kwh` bis < `potenzial_gut_kwh` | HP + WP parallel, EV blockiert | Nur wenn SOC_MAX ≤ 75% |
+| `gut` | ≥ `potenzial_gut_kwh` | HP + WP + EV alle parallel | **Immer** — genug Sonne für alles |
+
+Standardwerte: `potenzial_maessig_kwh = 20`, `potenzial_ausreichend_kwh = 40`, `potenzial_gut_kwh = 60`.
 
 **Logik:** Morgens/Vormittags steht SOC_MAX typisch bei 75% (Batterie wird gedrosselt,
 Verbraucher haben Vorrang). In dieser Phase toleriert die Engine Batterie-Entladung bei
@@ -491,7 +500,7 @@ SOC_MAX auf 100% geht (Nachmittag) wird die Batterie-Entladung strenger bewertet
 | Parameter | Standard | Bereich | Wirkung |
 |-----------|----------|---------|--------|
 | min_ladeleistung | 5000 W | 2000–10000 W | **Mindest-Batterie-Ladeleistung (Basis).** Wird potenzialabhängig herunterskaliert: gut=50% (2500W), ausreichend=70% (3500W), mäßig/niedrig=100% (5000W). Der Burst-Timer schützt vor Flip-Flop nach dem Einschalten. |
-| min_ladeleistung_morgens | 3000 W | 1000–8000 W | **Vormittags-Schwelle.** Bei guter Tagesprognose (>20 kWh) reichen 3 kW Ladeleistung, weil genug Sonne für Batterie+HP erwartet wird. |
+| min_ladeleistung_morgens | 3000 W | 1000–8000 W | **Vormittags-Schwelle.** Bei mindestens mäßigem Potenzial (`rest_kwh ≥ potenzial_maessig_kwh`, Standard 20 kWh) reichen 3 kW Ladeleistung, weil genug Sonne für Batterie+HP erwartet wird. |
 | min_rest_kwh | 12.0 kWh | 5–30 kWh | **Mindest-Restprognose.** HP-Burst nur wenn die Rest-Tagesprognose genug kWh zeigt, um Batterie voll zu laden UND HP zu versorgen. |
 | min_rest_kwh_morgens | 20.0 kWh | 10–40 kWh | **Vormittags-Mindestprognose.** Lang genug Sonne erwartet für HP + Batterie + eventuelle EV-Ladung. |
 | min_rest_h | 2.0 h | 1–4 h | **Schwelle für Phase 4 (Abend-Nachladezyklus).** Unter 2 h PV bis Sonnenuntergang → kein normaler Burst. Stattdessen Phase 4: HP nur wenn SOC ≈ MAX und PV noch ausreicht. |
@@ -511,9 +520,9 @@ SOC_MAX auf 100% geht (Nachmittag) wird die Batterie-Entladung strenger bewertet
 | notaus_forecast_klima_last_w | 1300 W | 0–3000 W | **Klima-Zusatzlast.** Wird nur angerechnet, wenn die Klimaanlage aktuell läuft. |
 | notaus_forecast_klima_plan_h | 4.0 h | 0–12 h | **Klima-Planhorizont.** Maximaler Stundenanteil der Klima-Last in der Forecast-Bedarfsrechnung. |
 | speicher_temp_max | 78 °C | 60–85 °C | **Warmwasser-Übertemperatur.** HP sofort AUS bei ≥78 °C. Schutz vor Verbrühung/Überdruck. |
-| potenzial_gut_kwh | 30.0 kWh | 15–60 kWh | **Tagesprognose für Potenzial "gut".** Ab hier: HP + WP + EV alle parallel, Batterie-Entladung immer toleriert. |
-| potenzial_ausreichend_kwh | 20.0 kWh | 10–40 kWh | **Tagesprognose für "ausreichend".** HP + WP parallel (kein EV). Entladung toleriert wenn SOC_MAX ≤ 75%. |
-| potenzial_maessig_kwh | 15.0 kWh | 5–30 kWh | **Tagesprognose für "mäßig".** HP nur solo (kein WP/EV). Entladung toleriert wenn SOC_MAX ≤ 75%. Unter diesem Wert → "niedrig": HP nur bei explizitem Burst, keine Entladung toleriert. |
+| potenzial_gut_kwh | 60.0 kWh | 40–200 kWh | **Tagesprognose für Potenzial "gut".** Ab hier: HP + WP + EV alle parallel, Batterie-Entladung immer toleriert. Muss größer als `potenzial_ausreichend_kwh` sein. |
+| potenzial_ausreichend_kwh | 40.0 kWh | 20–100 kWh | **Tagesprognose für "ausreichend".** HP + WP parallel (kein EV). Entladung toleriert wenn SOC_MAX ≤ 75%. Muss zwischen `potenzial_maessig_kwh` und `potenzial_gut_kwh` liegen. |
+| potenzial_maessig_kwh | 20.0 kWh | 10–50 kWh | **Tagesprognose für "mäßig".** HP nur solo (kein WP/EV). Entladung toleriert wenn SOC_MAX ≤ 75%. Unter diesem Wert → "niedrig": HP nur bei explizitem Burst, keine Entladung toleriert. Muss kleiner als `potenzial_ausreichend_kwh` sein. |
 | drain_fruehstart_vor_sunrise_h | 1.0 h | 0–3 h | **Drain-Frühstart vor Sonnenaufgang.** Phase 0 startet ab `sunrise − dieser_Wert`. |
 | drain_min_sunshine_h | 5.0 h | 0–12 h | **Mindest-Sonnenstunden für Drain (NEU 2026-03-14).** Phase 0 wird blockiert wenn die prognostizierten Sonnenstunden unter diesem Wert liegen. An Regentagen braucht der Haushalt die Batterie-Energie. 0 = deaktiviert (kein Sonnenstunden-Guard). |
 | drain_start_soc_pct | 20% | 10–50% | **Drain-SOC-Startschwelle.** Phase 0 nur wenn SOC über diesem Wert. |
@@ -607,6 +616,181 @@ temperaturgeführter Betrieb.
 | initial_temp_c_gut_nach_sunrise | 15 °C | 12–25 °C | Nach-Sunrise-Einschaltschwelle bei Forecast `gut` (früherer Start als maessig möglich). |
 | temp_hysterese_k | 1.0 K | 0.2–3.0 K | Temperatur-Hysterese gegen die jeweilige Einschalt-Schwelle. |
 | sunset_soc_stop_pct | 90% | 30–100% | Abschaltschwelle nach Sonnenuntergang: Klima AUS bei `SOC < Wert`. |
+
+---
+
+### 4.12 ww_absenkung — WW-Nachtabsenkung (Priorität 2)
+
+**Zweck:** Warmwasser-Solltemperatur (WP Modbus Reg 5047) nachts absenken, um
+Standby-Verluste zu minimieren. Morgens automatisch auf Standardwert zurücksetzen.
+
+**Score:** 45
+**Zyklus:** fast
+**Aktor:** `waermepumpe` (`set_ww_soll`)
+
+**Logik:**
+- 22:00–03:00: WW-Soll von `standard_temp_c` um `absenkung_k` reduzieren (57→50°C).
+- Ab 03:00: Auf `standard_temp_c` zurückstellen.
+- `extern_respekt_s`: Manuell gesetzte Werte werden für 30 Min respektiert.
+
+| Parameter | Standard | Bereich | Wirkung |
+|-----------|----------|---------|---------|
+| standard_temp_c | 57 °C | 42–65 °C | WW-Solltemperatur im Normalbetrieb |
+| absenkung_k | 7 K | 0–10 K | Absenkungsbetrag (Nacht-Soll = Standard − K) |
+| start_h | 22 h | 18–23 h | Beginn der Absenkung |
+| ende_h | 3 h | 1–9 h | Ende der Absenkung (Rückkehr auf Standard) |
+| extern_respekt_s | 1800 s | 0–7200 s | Schutzzeit bei externer Änderung |
+
+---
+
+### 4.13 heiz_absenkung — Heiz-Nachtabsenkung (Priorität 2)
+
+**Zweck:** Heiz-Festwertsoll (WP Modbus Reg 5037) abends absenken. Morgens um
+03:00 auf Standardwert zurück — rechtzeitig für die Fußbodenheizung (Bäder).
+
+**Score:** 44
+**Zyklus:** fast
+**Aktor:** `waermepumpe` (`set_heiz_soll`)
+
+**Logik:**
+- 18:00–03:00: Heiz-Soll von `standard_temp_c` um `absenkung_k` reduzieren (37→30°C).
+- Ab 03:00: Auf `standard_temp_c` zurückstellen.
+
+| Parameter | Standard | Bereich | Wirkung |
+|-----------|----------|---------|---------|
+| standard_temp_c | 37 °C | 28–47 °C | Heiz-Soll im Normalbetrieb |
+| absenkung_k | 7 K | 0–10 K | Absenkungsbetrag |
+| start_h | 18 h | 15–23 h | Beginn der Absenkung |
+| ende_h | 3 h | 1–9 h | Ende der Absenkung |
+| extern_respekt_s | 1800 s | 0–7200 s | Schutzzeit bei externer Änderung |
+
+---
+
+### 4.14 ww_verschiebung — WW-Bereitung verschieben (Priorität 2)
+
+**Zweck:** Bei schlechter Energiebilanz (SOC niedrig, PV gering, aber guter
+Forecast) die WW-Bereitung verschieben, indem WW-Soll vorübergehend abgesenkt
+wird. Die WP pausiert die WW-Bereitung, SOC wird geschont.
+
+**Score:** 47
+**Zyklus:** fast
+**Aktor:** `waermepumpe` (`set_ww_soll`)
+
+**Bedingungslogik (Aktivierung):**
+- SOC < `soc_schwelle_pct` (10%) UND PV < `pv_min_w` (2000 W)
+- Forecast-Rest > `forecast_rest_min_kwh` (10 kWh) → genug Sonne erwartet
+- WW-Ist > `ww_min_c` (45°C) → genug Reserven vorhanden
+- Proaktiv: Greift auch wenn WP nicht aktiv ist
+
+**Rücknahme:** PV > `pv_restore_w` ODER SOC > `soc_restore_pct` ODER Timeout `max_verschiebung_h`
+
+**Sunset-Ausnahme:** < 2h vor Sonnenuntergang: Forecast-Schwelle halbiert.
+
+| Parameter | Standard | Bereich | Wirkung |
+|-----------|----------|---------|---------|
+| soc_schwelle_pct | 10 % | 5–50 % | SOC-Aktivierungsschwelle |
+| pv_min_w | 2000 W | 1000–10000 W | PV-Aktivierungsschwelle |
+| forecast_rest_min_kwh | 10 kWh | 3–30 kWh | Min. Forecast-Rest |
+| ww_min_c | 45 °C | 35–55 °C | WW-Mindesttemperatur |
+| verschiebung_k | 7 K | 1–15 K | Absenkungsbetrag |
+| pv_restore_w | 3000 W | 1500–10000 W | PV-Rücknahme-Schwelle |
+| soc_restore_pct | 30 % | 10–80 % | SOC-Rücknahme-Schwelle |
+| max_verschiebung_h | 1 h | 0.5–6 h | Max. Verschiebungsdauer |
+
+---
+
+### 4.15 heiz_verschiebung — Heiz-Soll verschieben (Priorität 2)
+
+**Zweck:** Analog zu WW-Verschiebung, aber für den Heizkreis. Bei schlechter
+Energiebilanz Heiz-Soll absenken um Kompressor-Starts zu vermeiden.
+
+**Score:** 46
+**Zyklus:** fast
+**Aktor:** `waermepumpe` (`set_heiz_soll`)
+
+Gleiche Bedingungslogik und Sunset-Ausnahme wie ww_verschiebung. Parameter analog.
+
+---
+
+### 4.16 ww_boost — WW-Soll bei PV-Überschuss anheben (Priorität 2)
+
+**Zweck:** Bei vollen Batterien (SOC > 90%) und Netzeinspeisung den PV-Überschuss
+thermisch in Warmwasser puffern, statt einzuspeisen.
+
+**Score:** 48
+**Zyklus:** fast
+**Aktor:** `waermepumpe` (`set_ww_soll`)
+
+**Bedingungslogik:**
+- SOC ≥ `soc_min_pct` (90%) UND Grid-Export ≥ `grid_export_min_w` (2000 W)
+- WW-Ist < `ww_max_c` (60°C) → Sicherheitslimit
+- WW-Verschiebung darf nicht gleichzeitig aktiv sein
+
+**Rücknahme:** SOC < Schwelle ODER Export < Schwelle ODER WW ≥ Max ODER Timeout.
+
+| Parameter | Standard | Bereich | Wirkung |
+|-----------|----------|---------|---------|
+| soc_min_pct | 90 % | 70–100 % | SOC-Mindestwert für Boost |
+| grid_export_min_w | 2000 W | 500–5000 W | Min. Netzeinspeisung |
+| ww_max_c | 60 °C | 55–70 °C | WW-Sicherheitslimit |
+| boost_temp_c | 62 °C | 55–70 °C | Boost-Zieltemperatur |
+| max_boost_h | 2 h | 0.5–4 h | Max. Boost-Dauer |
+
+---
+
+### 4.17 wp_pflichtlauf — WP Täglicher Pflichtlauf (Priorität 2)
+
+**Zweck:** Sicherstellen dass die WP mindestens einmal täglich den Kompressor
+startet (Schmierung, Ventilbewegung). Im Sommer würde sie sonst tagelang
+stillstehen.
+
+**Score:** 49
+**Zyklus:** fast
+**Aktor:** `waermepumpe` (`set_heiz_soll`)
+
+**Logik:**
+- Wenn WP heute noch nicht gelaufen ist UND Uhrzeit ≥ `pflichtlauf_ab_h` (12:00):
+  Heiz-Soll auf `boost_temp_c` (55°C) setzen für max `max_boost_min` (30 min).
+- Endet automatisch wenn WP anspringt oder Timeout erreicht.
+
+| Parameter | Standard | Bereich | Wirkung |
+|-----------|----------|---------|---------|
+| pflichtlauf_ab_h | 12 h | 8–16 h | Frühester Start |
+| boost_temp_c | 55 °C | 40–55 °C | Boost-Zieltemperatur |
+| max_boost_min | 30 min | 10–60 min | Max. Boost-Dauer |
+
+---
+
+### 4.18 heiz_bedarf — FBH-Heizbedarf nach Außentemperatur (Priorität 2)
+
+**Zweck:** Wenn die Fußbodenheizung (Fritz!DECT) Wärme anfordert (fbh_aktiv=1)
+und es draußen kalt ist, den Heiz-Soll anheben oder auf Standard halten.
+Überstimmt Absenkung/Verschiebung per Kommando-Deduplizierung (höchster WP-Score).
+
+**Datenquellen:**
+- FBH-Status: Fritz!DECT Steckdose „Fußbodenheizung" (AIN 00000 0000000), State 0/1
+- Außentemperatur: WP-Sensor (Dimplex SIK 11 TES, Modbus Reg 1)
+
+**Score:** 50 (höchster aller WP-Regeln)
+**Zyklus:** fast
+**Aktor:** `waermepumpe` (`set_heiz_soll`)
+
+**Prioritätsstufen:**
+
+| Außentemperatur | Priorität | Heiz-Soll |
+|-----------------|-----------|-----------|
+| ≤ 5°C (kalt) | 100 % | Standard + `boost_k` (37+3 = 40°C) |
+| 5–15°C (mild) | Mittel | Standard halten (37°C) |
+| > 15°C (warm) | Gering | Keine Aktion |
+
+**Rücknahme:** FBH inaktiv, Außentemp > 15°C oder Timeout.
+
+| Parameter | Standard | Bereich | Wirkung |
+|-----------|----------|---------|---------|
+| temp_kalt_c | 5 °C | −10–10 °C | Volle Priorität unterhalb (Boost) |
+| temp_mild_c | 15 °C | 5–25 °C | Mittlere Priorität unterhalb. Darüber: keine Aktion. |
+| boost_k | 3 K | 0–10 K | Zuschlag bei ≤ temp_kalt_c |
+| max_bedarf_h | 3 h | 1–8 h | Max. Dauer des Heizbedarf-Boosts |
 
 ---
 

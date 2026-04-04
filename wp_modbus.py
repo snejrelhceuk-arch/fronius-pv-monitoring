@@ -23,6 +23,7 @@ SLAVE_ID = 1
 # Register 1–100: Werte in 0.1 °C (signed int16)
 # Register 5000+: Sollwerte in ganzen °C
 _REGS_TENTH = {
+    'aussen_temp':    1,
     'vorlauf':        5,
     'ruecklauf':      2,
     'ruecklauf_soll': 53,

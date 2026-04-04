@@ -23,7 +23,12 @@ from automation.engine.regeln.optimierung import (
 from automation.engine.regeln.geraete import (
     RegelWattpilotBattSchutz, RegelHeizpatrone, RegelKlimaanlage,
 )
-from automation.engine.regeln.waermepumpe import RegelWwAbsenkung, RegelHeizAbsenkung
+from automation.engine.regeln.waermepumpe import (
+    RegelWwAbsenkung, RegelHeizAbsenkung,
+    RegelWwVerschiebung, RegelHeizVerschiebung,
+    RegelWwBoost, RegelWpPflichtlauf,
+    RegelHeizBedarf,
+)
 
 __all__ = [
     'Regel',
@@ -32,4 +37,7 @@ __all__ = [
     'RegelZellausgleich', 'RegelForecastPlausi',
     'RegelWattpilotBattSchutz', 'RegelHeizpatrone', 'RegelKlimaanlage',
     'RegelWwAbsenkung', 'RegelHeizAbsenkung',
+    'RegelWwVerschiebung', 'RegelHeizVerschiebung',
+    'RegelWwBoost', 'RegelWpPflichtlauf',
+    'RegelHeizBedarf',
 ]

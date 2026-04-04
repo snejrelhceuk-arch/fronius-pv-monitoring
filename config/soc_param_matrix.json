@@ -1,7 +1,7 @@
 {
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
-  "_updated": "2026-03-30",
+  "_updated": "2026-04-04",
   "regelkreise": {
     "soc_extern": {
       "_doc": "Toleranz für extern geänderte SOC-Werte (z.B. manuell via Fronius App). Wenn SOC_MIN oder SOC_MAX außerhalb der Automation geändert werden, respektiert die Engine die Werte für die konfigurierte Dauer.",
@@ -170,7 +170,7 @@
         }
       },
       "score_gewicht": 72,
-      "_score_doc": "72 > AbendEntladerate(65): Morgen-Öffnung hat Vorrang. HALTE-Score 68 verhindert Rücksetzung.",
+      "_score_doc": "72 > AbendEntladerate(65): Morgen-Öffnung hat Vorrang. HALTE-Score (int(72*0.95)=68) erzeugt leere Aktionen → Engine cascadiert. Ping-Pong-Schutz gegen Komfort-Reset (70) erfolgt über _morgenfenster_sperrt_reset Guard, nicht über Score.",
       "engine_zyklus": "fast"
     },
     "nachmittag_soc_max": {
@@ -944,6 +944,16 @@
           "obs_feld": "sunshine_hours",
           "beschreibung": "Mindest-Sonnenstunden (Prognose) für Morgen-Drain. Unter diesem Wert wird Phase 0 blockiert — bei Regentagen braucht der Haushalt die Batterieenergie. 0 = deaktiviert."
         },
+        "drain_skip_bei_ladung_w": {
+          "wert": 2000,
+          "bereich": [
+            500,
+            5000
+          ],
+          "einheit": "W",
+          "obs_feld": "batt_power_w",
+          "beschreibung": "Phase 0 überspringen wenn Batterie bereits mit mehr als X Watt von PV lädt. Drain ist Vor-PV-Entladung — wenn PV schon stark lädt, ist der Drain kontraproduktiv. Phase 1/1b übernimmt dann."
+        },
         "drain_fruehstart_vor_sunrise_h": {
           "wert": 1.0,
           "bereich": [
@@ -1053,8 +1063,8 @@
         "potenzial_gut_kwh": {
           "wert": 60.0,
           "bereich": [
-            15.0,
-            60.0
+            40.0,
+            200.0
           ],
           "einheit": "kWh",
           "beschreibung": "Tagesprognose ab der HP parallel mit WP+EV laufen darf und Batterie-Entladung immer toleriert wird"
@@ -1062,8 +1072,8 @@
         "potenzial_ausreichend_kwh": {
           "wert": 40.0,
           "bereich": [
-            10.0,
-            40.0
+            20.0,
+            100.0
           ],
           "einheit": "kWh",
           "beschreibung": "Tagesprognose ab der HP parallel mit WP laufen darf (nicht EV). Entladung toleriert wenn SOC_MAX ≤ 75%"
@@ -1071,8 +1081,8 @@
         "potenzial_maessig_kwh": {
           "wert": 20.0,
           "bereich": [
-            5.0,
-            30.0
+            10.0,
+            50.0
           ],
           "einheit": "kWh",
           "beschreibung": "Tagesprognose ab der HP solo laufen darf (kein WP/EV). Entladung toleriert wenn SOC_MAX ≤ 75%"
@@ -1307,6 +1317,15 @@
           ],
           "einheit": "h",
           "beschreibung": "Ende der Nachtabsenkung (Dezimalstunde, z.B. 3 = 03:00)"
+        },
+        "extern_respekt_s": {
+          "wert": 1800,
+          "bereich": [
+            0,
+            7200
+          ],
+          "einheit": "s",
+          "beschreibung": "Toleranzzeit bei extern geändertem WW-Soll (z.B. manuell via Modbus-Tool). Engine überschreibt fremde Werte erst nach Ablauf. 0 = deaktiviert."
         }
       },
       "score_gewicht": 45,
@@ -1354,9 +1373,359 @@
           ],
           "einheit": "h",
           "beschreibung": "Ende der Absenkung (Dezimalstunde, z.B. 3 = 03:00)"
+        },
+        "extern_respekt_s": {
+          "wert": 1800,
+          "bereich": [
+            0,
+            7200
+          ],
+          "einheit": "s",
+          "beschreibung": "Toleranzzeit bei extern geändertem Heiz-Soll. Engine überschreibt fremde Werte erst nach Ablauf. 0 = deaktiviert."
         }
       },
       "score_gewicht": 44,
+      "engine_zyklus": "fast"
+    },
+    "ww_verschiebung": {
+      "_doc": "WW-Bereitung verschieben bei ungünstiger Energiebilanz: SOC niedrig + PV gering + Forecast gut → WW-Soll absenken, WP pausiert WW-Bereitung. Automatische Rücknahme bei PV-Erholung, SOC-Erholung, WW zu kalt oder Timeout.",
+      "aktiv": true,
+      "prioritaet": 2,
+      "beschreibung": "WW-Bereitung bei schlechter Energiebilanz verschieben (SOC niedrig, PV gering, Forecast gut)",
+      "parameter": {
+        "soc_schwelle_pct": {
+          "wert": 10,
+          "bereich": [
+            5,
+            50
+          ],
+          "einheit": "%",
+          "obs_feld": "batt_soc_pct",
+          "beschreibung": "SOC unter diesem Wert: Verschiebung möglich (5–50%)"
+        },
+        "pv_min_w": {
+          "wert": 2000,
+          "bereich": [
+            1000,
+            10000
+          ],
+          "einheit": "W",
+          "obs_feld": "pv_total_w",
+          "beschreibung": "PV-Leistung unter diesem Wert: Verschiebung möglich (1–10 kW)"
+        },
+        "forecast_rest_min_kwh": {
+          "wert": 10,
+          "bereich": [
+            3,
+            30
+          ],
+          "einheit": "kWh",
+          "obs_feld": "forecast_rest_kwh",
+          "beschreibung": "Rest-Forecast über diesem Wert: später gute Prognose (rechtfertigt Verschiebung). <2h vor Sunset: Schwelle halbiert."
+        },
+        "ww_min_c": {
+          "wert": 45,
+          "bereich": [
+            40,
+            52
+          ],
+          "einheit": "°C",
+          "obs_feld": "ww_temp_c",
+          "beschreibung": "WW-Ist über diesem Wert: noch warm genug für Verschiebung"
+        },
+        "pv_restore_w": {
+          "wert": 3000,
+          "bereich": [
+            1000,
+            10000
+          ],
+          "einheit": "W",
+          "obs_feld": "pv_total_w",
+          "beschreibung": "PV über diesem Wert: Verschiebung aufheben (muss > pv_min für Hysterese)"
+        },
+        "soc_restore_pct": {
+          "wert": 30,
+          "bereich": [
+            15,
+            80
+          ],
+          "einheit": "%",
+          "obs_feld": "batt_soc_pct",
+          "beschreibung": "SOC über diesem Wert: Verschiebung aufheben (muss > soc_schwelle)"
+        },
+        "ww_notfall_c": {
+          "wert": 42,
+          "bereich": [
+            38,
+            48
+          ],
+          "einheit": "°C",
+          "obs_feld": "ww_temp_c",
+          "beschreibung": "WW-Ist unter diesem Wert: Notfall-Rücknahme (zu kalt)"
+        },
+        "max_verschiebung_h": {
+          "wert": 1,
+          "bereich": [
+            1,
+            6
+          ],
+          "einheit": "h",
+          "beschreibung": "Maximale Verschiebungsdauer. Danach Rücknahme unabhängig von Bedingungen."
+        },
+        "verschiebung_k": {
+          "wert": 7,
+          "bereich": [
+            3,
+            15
+          ],
+          "einheit": "K",
+          "beschreibung": "WW-Soll-Absenkung relativ zum Standard (z.B. 7K: 57°C → 50°C)"
+        }
+      },
+      "score_gewicht": 47,
+      "engine_zyklus": "fast"
+    },
+    "heiz_verschiebung": {
+      "_doc": "Heiz-Sollwert absenken bei ungünstiger Energiebilanz: SOC niedrig + PV gering + Forecast gut → Heiz-Soll tiefer setzen, WP reduziert Heizleistung. Automatische Rücknahme bei PV/SOC-Erholung oder Timeout.",
+      "aktiv": true,
+      "prioritaet": 2,
+      "beschreibung": "Heiz-Soll bei schlechter Energiebilanz zusätzlich absenken (SOC niedrig, PV gering, Forecast gut)",
+      "parameter": {
+        "soc_schwelle_pct": {
+          "wert": 10,
+          "bereich": [
+            5,
+            50
+          ],
+          "einheit": "%",
+          "obs_feld": "batt_soc_pct",
+          "beschreibung": "SOC unter diesem Wert: Verschiebung möglich (5–50%)"
+        },
+        "pv_min_w": {
+          "wert": 2000,
+          "bereich": [
+            1000,
+            10000
+          ],
+          "einheit": "W",
+          "obs_feld": "pv_total_w",
+          "beschreibung": "PV-Leistung unter diesem Wert: Verschiebung möglich (1–10 kW)"
+        },
+        "forecast_rest_min_kwh": {
+          "wert": 10,
+          "bereich": [
+            3,
+            30
+          ],
+          "einheit": "kWh",
+          "obs_feld": "forecast_rest_kwh",
+          "beschreibung": "Rest-Forecast über diesem Wert: später gute Prognose (rechtfertigt Verschiebung). <2h vor Sunset: Schwelle halbiert."
+        },
+        "pv_restore_w": {
+          "wert": 3000,
+          "bereich": [
+            1000,
+            10000
+          ],
+          "einheit": "W",
+          "obs_feld": "pv_total_w",
+          "beschreibung": "PV über diesem Wert: Verschiebung aufheben (muss > pv_min für Hysterese)"
+        },
+        "soc_restore_pct": {
+          "wert": 30,
+          "bereich": [
+            15,
+            80
+          ],
+          "einheit": "%",
+          "obs_feld": "batt_soc_pct",
+          "beschreibung": "SOC über diesem Wert: Verschiebung aufheben (muss > soc_schwelle)"
+        },
+        "max_verschiebung_h": {
+          "wert": 1,
+          "bereich": [
+            1,
+            6
+          ],
+          "einheit": "h",
+          "beschreibung": "Maximale Verschiebungsdauer. Danach Rücknahme unabhängig von Bedingungen."
+        },
+        "verschiebung_k": {
+          "wert": 7,
+          "bereich": [
+            3,
+            15
+          ],
+          "einheit": "K",
+          "beschreibung": "Heiz-Soll-Absenkung relativ zum Standard (z.B. 7K: 37°C → 30°C)"
+        }
+      },
+      "score_gewicht": 46,
+      "engine_zyklus": "fast"
+    },
+    "ww_boost": {
+      "_doc": "WW-Soll anheben bei PV-Überschuss + voller Batterie: Überschüssige PV-Energie als Wärme im WW-Speicher puffern statt einzuspeisen (Eigenverbrauchsoptimierung).",
+      "aktiv": true,
+      "prioritaet": 2,
+      "beschreibung": "WW-Boost bei PV-Überschuss (SOC hoch, Einspeisung, WW noch kühl)",
+      "parameter": {
+        "soc_min_pct": {
+          "wert": 90,
+          "bereich": [
+            70,
+            100
+          ],
+          "einheit": "%",
+          "obs_feld": "batt_soc_pct",
+          "beschreibung": "SOC über diesem Wert: Boost möglich"
+        },
+        "grid_export_min_w": {
+          "wert": 2000,
+          "bereich": [
+            500,
+            8000
+          ],
+          "einheit": "W",
+          "obs_feld": "grid_power_w",
+          "beschreibung": "Minimale Einspeisung für Boost-Start (grid_power < -X)"
+        },
+        "ww_max_c": {
+          "wert": 60,
+          "bereich": [
+            55,
+            65
+          ],
+          "einheit": "°C",
+          "obs_feld": "ww_temp_c",
+          "beschreibung": "WW-Ist unter diesem Wert: noch Platz für Wärme"
+        },
+        "boost_temp_c": {
+          "wert": 62,
+          "bereich": [
+            58,
+            65
+          ],
+          "einheit": "°C",
+          "aktor_kommando": "set_ww_soll",
+          "beschreibung": "WW-Soll während Boost (max. 65°C für Legionellen-Sicherheit)"
+        },
+        "grid_restore_w": {
+          "wert": 0,
+          "bereich": [
+            -500,
+            500
+          ],
+          "einheit": "W",
+          "obs_feld": "grid_power_w",
+          "beschreibung": "Grid über diesem Wert → Boost aufheben (0 = bei Netzbezug)"
+        },
+        "soc_abbruch_pct": {
+          "wert": 80,
+          "bereich": [
+            50,
+            95
+          ],
+          "einheit": "%",
+          "obs_feld": "batt_soc_pct",
+          "beschreibung": "SOC unter diesem Wert: Boost abbrechen (Batterie braucht PV)"
+        },
+        "max_boost_h": {
+          "wert": 2,
+          "bereich": [
+            0.5,
+            4
+          ],
+          "einheit": "h",
+          "beschreibung": "Maximale Boost-Dauer. Danach Rücknahme."
+        }
+      },
+      "score_gewicht": 48,
+      "engine_zyklus": "fast"
+    },
+    "wp_pflichtlauf": {
+      "_doc": "Täglicher WP-Pflichtlauf: Heiz-Soll kurzzeitig auf boost_temp_c anheben, damit Kompressor mindestens einmal täglich startet (Schmierung, Ventilbewegung). Wichtig im Sommer bei hohen Außentemperaturen.",
+      "aktiv": true,
+      "prioritaet": 2,
+      "beschreibung": "WP täglicher Pflichtlauf via Heiz-Soll-Boost",
+      "parameter": {
+        "pflichtlauf_ab_h": {
+          "wert": 12,
+          "bereich": [
+            8,
+            16
+          ],
+          "einheit": "h",
+          "beschreibung": "Ab dieser Uhrzeit: Pflichtlauf starten wenn WP heute noch nicht lief"
+        },
+        "boost_temp_c": {
+          "wert": 55,
+          "bereich": [
+            40,
+            55
+          ],
+          "einheit": "°C",
+          "aktor_kommando": "set_heiz_soll",
+          "beschreibung": "Heiz-Soll während Pflichtlauf-Boost (max. 55°C)"
+        },
+        "max_boost_min": {
+          "wert": 30,
+          "bereich": [
+            10,
+            60
+          ],
+          "einheit": "min",
+          "beschreibung": "Maximale Boost-Dauer. Endet auch bei WP-Start."
+        }
+      },
+      "score_gewicht": 49,
+      "engine_zyklus": "fast"
+    },
+    "heiz_bedarf": {
+      "_doc": "FBH-Heizbedarf: Wenn die Fußbodenheizung (Fritz!DECT) Wärme anfordert und es draußen kalt ist, Heiz-Soll anheben oder auf Standard halten. Außentemperatur vom WP-Sensor (Modbus Reg 1). Überstimmt Absenkung/Verschiebung per Kommando-Deduplizierung.",
+      "aktiv": true,
+      "prioritaet": 2,
+      "beschreibung": "FBH-Heizbedarf: Heiz-Soll nach Außentemperatur priorisieren (≤5°C=Boost, 5–15°C=Standard halten, >15°C=keine Aktion)",
+      "parameter": {
+        "temp_kalt_c": {
+          "wert": 5,
+          "bereich": [
+            -10,
+            10
+          ],
+          "einheit": "°C",
+          "obs_feld": "wp_aussen_temp_c",
+          "beschreibung": "Unterhalb: volle Priorität (Heiz-Soll = Standard + Boost)"
+        },
+        "temp_mild_c": {
+          "wert": 15,
+          "bereich": [
+            5,
+            25
+          ],
+          "einheit": "°C",
+          "obs_feld": "wp_aussen_temp_c",
+          "beschreibung": "Unterhalb: mittlere Priorität (Heiz-Soll = Standard). Oberhalb: keine Aktion."
+        },
+        "boost_k": {
+          "wert": 3,
+          "bereich": [
+            0,
+            10
+          ],
+          "einheit": "K",
+          "beschreibung": "Zuschlag bei voller Priorität (≤temp_kalt_c). Heiz-Soll = standard + boost_k, max 47°C."
+        },
+        "max_bedarf_h": {
+          "wert": 3,
+          "bereich": [
+            1,
+            8
+          ],
+          "einheit": "h",
+          "beschreibung": "Maximale Dauer des Heizbedarf-Boosts. Danach Rücknahme auf Standard."
+        }
+      },
+      "score_gewicht": 50,
       "engine_zyklus": "fast"
     }
   },
@@ -1397,7 +1766,9 @@
       "klima_aktiv": "Klimaanlage läuft (Fritz!DECT-Status) — klimaanlage",
       "ww_temp_c": "WW-Ist-Temperatur [°C] (WP Modbus Reg 3) — ww_absenkung",
       "wp_ww_soll_c": "WW-Soll aktuell [°C] (WP Modbus Reg 5047) — ww_absenkung",
-      "wp_heiz_soll_c": "Heiz-Festwertsoll [°C] (WP Modbus Reg 5037) — heiz_absenkung"
+      "wp_heiz_soll_c": "Heiz-Festwertsoll [°C] (WP Modbus Reg 5037) — heiz_absenkung",
+      "wp_aussen_temp_c": "WP Außentemperatur [°C] (WP Modbus Reg 1) — heiz_bedarf",
+      "fbh_aktiv": "Fußbodenheizung aktiv (Fritz!DECT state=1) — heiz_bedarf"
     },
     "netz": {
       "grid_power_w": "Netzbezug/Einspeisung [W] — sls_schutz, heizpatrone",
