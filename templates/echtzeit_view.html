@@ -254,8 +254,8 @@
                 <div class="zoom-controls" style="display:flex; gap:5px; align-items:center;">
                     <span class="zoom-label">Auflösung:</span>
                     <button class="btn active" data-resolution="300" data-hours="24">5 min</button>
-                    <button class="btn" data-resolution="60" data-hours="6">1 min</button>
-                    <button class="btn" data-resolution="3" data-hours="1">3 s</button>
+                    <button class="btn" data-resolution="60" data-hours="24">1 min</button>
+                    <button class="btn" data-resolution="3" data-hours="24">3 s</button>
                 </div>
                 <div class="status-info" id="statusInfo">Lädt...</div>
             </div>
@@ -408,6 +408,19 @@
             if (offsetDays === 1) return 'gestern';
             if (offsetDays === 2) return 'vorgestern';
             return targetDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+        }
+
+        function getSelectedDayWindow(offsetDays) {
+            const dayStart = new Date();
+            dayStart.setHours(0, 0, 0, 0);
+            dayStart.setDate(dayStart.getDate() - offsetDays);
+
+            const start = Math.floor(dayStart.getTime() / 1000);
+            const end = offsetDays === 0
+                ? Math.floor(Date.now() / 1000)
+                : (start + 86399);
+
+            return { start, end };
         }
         
         function getYAxisLabel() {
@@ -600,10 +613,12 @@
                 console.log('→ loadData() gestartet: Resolution=' + currentResolution + 's, Hours=' + currentHours + 'h');
                 document.getElementById('footer').textContent = 'Lade Daten...';
                 
-                // Zeitfenster: currentHours wird von Auflösungs-Buttons gesetzt
-                let end = Math.floor(Date.now() / 1000) - (currentOffset * 86400);
+                // Zeitfenster: Tagesfenster je Navigationstag
+                const window = getSelectedDayWindow(currentOffset);
+                const start = window.start;
+                const end = window.end;
                 
-                const url = `/api/realtime_smart?hours=${currentHours}&resolution=${currentResolution}&end=${end}`;
+                const url = `/api/realtime_smart?start=${start}&end=${end}&resolution=${currentResolution}`;
                 console.log('→ API-Call:', url);
                 const response = await fetch(url);
                 const data = await response.json();
@@ -628,7 +643,12 @@
                 const dateLabel = getDateLabel(currentOffset);
                 const dateStr = date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
                 const resolutionText = currentResolution < 60 ? `${currentResolution}s` : `${currentResolution/60}min`;
-                const timeWindow = currentHours < 24 ? `${currentHours}h` : `${currentHours/24}d`;
+                const startTs = data.start || start;
+                const endTs = data.end || end;
+                const windowHours = Math.max(0.01, (endTs - startTs) / 3600);
+                const timeWindow = windowHours < 24
+                    ? `${windowHours.toFixed(1)}h`
+                    : `${(windowHours / 24).toFixed(1)}d`;
                 document.getElementById('statusInfo').textContent = 
                     `${dateStr} (${dateLabel}) | ${timeWindow} | ${data.points} Punkte | ${data.source} | ${resolutionText}`;
                 
@@ -680,6 +700,7 @@
             const yAxisConfigs = groups.map((group, idx) => {
                 const position = idx % 2 === 0 ? 'left' : 'right';
                 const offset = Math.floor(idx / 2) * 60;  // Jede 2. Achse 60px versetzt
+                const isFrequencyAxis = group === 'Frequenz (Hz)';
                 
                 return {
                     type: 'value',
@@ -698,6 +719,9 @@
                         show: idx === 0,  // Nur erste Achse zeigt Grid-Linien
                         lineStyle: { color: '#e5e7eb', width: 1 }
                     },
+                    min: isFrequencyAxis ? 49 : undefined,
+                    max: isFrequencyAxis ? 51 : undefined,
+                    interval: isFrequencyAxis ? 0.5 : undefined,
                     axisLabel: {
                         formatter: '{value}',
                         fontSize: 10

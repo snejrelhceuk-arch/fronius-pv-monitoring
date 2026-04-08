@@ -302,8 +302,33 @@
             border-bottom: 1px solid rgba(255,255,255,0.12);
             padding: 2px 0;
         }
+        #hpAutoBody {
+            overflow: hidden;
+            text-overflow: clip;
+            white-space: nowrap;
+        }
         #wpAutoSection {
             padding: 2px 0;
+        }
+        #klimaAutoSection {
+            border-bottom: 1px solid rgba(255,255,255,0.12);
+            padding-bottom: 2px;
+        }
+        .wp-auto {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            padding: 2px 8px;
+            font-size: 11px;
+            line-height: 1.35;
+        }
+        .wp-auto-line {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: clip;
+        }
+        .wp-auto-line.events {
+            color: rgba(255,255,255,0.55);
         }
         .auto-section .auto-header {
             padding: 3px 8px;
@@ -861,8 +886,9 @@
             </div>
             <!-- Zeile 5: Wärmepumpe (einzeilig, wie gehabt) -->
             <div class="auto-section" id="wpAutoSection">
-                <div id="wpAutoBody" class="auto-oneliner">
-                    <span class="ap-icon"></span> <span class="ap-text">—</span>
+                <div id="wpAutoBody" class="wp-auto">
+                    <div class="wp-auto-line"><span class="ap-label" style="color:#14b8a6">WP:</span> <span class="ap-text">—</span></div>
+                    <div class="wp-auto-line events"><span class="ap-label" style="color:#14b8a6">Soll:</span> <span class="ap-text">—</span></div>
                 </div>
             </div>
             <!-- Zeile 6: Temperaturen F1 + F2 + Batt -->
@@ -903,6 +929,7 @@
     const overlayCloseEl = document.getElementById('overlayClose');
     let overlayHidden = false;
     let lastOverlayEligible = false;
+    let lastFlowStatusData = null;  // Cache für Re-Render bei Resize
 
     function overlayEligible() {
         return window.innerWidth >= 780 && window.innerHeight >= 560;
@@ -1441,6 +1468,102 @@
         }
     }
 
+    // ── Responsive Event-Limits (passen sich der Fensterbreite an) ──────────
+    function getTimelineMaxEvents() {
+        const w = window.innerWidth;
+        if (w >= 1400) return 14;
+        if (w >= 1100) return 10;
+        if (w >= 800)  return 7;
+        if (w >= 600)  return 5;
+        return 3;
+    }
+
+    function getWpMaxEvents() {
+        const w = window.innerWidth;
+        if (w >= 1400) return 10;
+        if (w >= 1100) return 7;
+        if (w >= 800)  return 5;
+        if (w >= 600)  return 3;
+        return 2;
+    }
+
+    function buildWpSollEventSnippet(events) {
+        // events: älteste zuerst (nach .slice().reverse() im aufrufenden Code)
+        if (!events || events.length === 0) return 'keine Sollwert-Änderungen heute';
+
+        // Typen trennen für Oszillation-Erkennung
+        const hz = events.filter(a => a.kommando !== 'set_ww_soll');
+        const ww = events.filter(a => a.kommando === 'set_ww_soll');
+
+        function collapseOscillation(arr) {
+            if (!arr.length) return [];
+            const result = [];
+            let i = 0;
+            while (i < arr.length) {
+                if (i + 3 < arr.length) {
+                    const va = String(arr[i].wert);
+                    const vb = String(arr[i + 1].wert);
+                    if (va !== vb) {
+                        let j = i + 2;
+                        while (j < arr.length) {
+                            const expected = ((j - i) % 2 === 0) ? va : vb;
+                            if (String(arr[j].wert) !== expected) break;
+                            j++;
+                        }
+                        if (j - i >= 4) {
+                            result.push({
+                                ts:      arr[i].ts,
+                                ts_end:  arr[j - 1].ts,
+                                wert:    `${va}\u2194${vb}`,
+                                count:   j - i,
+                                osc:     true,
+                                kommando: arr[i].kommando,
+                            });
+                            i = j;
+                            continue;
+                        }
+                    }
+                }
+                result.push(arr[i]);
+                i++;
+            }
+            return result;
+        }
+
+        // Zusammenführen und nach Zeit sortieren
+        const merged = [...collapseOscillation(hz), ...collapseOscillation(ww)];
+        merged.sort((a, b) => (a.ts || '').localeCompare(b.ts || ''));
+
+        if (merged.length === 0) return 'keine Sollwert-Änderungen heute';
+
+        const maxN = getWpMaxEvents();
+        const toShow = merged.slice(-maxN);  // neueste N
+
+        return toShow.map(a => {
+            const zeit = a.ts ? a.ts.substring(11, 16) : '?';
+            const isWw  = a.kommando === 'set_ww_soll';
+            const label = isWw ? 'WW' : 'Hz';
+            const color = isWw ? '#14b8a6' : '#8b5cf6';
+            if (a.osc) {
+                const zeitEnd  = a.ts_end ? a.ts_end.substring(11, 16) : '';
+                const cntText  = a.count  ? ` \u00d7${a.count}` : '';
+                return `<span style="color:${color}" title="${a.count} Schaltvorg\u00e4nge ${a.kommando}">${zeit}\u2013${zeitEnd} ${label}:${a.wert}${cntText}</span>`;
+            } else {
+                const wert  = a.wert != null ? a.wert : '?';
+                const title = `${a.kommando || 'set_soll'}=${wert}\u00B0C: ${a.grund || ''}`;
+                return `<span style="color:${color}" title="${title}">${zeit}${label}\u2192${wert}\u00b0</span>`;
+            }
+        }).join(' <span class="ap-sep">\u2502</span> ');
+    }
+
+    function buildTimelineSnippet(items) {
+        if (!items || items.length === 0) return '';
+        const maxEvents = getTimelineMaxEvents();
+        // items kommen älteste-zuerst → letzte maxEvents zeigen (neueste)
+        const displayed = items.slice(-maxEvents);
+        return displayed.join(' <span class="ap-sep">\u2502</span> ');
+    }
+
     async function fetchFailoverStatus() {
         try {
             const r = await fetch(apiUrl('/api/failover_status'));
@@ -1506,6 +1629,14 @@
             const r = await fetch(apiUrl('/api/flow_status'));
             if (!r.ok) return;
             const d = await r.json();
+            lastFlowStatusData = d;
+            renderFlowStatusDetail(d);
+        } catch(e) { console.warn('BatteryDetail:', e); }
+    }
+
+    function renderFlowStatusDetail(d) {
+        if (!d) return;
+        try {
             document.getElementById('bd-soh').textContent = d.soh != null ? d.soh : '--';
 
             // PV-Prognose-Icon setzen
@@ -1557,7 +1688,6 @@
             document.getElementById('it-f2-dc').textContent = d.f2_temp_dc != null ? d.f2_temp_dc : '--';
             // Batt-Temp (in Temp-Zeile 5)
             document.getElementById('bd-temp').textContent = d.battery_temp != null ? d.battery_temp : '--';
-
             // ── Zeile 2: Batt-Automation (einzeilig) ────────────────
             const phasen = d.automation_phasen || {};
             const battBody = document.getElementById('battAutoBody');
@@ -1593,16 +1723,17 @@
             const hpAktionen = d.hp_aktionen || [];
             const hpBody = document.getElementById('hpAutoBody');
             if (hpAktionen.length > 0) {
-                const timeline = hpAktionen.slice().reverse().map(a => {
-                    const zeit = a.ts ? a.ts.substring(11, 16) : '?';
-                    const aIsEin = a.kommando === 'hp_ein';
+                const hpItems = hpAktionen.slice().reverse().map(a => {
+                    const zeit    = a.ts ? a.ts.substring(11, 16) : '?';
+                    const aIsEin  = a.kommando === 'hp_ein';
                     const isExtern = String(a.quelle || '').toLowerCase() === 'extern';
-                    const color = isExtern ? '#ef4444' : '#fb923c';
-                    const symbol = aIsEin ? '▲' : '▼';
-                    const src = isExtern ? 'extern' : 'automation';
+                    const color   = isExtern ? '#ef4444' : '#fb923c';
+                    const symbol  = aIsEin ? '\u25b2' : '\u25bc';
+                    const src     = isExtern ? 'extern' : 'auto';
                     return `<span style="color:${color}" title="${src}: ${a.grund || ''}">${zeit}${symbol}</span>`;
                 });
-                hpBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#fb923c">HP:</span> ${timeline.join(' ')}`;
+                const hpTimeline = buildTimelineSnippet(hpItems);
+                hpBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#fb923c">HP:</span> ${hpTimeline}`;
             } else {
                 hpBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#fb923c">HP:</span> <span class="ap-text">keine Schaltungen heute</span>`;
             }
@@ -1611,21 +1742,22 @@
             const klimaAktionen = d.klima_aktionen || [];
             const klimaBody = document.getElementById('klimaAutoBody');
             if (klimaAktionen.length > 0) {
-                const klimaTimeline = klimaAktionen.slice().reverse().map(a => {
+                const klimaItems = klimaAktionen.slice().reverse().map(a => {
                     const zeit = a.ts ? a.ts.substring(11, 16) : '?';
                     const aIsEin = a.kommando === 'klima_ein';
                     const isExtern = String(a.quelle || '').toLowerCase() === 'extern';
                     const color = isExtern ? '#ef4444' : '#fb923c';
-                    const symbol = aIsEin ? '▲' : '▼';
+                    const symbol  = aIsEin ? '\u25b2' : '\u25bc';
                     const src = isExtern ? 'extern' : 'automation';
                     return `<span style="color:${color}" title="${src}: ${a.grund || ''}">${zeit}${symbol}</span>`;
                 });
-                klimaBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#00bcd4">Klima:</span> ${klimaTimeline.join(' ')}`;
+                const klimaTimeline = buildTimelineSnippet(klimaItems);
+                klimaBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#00bcd4">Klima:</span> ${klimaTimeline}`;
             } else {
                 klimaBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#00bcd4">Klima:</span> <span class="ap-text">keine Schaltungen heute</span>`;
             }
 
-            // ── Zeile 5: WP Wärmepumpe (einzeilig) ─────────────────
+            // ── Zeile 5: WP Wärmepumpe (zweizeilig) ─────────────────
             const wp = d.wp_status || {};
             const wpBody = document.getElementById('wpAutoBody');
             if (wpBody && !wp.error) {
@@ -1638,27 +1770,20 @@
                 const wqe = wp.quelle_ein != null ? wp.quelle_ein : '--';
                 const wqa = wp.quelle_aus != null ? wp.quelle_aus : '--';
 
-                // WP-Schaltaktionen (Sollwert-Änderungen) als Mini-Timeline
+                // WP-Schaltaktionen (Sollwert-Änderungen): nur neueste Events,
+                // bis sie in die verfügbare Zeilenbreite passen.
                 const wpAkt = d.wp_aktionen || [];
-                let wpTimeline = '';
-                if (wpAkt.length > 0) {
-                    const tl = wpAkt.slice(0, 10).reverse().map(a => {
-                        const zeit = a.ts ? a.ts.substring(11, 16) : '?';
-                        const isWw = a.kommando === 'set_ww_soll';
-                        const label = isWw ? 'WW' : 'Hz';
-                        const color = isWw ? '#14b8a6' : '#8b5cf6';
-                        return `<span style="color:${color}" title="${a.kommando}=${a.wert}°C: ${a.grund || ''}">${zeit}${label}→${a.wert}°</span>`;
-                    });
-                    wpTimeline = ` <span class="ap-sep">│</span> ${tl.join(' ')}`;
-                }
+                const wpAktNeuesteZuerst = wpAkt.slice().reverse();
+                const wpSollTimeline = buildWpSollEventSnippet(wpAktNeuesteZuerst);
 
-                wpBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#14b8a6">WP:</span> VL <span class="ap-wp-val">${wv}°</span> <span class="ap-sep">·</span> RL <span class="ap-wp-val">${wr}°</span>/<span class="ap-wp-val">${wrs}°</span> <span class="ap-sep">·</span> WW <span class="ap-wp-val">${wwi}°</span>/<span class="ap-wp-val">${wws}°</span> <span class="ap-sep">·</span> Heiz <span class="ap-wp-val">${whs}°</span> <span class="ap-sep">·</span> Quelle <span class="ap-wp-val">${wqe}°</span>/<span class="ap-wp-val">${wqa}°</span>${wpTimeline}`;
+                wpBody.innerHTML = `<div class="wp-auto-line"><span class="ap-icon"></span><span class="ap-label" style="color:#14b8a6">WP:</span> VL <span class="ap-wp-val">${wv}°</span> <span class="ap-sep">·</span> RL <span class="ap-wp-val">${wr}°</span>/<span class="ap-wp-val">${wrs}°</span> <span class="ap-sep">·</span> WW <span class="ap-wp-val">${wwi}°</span>/<span class="ap-wp-val">${wws}°</span> <span class="ap-sep">·</span> Heiz <span class="ap-wp-val">${whs}°</span> <span class="ap-sep">·</span> Quelle <span class="ap-wp-val">${wqe}°</span>/<span class="ap-wp-val">${wqa}°</span></div><div class="wp-auto-line events"><span class="ap-icon"></span><span class="ap-label" style="color:#14b8a6">Soll:</span> ${wpSollTimeline}</div>`;
+            } else if (wpBody) {
+                wpBody.innerHTML = `<div class="wp-auto-line"><span class="ap-label" style="color:#14b8a6">WP:</span> <span class="ap-text">nicht verfügbar</span></div><div class="wp-auto-line events"><span class="ap-label" style="color:#14b8a6">Soll:</span> <span class="ap-text">—</span></div>`;
             }
 
             // ── Zeile 6: Temperaturen (Batt-Temp bereits im HTML integriert) ──
             document.getElementById('bd-temp').textContent = d.battery_temp != null ? d.battery_temp : '--';
-
-        } catch(e) { console.warn('BatteryDetail:', e); }
+        } catch(e) { console.warn('renderFlowStatusDetail:', e); }
     }
 
     initGauges();
@@ -1688,6 +1813,7 @@
     window.addEventListener('resize', function() {
         adjustSvgForMobile();
         syncOverlayLayout();
+        if (lastFlowStatusData) renderFlowStatusDetail(lastFlowStatusData);
     });
     </script>
 
