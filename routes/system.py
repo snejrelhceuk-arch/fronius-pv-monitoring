@@ -22,11 +22,185 @@ _failover_cache = {'ts': 0, 'result': None}
 _FAILOVER_CACHE_TTL = 60  # Sekunden (max. 1 SSH-Aufruf pro Minute)
 _backup_cache = {'ts': 0, 'result': None}
 _BACKUP_CACHE_TTL = 600  # Sekunden (10 Minuten)
+_ha_cache = {
+    'wattpilot': {'ts': 0, 'data': None},
+    'flow': {'ts': 0, 'data': None},
+}
 
 # Fritz!DECT Live-Status Cache (eigener, längerer TTL als battery_cache)
 _fritzdect_cache = {'ts': 0, 'data': None}
 _FRITZDECT_CACHE_TTL = 120  # 2 Minuten (Fritz!Box ist langsam, 1 Bulk-Request ~2s)
 _flow_cache = {'ts': 0, 'data': None}
+
+
+def _read_wattpilot_db_summary(now: float) -> dict:
+    """Kompakten Wattpilot-Status aus der DB lesen (kein Live-WebSocket)."""
+    conn = get_db_connection()
+    if not conn:
+        raise RuntimeError('DB nicht verfügbar')
+
+    try:
+        try:
+            row = conn.execute(
+                """
+                SELECT ts, energy_total_wh, power_w, car_state, session_wh,
+                       temperature_c, phase_mode, amp, trx, lmo, frc
+                FROM wattpilot_readings
+                ORDER BY ts DESC
+                LIMIT 1
+                """
+            ).fetchone()
+            has_extended_cols = True
+        except sqlite3.OperationalError:
+            row = conn.execute(
+                """
+                SELECT ts, energy_total_wh, power_w, car_state, session_wh,
+                       temperature_c, phase_mode
+                FROM wattpilot_readings
+                ORDER BY ts DESC
+                LIMIT 1
+                """
+            ).fetchone()
+            has_extended_cols = False
+    finally:
+        conn.close()
+
+    if not row:
+        raise RuntimeError('Keine Wattpilot-Daten in DB')
+
+    if has_extended_cols:
+        ts, energy_total_wh, power_w, car_state, session_wh, temperature_c, phase_mode, amp, trx, lmo, frc = row
+    else:
+        ts, energy_total_wh, power_w, car_state, session_wh, temperature_c, phase_mode = row
+        amp, trx, lmo, frc = 0, None, 0, 0
+    age_s = round(now - float(ts))
+    car_state = int(car_state or 0)
+    phase_mode = int(phase_mode or 0)
+    return {
+        'online': age_s <= 180,
+        'source': 'db',
+        'age_s': age_s,
+        'timestamp': datetime.now().isoformat(),
+        'last_update_ts': ts,
+        'energy_total_wh': energy_total_wh or 0,
+        'energy_total_kwh': round((energy_total_wh or 0) / 1000.0, 3),
+        'energy_session_wh': session_wh or 0,
+        'energy_session_kwh': round((session_wh or 0) / 1000.0, 3),
+        'power_w': float(power_w or 0),
+        'car_state': car_state,
+        'car_state_text': {
+            0: 'Unbekannt',
+            1: 'Bereit (kein Auto)',
+            2: 'Lädt',
+            3: 'Warte auf Auto',
+            4: 'Vollständig',
+            5: 'Fehler',
+        }.get(car_state, f'Unbekannt ({car_state})'),
+        'charging': car_state == 2,
+        'temperature_c': float(temperature_c or 0),
+        'phase_mode_raw': phase_mode,
+        'phase_mode': '3-phasig' if phase_mode == 2 else '1-phasig',
+        'amp': int(amp or 0),
+        'trx': trx,
+        'lmo': int(lmo or 0),
+        'frc': int(frc or 0),
+    }
+
+
+def _read_ha_flow_payload(now: float) -> dict:
+    """Kompakte HA-Flow-Daten aus raw_data + Neben-Tabellen lesen."""
+    conn = get_db_connection()
+    if not conn:
+        raise RuntimeError('DB nicht verfügbar')
+
+    try:
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute("SELECT * FROM raw_data ORDER BY ts DESC LIMIT 1")
+        row = c.fetchone()
+        if not row:
+            raise RuntimeError('Keine aktuellen raw_data vorhanden')
+
+        latest = dict(row)
+        ts = float(latest.get('ts', 0) or 0)
+        if now - ts > 120:
+            raise RuntimeError('raw_data zu alt')
+
+        wattpilot_power = 0
+        c.execute(
+            """
+            SELECT power_w, car_state FROM wattpilot_readings
+            WHERE ts > ?
+            ORDER BY ts DESC LIMIT 6
+            """,
+            (now - 180,),
+        )
+        wattpilot_rows = c.fetchall()
+        if wattpilot_rows:
+            for pw, car in wattpilot_rows:
+                if car == 2 and (pw or 0) > 0:
+                    wattpilot_power = round(pw, 0)
+                    break
+            if wattpilot_power == 0:
+                pw0 = wattpilot_rows[0][0]
+                if pw0 is not None:
+                    wattpilot_power = round(pw0, 0)
+
+        heizpatrone_power = 0
+        klima_power = 0
+        c.execute(
+            """
+            SELECT device_id, power_w FROM fritzdect_readings
+            WHERE ts > ?
+            ORDER BY ts DESC LIMIT 10
+            """,
+            (now - 60,),
+        )
+        for device_id, pw in c.fetchall():
+            if device_id == 'heizpatrone':
+                heizpatrone_power = max(0, round(pw or 0, 1))
+            elif device_id == 'klimaanlage':
+                klima_power = max(0, round(pw or 0, 1))
+    finally:
+        conn.close()
+
+    p_dc1 = latest.get('P_DC1', 0) or 0
+    p_dc2 = latest.get('P_DC2', 0) or 0
+    p_f2 = latest.get('P_F2', 0) or 0
+    p_f3 = latest.get('P_F3', 0) or 0
+    p_netz = latest.get('P_Netz', 0) or 0
+    i_batt = latest.get('I_Batt_API', 0) or 0
+    u_batt = latest.get('U_Batt_API', 0) or 0
+    soc_batt = latest.get('SOC_Batt', 0) or 0
+    p_wp = latest.get('P_WP', 0) or 0
+
+    f1 = round(p_dc1 + p_dc2, 0)
+    f2 = round(p_f2, 0)
+    f3 = round(p_f3, 0)
+    pv_total_w = round(f1 + f2 + f3, 0)
+    battery_power_w = round(i_batt * u_batt, 0)
+    grid_power_w = round(p_netz, 0)
+    total_consumption_w = round(pv_total_w - battery_power_w + grid_power_w, 0)
+    heatpump_w = max(0, round(-p_wp, 0))
+    wattpilot_w = max(0, wattpilot_power)
+    household_w = max(0, round(total_consumption_w - wattpilot_w - heatpump_w - heizpatrone_power - klima_power, 0))
+
+    return {
+        'source': 'db',
+        'timestamp': datetime.now().isoformat(),
+        'last_update_ts': ts,
+        'age_s': round(now - ts),
+        'pv_total_w': pv_total_w,
+        'grid_power_w': grid_power_w,
+        'battery_power_w': battery_power_w,
+        'battery_soc_pct': round(soc_batt, 1),
+        'consumption_total_w': total_consumption_w,
+        'household_w': household_w,
+        'wattpilot_w': wattpilot_w,
+        'heatpump_w': heatpump_w,
+        'heizpatrone_w': heizpatrone_power,
+        'klima_w': klima_power,
+    }
 
 
 def _build_battery_status_result(now, api):
@@ -313,7 +487,7 @@ def _build_automation_phasen(now, result):
         _obs_soc_min = result.get('soc_min')
         _obs_soc_max = result.get('soc_max')
 
-        # SOC-Grenz-Zeitpunkte aus letzten Switches rekonstruieren
+        # SOC-Grenz-Zeitpunkte aus letzten Switches rekonstruieren (24h-Fenster)
         _soc_switches = result.get('soc_switches', [])
         _last_soc_min_ts = None
         _last_soc_max_ts = None
@@ -322,6 +496,26 @@ def _build_automation_phasen(now, result):
                 _last_soc_min_ts = _sw.get('ts', '')[:16].replace('T', ' ')
             if _sw.get('kommando') == 'set_soc_max' and _sw.get('ergebnis') == 'OK' and not _last_soc_max_ts:
                 _last_soc_max_ts = _sw.get('ts', '')[:16].replace('T', ' ')
+        # Fallback: all-time letzter Switch wenn nicht im 24h-Fenster
+        if not _last_soc_min_ts or not _last_soc_max_ts:
+            try:
+                with sqlite3.connect(_persist_db) as _alog_fb:
+                    if not _last_soc_min_ts:
+                        _fb_min = _alog_fb.execute(
+                            "SELECT ts FROM automation_log WHERE aktor='batterie'"
+                            " AND kommando='set_soc_min' AND ergebnis='OK'"
+                            " ORDER BY ts DESC LIMIT 1").fetchone()
+                        if _fb_min:
+                            _last_soc_min_ts = _fb_min[0][:16].replace('T', ' ')
+                    if not _last_soc_max_ts:
+                        _fb_max = _alog_fb.execute(
+                            "SELECT ts FROM automation_log WHERE aktor='batterie'"
+                            " AND kommando='set_soc_max' AND ergebnis='OK'"
+                            " ORDER BY ts DESC LIMIT 1").fetchone()
+                        if _fb_max:
+                            _last_soc_max_ts = _fb_max[0][:16].replace('T', ' ')
+            except Exception:
+                pass
 
         # Nachmittag-Prognose: wann wird SOC_MAX auf 100% gesetzt?
         _nachmittag_prognose = ''
@@ -359,7 +553,7 @@ def _build_automation_phasen(now, result):
                 if _last_soc_min_ts:
                     _morgen_grund += f' seit {_last_soc_min_ts[5:]}'
                 else:
-                    _morgen_grund += ' (gestern gesetzt)'
+                    _morgen_grund += ' (kein Log verfügbar)'
                 _morgen_grund += ' — Batterie entleeren vor PV-Übernahme'
                 _phase_log['morgen'] = {
                     'status': 'done', 'zeit': _last_soc_min_ts[11:16] if _last_soc_min_ts else None,
@@ -394,6 +588,8 @@ def _build_automation_phasen(now, result):
             else:
                 _nm_aktion = f'SOC_MAX {_obs_soc_max}% → 100%'
                 _nm_grund = f'SOC_MAX aktuell {_obs_soc_max}%'
+                if _last_soc_max_ts:
+                    _nm_grund += f' (zuletzt {_last_soc_max_ts[5:16]})'
                 if _nachmittag_prognose:
                     _nm_grund += f', Öffnung {_nachmittag_prognose}'
                 else:
@@ -868,9 +1064,9 @@ def _fetch_hp_status(now, result):
                             })
             # Neueste zuerst
             hp_aktionen.reverse()
-            hp_aktionen = hp_aktionen[:20]
+            hp_aktionen = hp_aktionen[:120]
             klima_aktionen.reverse()
-            klima_aktionen = klima_aktionen[:20]
+            klima_aktionen = klima_aktionen[:120]
 
         result['hp_aktionen'] = hp_aktionen
         result['klima_aktionen'] = klima_aktionen
@@ -899,7 +1095,7 @@ def _fetch_hp_status(now, result):
                                 'grund': (_grund or '').strip()[:120],
                             })
             wp_aktionen.reverse()
-            wp_aktionen = wp_aktionen[:20]
+            wp_aktionen = wp_aktionen[:120]
         result['wp_aktionen'] = wp_aktionen
 
     except Exception as _he:
@@ -1134,7 +1330,7 @@ def api_system_info():
 
 @bp.route('/api/wattpilot/status')
 def wattpilot_status():
-    """Live-Status vom Wattpilot (mit 30s Cache)."""
+    """Wattpilot-Status aus lokaler DB (mit 30s Cache, kein Live-WebSocket)."""
     now = time.time()
 
     # 30s Cache
@@ -1142,18 +1338,101 @@ def wattpilot_status():
         return jsonify(wattpilot_cache['data'])
 
     try:
-        from wattpilot_api import WattpilotClient
-        client = WattpilotClient()
-        summary = client.get_status_summary()
+        summary = _read_wattpilot_db_summary(now)
         wattpilot_cache['data'] = summary
         wattpilot_cache['ts'] = now
         return jsonify(summary)
     except Exception as e:
-        logging.warning(f"Wattpilot offline: {e}")
+        logging.warning(f"Wattpilot-Status aus DB nicht verfügbar: {e}")
         if wattpilot_cache['data']:
             return jsonify(wattpilot_cache['data'])
-        # Offline ist normaler Betriebszustand → 200 (nicht 500)
+        # Offline/Stale ist normaler Betriebszustand → 200 (nicht 500)
         return jsonify({"online": False, "error_message": str(e), "timestamp": datetime.now().isoformat()})
+
+
+@bp.route('/api/ha')
+def ha_index():
+    """Discovery-Index für Home-Assistant-Lesepfade."""
+    return jsonify({
+        'name': 'pv-system ha export',
+        'version': 1,
+        'timestamp': datetime.now().isoformat(),
+        'endpoints': [
+            {
+                'path': '/api/ha/wattpilot',
+                'poll_seconds': 15,
+                'source': 'db',
+                'description': 'Kompakter Wattpilot-Status für HA',
+            },
+            {
+                'path': '/api/ha/flow',
+                'poll_seconds': 15,
+                'source': 'db',
+                'description': 'Kompakte Flow-/Verbrauchsdaten für HA',
+            },
+        ],
+    })
+
+
+@bp.route('/api/ha/wattpilot')
+def ha_wattpilot_status():
+    """HA-freundlicher, flacher Wattpilot-Status aus lokaler DB."""
+    now = time.time()
+    cache = _ha_cache['wattpilot']
+    if cache['data'] and (now - cache['ts']) < 15:
+        return jsonify(cache['data'])
+
+    try:
+        summary = _read_wattpilot_db_summary(now)
+        payload = {
+            'online': summary['online'],
+            'stale': summary['age_s'] > 180,
+            'age_s': summary['age_s'],
+            'last_update_ts': summary['last_update_ts'],
+            'charging': summary['charging'],
+            'power_w': summary['power_w'],
+            'car_state': summary['car_state'],
+            'car_state_text': summary['car_state_text'],
+            'energy_total_kwh': summary['energy_total_kwh'],
+            'energy_session_kwh': summary['energy_session_kwh'],
+            'temperature_c': summary['temperature_c'],
+            'phase_mode_raw': summary['phase_mode_raw'],
+            'phase_mode_text': summary['phase_mode'],
+            'amp': summary['amp'],
+            'trx': summary['trx'],
+            'lmo': summary['lmo'],
+            'frc': summary['frc'],
+            'source': 'db',
+            'timestamp': summary['timestamp'],
+        }
+        cache['data'] = payload
+        cache['ts'] = now
+        return jsonify(payload)
+    except Exception as e:
+        logging.warning(f"HA Wattpilot-Status nicht verfügbar: {e}")
+        if cache['data']:
+            return jsonify(cache['data'])
+        return jsonify({'online': False, 'error_message': str(e), 'timestamp': datetime.now().isoformat()})
+
+
+@bp.route('/api/ha/flow')
+def ha_flow_status():
+    """HA-freundliche, flache Flow-Daten aus lokaler DB."""
+    now = time.time()
+    cache = _ha_cache['flow']
+    if cache['data'] and (now - cache['ts']) < 15:
+        return jsonify(cache['data'])
+
+    try:
+        payload = _read_ha_flow_payload(now)
+        cache['data'] = payload
+        cache['ts'] = now
+        return jsonify(payload)
+    except Exception as e:
+        logging.warning(f"HA Flow-Status nicht verfügbar: {e}")
+        if cache['data']:
+            return jsonify(cache['data'])
+        return jsonify({'error_message': str(e), 'timestamp': datetime.now().isoformat()})
 
 
 @bp.route('/api/wattpilot/history')
