@@ -41,6 +41,7 @@ from typing import Optional
 import config as app_config
 from automation.engine import credential_store
 from automation.engine.obs_state import ObsState
+from automation.engine.wattpilot_recovery import WattpilotRecoveryManager
 from diagnos.health import run_all as run_diagnos_health
 from diagnos.integrity import run_all as run_diagnos_integrity
 
@@ -63,6 +64,7 @@ class EventNotifier:
         self._from = getattr(app_config, 'NOTIFICATION_FROM', 'alerts@example.invalid')
         self._events = getattr(app_config, 'NOTIFICATION_EVENTS', [])
         self._thresholds = getattr(app_config, 'EVENT_THRESHOLDS', {})
+        self._wattpilot_recovery = WattpilotRecoveryManager()
 
     def prüfe_und_melde(self, obs: ObsState) -> list[str]:
         """Prüfe alle konfigurierten Events gegen ObsState.
@@ -425,6 +427,16 @@ class EventNotifier:
                 attachment,
             ):
                 ausgeloest.append(alarm_key)
+
+        # Optionale Auto-Recovery fuer anhaltende Wattpilot-Stoerung.
+        # Erfolgt nur bei explizit aktivierter Konfiguration.
+        try:
+            recovery_info = self._wattpilot_recovery.evaluate_and_recover(attachment)
+            if recovery_info:
+                LOG.warning(f"Integrity-Recovery: {recovery_info}")
+                ausgeloest.append('integrity:wattpilot_auto_recovery')
+        except Exception as e:
+            LOG.error(f"Integrity-Recovery Fehler: {e}")
 
         return ausgeloest
 

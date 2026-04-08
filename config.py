@@ -93,6 +93,22 @@ WATTPILOT_WRITE_RETRY_PAUSE = 3    # Sekunden Pause zwischen Schreib-Retries
 WATTPILOT_READINGS_RETENTION_DAYS = 90   # Einzelmessungen (90 Tage)
 WATTPILOT_DAILY_RETENTION_DAYS = 3650    # Tagesaggregate (~10 Jahre)
 
+# --- Wattpilot Auto-Recovery (Automation, konservativ) ---
+# Standard: AUS. Nur aktivieren, wenn Betriebsbeobachtung dies erfordert.
+WATTPILOT_AUTO_RECOVERY_ENABLED = False
+# Modi: 'disabled', 'collector_restart', 'wallbox_reset'
+WATTPILOT_AUTO_RECOVERY_MODE = 'disabled'
+# Zusaetzliche Sicherheitsfreigabe fuer wallbox_reset (rbt).
+# Muss explizit TRUE sein, sonst bleibt wallbox_reset gesperrt.
+WATTPILOT_AUTO_RECOVERY_ALLOW_WALLBOX_RESET = False
+WATTPILOT_AUTO_RECOVERY_MIN_FAIL_AGE_S = 900           # Trigger erst nach 15 min Stoerung
+WATTPILOT_AUTO_RECOVERY_ERROR_THRESHOLD = 8            # oder >=8 Fehler in Folge
+WATTPILOT_AUTO_RECOVERY_COOLDOWN_S = 21600             # 6h Cooldown zwischen Aktionen
+WATTPILOT_AUTO_RECOVERY_MAX_ACTIONS_PER_DAY = 1        # max 1 Recovery/Tag
+WATTPILOT_AUTO_RECOVERY_ACTIVE_POWER_W = 500           # keine Recovery waehrend aktiver Ladung
+WATTPILOT_AUTO_RECOVERY_RESET_TIMER_MS = 10000         # rbt-Wert fuer Wallbox-Reset
+WATTPILOT_AUTO_RECOVERY_STATE_FILE = os.path.join(BASE_DIR, 'config', 'wattpilot_recovery_state.json')
+
 # --- Datenerfassung ---
 POLL_INTERVAL = 3          # Sekunden zwischen Modbus-Abfragen
 BUFFER_MAXLEN = 400        # RAM-Buffer Größe (~20min bei 3s Polling)

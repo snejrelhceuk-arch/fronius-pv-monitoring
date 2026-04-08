@@ -10,7 +10,11 @@ CREATE TABLE IF NOT EXISTS wattpilot_readings (
     car_state INTEGER DEFAULT 0,      -- Auto-Status (1=Idle, 2=Charging, ...)
     session_wh REAL DEFAULT 0,        -- Session-Energie in Wh
     temperature_c REAL DEFAULT 0,     -- Gerätetemperatur in °C
-    phase_mode INTEGER DEFAULT 0      -- 1=1-phasig, 2=3-phasig
+    phase_mode INTEGER DEFAULT 0,     -- 1=1-phasig, 2=3-phasig
+    amp INTEGER DEFAULT 0,            -- aktuell eingestellter Maximalstrom [A]
+    trx TEXT,                         -- aktuell erkannter RFID-Chip
+    lmo INTEGER DEFAULT 0,            -- Lademodus (3=Default,4=Eco,5=NextTrip)
+    frc INTEGER DEFAULT 0             -- Force-State (0=neutral,1=off,2=on)
 );
 
 CREATE INDEX IF NOT EXISTS idx_wattpilot_ts ON wattpilot_readings(ts);

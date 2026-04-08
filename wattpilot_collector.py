@@ -101,11 +101,35 @@ def remove_pid_file():
 def init_db():
     """Erstelle Wattpilot-Tabellen falls nicht vorhanden."""
     conn = sqlite3.connect(DB_PATH)
-    schema_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'doc', 'schema', 'db_schema_wattpilot.sql')
-    if os.path.exists(schema_file):
-        with open(schema_file, 'r') as f:
-            conn.executescript(f.read())
-        logger.info("Wattpilot DB-Schema initialisiert")
+    schema_candidates = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), 'doc', 'collector', 'schema', 'db_schema_wattpilot.sql'),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), 'doc', 'schema', 'db_schema_wattpilot.sql'),
+    ]
+    for schema_file in schema_candidates:
+        if os.path.exists(schema_file):
+            with open(schema_file, 'r') as f:
+                conn.executescript(f.read())
+            logger.info("Wattpilot DB-Schema initialisiert")
+            break
+
+    # Additive Migration fuer bestehende Installationen
+    try:
+        cols = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(wattpilot_readings)").fetchall()
+        }
+        for col, ddl in (
+            ('amp', 'INTEGER DEFAULT 0'),
+            ('trx', 'TEXT'),
+            ('lmo', 'INTEGER DEFAULT 0'),
+            ('frc', 'INTEGER DEFAULT 0'),
+        ):
+            if col not in cols:
+                conn.execute(f"ALTER TABLE wattpilot_readings ADD COLUMN {col} {ddl}")
+                logger.info(f"Wattpilot DB-Migration: Spalte '{col}' ergänzt")
+        conn.commit()
+    except Exception as e:
+        logger.warning(f"Wattpilot DB-Migration konnte nicht vollständig angewendet werden: {e}")
     conn.close()
 
 
@@ -161,14 +185,19 @@ def collect_reading():
     session_wh = summary.get('energy_session_wh', 0) or 0
     temperature_c = summary.get('temperature_c', 0) or 0
     phase_mode = summary.get('phase_mode_raw', 0) or 0
+    amp = int(summary.get('amp', 0) or 0)
+    trx_raw = summary.get('trx', None)
+    trx = '' if trx_raw is None else str(trx_raw)
+    lmo = int(summary.get('lmo', 0) or 0)
+    frc = int(summary.get('frc', 0) or 0)
     
     conn = sqlite3.connect(DB_PATH, timeout=10.0)
     try:
         conn.execute("""
             INSERT OR REPLACE INTO wattpilot_readings 
-                (ts, energy_total_wh, power_w, car_state, session_wh, temperature_c, phase_mode)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (ts, energy_total_wh, power_w, car_state, session_wh, temperature_c, phase_mode))
+                (ts, energy_total_wh, power_w, car_state, session_wh, temperature_c, phase_mode, amp, trx, lmo, frc)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (ts, energy_total_wh, power_w, car_state, session_wh, temperature_c, phase_mode, amp, trx, lmo, frc))
         conn.commit()
         
         kwh = energy_total_wh / 1000.0
