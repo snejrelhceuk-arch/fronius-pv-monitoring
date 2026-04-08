@@ -226,6 +226,12 @@ class RegelHeizAbsenkung(Regel):
         if not ist_aktiv(matrix, self.regelkreis):
             return 0
 
+        # FBH-Heizbedarf hat Vorrang vor Tagwert-Wiederherstellung.
+        # Ausnahme "Heizperiode verschieben" ist separat ueber
+        # _verschoben['heiz_aktiv'] modelliert und wird unten behandelt.
+        if _heizbedarf['aktiv']:
+            return 0
+
         # Heiz-Verschiebung hat Vorrang → nicht eingreifen
         if _verschoben['heiz_aktiv']:
             return 0
@@ -926,8 +932,10 @@ class RegelHeizBedarf(Regel):
       ≤ temp_mild_c (15°C): Heiz-Soll = standard            (mittlere Prio)
       > temp_mild_c:        Keine Aktion                     (gering)
 
-    Koordination: Höchster Score aller WP-Regeln → überstimmt
-                  Absenkung/Verschiebung via Kommando-Deduplizierung.
+    Koordination: Heizbedarf setzt _heizbedarf['aktiv'] und blockiert
+                  damit die Heiz-Absenkung zyklusuebergreifend. Fuer
+                  aktive Heiz-Verschiebung bleibt _verschoben['heiz_aktiv']
+                  der bewusst hoeher priorisierte Ausnahmefall.
     """
 
     name = 'heiz_bedarf'

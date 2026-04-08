@@ -15,6 +15,7 @@ import logging
 import os
 import sqlite3
 import time
+from collections import defaultdict, deque
 from datetime import datetime
 
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -71,6 +72,50 @@ def init_persist_log(db_path: str = PERSIST_DB_PATH) -> sqlite3.Connection:
 # Deduplizierungs-Sperre: Identische Befehle innerhalb dieser Zeit überspringen
 DEDUP_INTERVALL_S = 45  # Sekunden
 DEDUP_FEHLER_INTERVALL_S = 300  # 5 Minuten Cooldown nach FEHLER
+OSCILLATION_WINDOW_S = 20 * 60  # 20 Minuten Beobachtungsfenster
+OSCILLATION_MIN_EVENTS = 6      # mindestens A-B-A-B-A-B
+OSCILLATION_WARN_COOLDOWN_S = 30 * 60
+
+
+def _detect_value_oscillation(entries: list[tuple[float, str, str]]) -> dict | None:
+    """Erkenne Alternieren zwischen genau zwei Werten.
+
+    Erwartet chronologisch sortierte Eintraege: (ts, wert_str, grund).
+    Liefert Metadaten fuer eine Warnung oder None.
+    """
+    if len(entries) < OSCILLATION_MIN_EVENTS:
+        return None
+
+    tail = entries[-8:]
+    values = [value for _, value, _ in tail]
+    unique_values = set(values)
+    if len(unique_values) != 2:
+        return None
+
+    if any(values[i] == values[i - 1] for i in range(1, len(values))):
+        return None
+
+    if any(values[i] != values[i - 2] for i in range(2, len(values))):
+        return None
+
+    first_ts = tail[0][0]
+    last_ts = tail[-1][0]
+    if (last_ts - first_ts) > OSCILLATION_WINDOW_S:
+        return None
+
+    ordered_values = []
+    for value in values:
+        if value not in ordered_values:
+            ordered_values.append(value)
+
+    return {
+        'value_a': ordered_values[0],
+        'value_b': ordered_values[1],
+        'count': len(tail),
+        'duration_s': last_ts - first_ts,
+        'first_reason': tail[0][2],
+        'last_reason': tail[-1][2],
+    }
 
 
 class Actuator:
@@ -93,6 +138,9 @@ class Actuator:
         self._letzte_aktion: dict[tuple, float] = {}
         # FEHLER-Cooldown: {(aktor, kommando, wert_str): timestamp}
         self._letzte_fehler: dict[tuple, float] = {}
+        # Erfolgreiche Aktionshistorie fuer Flatter-/Oszillationserkennung
+        self._aktionshistorie: dict[tuple[str, str], deque] = defaultdict(deque)
+        self._letzte_oszillationswarnung: dict[tuple[str, str, str, str], float] = {}
 
     def _register_default_aktoren(self):
         """Standard-Aktoren registrieren."""
@@ -161,6 +209,7 @@ class Actuator:
         # Bei Erfolg: Timestamp für Deduplizierung merken
         if ergebnis.get('ok'):
             self._letzte_aktion[dedup_key] = now
+            self._pruefe_oszillation(aktion, now)
         else:
             self._letzte_fehler[dedup_key] = now
 
@@ -177,6 +226,50 @@ class Actuator:
         self._log_aktion(aktion, ergebnis)
 
         return ergebnis
+
+    def _pruefe_oszillation(self, aktion: dict, now_ts: float) -> None:
+        """Warne bei schneller Alternierung erfolgreicher Sollwertschaltungen."""
+        aktor_name = aktion.get('aktor', '')
+        kommando = aktion.get('kommando', '')
+        wert_str = str(aktion.get('wert', ''))
+        grund = str(aktion.get('grund', '') or '')[:160]
+
+        # Nur wertbehaftete Schaltaktionen koennen sinnvoll oszillieren.
+        if not aktor_name or not kommando or wert_str == '':
+            return
+
+        hist_key = (aktor_name, kommando)
+        history = self._aktionshistorie[hist_key]
+        history.append((now_ts, wert_str, grund))
+
+        while history and (now_ts - history[0][0]) > OSCILLATION_WINDOW_S:
+            history.popleft()
+
+        detection = _detect_value_oscillation(list(history))
+        if not detection:
+            return
+
+        value_a = detection['value_a']
+        value_b = detection['value_b']
+        warn_key = (aktor_name, kommando, min(value_a, value_b), max(value_a, value_b))
+        last_warn_ts = self._letzte_oszillationswarnung.get(warn_key, 0)
+        if (now_ts - last_warn_ts) < OSCILLATION_WARN_COOLDOWN_S:
+            return
+
+        duration_min = detection['duration_s'] / 60.0
+        LOG.warning(
+            "Oszillationsverdacht: %s.%s alterniert zwischen %s und %s "
+            "(%s Schaltungen in %.1f min). Erste Ursache: %s | Letzte Ursache: %s",
+            aktor_name,
+            kommando,
+            value_a,
+            value_b,
+            detection['count'],
+            duration_min,
+            detection['first_reason'] or '-',
+            detection['last_reason'] or '-',
+        )
+        self._letzte_oszillationswarnung[warn_key] = now_ts
 
     def ausfuehren_plan(self, aktionen: list[dict]) -> list[dict]:
         """Führe einen Action-Plan (Liste von Aktionen) aus.
@@ -197,18 +290,20 @@ class Actuator:
     # ── Logging ──────────────────────────────────────────────
 
     def _log_aktion(self, aktion: dict, ergebnis: dict):
-        """Logge Aktion + Ergebnis in Persist-DB."""
+        """Logge Aktion + Ergebnis in Persist-DB + Schaltlog."""
+        # Status unabhängig von DB-Erfolg bestimmen
+        if self.dry_run:
+            status = 'DRY-RUN'
+        elif ergebnis.get('ok'):
+            status = 'OK'
+        else:
+            status = 'FEHLER'
+
+        # ── Persist-DB (automation_log) ──
         for _attempt in range(2):
             try:
                 conn = self._get_persist_conn()
                 now = datetime.now().isoformat()
-
-                if self.dry_run:
-                    status = 'DRY-RUN'
-                elif ergebnis.get('ok'):
-                    status = 'OK'
-                else:
-                    status = 'FEHLER'
 
                 verify = ergebnis.get('verify')
                 verify_ok = None
@@ -237,21 +332,19 @@ class Actuator:
                 conn.commit()
                 break  # Erfolg — Schleife verlassen
             except Exception as e:
-                LOG.error(f"Persist-DB Logging fehlgeschlagen: {e}")
-                # Bei "malformed" oder I/O-Fehlern: Verbindung verwerfen und neu aufbauen
-                if _attempt == 0 and ('malformed' in str(e) or 'disk I/O' in str(e)):
-                    LOG.warning("Persist-DB Verbindung wird erneuert (malformed/IO)")
-                    try:
-                        if self._persist_conn:
-                            self._persist_conn.close()
-                    except Exception:
-                        pass
-                    self._persist_conn = None
-                    # Retry in nächster Iteration
-                else:
-                    break  # Kein Retry bei anderen Fehlern
+                LOG.error(f"Persist-DB Logging fehlgeschlagen (Versuch {_attempt + 1}/2): {e}")
+                # Verbindung IMMER verwerfen → frischer Reconnect beim Retry
+                try:
+                    if self._persist_conn:
+                        self._persist_conn.close()
+                except Exception:
+                    pass
+                self._persist_conn = None
+                if _attempt > 0:
+                    LOG.error("Persist-DB automation_log dauerhaft gestört — "
+                              "Dashboard-Anzeige wird unvollständig!")
 
-        # ── Zentrales Schaltlog ──
+        # ── Zentrales Schaltlog (immer, unabhängig von DB-Erfolg) ──
         try:
             wert_str = ''
             if aktion.get('wert') is not None:

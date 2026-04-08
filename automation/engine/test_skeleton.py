@@ -39,6 +39,7 @@ from automation.engine.engine import (
     RegelForecastPlausi,
     RegelWattpilotBattSchutz,
 )
+from automation.engine.regeln.waermepumpe import RegelHeizAbsenkung, RegelHeizBedarf, _heizbedarf
 from automation.engine.regeln.geraete import RegelHeizpatrone
 from automation.engine.param_matrix import (
     lade_matrix, validiere_matrix, get_param, ist_aktiv,
@@ -372,8 +373,10 @@ def test_regel_morgen_soc_min():
         assert aktionen[0]['kommando'] == 'set_soc_mode'
         assert aktionen[0]['wert'] == 'manual'
         assert aktionen[1]['kommando'] == 'set_soc_min'
-        assert aktionen[1]['wert'] == 5
-        LOG.info(f"✓ Aktionen: {[a['kommando'] for a in aktionen]}")
+        # Dynamisches SOC_MIN aus Nacht-Prognose (Fallback=20% wenn keine DB-Historie)
+        soc_min_wert = aktionen[1]['wert']
+        assert 15 <= soc_min_wert <= 25, f"Erwarte SOC_MIN 15-25%, got {soc_min_wert}%"
+        LOG.info(f"✓ Aktionen: {[a['kommando'] for a in aktionen]}, SOC_MIN={soc_min_wert}%")
 
     # Nachmittags 15:00 → außerhalb Zeitfenster → Score 0
     fake_afternoon = datetime(2025, 6, 15, 15, 0)
@@ -407,7 +410,7 @@ def test_regel_komfort_reset_morgen_sperre():
     regel = RegelKomfortReset()
 
     # 05:30, Sunrise=6.0 -> > Sunrise-1h, gute Prognose
-    # Erwartung: Komfort-Reset greift NICHT ein, SOC_MIN=5% bleibt unangetastet.
+    # Erwartung: Komfort-Reset greift NICHT ein, SOC_MIN=5% (bzw. 20%) bleibt.
     fake_time_block = datetime(2025, 6, 15, 5, 30)
     with patch('automation.engine.regeln.soc_steuerung.datetime') as mock_dt:
         mock_dt.now.return_value = fake_time_block
@@ -417,7 +420,7 @@ def test_regel_komfort_reset_morgen_sperre():
             forecast_quality='gut',
             sunrise=6.0,
             sunset=20.5,
-            soc_min=5,
+            soc_min=20,
             soc_max=75,
             soc_mode='manual',
             batt_soc_pct=24,
@@ -428,8 +431,8 @@ def test_regel_komfort_reset_morgen_sperre():
         assert aktionen == [], f"Erwarte keine Aktionen, got {aktionen}"
         LOG.info("✓ 05:30, forecast=gut: Komfort-Reset gesperrt")
 
-    # 04:30, Sunrise=6.0 -> vor Sunrise-1h, SOC_MIN=5% (Stress)
-    # Erwartung: Guard greift trotzdem, weil SOC_MIN bereits auf Stress steht
+    # 04:30, Sunrise=6.0 -> vor Sunrise-1h, SOC_MIN=20% (Morgen-Öffnung)
+    # Erwartung: Guard greift, weil SOC_MIN < Komfort (25%)
     # und wir im Nachtlast-Fenster (SR-3h bis SR) sind → Ping-Pong-Schutz.
     fake_time_allow = datetime(2025, 6, 15, 4, 30)
     with patch('automation.engine.regeln.soc_steuerung.datetime') as mock_dt:
@@ -440,14 +443,14 @@ def test_regel_komfort_reset_morgen_sperre():
             forecast_quality='gut',
             sunrise=6.0,
             sunset=20.5,
-            soc_min=5,
+            soc_min=20,
             soc_max=75,
             soc_mode='manual',
             batt_soc_pct=24,
         )
         score2 = regel.bewerte(obs2, matrix)
-        assert score2 == 0, f"Erwarte Score 0 bei SOC_MIN=Stress im Nachtlast-Fenster, got {score2}"
-        LOG.info("✓ 04:30, forecast=gut, SOC_MIN=5%%: Komfort-Reset gesperrt (Ping-Pong-Schutz)")
+        assert score2 == 0, f"Erwarte Score 0 bei SOC_MIN<Komfort im Nachtlast-Fenster, got {score2}"
+        LOG.info("✓ 04:30, forecast=gut, SOC_MIN=20%%: Komfort-Reset gesperrt (Ping-Pong-Schutz)")
 
     # 04:30, Sunrise=6.0 -> vor Sunrise-1h, SOC_MIN=25% (Komfort)
     # Erwartung: Komfort-Reset darf bewerten (SOC_MIN nicht auf Stress,
@@ -501,8 +504,12 @@ def test_regel_morgen_soc_min_nachtlast_oeffnung():
 
         aktionen = regel.erzeuge_aktionen(obs, matrix)
         assert len(aktionen) >= 1, f"Erwarte Aktionen für frühe Öffnung, got {aktionen}"
-        assert any(a['kommando'] == 'set_soc_min' and a['wert'] == 5 for a in aktionen)
-        LOG.info("✓ 03:35, Grid/WP aktiv bei SOC_MIN=25%: Nachtlast-Öffnung greift")
+        # Nachtlast-Öffnung: Dynamisches SOC_MIN (Fallback=20% ohne DB-Daten)
+        soc_min_aktion = [a for a in aktionen if a['kommando'] == 'set_soc_min']
+        assert len(soc_min_aktion) == 1, f"Erwarte set_soc_min Aktion, got {aktionen}"
+        soc_min_wert = soc_min_aktion[0]['wert']
+        assert 15 <= soc_min_wert <= 25, f"Erwarte SOC_MIN 15-25% bei Nachtlast, got {soc_min_wert}%"
+        LOG.info("✓ 03:35, Grid/WP aktiv bei SOC_MIN=25%%: Nachtlast-Öffnung greift (SOC_MIN→%s%%)", soc_min_wert)
 
     return True
 
@@ -575,7 +582,39 @@ def test_regel_heizpatrone_phase0_braucht_offene_batterie():
         assert score_offen > 0, f"Erwarte Score > 0 bei offener Batterie, got {score_offen}"
         assert aktionen_offen, "Erwarte Phase-0-Aktion bei offener Batterie"
         assert aktionen_offen[0]['kommando'] == 'hp_ein'
-        LOG.info("✓ Phase 0 blockiert bei SOC_MIN=25%, erlaubt bei SOC_MIN=5%")
+        LOG.info("✓ Phase 0 blockiert bei SOC_MIN=25%, erlaubt bei SOC_MIN=5%% (Score=%s)", score_offen)
+
+        # Mittlere Nacht: SOC_MIN=16% → Phase 0 erlaubt mit reduziertem Score
+        # Frische Instanz um Burst-State vom vorherigen Test zu vermeiden.
+        regel2 = RegelHeizpatrone()
+        regel2._letzter_hp_zustand = False
+        regel2._letzte_aus = 0
+
+        obs_mittel = ObsState(
+            sunrise=6.33,
+            sunset=19.5,
+            soc_min=16,
+            soc_max=75,
+            batt_soc_pct=25.0,
+            batt_power_w=0.0,
+            house_load_w=320.0,
+            wp_power_w=0.0,
+            ev_power_w=0.0,
+            forecast_quality='gut',
+            sunshine_hours=8.0,
+            forecast_rest_kwh=80.0,
+            forecast_power_profile=forecast_profile,
+            heizpatrone_aktiv=False,
+        )
+
+        score_mittel = regel2.bewerte(obs_mittel, matrix)
+        assert score_mittel > 0, f"Erwarte Score > 0 bei SOC_MIN=16% (mittlere Nacht), got {score_mittel}"
+        assert score_mittel < score_offen, (
+            f"Erwarte reduzierten Score bei SOC_MIN=16% vs 5%: "
+            f"{score_mittel} sollte < {score_offen} sein"
+        )
+        LOG.info("✓ Phase 0 erlaubt bei SOC_MIN=16%% mit reduziertem Score %s < %s",
+                 score_mittel, score_offen)
 
     return True
 
@@ -585,6 +624,8 @@ def test_regel_nachmittag_soc_max():
     _sep("6d. RegelNachmittagSocMax")
 
     matrix = lade_matrix(DEFAULT_MATRIX_PATH)
+    # Legacy-Pfad fuer deterministische Basisprüfung: ohne Nacht-Dynamik
+    matrix['regelkreise']['nachmittag_soc_max']['parameter']['nacht_soc_dynamik_aktiv']['wert'] = False
     regel = RegelNachmittagSocMax()
 
     # 16:30, Sunset 17.5 → nur 1h bis Sunset → max_stunden_vor_sunset = 1.5 → Deadline!
@@ -670,6 +711,8 @@ def test_regel_nachmittag_forecast_rest():
     _sep("6d2. Nachmittag mit forecast_rest + cloud_rest")
 
     matrix = lade_matrix(DEFAULT_MATRIX_PATH)
+    # Deterministischer Test: Dynamik deaktivieren (done-check gegen stress_max_pct=100)
+    matrix['regelkreise']['nachmittag_soc_max']['parameter']['nacht_soc_dynamik_aktiv']['wert'] = False
     regel = RegelNachmittagSocMax()
 
     # 17:30, Sunset 18.5 → 1h bis Sunset → Deadline-Zone → Score=55
@@ -916,6 +959,62 @@ def test_engine_multi_aktion(ram_db_path: str, persist_db_path: str):
     return True
 
 
+def test_regel_heiz_absenkung_gibt_heizbedarf_nach():
+    """Regression: Tagwert-Wiederherstellung darf aktiven Heizbedarf nicht rueckgaengig machen."""
+    _sep("9. WP Heiz-Absenkung vs Heiz-Bedarf")
+
+    matrix = lade_matrix(DEFAULT_MATRIX_PATH)
+    regel_bedarf = RegelHeizBedarf()
+    regel_absenkung = RegelHeizAbsenkung()
+
+    _heizbedarf['aktiv'] = False
+    _heizbedarf['seit'] = None
+
+    obs = ObsState(
+        fbh_aktiv=True,
+        wp_aussen_temp_c=3.2,
+        wp_heiz_soll_c=37,
+    )
+
+    score_bedarf = regel_bedarf.bewerte(obs, matrix)
+    assert score_bedarf > 0, f"Erwarte aktiven HeizBedarf, got {score_bedarf}"
+    assert _heizbedarf['aktiv'] is True, "HeizBedarf sollte Aktiv-Flag setzen"
+
+    score_absenkung = regel_absenkung.bewerte(obs, matrix)
+    assert score_absenkung == 0, (
+        f"Heiz-Absenkung muss aktivem HeizBedarf nachgeben, got {score_absenkung}"
+    )
+    LOG.info("✓ Heiz-Absenkung gibt aktivem HeizBedarf nach")
+    return True
+
+
+def test_actuator_oszillationserkennung(persist_db_path: str):
+    """Regression: Alternierende Sollwertfolge soll als Oszillation erkannt werden."""
+    _sep("10. Actuator Oszillationserkennung")
+
+    actuator = Actuator(dry_run=True, persist_db_path=persist_db_path)
+    with patch('automation.engine.actuator.LOG.warning') as mock_warning:
+        start = 1_000_000.0
+        for idx, wert in enumerate([37, 40, 37, 40, 37, 40]):
+            action = {
+                'tier': 2,
+                'aktor': 'waermepumpe',
+                'kommando': 'set_heiz_soll',
+                'wert': wert,
+                'grund': f'Testfolge {idx + 1}',
+            }
+            with patch('automation.engine.actuator.time.time', return_value=start + idx * 60.0):
+                result = actuator.ausfuehren(action)
+            assert result['ok'], f"Dry-Run Aktion fehlgeschlagen: {result}"
+
+        warn_messages = [call for call in mock_warning.call_args_list if 'Oszillationsverdacht' in str(call)]
+        assert warn_messages, "Erwarte mindestens eine Oszillationswarnung"
+
+    actuator.close()
+    LOG.info("✓ Oszillationserkennung spricht auf alternierende Sollwerte an")
+    return True
+
+
 def main():
     print("\n" + "█" * 60)
     print("  PV-Automation Skeleton — Dry-Run-Test")
@@ -954,6 +1053,8 @@ def main():
             # Integration Tests (Phase 2)
             ('Engine Zyklus-Filter', lambda: test_engine_zyklusfilter(ram_db, persist_db)),
             ('Multi-Aktions-Plan', lambda: test_engine_multi_aktion(ram_db, persist_db)),
+            ('Regel: Heiz-Absenkung gibt HeizBedarf nach', test_regel_heiz_absenkung_gibt_heizbedarf_nach),
+            ('Actuator: Oszillationserkennung', lambda: test_actuator_oszillationserkennung(persist_db)),
         ]
 
         passed = 0

@@ -11,7 +11,13 @@ Siehe: doc/BATTERIE_STRATEGIEN.md
 from __future__ import annotations
 
 import logging
+import os
+import sqlite3
+import time
 from datetime import datetime
+from typing import Optional, Tuple
+
+import config as app_config
 from automation.engine.obs_state import ObsState
 from automation.engine.regeln.basis import Regel
 from automation.engine.regeln.soc_extern import soc_extern_tracker
@@ -46,8 +52,9 @@ def _nachtlast_oeffnung_noetig(obs: ObsState, matrix: dict) -> bool:
     if sunrise is None or soc_min is None or soc is None:
         return False
 
-    stress = get_param(matrix, 'morgen_soc_min', 'stress_min_pct', 5)
-    if soc_min <= stress:
+    # Bereits geöffnet wenn SOC_MIN unter Komfort → nicht erneut triggern
+    komfort_min = int(get_param(matrix, 'komfort_reset', 'komfort_min_pct', 25))
+    if soc_min < komfort_min:
         return False
 
     now_h = _jetzt_h()
@@ -61,6 +68,174 @@ def _nachtlast_oeffnung_noetig(obs: ObsState, matrix: dict) -> bool:
 
 
 # ═════════════════════════════════════════════════════════════
+# NACHT-PROGNOSE — Dynamische SOC-Ziele aus historischem Verbrauch
+# (Shared zwischen Morgen- und Nachmittag-Regeln)
+# ═════════════════════════════════════════════════════════════
+
+_nacht_prognose_cache: dict = {'ts': 0.0, 'value': None}
+_RK_NACHT = 'nachmittag_soc_max'
+
+
+def _schaetze_wp_nacht_kwh(obs: ObsState, matrix: dict) -> Optional[float]:
+    """Schätze WP-Verbrauch für kommende Nacht [kWh]."""
+    start_h = float(get_param(matrix, _RK_NACHT, 'nachtfenster_start_h', 22.0))
+    ende_h = float(get_param(matrix, _RK_NACHT, 'nachtfenster_ende_h', 6.0))
+    nacht_h = ((24.0 - start_h) + ende_h) if ende_h <= start_h else (ende_h - start_h)
+    nacht_h = max(1.0, min(12.0, nacht_h))
+
+    if obs.wp_last30h_kwh is not None and obs.wp_last30h_kwh > 0:
+        return max(0.0, float(obs.wp_last30h_kwh) * nacht_h / 30.0)
+    now_h = _jetzt_h()
+    if obs.wp_today_kwh is not None and obs.wp_today_kwh > 0 and now_h > 1.0:
+        return max(0.0, float(obs.wp_today_kwh) * nacht_h / now_h)
+    wp_w = obs.wp_power_avg30_w if obs.wp_power_avg30_w is not None else obs.wp_power_w
+    if wp_w is not None and wp_w > 0:
+        return max(0.0, float(wp_w) * nacht_h / 1000.0)
+    return None
+
+
+def _lese_nachtverbrauch_good_days(matrix: dict) -> Optional[dict]:
+    """Historischen Nachtverbrauch an Gut-Prognose-Tagen lesen."""
+    lookback = int(get_param(matrix, _RK_NACHT, 'nacht_last_lookback_tage', 21))
+    min_n = int(get_param(matrix, _RK_NACHT, 'nacht_last_min_samples', 4))
+    start_h = float(get_param(matrix, _RK_NACHT, 'nachtfenster_start_h', 22.0))
+    ende_h = float(get_param(matrix, _RK_NACHT, 'nachtfenster_ende_h', 6.0))
+
+    db_path = next((p for p in [app_config.DB_PATH, app_config.DB_PERSIST_PATH]
+                     if p and os.path.exists(p)), None)
+    if not db_path:
+        return None
+    try:
+        conn = sqlite3.connect(f'file:{db_path}?mode=ro', uri=True, timeout=3.0)
+    except Exception:
+        return None
+    try:
+        rows = conn.execute(
+            "SELECT date FROM forecast_daily "
+            "WHERE quality='gut' AND date < date('now','localtime') "
+            "ORDER BY date DESC LIMIT ?", (lookback,)
+        ).fetchall()
+        if not rows:
+            return None
+
+        totals, wps = [], []
+        for (dstr,) in rows:
+            if not dstr:
+                continue
+            dstr = str(dstr)
+            ts_s = int(time.mktime(time.strptime(
+                f"{dstr} {int(start_h):02d}:{int((start_h % 1) * 60):02d}:00",
+                '%Y-%m-%d %H:%M:%S')))
+            window_h = ((24.0 - start_h) + ende_h) if ende_h <= start_h else (ende_h - start_h)
+            ts_e = ts_s + int(window_h * 3600)
+            if ts_e <= ts_s:
+                continue
+            row = conn.execute(
+                "SELECT SUM(COALESCE(W_Verbrauch,0))/1000.0, "
+                "SUM(COALESCE(W_Imp_WP_delta,0))/1000.0 "
+                "FROM data_1min WHERE ts>=? AND ts<?", (ts_s, ts_e)
+            ).fetchone()
+            if not row:
+                continue
+            t_kwh, w_kwh = float(row[0] or 0), float(row[1] or 0)
+            if t_kwh <= 0.2:
+                continue
+            totals.append(t_kwh)
+            wps.append(max(0.0, w_kwh))
+
+        if len(totals) < min_n:
+            return None
+        return {
+            'avg_total_kwh': round(sum(totals) / len(totals), 2),
+            'avg_wp_kwh': round(sum(wps) / len(wps), 2) if wps else 0.0,
+            'samples': len(totals),
+        }
+    except Exception as e:
+        LOG.debug("Nachtverbrauch nicht berechenbar: %s", e)
+        return None
+    finally:
+        conn.close()
+
+
+def _prognose_nachtverbrauch_kwh(obs: ObsState, matrix: dict) -> Optional[dict]:
+    """Prognostizierter Nachtverbrauch aus Good-Day-Historie + WP-Trend."""
+    global _nacht_prognose_cache
+    if not bool(get_param(matrix, _RK_NACHT, 'nacht_soc_dynamik_aktiv', True)):
+        return None
+    ttl = int(get_param(matrix, _RK_NACHT, 'nacht_last_cache_s', 1800))
+    now_ts = time.time()
+    if _nacht_prognose_cache['value'] is not None and (now_ts - _nacht_prognose_cache['ts']) <= ttl:
+        return _nacht_prognose_cache['value']
+
+    hist = _lese_nachtverbrauch_good_days(matrix)
+    if not hist:
+        return None
+    wp_est = _schaetze_wp_nacht_kwh(obs, matrix)
+    pred = float(hist['avg_total_kwh'])
+    if wp_est is not None:
+        pred += max(0.0, float(wp_est) - float(hist.get('avg_wp_kwh', 0.0)))
+
+    lo = float(get_param(matrix, _RK_NACHT, 'nachtverbrauch_min_kwh', 1.0))
+    hi = float(get_param(matrix, _RK_NACHT, 'nachtverbrauch_max_kwh', 18.0))
+    pred = max(lo, min(hi, pred))
+
+    result = {
+        'pred_kwh': round(pred, 2),
+        'hist_kwh': float(hist['avg_total_kwh']),
+        'wp_hist_kwh': float(hist.get('avg_wp_kwh', 0.0)),
+        'wp_est_kwh': round(float(wp_est), 2) if wp_est is not None else None,
+        'samples': int(hist['samples']),
+    }
+    _nacht_prognose_cache = {'ts': now_ts, 'value': result}
+    return result
+
+
+def _dynamische_soc_ziele(obs: ObsState, matrix: dict) -> Optional[Tuple[int, int, dict]]:
+    """Dynamische SOC-Ziele aus prognostiziertem Nachtverbrauch.
+
+    Gibt (soc_min_morgen, soc_max_abend, prognose) zurück.
+
+    Bedarfsbasierter Algorithmus — gegenläufige Skalierung:
+      SOC_MAX = komfort_min + Nacht-Bedarf-% + Sicherheit  [≥ komfort_max]
+        → Leichte Nacht (3 kWh): SOC_MAX = 75% (Komfort reicht)
+        → Schwere Nacht (12 kWh): SOC_MAX → 100%
+
+      SOC_MIN = 25..5% (invers zum Nachtverbrauch)
+        → Leichte Nacht → 25%: kein Drain nötig, Batterie schonen
+        → Schwere Nacht → 5%:  voller Drain, PV lädt morgen nach
+    """
+    prog = _prognose_nachtverbrauch_kwh(obs, matrix)
+    if prog is None:
+        return None
+
+    usable_kwh = max(1.0, float(get_param(matrix, _RK_NACHT, 'nacht_soc_usable_kwh', 18.0)))
+    soc_floor = float(get_param(matrix, _RK_NACHT, 'nacht_soc_min_floor_pct', 5.0))
+    sicherheit = float(get_param(matrix, _RK_NACHT, 'nacht_sicherheit_pct', 10.0))
+    komfort_min = int(get_param(matrix, 'komfort_reset', 'komfort_min_pct', 25))
+    komfort_max = float(get_param(matrix, _RK_NACHT, 'komfort_max_pct', 75))
+
+    nacht_kwh = float(prog['pred_kwh'])
+    usable_pct = 100.0 - soc_floor  # 95% nutzbar (5-100%)
+
+    # ── SOC_MAX: Abends genug laden für die Nacht ──
+    bedarf_pct = (nacht_kwh / usable_kwh) * usable_pct
+    soc_max_f = komfort_min + bedarf_pct + sicherheit
+    soc_max = int(round(max(komfort_max, min(100.0, soc_max_f))))
+
+    # ── SOC_MIN morgens: Gegenläufig zum Nachtverbrauch ──
+    #   3 kWh Nacht → 25%  (kein Drain nötig, Batterie schonen)
+    #  12 kWh Nacht →  5%  (voller Drain, PV lädt morgen nach)
+    frac = min(1.0, max(0.0, (nacht_kwh - 3.0) / 9.0))
+    soc_min_f = 25.0 - frac * 20.0
+    soc_min = int(round(max(soc_floor, min(float(komfort_min), soc_min_f))))
+
+    if soc_max <= soc_min:
+        soc_max = min(100, soc_min + 1)
+
+    return soc_min, soc_max, prog
+
+
+# ═════════════════════════════════════════════════════════════
 # MORGEN SOC_MIN (P2 — Steuerung, fast)
 # ═════════════════════════════════════════════════════════════
 
@@ -71,9 +246,14 @@ class RegelMorgenSocMin(Regel):
       Sunrise → ForecastCollector holt Prognose (Tier-3, ~0.6s)
              → ObsState.pv_at_sunrise_1h_w wird befüllt
              → Engine nächster 60s-Zyklus sieht Wert
-             → pv_at_sunrise_1h_w >= 1500W?  → SOC_MIN=5%, SOC_MAX=75%
+             → pv_at_sunrise_1h_w >= 1500W?  → SOC_MIN dynamisch, SOC_MAX=75%
 
-    Halte-Modus: Solange SOC > stress+2% im Zeitfenster →
+    SOC_MIN je nach Nachtverbrauch (gegenläufig):
+      Leichte Nacht (3 kWh): 25% — kein Drain, Batterie schonen
+      Schwere Nacht (12 kWh):  5% — voller Drain, PV lädt morgen nach
+      Fallback ohne Historie:  20% (morgen_drain_soc_min_pct)
+
+    Halte-Modus: Solange SOC > SOC_MIN+2% im Zeitfenster →
       Einstellung beibehalten (hoher Score verhindert Rücksetzung).
 
     Parametermatrix: regelkreise.morgen_soc_min
@@ -107,7 +287,6 @@ class RegelMorgenSocMin(Regel):
                       f'→ toleriert ({verbleibend}s verbleibend)')
             return 0
 
-        stress = get_param(matrix, self.regelkreis, 'stress_min_pct', 5)
         score = get_score_gewicht(matrix, self.regelkreis)
 
         if nachtlast_oeffnung:
@@ -116,9 +295,10 @@ class RegelMorgenSocMin(Regel):
                      obs.soc_min, obs.batt_soc_pct or -1, obs.grid_power_w or 0)
             return score
 
-        # ── HALTE-MODUS: SOC_MIN bereits geöffnet ──
-        if obs.soc_min is not None and obs.soc_min <= stress:
-            if obs.batt_soc_pct is not None and obs.batt_soc_pct > stress + 2:
+        # ── HALTE-MODUS: SOC_MIN bereits unter Komfort (Öffnung war aktiv) ──
+        komfort_min_ref = int(get_param(matrix, 'komfort_reset', 'komfort_min_pct', 25))
+        if obs.soc_min is not None and obs.soc_min < komfort_min_ref:
+            if obs.batt_soc_pct is not None and obs.batt_soc_pct > obs.soc_min + 2:
                 halte_score = int(score * 0.95)
                 LOG.debug(f"morgen_soc_min HALTE: SOC={obs.batt_soc_pct:.1f}%, "
                           f"SOC_MIN={obs.soc_min}% → Score {halte_score}")
@@ -154,14 +334,22 @@ class RegelMorgenSocMin(Regel):
         return score
 
     def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
-        stress = get_param(matrix, self.regelkreis, 'stress_min_pct', 5)
         komfort_max = get_param(matrix, self.regelkreis, 'morgen_soc_max_pct', 75)
+        fallback_min = int(get_param(matrix, self.regelkreis, 'morgen_drain_soc_min_pct', 20))
 
         # ── HALTE-MODUS: bereits geöffnet → keine neue Aktion ──
-        if obs.soc_min is not None and obs.soc_min <= stress:
+        komfort_min_ref = int(get_param(matrix, 'komfort_reset', 'komfort_min_pct', 25))
+        if obs.soc_min is not None and obs.soc_min < komfort_min_ref:
             return []
 
-        # ── ÖFFNUNG: SOC_MODE=manual, SOC_MIN=5%, SOC_MAX=75% ──
+        # ── Dynamisches SOC_MIN aus Nachtverbrauch-Prognose ──
+        dyn = _dynamische_soc_ziele(obs, matrix)
+        if dyn is not None:
+            soc_min_ziel = dyn[0]  # 20–25% je nach Nachtverbrauch
+        else:
+            soc_min_ziel = fallback_min  # Fallback ohne Historie
+
+        # ── ÖFFNUNG: SOC_MODE=manual, SOC_MIN dynamisch, SOC_MAX=75% ──
         aktionen = []
         pv_sr1h = obs.pv_at_sunrise_1h_w or 0
         soc_str = f"{obs.batt_soc_pct:.0f}" if obs.batt_soc_pct is not None else "?"
@@ -175,9 +363,10 @@ class RegelMorgenSocMin(Regel):
 
         aktionen.append({
             'tier': 2, 'aktor': 'batterie',
-            'kommando': 'set_soc_min', 'wert': stress,
+            'kommando': 'set_soc_min', 'wert': soc_min_ziel,
             'grund': (f'Morgen-Öffnung: PV@SR+1h={pv_sr1h:.0f}W ≥ Schwelle '
-                      f'→ SOC_MIN→{stress}% (SOC={soc_str}%)'),
+                      f'→ SOC_MIN→{soc_min_ziel}% '
+                      f'({"Nacht-Prognose" if dyn else "Fallback"}, SOC={soc_str}%)'),
         })
 
         if obs.soc_max is None or obs.soc_max != komfort_max:
@@ -212,6 +401,9 @@ class RegelNachmittagSocMax(Regel):
     name = 'nachmittag_soc_max'
     regelkreis = 'nachmittag_soc_max'
     engine_zyklus = 'strategic'
+
+    # Nacht-Prognose und dynamische SOC-Ziele: → Modul-Level-Funktionen
+    # _prognose_nachtverbrauch_kwh(), _dynamische_soc_ziele()
 
     def _effektive_schwelle_w(self, obs: ObsState, matrix: dict) -> float:
         """Öffnungsschwelle unter Berücksichtigung aktiver Großverbraucher."""
@@ -298,8 +490,10 @@ class RegelNachmittagSocMax(Regel):
         now = datetime.now()
         hr = now.hour + now.minute / 60.0
 
-        stress_max = get_param(matrix, self.regelkreis, 'stress_max_pct', 100)
-        if obs.soc_max is not None and obs.soc_max >= stress_max:
+        # Dynamisches Ziel für "bereits erledigt"-Check
+        dyn = _dynamische_soc_ziele(obs, matrix)
+        ziel_max = dyn[1] if dyn else int(get_param(matrix, self.regelkreis, 'stress_max_pct', 100))
+        if obs.soc_max is not None and obs.soc_max >= ziel_max:
             return 0
 
         score_max = get_score_gewicht(matrix, self.regelkreis)
@@ -348,15 +542,35 @@ class RegelNachmittagSocMax(Regel):
         peak_str = f"Peak {peak_h:.1f}h" if peak_h else "Peak ?"
         dyn_start = self._berechne_dynamische_startzeit(obs, matrix)
 
-        aktionen.append({
-            'tier': 2, 'aktor': 'batterie',
-            'kommando': 'set_soc_max', 'wert': stress,
-            'grund': (f'Nachmittag: SOC_MAX {komfort}%→{stress}%, '
-                      f'{sunset - now_h:.1f}h bis Sunset, '
-                      f'{peak_str}, Öffnung ab {dyn_start:.1f}h'),
-        })
+        soc_max_ziel = stress  # Fallback: 100%
+        dyn = _dynamische_soc_ziele(obs, matrix)
+        if dyn is not None:
+            _, soc_max_ziel, prog = dyn
+            LOG.info(
+                "nachmittag_soc_max: Nacht %.1fkWh (Hist %.1fkWh, "
+                "WP hist %.1fkWh, WP est %s, n=%s) -> SOC_MAX %s%%",
+                prog['pred_kwh'], prog['hist_kwh'], prog['wp_hist_kwh'],
+                f"{prog['wp_est_kwh']:.1f}kWh" if prog['wp_est_kwh'] is not None else '-',
+                prog['samples'], soc_max_ziel,
+            )
 
-        # Hinweis: registriere_aktion() erfolgt NACH Actuator-Erfolg in engine.py (K2)
+        if obs.soc_max is None or obs.soc_max != soc_max_ziel:
+            if dyn is not None:
+                aktionen.append({
+                    'tier': 2, 'aktor': 'batterie',
+                    'kommando': 'set_soc_max', 'wert': soc_max_ziel,
+                    'grund': (f'Nachmittag-Dynamik: Nacht {prog["pred_kwh"]:.1f}kWh '
+                              f'-> SOC_MAX {obs.soc_max or "?"}%→{soc_max_ziel}% '
+                              f'(Hist n={prog["samples"]})'),
+                })
+            else:
+                aktionen.append({
+                    'tier': 2, 'aktor': 'batterie',
+                    'kommando': 'set_soc_max', 'wert': soc_max_ziel,
+                    'grund': (f'Nachmittag: SOC_MAX {komfort}%→{soc_max_ziel}%, '
+                              f'{sunset - now_h:.1f}h bis Sunset, '
+                              f'{peak_str}, Öffnung ab {dyn_start:.1f}h'),
+                })
 
         return aktionen
 
@@ -421,15 +635,11 @@ class RegelKomfortReset(Regel):
     def _morgenfenster_sperrt_reset(self, obs: ObsState, matrix: dict) -> bool:
         """Sperrt Komfort-Reset bei guter Prognose ab Sunrise-1h.
 
-        Verhindert Konflikte mit der Morgen-Öffnung (SOC_MIN=5%), damit
+        Verhindert Konflikte mit der Morgen-Öffnung (SOC_MIN 5-25%), damit
         SOC_MIN in der kritischen Vor-Sunrise-Phase nicht auf 25% zurückspringt.
 
-        Erweitert (2026-04-02): Auch im Nachtlast-Fenster (SR-3h bis SR)
-        sperren, wenn SOC_MIN bereits auf Stress steht. Die Morgen-Öffnung
-        kann über den Nachtlast-Bypass ab SR-3h triggern; ohne diesen Guard
-        entsteht ein Ping-Pong zwischen Morgen-Öffnung (→5%) und
-        Komfort-Reset (→25%), weil der HALTE-MODUS der Morgen-Öffnung
-        leere Aktionen erzeugt und die Engine zum Komfort-Reset cascadiert.
+        Erweitert (2026-04-06): Prüft SOC_MIN < Komfort statt <= Stress,
+        da der Morgen-Algorithmus jetzt dynamisch 5-25% setzt.
         """
         if (obs.forecast_quality or '').lower() != 'gut':
             return False
@@ -443,13 +653,13 @@ class RegelKomfortReset(Regel):
             return True
 
         # Morgen-Öffnung kann via Nachtlast-Bypass ab sunrise-3h triggern.
-        # Wenn SOC_MIN bereits auf Stress steht (Morgen-Öffnung hat gewirkt
+        # Wenn SOC_MIN bereits unter Komfort steht (Morgen-Öffnung hat gewirkt
         # oder Nacht-Drain war korrekt), Reset sperren.
-        stress = get_param(matrix, 'morgen_soc_min', 'stress_min_pct', 5)
-        if (obs.soc_min is not None and obs.soc_min <= stress
+        komfort_min = int(get_param(matrix, 'komfort_reset', 'komfort_min_pct', 25))
+        if (obs.soc_min is not None and obs.soc_min < komfort_min
                 and (sunrise - NACHTLAST_FENSTER_H) <= now_h < sunrise):
-            LOG.info("komfort_reset: Morgen-Öffnung aktiv (SOC_MIN=%s%% ≤ %s%%), "
-                     "Reset gesperrt im Nachtlast-Fenster", obs.soc_min, stress)
+            LOG.info("komfort_reset: Morgen-Öffnung aktiv (SOC_MIN=%s%% < %s%%), "
+                     "Reset gesperrt im Nachtlast-Fenster", obs.soc_min, komfort_min)
             return True
 
         return _nachtlast_oeffnung_noetig(obs, matrix)
