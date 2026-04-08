@@ -169,17 +169,23 @@ def api_realtime_smart():
     """
     try:
         # Parameter
-        hours = min(request.args.get('hours', type=int, default=24), 168)
+        hours = min(max(request.args.get('hours', type=float, default=24.0), 0.001), 168)
         resolution = max(request.args.get('resolution', type=int, default=300), 3)
+        start_ts = request.args.get('start', type=int)
         end_ts = request.args.get('end', type=int)
 
         # Zeitfenster berechnen
-        if end_ts:
+        if start_ts and end_ts and start_ts < end_ts:
+            start = start_ts
             end = end_ts
+            hours = (end - start) / 3600
         else:
-            end = int(time.time())
+            if end_ts:
+                end = end_ts
+            else:
+                end = int(time.time())
 
-        start = end - (hours * 3600)
+            start = end - int(hours * 3600)
 
         # tmpfs-DB: Direkt lesen — immer frisch, kein Cache nötig
         conn = get_db_connection()
@@ -573,16 +579,29 @@ def api_flow_realtime():
             row = c.fetchone()
 
             # Wattpilot aus separater Tabelle (vor conn.close!)
+            # Strategie: letzten aktiven Ladewert (car_state=2, power>0) innerhalb
+            # 3 Minuten bevorzugen. Verhindert Sprünge in Haushalt-Bubble wenn der
+            # WebSocket-Collector kurz retried und power=0 schreibt, obwohl das Auto
+            # tatsächlich lädt (Erkennung über car_state=2).
             wattpilot_power = 0
             try:
                 c.execute("""
-                    SELECT power_w FROM wattpilot_readings
+                    SELECT power_w, car_state FROM wattpilot_readings
                     WHERE ts > ?
-                    ORDER BY ts DESC LIMIT 1
-                """, (now - 60,))
-                wattpilot_row = c.fetchone()
-                if wattpilot_row and wattpilot_row[0] is not None:
-                    wattpilot_power = round(wattpilot_row[0], 0)
+                    ORDER BY ts DESC LIMIT 6
+                """, (now - 180,))
+                wattpilot_rows = c.fetchall()
+                if wattpilot_rows:
+                    # Bevorzuge jüngsten aktiven Ladewert (car=2, power>0)
+                    for pw, car in wattpilot_rows:
+                        if car == 2 and (pw or 0) > 0:
+                            wattpilot_power = round(pw, 0)
+                            break
+                    # Fallback: aktuellster Wert (auch wenn 0)
+                    if wattpilot_power == 0:
+                        pw0 = wattpilot_rows[0][0]
+                        if pw0 is not None:
+                            wattpilot_power = round(pw0, 0)
             except Exception as e:
                 logging.debug(f"Wattpilot read: {e}")
 
