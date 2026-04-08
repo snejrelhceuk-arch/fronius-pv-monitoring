@@ -372,9 +372,94 @@ class RegelHeizpatrone(Regel):
         return False  # niedrig → keine Toleranz
 
     def _drain_soc_freigegeben(self, obs: ObsState, matrix: dict) -> bool:
-        """Phase 0 nur bei bereits geöffneter Batterie erlauben."""
-        stress = get_param(matrix, 'morgen_soc_min', 'stress_min_pct', 5)
-        return obs.soc_min is not None and obs.soc_min <= stress
+        """Phase 0 nur bei bereits geöffneter Batterie erlauben.
+
+        Prüft ob die Morgen-Öffnung aktiv ist (SOC_MIN < Komfort 25%).
+        Bei leichten Nächten (SOC_MIN=25%) wird kein Drain benötigt.
+        """
+        komfort_min = int(get_param(matrix, 'komfort_reset', 'komfort_min_pct', 25))
+        return obs.soc_min is not None and obs.soc_min < komfort_min
+
+    def _forecast_power_at_hour(self, obs: ObsState, hour: int) -> Optional[float]:
+        """Hole Prognoseleistung [W] für eine Stunde aus dem Forecast-Profil."""
+        if not obs.forecast_power_profile:
+            return None
+        for entry in obs.forecast_power_profile:
+            if entry.get('hour', 0) == hour:
+                return float(entry.get('total_ac_w', 0) or 0)
+        return None
+
+    def _drain_haushalt_prognose_veto(
+        self,
+        obs: ObsState,
+        matrix: dict,
+        house_netto_w: float,
+        now_h: float,
+    ) -> tuple[bool, str]:
+        """Veto für Drain-Haushaltsabschaltung bei guter/tragfähiger Prognose.
+
+        Voraussetzungen:
+          1) Tagesprognose-Qualität ist "gut".
+          2) Entweder Lastdeckung jetzt+30min ODER positiver Trend bis +30min
+             mit ausreichender SOC-Brücke für die Übergangszeit.
+        """
+        quality = (obs.forecast_quality or '').lower()
+        tagesqualitaet_gut = quality == 'gut'
+        if not tagesqualitaet_gut:
+            return False, ''
+
+        last_w = max(0.0, float(house_netto_w)) + float(self.HP_NENN_W)
+        reserve_w = float(get_param(
+            matrix, self.regelkreis, 'drain_haushalt_prognose_reserve_w', 200
+        ))
+        noetig_w = last_w + reserve_w
+
+        now_hour = int(now_h)
+        plus30_hour = int((now_h + 0.5) % 24)
+        fc_now_w = self._forecast_power_at_hour(obs, now_hour)
+        fc_30_w = self._forecast_power_at_hour(obs, plus30_hour)
+
+        if fc_now_w is None or fc_30_w is None:
+            return False, ''
+
+        # Fall A: klassisch — Prognose deckt Bedarf bereits jetzt und in 30 Min.
+        if fc_now_w >= noetig_w and fc_30_w >= noetig_w:
+            return True, (f'Tagesprognose=gut und Prognose trägt Last: jetzt {fc_now_w:.0f}W, '
+                          f'+30min {fc_30_w:.0f}W ≥ Bedarf {noetig_w:.0f}W')
+
+        # Fall B: Gradient-Freigabe — jetzt ggf. Defizit, aber in 30 Min ausreichend.
+        # Dann nur zulassen, wenn SOC das Defizit überbrücken kann.
+        gradient_min_w = float(get_param(
+            matrix, self.regelkreis, 'drain_haushalt_gradient_min_w', 300
+        ))
+        trend_w = fc_30_w - fc_now_w
+        if fc_30_w < noetig_w or trend_w < gradient_min_w:
+            return False, ''
+
+        bridge_h = float(get_param(
+            matrix, self.regelkreis, 'drain_haushalt_bridge_h', 0.5
+        ))
+        deficit_now_w = max(0.0, noetig_w - fc_now_w)
+        bridge_need_kwh = deficit_now_w * max(0.0, bridge_h) / 1000.0
+
+        soc = float(obs.batt_soc_pct if obs.batt_soc_pct is not None else 0.0)
+        drain_stop_soc = float(get_param(
+            matrix, self.regelkreis, 'drain_stop_soc_pct', 15
+        ))
+        soc_reserve_pct = float(get_param(
+            matrix, self.regelkreis, 'drain_haushalt_soc_reserve_pct', 2
+        ))
+        soc_min_bridge = drain_stop_soc + soc_reserve_pct
+        soc_buffer_pct = max(0.0, soc - soc_min_bridge)
+        bridge_avail_kwh = soc_buffer_pct * config.PV_BATTERY_KWH / 100.0
+
+        if bridge_avail_kwh >= bridge_need_kwh:
+            return True, (
+                f'Tagesprognose=gut und Gradient trägt: ΔP={trend_w:.0f}W, '
+                f'+30min {fc_30_w:.0f}W ≥ Bedarf {noetig_w:.0f}W, '
+                f'SOC-Brücke {bridge_avail_kwh:.2f}/{bridge_need_kwh:.2f}kWh'
+            )
+        return False, ''
 
     def bewerte(self, obs: ObsState, matrix: dict) -> int:
         """Score für HP-Steuerung.
@@ -524,9 +609,15 @@ class RegelHeizpatrone(Regel):
                     haus_netto = (obs.house_load_w or 0)
                     if obs.heizpatrone_aktiv:
                         haus_netto = max(0, haus_netto - self.HP_NENN_W)
-                    if (haus_netto >= d_haus * 1.2
-                            or (obs.wp_power_w or 0) >= d_wp
-                            or (obs.ev_power_w or 0) >= d_ev):
+                    # WP-Leistung auch herausrechnen (eigene Prüfung unten)
+                    haus_netto = max(0, haus_netto - (obs.wp_power_w or 0))
+                    if haus_netto >= d_haus * 1.2:
+                        veto, _ = self._drain_haushalt_prognose_veto(
+                            obs, matrix, haus_netto, now_h
+                        )
+                        if not veto:
+                            return int(score * 1.5)
+                    if (obs.wp_power_w or 0) >= d_wp or (obs.ev_power_w or 0) >= d_ev:
                         return int(score * 1.5)
                 else:
                     # Batterie entlädt: potenzial- und kontextabhängig
@@ -549,6 +640,14 @@ class RegelHeizpatrone(Regel):
 
                 # Burst-Timer abgelaufen
                 if self._burst_ende > 0 and time.time() >= self._burst_ende:
+                    # Phase 0 darf innerhalb des Drain-Fensters kontinuierlich laufen.
+                    # Das eigentliche Verlängern passiert in erzeuge_aktionen().
+                    if self._drain_modus and self._letzte_phase == 'phase0':
+                        drain_fenster = get_param(
+                            matrix, self.regelkreis, 'drain_fenster_ende_h', 10.0
+                        )
+                        if now_h < drain_fenster:
+                            return score
                     return int(score * 1.2)
 
             # Laufender Burst noch aktiv → Score halten (kein Abschalten)
@@ -612,7 +711,7 @@ class RegelHeizpatrone(Regel):
         sunshine_h = obs.sunshine_hours or 0
         if now_h >= (sunrise_h - drain_fruehstart_h) and now_h < drain_fenster:
             if not self._drain_soc_freigegeben(obs, matrix):
-                LOG.debug('Phase 0 blockiert: SOC_MIN=%s%% > Stress-SOC', obs.soc_min)
+                LOG.debug('Phase 0 blockiert: SOC_MIN=%s%% (Morgen-Öffnung nicht aktiv)', obs.soc_min)
             elif sunshine_h < drain_min_sunshine_h:
                 LOG.debug(f'Phase 0 blockiert: Sonnenstunden {sunshine_h:.1f}h '
                           f'< {drain_min_sunshine_h:.1f}h Minimum')
@@ -626,6 +725,8 @@ class RegelHeizpatrone(Regel):
                 haus_netto = (obs.house_load_w or 0)
                 if obs.heizpatrone_aktiv:
                     haus_netto = max(0, haus_netto - self.HP_NENN_W)
+                # WP-Leistung auch herausrechnen (eigene Prüfung unten)
+                haus_netto = max(0, haus_netto - (obs.wp_power_w or 0))
                 haushalt_ok = haus_netto < d_haus
                 wp_ok = (obs.wp_power_w or 0) < d_wp
                 ev_ok = (obs.ev_power_w or 0) < d_ev
@@ -658,7 +759,22 @@ class RegelHeizpatrone(Regel):
                     LOG.debug(f'Phase 0 übersprungen: P_Batt={p_batt:.0f}W > '
                               f'{drain_skip_w}W → PV lädt bereits')
                 elif all([haushalt_ok, wp_ok, ev_ok, soc_ok, forecast_ok, prognose_stark]):
-                    return score
+                    # Score-Abstufung nach Drain-Tiefe:
+                    #   SOC_MIN=5% (voller Drain)  → 100% Score
+                    #   SOC_MIN=20% (knapp offen)  →  25% Score
+                    # Je weniger Drain nötig, desto weniger lohnt HP-Einsatz
+                    # (Batterie-Lebensdauer an SOC-Grenzen > Eigenverbrauch).
+                    komfort_min = int(get_param(matrix, 'komfort_reset', 'komfort_min_pct', 25))
+                    stress_min = int(get_param(matrix, 'morgen_soc_min', 'stress_min_pct', 5))
+                    drain_spanne = max(1, komfort_min - stress_min)  # 20
+                    drain_tiefe = max(0, komfort_min - (obs.soc_min or komfort_min))
+                    drain_frac = min(1.0, drain_tiefe / drain_spanne)
+                    # Mindestens 25% Score wenn Phase 0 überhaupt greift
+                    phase0_score = max(int(score * 0.25), int(score * drain_frac))
+                    LOG.debug(f'Phase 0: SOC_MIN={obs.soc_min}%% '
+                              f'→ drain_frac={drain_frac:.2f} '
+                              f'→ Score {phase0_score}/{score}')
+                    return phase0_score
 
         # Phase 1: Vormittags
         #   p_batt > min_lade_morgens + SOC nahe SOC_MAX (Überlaufventil-Prinzip).
@@ -843,14 +959,25 @@ class RegelHeizpatrone(Regel):
                             house_w = obs.house_load_w or 0
                             if obs.heizpatrone_aktiv:
                                 house_w = max(0, house_w - self.HP_NENN_W)
+                            # WP-Leistung auch herausrechnen (eigene Prüfung unten)
+                            house_w = max(0, house_w - (obs.wp_power_w or 0))
                             wp_w = obs.wp_power_w or 0
                             ev_w = obs.ev_power_w or 0
                             if house_w >= d_haus * 1.2:
-                                notaus_grund = (f'Drain-Ende: Haushalt {house_w:.0f}W '
-                                                f'≥ {d_haus}×1.2')
-                            elif wp_w >= d_wp:
+                                veto, veto_grund = self._drain_haushalt_prognose_veto(
+                                    obs, matrix, house_w, now_h
+                                )
+                                if veto:
+                                    LOG.info(
+                                        f'Drain-Haushalt VETO: {veto_grund} '
+                                        f'(Haus={house_w:.0f}W, Schwelle={d_haus}×1.2)'
+                                    )
+                                else:
+                                    notaus_grund = (f'Drain-Ende: Haushalt {house_w:.0f}W '
+                                                    f'≥ {d_haus}×1.2')
+                            if not notaus_grund and wp_w >= d_wp:
                                 notaus_grund = f'Drain-Ende: WP {wp_w:.0f}W ≥ {d_wp}W'
-                            elif ev_w >= d_ev:
+                            elif not notaus_grund and ev_w >= d_ev:
                                 notaus_grund = f'Drain-Ende: EV {ev_w:.0f}W ≥ {d_ev}W'
                 else:
                     # Batterie entlädt: potenzial- und kontextabhängig
@@ -911,9 +1038,29 @@ class RegelHeizpatrone(Regel):
                         # ── Auto-Verlängerung bei laufendem Burst ──
                         # Statt abschalten und 10 Min später neu starten:
                         # direkt verlängern wenn Bedingungen weiterhin gut.
-                        # Gilt für Phase 1b, 2 und 3 (SOC≈MAX-Phasen).
                         auto_verlaengert = False
-                        if self._letzte_phase in ('phase1b', 'phase2', 'phase3'):
+
+                        # Phase 0 (Morgen-Drain): innerhalb Drain-Fenster kontinuierlich laufen.
+                        if self._drain_modus and self._letzte_phase == 'phase0':
+                            drain_fenster = get_param(
+                                matrix, self.regelkreis, 'drain_fenster_ende_h', 10.0
+                            )
+                            if now_h < drain_fenster:
+                                verlaengern_s = get_param(
+                                    matrix, self.regelkreis, 'drain_burst_dauer_s', 2700
+                                )
+                                self._burst_ende = time.time() + verlaengern_s
+                                auto_verlaengert = True
+                                laufzeit = int((time.time() - self._burst_start) / 60)
+                                LOG.info(
+                                    f'phase0 Auto-Verlängerung ({laufzeit} Min): '
+                                    f'SOC={soc:.0f}%, rest_h={rest_h:.1f}, '
+                                    f'rest_kwh={rest_kwh:.1f} '
+                                    f'→ +{verlaengern_s // 60} Min')
+
+                        # Phasen 1b/2/3: Verlängerung nur bei weiter guten Überschusskriterien.
+                        if (not auto_verlaengert
+                                and self._letzte_phase in ('phase1b', 'phase2', 'phase3')):
                             grid_ok_tol = get_param(matrix, self.regelkreis,
                                                     'grid_ok_toleranz_w', 500)
                             grid_jetzt = obs.grid_power_w or 0
@@ -934,6 +1081,7 @@ class RegelHeizpatrone(Regel):
                                     f'SOC={soc:.0f}%, Grid={grid_jetzt:.0f}W, '
                                     f'rest_kwh={rest_kwh:.1f} '
                                     f'→ +{verlaengern_s // 60} Min')
+
                         if not auto_verlaengert:
                             notaus_grund = (f'Burst-Timer abgelaufen '
                                             f'({int((time.time() - self._burst_start) / 60)} Min)')
@@ -1010,7 +1158,7 @@ class RegelHeizpatrone(Regel):
         sunshine_h = obs.sunshine_hours or 0
         if now_h >= (sunrise_h - drain_fruehstart_h) and now_h < drain_fenster:
             if not self._drain_soc_freigegeben(obs, matrix):
-                LOG.debug('Phase 0 Schalt-Log blockiert: SOC_MIN=%s%% > Stress-SOC', obs.soc_min)
+                LOG.debug('Phase 0 Schalt-Log blockiert: SOC_MIN=%s%% (Morgen-Öffnung nicht aktiv)', obs.soc_min)
             elif sunshine_h < drain_min_sunshine_h:
                 LOG.debug(f'Phase 0 Schalt-Log blockiert: Sonnenstunden {sunshine_h:.1f}h '
                           f'< {drain_min_sunshine_h:.1f}h')

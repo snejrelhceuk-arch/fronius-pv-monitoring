@@ -129,6 +129,17 @@
           "aktor_kommando": "set_soc_min",
           "beschreibung": "SOC_MIN nach Öffnung (tiefe Entladung erlaubt)"
         },
+        "morgen_drain_soc_min_pct": {
+          "wert": 20,
+          "bereich": [
+            15,
+            35
+          ],
+          "einheit": "%",
+          "obs_feld": "soc_min",
+          "aktor_kommando": "set_soc_min",
+          "beschreibung": "SOC_MIN bei morgendlichem Grid-Drain (Nachtlast-Öffnung) — konservativ, verhindert Über-Entladung nachts"
+        },
         "morgen_soc_max_pct": {
           "wert": 75,
           "bereich": [
@@ -247,6 +258,101 @@
           "einheit": "h",
           "obs_feld": "sunset",
           "beschreibung": "Deadline: x Stunden vor Sunset SOC_MAX zwingend erhöhen"
+        },
+        "nacht_soc_dynamik_aktiv": {
+          "wert": true,
+          "einheit": "bool",
+          "beschreibung": "Dynamische SOC-Zielfenster aus Nachtverbrauch (Good-Day-Historie + WP-Trend) berechnen"
+        },
+        "nacht_last_lookback_tage": {
+          "wert": 21,
+          "bereich": [
+            7,
+            60
+          ],
+          "einheit": "d",
+          "beschreibung": "Anzahl betrachteter Tage fuer Good-Day-Nachtverbrauch"
+        },
+        "nacht_last_min_samples": {
+          "wert": 4,
+          "bereich": [
+            2,
+            20
+          ],
+          "einheit": "n",
+          "beschreibung": "Mindestanzahl gueltiger Nacht-Samples fuer Dynamik"
+        },
+        "nacht_last_cache_s": {
+          "wert": 1800,
+          "bereich": [
+            300,
+            7200
+          ],
+          "einheit": "s",
+          "beschreibung": "Cache-Zeit fuer Nachtverbrauchsberechnung"
+        },
+        "nachtfenster_start_h": {
+          "wert": 22.0,
+          "bereich": [
+            18.0,
+            23.5
+          ],
+          "einheit": "h",
+          "beschreibung": "Start des Nachtfensters (lokale Zeit)"
+        },
+        "nachtfenster_ende_h": {
+          "wert": 6.0,
+          "bereich": [
+            0.0,
+            12.0
+          ],
+          "einheit": "h",
+          "beschreibung": "Ende des Nachtfensters (lokale Zeit; darf am Folgetag liegen)"
+        },
+        "nacht_soc_usable_kwh": {
+          "wert": 18.0,
+          "bereich": [
+            10.0,
+            24.0
+          ],
+          "einheit": "kWh",
+          "beschreibung": "Nutzbare Batteriemenge (5-100% -> typ. 18kWh)"
+        },
+        "nacht_soc_min_floor_pct": {
+          "wert": 5,
+          "bereich": [
+            0,
+            20
+          ],
+          "einheit": "%",
+          "beschreibung": "Absoluter Boden fuer dynamisches SOC_MIN"
+        },
+        "nacht_sicherheit_pct": {
+          "wert": 10,
+          "bereich": [
+            5,
+            20
+          ],
+          "einheit": "%",
+          "beschreibung": "Sicherheitsmarge auf SOC_MAX (Nacht-Bedarf + Sicherheit = Ziel)"
+        },
+        "nachtverbrauch_min_kwh": {
+          "wert": 1.0,
+          "bereich": [
+            0.5,
+            8.0
+          ],
+          "einheit": "kWh",
+          "beschreibung": "Unteres Clamp-Limit fuer prognostizierten Nachtverbrauch"
+        },
+        "nachtverbrauch_max_kwh": {
+          "wert": 18.0,
+          "bereich": [
+            8.0,
+            24.0
+          ],
+          "einheit": "kWh",
+          "beschreibung": "Oberes Clamp-Limit fuer prognostizierten Nachtverbrauch"
         }
       },
       "score_gewicht": 55,
@@ -993,6 +1099,46 @@
           "einheit": "W",
           "obs_feld": "house_load_w",
           "beschreibung": "Drain nur bei niedrigem Hausverbrauch (unter diesem Wert)"
+        },
+        "drain_haushalt_prognose_reserve_w": {
+          "wert": 400,
+          "bereich": [
+            100,
+            1000
+          ],
+          "einheit": "W",
+          "obs_feld": "forecast_power_profile",
+          "beschreibung": "Zusätzliche Reserve auf (HP+Haushalt) für Drain-Haushalts-Veto bei guter Tagesprognose"
+        },
+        "drain_haushalt_gradient_min_w": {
+          "wert": 700,
+          "bereich": [
+            100,
+            2000
+          ],
+          "einheit": "W",
+          "obs_feld": "forecast_power_profile",
+          "beschreibung": "Mindestanstieg der Prognoseleistung von jetzt bis +30min für Gradient-Veto"
+        },
+        "drain_haushalt_bridge_h": {
+          "wert": 0.75,
+          "bereich": [
+            0.25,
+            1.5
+          ],
+          "einheit": "h",
+          "obs_feld": "batt_soc_pct",
+          "beschreibung": "Annahme für Defizit-Überbrückungsdauer im Gradient-Veto (SOC-Brücke)"
+        },
+        "drain_haushalt_soc_reserve_pct": {
+          "wert": 5,
+          "bereich": [
+            0,
+            15
+          ],
+          "einheit": "%",
+          "obs_feld": "batt_soc_pct",
+          "beschreibung": "Zusätzliche SOC-Reserve über drain_stop_soc_pct für Gradient-Veto"
         },
         "drain_max_wp_w": {
           "wert": 500,
