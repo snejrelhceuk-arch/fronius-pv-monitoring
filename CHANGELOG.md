@@ -7,6 +7,9 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixes
+- **Verbrauchsformel Tageskopf (counter_totals):** `routes/visualization.py` — Formel von `ertrag + bezug - einspeis` (reiner PV-DC-Ertrag) auf `ac_gesamt + bezug - einspeis` (mit `ac_gesamt = W_AC_Inv + F2 + F3`) umgestellt. `W_AC_Inv` bildet den gesamten AC-Ausgang des Wechselrichters ab (PV + Batterieentladung − Batterieladung), sodass die Batterieentladung korrekt im Tagesverbrauch erscheint.
+
 ### Projektankündigungen
 - MEGA-BAS Rollout: I2C-HAT-Inbetriebnahme mit zusätzlicher Temperatur-Sensorik und vorbereiteter Aktorik für kommende Hardware-Phasen.
 - 3-Phasen-Heizpatrone (Zukunftsphase): Konzept für stufenweise Zuschaltung und Schützstrategie als nächster Ausbauschritt.
