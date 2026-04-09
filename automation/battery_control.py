@@ -5,11 +5,9 @@ battery_control.py — Batterie-Diagnose und -Steuerung via SunSpec Model 124
 Liest und schreibt Storage-Register des Fronius Symo Hybrid / Gen24.
 2× BYD HVS 10,24 kWh parallel (LFP-Chemie, Hochvolt).
 
-HINWEIS: Laderate-/Entladerate-Steuerung (InWRte, OutWRte, StorCtl_Mod)
-wurde am 2026-03-07 entfernt. Der interne DC-DC-Wandler des GEN24 12.0
-begrenzt den Batteriestrom hardwareseitig auf ~22 A (≈9,5 kW bei 432 V).
-Software-Ratenlimits waren daher wirkungslos. SOC_MIN/SOC_MAX über die
-Fronius HTTP-API sind das korrekte Steuerungsinstrument.
+HINWEIS: Die automatische Laderate-/Entladerate-Steuerung in der
+Automation-Engine wurde am 2026-03-07 entfernt. Manuelle Modbus-Eingriffe
+über dieses Diagnosetool bleiben für Service/Recovery möglich.
 
 Basiert auf: Fronius Register Map Int&SF v1.0 with SYMOHYBRID MODEL 124
 Quelle: ~/Downloads/SM 1.0/SE_EI_Modbus_Sunspec_Maps_State_Codes_Events/
@@ -52,10 +50,12 @@ Schreibbare Register (Function Codes 0x03 Read, 0x06 Write Single, 0x10 Write Mu
 Nutzung:
   python3 battery_control.py                     # Status anzeigen
   python3 battery_control.py --set-min-soc 15    # Min-Reserve auf 15% setzen
+    python3 battery_control.py --set-charge 100    # InWRte auf 100% setzen (manuell)
+    python3 battery_control.py --set-discharge 100 # OutWRte auf 100% setzen (manuell)
+    python3 battery_control.py --storctl auto      # StorCtl_Mod setzen (0/1/2/3)
   python3 battery_control.py --set-charge 50     # Laderate auf 50% begrenzen
   python3 battery_control.py --set-discharge 80  # Entladerate auf 80% begrenzen
-  python3 battery_control.py --hold               # Batterie halten (kein Laden/Entladen)
-  python3 battery_control.py --auto               # Zurück auf Automatik
+    python3 battery_control.py --rate-max           # In/Out auf 100% + StorCtl auto
   python3 battery_control.py --grid-charge on     # Netzladung erlauben
   python3 battery_control.py --grid-charge off    # Netzladung verbieten
 """
@@ -73,7 +73,10 @@ except Exception:
     pass
 
 import os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.dirname(_THIS_DIR)
+sys.path.insert(0, _THIS_DIR)
+sys.path.insert(0, _PROJECT_ROOT)
 import config
 
 # --- Konfiguration (aus zentraler config.py) ---
@@ -439,14 +442,56 @@ def set_min_reserve(client, percent):
     return client.write_single_register(REG['MinRsvPct'], raw_value)
 
 
-# ── ENTFERNT (2026-03-07) ────────────────────────────────────────────
-# set_charge_rate(), set_discharge_rate(), hold_battery(), auto_battery()
-# wurden entfernt. Der GEN24 12.0 DC-DC-Wandler begrenzt den Batterie-
-# strom hardwareseitig auf ~22 A (≈9,5 kW). Software-Ratenlimits über
-# InWRte/OutWRte/StorCtl_Mod waren wirkungslos und verkomplizierten
-# das System. SOC_MIN/SOC_MAX via Fronius HTTP-API reichen aus.
-# Siehe: Git-Commit für vollständige Historie.
-# ─────────────────────────────────────────────────────────────────────
+def _percent_to_raw(client, sf_reg, percent):
+    """Konvertiert Prozent in Register-RAW anhand Scale-Factor."""
+    sf = read_raw(client, sf_reg)
+    if sf is None:
+        return None, None
+    sf_val = sf if sf < 0x8000 else sf - 0x10000
+    raw_value = int(percent * (10 ** (-sf_val)))
+    return raw_value, sf_val
+
+
+def set_charge_rate(client, percent):
+    """Setzt InWRte (Laderate in % von WChaMax)."""
+    if not -100 <= percent <= 100:
+        print("  [FEHLER] Laderate muss zwischen -100 und 100 liegen")
+        return False
+    raw_value, sf_val = _percent_to_raw(client, REG['InOutWRte_SF'], percent)
+    if raw_value is None:
+        print("  [FEHLER] Kann InOutWRte_SF nicht lesen")
+        return False
+    print(f"  Schreibe InWRte: {percent}% → raw={raw_value} (SF={sf_val})")
+    return client.write_single_register(REG['InWRte'], raw_value)
+
+
+def set_discharge_rate(client, percent):
+    """Setzt OutWRte (Entladerate in % von WChaMax)."""
+    if not -100 <= percent <= 100:
+        print("  [FEHLER] Entladerate muss zwischen -100 und 100 liegen")
+        return False
+    raw_value, sf_val = _percent_to_raw(client, REG['InOutWRte_SF'], percent)
+    if raw_value is None:
+        print("  [FEHLER] Kann InOutWRte_SF nicht lesen")
+        return False
+    print(f"  Schreibe OutWRte: {percent}% → raw={raw_value} (SF={sf_val})")
+    return client.write_single_register(REG['OutWRte'], raw_value)
+
+
+def set_storctl_mode(client, mode):
+    """Setzt StorCtl_Mod: auto=0, charge=1, discharge=2, both=3."""
+    map_mode = {
+        'auto': 0,
+        'charge': 1,
+        'discharge': 2,
+        'both': 3,
+    }
+    if mode not in map_mode:
+        print(f"  [FEHLER] Ungültiger StorCtl-Modus: {mode}")
+        return False
+    val = map_mode[mode]
+    print(f"  Schreibe StorCtl_Mod: {val} ({mode})")
+    return client.write_single_register(REG['StorCtl_Mod'], val)
 
 
 def set_grid_charge(client, enabled):
@@ -465,16 +510,24 @@ def main():
 Beispiele:
   %(prog)s                        Status anzeigen
   %(prog)s --set-min-soc 15       Min-Reserve auf 15%%
+    %(prog)s --set-charge 100 --set-discharge 100 --storctl auto --confirm
+                                                                    Ratenregister normalisieren
   %(prog)s --grid-charge off      Netzladung verbieten
 
-Hinweis: Laderate-/Entladerate-Steuerung (--set-charge, --set-discharge,
---hold, --auto) wurde entfernt. Der GEN24 12.0 DC-DC-Wandler begrenzt
-den Batteriestrom hardwareseitig auf ~22 A. SOC_MIN/SOC_MAX über die
-Fronius HTTP-API (fronius_api.py) sind das korrekte Steuerungsinstrument.
+Hinweis: Diese Rate-Kommandos sind bewusst nur manuell im Diagnosetool
+verfügbar. Die Automation-Engine steuert keine Laderaten mehr.
         """)
 
     parser.add_argument('--set-min-soc', type=float, metavar='PCT',
                         help='Minimale SOC-Reserve setzen (0-100%%)')
+    parser.add_argument('--set-charge', type=float, metavar='PCT',
+                        help='Laderate (InWRte) setzen (-100..100%%)')
+    parser.add_argument('--set-discharge', type=float, metavar='PCT',
+                        help='Entladerate (OutWRte) setzen (-100..100%%)')
+    parser.add_argument('--storctl', choices=['auto', 'charge', 'discharge', 'both'],
+                        help='StorCtl_Mod setzen (auto=0, charge=1, discharge=2, both=3)')
+    parser.add_argument('--rate-max', action='store_true',
+                        help='InWRte/OutWRte auf 100%% und StorCtl_Mod auf auto setzen')
     parser.add_argument('--grid-charge', choices=['on', 'off'],
                         help='Netzladung ein/ausschalten')
     parser.add_argument('--ip', default=IP_ADDRESS,
@@ -487,6 +540,10 @@ Fronius HTTP-API (fronius_api.py) sind das korrekte Steuerungsinstrument.
     # Erkenne ob Schreiboperation gewünscht
     is_write = any([
         args.set_min_soc is not None,
+        args.set_charge is not None,
+        args.set_discharge is not None,
+        args.storctl is not None,
+        args.rate_max,
         args.grid_charge is not None,
     ])
 
@@ -525,6 +582,20 @@ Fronius HTTP-API (fronius_api.py) sind das korrekte Steuerungsinstrument.
                 success = False
             else:
                 success = set_min_reserve(client, args.set_min_soc) and success
+
+        if args.rate_max:
+            success = set_charge_rate(client, 100.0) and success
+            success = set_discharge_rate(client, 100.0) and success
+            success = set_storctl_mode(client, 'auto') and success
+
+        if args.set_charge is not None:
+            success = set_charge_rate(client, args.set_charge) and success
+
+        if args.set_discharge is not None:
+            success = set_discharge_rate(client, args.set_discharge) and success
+
+        if args.storctl is not None:
+            success = set_storctl_mode(client, args.storctl) and success
 
         if args.grid_charge is not None:
             success = set_grid_charge(client, args.grid_charge == 'on') and success

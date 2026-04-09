@@ -4,11 +4,11 @@ profil_wechsel.py — Umschaltung zwischen Inbetriebnahme-Profilen
 
 Profile:
   A  Vollbetrieb (Eigenverbrauch Max)
-     → SOC-Komfort 25–75%, max 12 kW, alle Raten frei
+      → SOC-Komfort 25–75%, max 12 kW
   B  Konservativ (Einfahren Tag 1)
-     → SOC-Komfort 30–70%, max 6 kW (= 1 Tower), Raten frei
+      → SOC-Komfort 30–70%, max 6 kW (= 1 Tower)
   C  Altsystem (vor Umbau)
-     → SOC-Komfort 25–75%, 10,24 kWh, 10 kW, Raten aktiv
+      → SOC-Komfort 25–75%, 10,24 kWh, 10 kW
 
 Verwendung:
   python3 tools/profil_wechsel.py          # Zeigt aktuelles Profil
@@ -33,17 +33,13 @@ SOC_MATRIX = os.path.join(_PROJECT, 'config', 'soc_param_matrix.json')
 PROFILE = {
     'A': {
         'name': 'Vollbetrieb (Eigenverbrauch Max)',
-        'beschreibung': 'Volle Kapazität, alle Raten frei, SOC 25–75%',
+        'beschreibung': 'Volle Kapazität, SOC 25–75%',
         'battery_control': {
             'batterie.kapazitaet_kwh': 20.48,
             'batterie.max_lade_w': 12000,
             'batterie.max_entlade_w': 12000,
             'soc_grenzen.komfort_min': 25,
             'soc_grenzen.komfort_max': 75,
-        },
-        'soc_param_matrix': {
-            'regelkreise.abend_entladerate.aktiv': False,
-            'regelkreise.laderate_dynamisch.aktiv': False,
         },
     },
     'B': {
@@ -56,10 +52,6 @@ PROFILE = {
             'soc_grenzen.komfort_min': 30,
             'soc_grenzen.komfort_max': 70,
         },
-        'soc_param_matrix': {
-            'regelkreise.abend_entladerate.aktiv': False,
-            'regelkreise.laderate_dynamisch.aktiv': False,
-        },
     },
     'C': {
         'name': 'Altsystem (vor Umbau)',
@@ -70,10 +62,6 @@ PROFILE = {
             'batterie.max_entlade_w': 10240,
             'soc_grenzen.komfort_min': 25,
             'soc_grenzen.komfort_max': 75,
-        },
-        'soc_param_matrix': {
-            'regelkreise.abend_entladerate.aktiv': True,
-            'regelkreise.laderate_dynamisch.aktiv': True,
         },
     },
 }
@@ -136,12 +124,6 @@ def detect_current_profile():
                 match = False
                 break
         if match:
-            for dotpath, expected in profil['soc_param_matrix'].items():
-                actual = _get_nested(matrix, dotpath)
-                if actual != expected:
-                    match = False
-                    break
-        if match:
             return key
     return '?'
 
@@ -161,8 +143,6 @@ def show_status():
     print(f"║  Max Laden:    {_get_nested(batt, 'batterie.max_lade_w')} W")
     print(f"║  Max Entladen: {_get_nested(batt, 'batterie.max_entlade_w')} W")
     print(f"║  SOC Komfort:  {_get_nested(batt, 'soc_grenzen.komfort_min')}–{_get_nested(batt, 'soc_grenzen.komfort_max')}%")
-    print(f"║  Abend-Rate:   {'aktiv' if _get_nested(matrix, 'abend_entladerate.aktiv') else 'AUS'}")
-    print(f"║  Dyn. Laderate:{'aktiv' if _get_nested(matrix, 'laderate_dynamisch.aktiv') else 'AUS'}")
     print("╚══════════════════════════════════════════════════════╝")
     print()
     print("Verfügbare Profile:")
@@ -202,12 +182,6 @@ def apply_profile(key):
         _set_nested(batt, dotpath, value)
     batt['_updated'] = datetime.now().strftime('%Y-%m-%d')
     _save_json(BATT_CFG, batt)
-
-    # soc_param_matrix.json
-    matrix = _load_json(SOC_MATRIX)
-    for dotpath, value in profil['soc_param_matrix'].items():
-        _set_nested(matrix, dotpath, value)
-    _save_json(SOC_MATRIX, matrix)
 
     print(f"\n✓ Profil {key.upper()} angewendet: {profil['name']}")
     print(f"  {profil['beschreibung']}")

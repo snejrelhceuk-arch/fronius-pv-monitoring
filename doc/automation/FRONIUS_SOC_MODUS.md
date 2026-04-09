@@ -25,11 +25,11 @@
 | SOC_MIN | **fest 5 %** (Firmware-Hardcode) |
 | SOC_MAX | **fest 100 %** (Firmware-Hardcode) |
 | Schreiben via HTTP-API | **wirkungslos** — kein Fehler, aber keine Wirkung |
-| Schreiben via SunSpec Modbus M124 (`InWRte`, `OutWRte`) | **wirksam** (überschreibt Lade-/Entladeraten-Prozent) |
+| Schreiben via SunSpec Modbus M124 (`InWRte`, `OutWRte`) | **manuell möglich**, aber **nicht** Teil der Automation-Logik |
 | Typisches Verhalten | Lädt Batterie auf 100 %, entlädt im Eigenverbrauchsoptimum |
 
 **Was unsere Software im Auto-Modus tun kann:**
-- Via Modbus `StorCtl_Mod`, `OutWRte`, `InWRte`: Lade- und Entladeraten begrenzen (0–100 % der Nennleistung)
+- Via Modbus `StorCtl_Mod`, `OutWRte`, `InWRte`: nur manuell über Diagnose-Tool (`automation/battery_control.py`), nicht automatisiert
 - Via Modbus `MinRsvPct`: **Notstrom-Reserve** — sperrt Entladung unterhalb dieses SOC-Wertes im Normalbetrieb. Wird **nur** freigegeben wenn die Anlage tatsächlich im Inselbetrieb/Notstrom läuft. Dies ist eine eigene Kategorie — kein SOC_MIN-Ersatz, sondern ein Schutz-Reserve für den Backup-Fall. Nur relevant wenn Backup Power / Notstrom am Gen24 aktiviert und angeschlossen ist.
 - Via `ChaGriSet`: Netzbezug zum Laden erlauben / sperren
 
@@ -58,7 +58,7 @@ Typische Anwendungsfälle für Auto:
 | Steuert | PIKO / unsere Software via HTTP-API |
 | SOC_MIN | **frei konfigurierbar** via `/config/batteries` HTTP-POST |
 | SOC_MAX | **frei konfigurierbar** via `/config/batteries` HTTP-POST |
-| SunSpec Modbus | weiterhin wirksam für Raten-Limits |
+| SunSpec Modbus | manuell nutzbar, aber nicht durch Engine-Regeln automatisch gesetzt |
 | Typisches Verhalten | Ladung stoppt bei SOC_MAX, Entladung stoppt bei SOC_MIN |
 
 **Im Manuell-Modus:** Die drei praxisrelevanten Komfort-Konfigurationen:
