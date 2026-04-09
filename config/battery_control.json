@@ -62,13 +62,6 @@
     "letzter_ausgleich": "2026-04-04",
     "beschreibung": "Prüft täglich die PV-Prognose. Am ersten Tag im Monat mit genug Sonne (>=25 kWh) wird der Vollzyklus ausgelöst. Wenn bis zum 28. kein passender Tag kam, wird die Schwelle auf 15 kWh gesenkt. Absolute Obergrenze: 45 Tage ohne Ausgleich."
   },
-  "leistungsbegrenzung": {
-    "_doc": "ENTFERNT (2026-03-07): GEN24 DC-DC-Wandler begrenzt Batteriestrom auf ~22A. Software-Ratenlimits via InWRte/OutWRte/StorCtl_Mod wirkungslos. Sektion bleibt als Dokumentation erhalten.",
-    "_status": "deprecated",
-    "_historisch_laderate_sommer_prozent": 68,
-    "_historisch_entladerate_abend_prozent": 29,
-    "_historisch_entladerate_nacht_prozent": 10
-  },
   "zeitsteuerung": {
     "_doc": "Prüfintervall und Strategie-Zeitfenster",
     "pruef_intervall_minuten": 15,

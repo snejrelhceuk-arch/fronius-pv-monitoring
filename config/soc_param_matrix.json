@@ -1,7 +1,7 @@
 {
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
-  "_updated": "2026-04-04",
+  "_updated": "2026-04-09",
   "regelkreise": {
     "soc_extern": {
       "_doc": "Toleranz für extern geänderte SOC-Werte (z.B. manuell via Fronius App). Wenn SOC_MIN oder SOC_MAX außerhalb der Automation geändert werden, respektiert die Engine die Werte für die konfigurierte Dauer.",
@@ -17,51 +17,6 @@
           "beschreibung": "Toleranzzeit bei extern geänderten SOC_MIN/SOC_MAX (Default 30 Min). Engine überschreibt fremde Werte erst nach Ablauf. 0 = deaktiviert. Analog zu heizpatrone.extern_respekt_s."
         }
       }
-    },
-    "soc_schutz": {
-      "_doc": "Sicherheitshalber: SOC-Grenzen nie verletzen",
-      "_entfernt": "2026-03-07: GEN24 DC-DC-Wandler begrenzt Batteriestrom auf ~22A; SOC_MIN via HTTP-API steuert Entlade-Erlaubnis implizit",
-      "aktiv": true,
-      "prioritaet": 1,
-      "beschreibung": "SOC-Untergrenze/Obergrenze als harte Schutzschwelle",
-      "parameter": {
-        "stop_entladung_unter_pct": {
-          "wert": 5,
-          "bereich": [
-            0,
-            20
-          ],
-          "einheit": "%",
-          "obs_feld": "batt_soc_pct",
-          "aktor_kommando": "stop_discharge",
-          "beschreibung": "Unter diesem SOC: Entladung sofort stoppen"
-        },
-        "drosselung_unter_pct": {
-          "wert": 7,
-          "bereich": [
-            5,
-            30
-          ],
-          "einheit": "%",
-          "obs_feld": "batt_soc_pct",
-          "aktor_kommando": "set_discharge_rate",
-          "aktor_wert": 50,
-          "beschreibung": "Unter diesem SOC: Entladerate auf 50% drosseln"
-        },
-        "stop_ladung_ueber_pct": {
-          "wert": 100,
-          "bereich": [
-            80,
-            100
-          ],
-          "einheit": "%",
-          "obs_feld": "batt_soc_pct",
-          "aktor_kommando": "stop_charge",
-          "beschreibung": "Über diesem SOC: Ladung stoppen (außer Zellausgleich)"
-        }
-      },
-      "score_gewicht": 90,
-      "engine_zyklus": "fast"
     },
     "sls_schutz": {
       "_doc": "SLS-Sicherungsschutz: Konfigurierbare Phasenstrombegrenzung am Zählerplatz F1 (SmartMeter Netz). Standard 35A, mittelfristig 50A nach Anschlussänderung. Proportionale Wattpilot-Abregelung um Überschreitungsbetrag + Sicherheitsmarge.",
@@ -438,84 +393,6 @@
       "score_gewicht": 70,
       "engine_zyklus": "fast"
     },
-    "abend_entladerate": {
-      "_doc": "Entladerate nach Tageszeit begrenzen — Spitzenlasten ans Netz",
-      "_entfernt": "2026-03-07: GEN24 DC-DC-Wandler begrenzt Batteriestrom auf ~22A; Modbus-Ratenlimits (OutWRte) wirkungslos",
-      "aktiv": false,
-      "prioritaet": 2,
-      "beschreibung": "Abends/nachts Entladerate reduzieren, damit Batterie für Grundlast reicht",
-      "parameter": {
-        "abend_start_h": {
-          "wert": 15,
-          "bereich": [
-            13,
-            18
-          ],
-          "einheit": "h",
-          "beschreibung": "Ab dieser Stunde: Abend-Rate aktiv"
-        },
-        "abend_ende_h": {
-          "wert": 0,
-          "bereich": [
-            0,
-            2
-          ],
-          "einheit": "h",
-          "beschreibung": "Bis zu dieser Stunde (0=Mitternacht)"
-        },
-        "abend_rate_pct": {
-          "wert": 29,
-          "bereich": [
-            10,
-            80
-          ],
-          "einheit": "%",
-          "aktor_kommando": "set_discharge_rate",
-          "beschreibung": "Abend-Entladerate (~3 kW bei 10.24 kWh)"
-        },
-        "nacht_start_h": {
-          "wert": 0,
-          "bereich": [
-            0,
-            2
-          ],
-          "einheit": "h",
-          "beschreibung": "Ab dieser Stunde: Nacht-Rate aktiv"
-        },
-        "nacht_ende_h": {
-          "wert": 6,
-          "bereich": [
-            4,
-            8
-          ],
-          "einheit": "h",
-          "beschreibung": "Bis zu dieser Stunde"
-        },
-        "nacht_rate_pct": {
-          "wert": 10,
-          "bereich": [
-            0,
-            30
-          ],
-          "einheit": "%",
-          "aktor_kommando": "set_discharge_rate",
-          "beschreibung": "Nacht-Entladerate (~1 kW — Standby)"
-        },
-        "kritisch_soc_pct": {
-          "wert": 10,
-          "bereich": [
-            5,
-            20
-          ],
-          "einheit": "%",
-          "obs_feld": "batt_soc_pct",
-          "aktor_kommando": "stop_discharge",
-          "beschreibung": "Unter diesem SOC: nur Entladung stoppen (Laden bleibt erlaubt!)"
-        }
-      },
-      "score_gewicht": 65,
-      "engine_zyklus": "fast"
-    },
     "zellausgleich": {
       "_doc": "Monatlicher Vollzyklus für BYD-Zellbalancing",
       "aktiv": true,
@@ -592,61 +469,6 @@
       "score_gewicht": 30,
       "engine_zyklus": "strategic"
     },
-    "temp_schutz": {
-      "_doc": "Gradueller Laderate-Schutz nach Zelltemperatur (Tier-2, ergänzt Tier-1 Interrupt)",
-      "_entfernt": "2026-03-07: BMS regelt Temperatur-Schutz selbständig (LFP-Zellchemie); InWRte-Schreiben wirkungslos",
-      "aktiv": false,
-      "prioritaet": 1,
-      "beschreibung": "Laderate stufenweise reduzieren bei steigender Batterie-Temperatur",
-      "parameter": {
-        "stufe_25c_pct": {
-          "wert": 100,
-          "bereich": [
-            80,
-            100
-          ],
-          "einheit": "%",
-          "obs_feld": "batt_temp_max_c",
-          "aktor_kommando": "set_charge_rate",
-          "beschreibung": "Laderate bei ≥25°C"
-        },
-        "stufe_30c_pct": {
-          "wert": 80,
-          "bereich": [
-            50,
-            100
-          ],
-          "einheit": "%",
-          "obs_feld": "batt_temp_max_c",
-          "aktor_kommando": "set_charge_rate",
-          "beschreibung": "Laderate bei ≥30°C"
-        },
-        "stufe_35c_pct": {
-          "wert": 68,
-          "bereich": [
-            30,
-            80
-          ],
-          "einheit": "%",
-          "obs_feld": "batt_temp_max_c",
-          "aktor_kommando": "set_charge_rate",
-          "beschreibung": "Laderate bei ≥35°C"
-        },
-        "stufe_40c_pct": {
-          "wert": 50,
-          "bereich": [
-            20,
-            70
-          ],
-          "einheit": "%",
-          "obs_feld": "batt_temp_max_c",
-          "aktor_kommando": "set_charge_rate",
-          "beschreibung": "Laderate bei ≥40°C (Tier-2; Tier-1 greift ab 40°C härter)"
-        }
-      },
-      "score_gewicht": 70,
-      "engine_zyklus": "fast"
-    },
     "forecast_plausibilisierung": {
       "_doc": "Rest-Prognose an Realität anpassen: IST vs. SOLL vergleichen, bei Abweichung verringern",
       "aktiv": true,
@@ -704,62 +526,8 @@
       "score_gewicht": 50,
       "engine_zyklus": "strategic"
     },
-    "laderate_dynamisch": {
-      "_doc": "Laderate aktiv steuern: temp-abhängig + SOC-abhängig + PV-abhängig",
-      "_entfernt": "2026-03-07: GEN24 DC-DC-Wandler begrenzt Batteriestrom auf ~22A; InWRte-Schreiben wirkungslos",
-      "aktiv": false,
-      "prioritaet": 2,
-      "beschreibung": "Laderate dynamisch begrenzen abhängig von Temp, SOC-Bereich und aktueller PV-Leistung",
-      "parameter": {
-        "komfort_max_laderate_pct": {
-          "wert": 80,
-          "bereich": [
-            50,
-            100
-          ],
-          "einheit": "%",
-          "obs_feld": "charge_rate_pct",
-          "aktor_kommando": "set_charge_rate",
-          "beschreibung": "Maximale Laderate im Komfort-Bereich (LFP-schonend)"
-        },
-        "stress_max_laderate_pct": {
-          "wert": 100,
-          "bereich": [
-            80,
-            100
-          ],
-          "einheit": "%",
-          "obs_feld": "charge_rate_pct",
-          "aktor_kommando": "set_charge_rate",
-          "beschreibung": "Maximale Laderate im Stress-Bereich (wenn nötig: volle Power)"
-        },
-        "wp_aktiv_reduktion_pct": {
-          "wert": 60,
-          "bereich": [
-            30,
-            90
-          ],
-          "einheit": "%",
-          "obs_feld": "wp_active",
-          "aktor_kommando": "set_charge_rate",
-          "beschreibung": "Laderate wenn WP gleichzeitig läuft (Netzüberlast vermeiden)"
-        },
-        "pv_min_fuer_vollladung_w": {
-          "wert": 5000,
-          "bereich": [
-            2000,
-            10000
-          ],
-          "einheit": "W",
-          "obs_feld": "pv_total_w",
-          "beschreibung": "Mindest-PV-Leistung für volle Laderate"
-        }
-      },
-      "score_gewicht": 45,
-      "engine_zyklus": "fast"
-    },
     "wattpilot_battschutz": {
-      "_doc": "Batterieschutz bei WattPilot-Ladung: Entladerate drosseln, SOC_MIN anheben, Nutzerhinweis",
+      "_doc": "Batterieschutz bei WattPilot-Ladung: SOC_MIN anheben (ohne Ratensteuerung), Nutzerhinweis",
       "aktiv": true,
       "prioritaet": 1,
       "beschreibung": "Schützt Batterie vor Tiefentladung durch EV-Ladung (bis 22kW)",
@@ -773,27 +541,6 @@
           "einheit": "W",
           "obs_feld": "ev_power_w",
           "beschreibung": "Mindest-EV-Leistung damit Regel greift"
-        },
-        "soc_drosselung_ab_pct": {
-          "wert": 50,
-          "bereich": [
-            30,
-            70
-          ],
-          "einheit": "%",
-          "obs_feld": "batt_soc_pct",
-          "beschreibung": "Unter diesem SOC Entladerate auf 0.3C reduzieren"
-        },
-        "entladerate_reduziert_pct": {
-          "wert": 30,
-          "bereich": [
-            10,
-            50
-          ],
-          "einheit": "%",
-          "obs_feld": "discharge_rate_pct",
-          "aktor_kommando": "set_discharge_rate",
-          "beschreibung": "Reduzierte Entladerate (≈0.3C bei 10.24kWh → 30%)"
         },
         "soc_min_puffer_pct": {
           "wert": 5,
@@ -1895,19 +1642,19 @@
   "beobachtungsfelder": {
     "_doc": "Referenz: Alle ObsState-Felder die von Regeln gelesen werden",
     "batterie": {
-      "batt_soc_pct": "SOC [0..100%] — soc_schutz, abend_entladerate",
-      "batt_power_w": "Leistung [W] — pos=Laden, neg=Entladen — laderate_dynamisch",
-      "batt_temp_max_c": "Zell-Temp Maximum [°C] — temp_schutz",
-      "cha_state": "Ladestatus [1=OFF..7] — laderate_dynamisch",
-      "charge_rate_pct": "Aktuelle Laderate [%] — laderate_dynamisch, temp_schutz",
-      "discharge_rate_pct": "Aktuelle Entladerate [%] — abend_entladerate",
+      "batt_soc_pct": "SOC [0..100%] — soc_extern, morgen_soc_min, nachmittag_soc_max, wattpilot_battschutz",
+      "batt_power_w": "Leistung [W] — pos=Laden, neg=Entladen — heizpatrone-Logik",
+      "batt_temp_max_c": "Zell-Temp Maximum [°C] — Event/Alarm-Mail bei 40°C, Tier-1 Alarm-Flag",
+      "cha_state": "Ladestatus [1=OFF..7] — Telemetrie",
+      "charge_rate_pct": "Aktuelle Laderate [%] — Telemetrie (manuelle Modbus-Steuerung)",
+      "discharge_rate_pct": "Aktuelle Entladerate [%] — Telemetrie (manuelle Modbus-Steuerung)",
       "soc_min": "Fronius SOC_MIN-Setting [%] — morgen_soc_min",
       "soc_max": "Fronius SOC_MAX-Setting [%] — nachmittag_soc_max",
       "soc_mode": "auto|manual — morgen, nachmittag",
-      "storctl_mod": "Modbus StorCtl_Mod Bitfield — abend_entladerate"
+      "storctl_mod": "Modbus StorCtl_Mod Bitfield — Telemetrie (manuelle Modbus-Steuerung)"
     },
     "erzeuger": {
-      "pv_total_w": "PV-Leistung aktuell [W] — morgen_soc_min, laderate_dynamisch",
+      "pv_total_w": "PV-Leistung aktuell [W] — morgen_soc_min, heizpatrone",
       "pv_today_kwh": "PV-Erzeugung heute [kWh] — forecast_plausibilisierung",
       "forecast_kwh": "Tagesprognose [kWh] — morgen, nachmittag, zellausgleich",
       "forecast_rest_kwh": "Rest-Prognose ab jetzt [kWh] — nachmittag, forecast_plausi",
@@ -1918,8 +1665,8 @@
       "cloud_rest_avg_pct": "Wolken Resttag Schnitt [%] — forecast_plausi, nachmittag"
     },
     "verbraucher": {
-      "wp_power_w": "WP-Leistung aktuell [W] (SmartMeter WP) — laderate_dynamisch",
-      "wp_active": "WP läuft (P_WP > 200W) — laderate_dynamisch",
+      "wp_power_w": "WP-Leistung aktuell [W] (SmartMeter WP) — heiz/ww-Regeln",
+      "wp_active": "WP läuft (P_WP > 200W) — heiz/ww-Regeln",
       "wp_today_kwh": "WP-Verbrauch heute [kWh] — informativ",
       "ev_power_w": "WattPilot-Leistung [W] — wattpilot_battschutz",
       "ev_charging": "WattPilot lädt (car==2) — wattpilot_battschutz",

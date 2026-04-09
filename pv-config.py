@@ -40,7 +40,7 @@ from automation.engine.param_matrix import (
 )
 
 # ── Konstanten ─────────────────────────────────────────────────
-VERSION = '1.2.0'
+VERSION = '1.3.0'
 TITLE = 'PV-System Konfiguration'
 BATTERY_CONFIG_PATH = os.path.join(PROJECT_ROOT, 'config', 'battery_control.json')
 SCHEDULER_STATE_PATH = os.path.join(PROJECT_ROOT, 'config', 'battery_scheduler_state.json')

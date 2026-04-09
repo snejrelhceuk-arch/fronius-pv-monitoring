@@ -34,9 +34,10 @@ LOG = logging.getLogger('engine')
 class RegelWattpilotBattSchutz(Regel):
     """Batterieschutz bei WattPilot-EV-Ladung.
 
-    Logik (2 Stufen):
-    1. SOC > soc_min + puffer: kein Eingriff
-    2. SOC ≤ SOC_MIN + puffer: SOC_MIN anheben → Netzladung erzwingen
+     Logik (2 Trigger):
+     1. SOC ≤ SOC_MIN + puffer: SOC_MIN anheben → Netzladung erzwingen
+     2. Letzte 2h vor Sunset UND SOC < 25%: SOC_MIN auf 25% halten,
+         solange EV-Ladung aktiv ist
 
     Entfernt (2026-03-07): Stufe 2 (set_discharge_rate) — GEN24 DC-DC-Wandler
     begrenzt Batteriestrom auf ~22 A; Modbus-Ratenlimits wirkungslos.
@@ -72,6 +73,15 @@ class RegelWattpilotBattSchutz(Regel):
         if obs.batt_soc_pct is not None and obs.batt_soc_pct <= soc_min_eff + puffer:
             return int(score * 1.3)
 
+        # Sunset-Guard: In den letzten 2h vor Sunset SOC_MIN auf 25% halten,
+        # damit EV-Ladung nicht die Batterie unter 25% zieht.
+        soc = obs.batt_soc_pct
+        sunset_h = obs.sunset
+        if soc is not None and sunset_h is not None:
+            now_h = datetime.now().hour + datetime.now().minute / 60.0
+            if (sunset_h - 2.0) <= now_h <= sunset_h and soc < 25:
+                return int(score * 1.2)
+
         return 0
 
     def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
@@ -85,20 +95,36 @@ class RegelWattpilotBattSchutz(Regel):
         eco_info = " (Eco-Modus)" if obs.ev_eco_mode else " (kein Eco → Schnellladung)"
         ev_w = obs.ev_power_w or 0
 
-        # ── SOC nahe SOC_MIN → Netzbezug erzwingen ──────────
-        if soc <= soc_min_eff + puffer:
+        sunset_guard = False
+        if obs.sunset is not None:
+            now_h = datetime.now().hour + datetime.now().minute / 60.0
+            sunset_guard = (obs.sunset - 2.0) <= now_h <= obs.sunset
+
+        trigger_soc_nahe_min = soc <= soc_min_eff + puffer
+        trigger_sunset_soc_25 = sunset_guard and soc < soc_min_netz
+
+        # ── SOC-Schutz bei EV-Ladung → Netzbezug erzwingen ──────────
+        if trigger_soc_nahe_min or trigger_sunset_soc_25:
             if obs.soc_mode != 'manual':
                 aktionen.append({
                     'tier': 2, 'aktor': 'batterie',
                     'kommando': 'set_soc_mode', 'wert': 'manual',
                     'grund': 'WattPilot-Schutz: SOC_MODE → manual',
                 })
+
+            if trigger_sunset_soc_25 and not trigger_soc_nahe_min:
+                grund = (f'WattPilot-Schutz (Sunset-Fenster): letzte 2h vor Sunset, '
+                         f'SOC {soc:.0f}% < {soc_min_netz}% → SOC_MIN auf {soc_min_netz}% '
+                         f'(Netzbezug){eco_info}')
+            else:
+                grund = (f'WattPilot-Schutz: SOC {soc:.0f}% nahe SOC_MIN '
+                         f'{soc_min_eff}% → SOC_MIN auf {soc_min_netz}% '
+                         f'(Netzbezug){eco_info}')
+
             aktionen.append({
                 'tier': 2, 'aktor': 'batterie',
                 'kommando': 'set_soc_min', 'wert': soc_min_netz,
-                'grund': (f'WattPilot-Schutz: SOC {soc:.0f}% nahe SOC_MIN '
-                          f'{soc_min_eff}% → SOC_MIN auf {soc_min_netz}% '
-                          f'(Netzbezug){eco_info}'),
+                'grund': grund,
                 'hinweis': (f'WattPilot lädt mit {ev_w:.0f}W{eco_info} — '
                             f'Batterie geschützt, Ladung ab jetzt aus dem Netz'),
             })

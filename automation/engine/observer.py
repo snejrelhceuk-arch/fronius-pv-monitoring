@@ -76,13 +76,8 @@ class Observer:
             with open(cfg_path, 'r') as f:
                 cfg = json.load(f)
             batt = cfg.get('batterie', {})
-            limits = cfg.get('leistungsbegrenzung', {}).get('temperatur_limits', {})
-            sicherheit = cfg.get('sicherheit', {})
-            # Erste Warnstufe aus temperatur_limits (40°C → 50%)
-            warn_temps = sorted([int(k) for k in limits.keys()])
-            warn_c = warn_temps[-1] if warn_temps else 40  # Höchste definierte Temp
             return {
-                'batt_temp_warn_c': warn_c,
+                'batt_temp_warn_c': 40,
                 'batt_temp_alarm_c': 45,
                 'batt_temp_reduce_c_rate': 0.3,
                 'batt_kapazitaet_kwh': batt.get('kapazitaet_kwh', 20.48),
