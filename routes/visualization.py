@@ -242,10 +242,16 @@ def api_tag_visualization():
                 dc1, dc2, exp_f2, exp_f3, imp_netz, exp_netz, ac_inv, imp_wp = [
                     d / 1000.0 for d in deltas_wh]
 
+                # PV-Erzeugung bleibt reine DC/Generator-Erzeugung.
                 ertrag = dc1 + dc2 + exp_f2 + exp_f3
                 einspeis = exp_netz
                 bezug = imp_netz
-                verbrauch = ertrag + bezug - einspeis
+
+                # Verbrauch fuer Tageskopf als AC-Bilanz:
+                # (F1-AC inkl. Batteriefluss + F2/F3) + Netzbezug - Netzeinspeisung.
+                # Damit wird Batterieentladung korrekt im Verbrauch abgebildet.
+                ac_gesamt = ac_inv + exp_f2 + exp_f3
+                verbrauch = max(0.0, ac_gesamt + bezug - einspeis)
                 counter_totals = {
                     'ertrag_kwh': round(ertrag, 3),
                     'einspeis_kwh': round(einspeis, 3),
