@@ -35,6 +35,9 @@ config/battery_scheduler_state.json
 config/battery_bms_checkpoints.json
 config/fritz_config.json
 
+# TLS-Zertifikate und Schlüssel (sensibel)
+config/tls/
+
 # Lokale Kontroll-Datei (nicht im Repo)
 ToExamine.md
 
@@ -91,4 +94,6 @@ tools/PV_Anlagendokumentation.pdf
 pv-automation.service
 pv-observer.service
 pv-wattpilot.service
+pv-steuerbox.service
+pv-shutdown-persist.service
 OLLI/

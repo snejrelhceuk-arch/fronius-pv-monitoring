@@ -1,7 +1,7 @@
 {
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
-  "_updated": "2026-04-09",
+  "_updated": "2026-04-11",
   "regelkreise": {
     "soc_extern": {
       "_doc": "Toleranz für extern geänderte SOC-Werte (z.B. manuell via Fronius App). Wenn SOC_MIN oder SOC_MAX außerhalb der Automation geändert werden, respektiert die Engine die Werte für die konfigurierte Dauer.",
@@ -1172,6 +1172,15 @@
           ],
           "einheit": "%",
           "beschreibung": "Nach Sonnenuntergang: Klima AUS wenn Batterie-SOC unter diesen Wert fällt."
+        },
+        "extern_respekt_s": {
+          "wert": 1800,
+          "bereich": [
+            300,
+            7200
+          ],
+          "einheit": "s",
+          "beschreibung": "Dauer in Sekunden, wie lange ein extern erkanntes Einschalten respektiert wird. Während dieser Zeit greift die Temperatur-Abschaltlogik nicht; nur harte Sicherheitskriterien (Sunset+SOC) bleiben aktiv."
         }
       },
       "score_gewicht": 52,

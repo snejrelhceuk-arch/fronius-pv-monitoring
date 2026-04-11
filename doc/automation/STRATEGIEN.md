@@ -150,6 +150,8 @@ TAGSÜBER (PV-Überschuss > 3 kW):
     → Klimaanlage im Heizhaus temperaturgeführt:
       Vor Sunrise nur bei Forecast gut + Temp >= 15°C,
       nach Sunrise sicher ab Temp >= 20°C
+      Manuelles Einschalten wird für extern_respekt_s respektiert
+      (analog HP-Autoritätsschaltung, §2.6)
     → Bei massivem Überschuss: WP auf Smart Grid "dunkelgrün" setzen
       (Coil 3=1, Coil 4=1 → WP Maximalleistung, E9 nicht relevant)
     → Heizpatrone separat steuern (Fritz!DECT API oder MEGA-BAS TRIAC→24V-Relais)
@@ -434,6 +436,7 @@ die Regelung des Nulleinspeisers braucht bis zu 30 s zum Nachregeln.
 | Abend-Nachladezyklus | in `geraete.py` Phase 4 | ✅ Produktiv (2026-03-08) |
 | Phasenströme Pipeline | `data_collector.py → obs_state.py` | ✅ Produktiv (2026-03-08) |
 | Autoritätsschaltung (Extern) | in `geraete.py` + `extern_notaus_soc_pct` | ✅ Produktiv (2026-03-14) |
+| Klima Extern-Erkennung | in `geraete.py` (analog HP-Muster) | ✅ Produktiv (2026-04-11) |
 | Parametermatrix (30+ Param.) | `config/soc_param_matrix.json` | ✅ Produktiv |
 | Registrierung in `actuator.py` | 3 Aktoren: batterie, wattpilot, fritzdect | ✅ Produktiv |
 | pv-config.py Menü 6 | HP-Status, Config, Test, manuell Ein/Aus | ✅ Produktiv |

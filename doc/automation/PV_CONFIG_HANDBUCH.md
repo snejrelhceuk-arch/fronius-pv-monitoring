@@ -120,7 +120,7 @@ Die Einheit steht immer beim angezeigten Wert (z.B. `5%`, `100W`, `5.0kWh`).
 
 | Parameter | Standard | Bereich | Wirkung |
 |-----------|----------|---------|--------|
-| extern_respekt | 1800 s | 0–7200 s | **Toleranzzeit bei extern geänderten SOC-Werten (30 Min).** Alle SOC-Steuerungsregeln (morgen_soc_min, nachmittag_soc_max, komfort_reset, forecast_plausi, zellausgleich) pausieren für diese Dauer. Tier-1-Alarmierung läuft unabhängig weiter. 0 = deaktiviert. |
+| extern_respekt | 1800 s | 900–7200 s | **Toleranzzeit bei extern geänderten SOC-Werten (30 Min).** Alle SOC-Steuerungsregeln (morgen_soc_min, nachmittag_soc_max, komfort_reset, forecast_plausi, zellausgleich) pausieren für diese Dauer. Tier-1-Alarmierung läuft unabhängig weiter. |
 
 **Sicherheit:** Tier-1-Checks (Temperatur, SOC) setzen weiterhin Alarm-Flags. Direkte Modbus-Aktionen für Laderaten laufen nicht automatisiert. Batterie-Schutz erfolgt über SOC_MIN/SOC_MAX (HTTP-API).
 
@@ -601,6 +601,9 @@ temperaturgeführter Betrieb.
 | initial_temp_c_gut_nach_sunrise | 15 °C | 12–25 °C | Nach-Sunrise-Einschaltschwelle bei Forecast `gut` (früherer Start als maessig möglich). |
 | temp_hysterese_k | 1.0 K | 0.2–3.0 K | Temperatur-Hysterese gegen die jeweilige Einschalt-Schwelle. |
 | sunset_soc_stop_pct | 90% | 30–100% | Abschaltschwelle nach Sonnenuntergang: Klima AUS bei `SOC < Wert`. |
+| extern_respekt_s | 1800 s | 300–7200 s | **Autoritätszeit (30 Min, 5 Min–2 h).** Bei manuellem Einschalten: Engine respektiert Nutzer-Entscheidung, nur Sunset+SOC-Schutz (`sunset_soc_stop_pct`) überstimmt. Bei manuellem Ausschalten: `klima_ein` für dieselbe Dauer gesperrt. |
+
+**Extern-Erkennung (Autoritätsschaltung):** Identisch zum HP-Muster (§4.10). Die Engine erkennt automatisch, wenn die Klimaanlage außerhalb der Engine eingeschaltet wird (Steuerbox, Fritz!Box-App, physischer Schalter): Klima ist EIN, aber kein Engine-Kommando liegt vor (180 s Grace-Window). In diesem Fall gilt für `extern_respekt_s` die Nutzer-Autorität: Temperaturlogik pausiert. Nur die harte Sicherheit (nach Sonnenuntergang bei `SOC < sunset_soc_stop_pct`) überstimmt sofort.
 
 ---
 

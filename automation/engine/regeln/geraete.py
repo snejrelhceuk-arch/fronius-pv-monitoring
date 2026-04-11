@@ -1367,11 +1367,73 @@ class RegelHeizpatrone(Regel):
 
 class RegelKlimaanlage(RegelHeizpatrone):
     # Eigenstaendige Thermoschutzregel fuer das Heizhaus via Fritz!DECT.
+    #
+    # Extern-Erkennung:
+    #   Identisches Muster wie HP: Zustandsübergangs-Erkennung (OFF→ON ohne
+    #   Engine-Beteiligung). Während extern_respekt_s gelten NUR harte
+    #   Sicherheitskriterien (Sunset+SOC); Temperatur-AUS wird pausiert.
+    #   Kein DB-basierter Override-Check nötig (Override-Processor setzt Klima-
+    #   Overrides sofort auf 'done'; Hold ist deshalb architekturfremd).
 
     name = 'klimaanlage'
     regelkreis = 'klimaanlage'
     aktor = 'fritzdect'
     engine_zyklus = 'fast'
+
+    def __init__(self):
+        super().__init__()
+        # Klima-spezifische Extern-Erkennung (getrennt von HP-State)
+        self._klima_letzter_zustand: Optional[bool] = None
+        self._klima_extern_ein_ts: float = 0
+        self._engine_klima_ein_ts: float = 0
+
+    # ── Extern-Erkennung ─────────────────────────────────────
+
+    def _aktualisiere_klima_extern(self, obs: ObsState, matrix: dict) -> bool:
+        """Zustandsübergangs-basierte Extern-Erkennung. Muss JEDEN Zyklus laufen.
+
+        Erkennt ob Klima AUS→EIN ging ohne dass die Engine es veranlasst hat.
+        Returns: True wenn ein externer Override aktuell respektiert wird.
+        """
+        extern_respekt = float(get_param(
+            matrix, self.regelkreis, 'extern_respekt_s', 1800
+        ))
+
+        # ── OFF→ON Transition ──
+        if (obs.klima_aktiv
+                and self._klima_letzter_zustand is not None
+                and not self._klima_letzter_zustand):
+            # War das die Engine? (klima_ein innerhalb 180s erzeugt)
+            if (time.time() - self._engine_klima_ein_ts) < 180:
+                self._engine_klima_ein_ts = 0  # verbraucht
+                LOG.debug('Klima EIN: Engine-initiiert (erkannt)')
+            else:
+                self._klima_extern_ein_ts = time.time()
+                LOG.info('Klima extern eingeschaltet erkannt → Respekt %ds aktiv',
+                         int(extern_respekt))
+                logge_extern('fritzdect', 'Klima extern EIN',
+                             'Manuell eingeschaltet (nicht durch Engine)')
+
+        # ── ON→OFF Transition: Extern-Hold beenden ──
+        if (not obs.klima_aktiv
+                and self._klima_letzter_zustand is not None
+                and self._klima_letzter_zustand):
+            if self._klima_extern_ein_ts > 0:
+                LOG.info('Klima extern AUS → Extern-Hold beendet')
+                logge_extern('fritzdect', 'Klima extern AUS',
+                             'Ausgeschaltet während Extern-Hold')
+            self._klima_extern_ein_ts = 0
+
+        # Klima nicht aktiv → Timer immer auf 0
+        if not obs.klima_aktiv:
+            self._klima_extern_ein_ts = 0
+
+        self._klima_letzter_zustand = obs.klima_aktiv
+
+        return (self._klima_extern_ein_ts > 0
+                and (time.time() - self._klima_extern_ein_ts) < extern_respekt)
+
+    # ── Hilfsfunktionen ──────────────────────────────────────
 
     def _now_h(self) -> float:
         now = datetime.now()
@@ -1384,7 +1446,6 @@ class RegelKlimaanlage(RegelHeizpatrone):
     def _get_temp_ist_c(self, obs: ObsState, matrix: dict) -> float:
         if obs.klima_temp_c is not None:
             return float(obs.klima_temp_c)
-        # Fallback wenn kein Sensorwert vorhanden
         return float(get_param(matrix, self.regelkreis, 'initial_temp_c', 15))
 
     def _forecast_ist_gut(self, obs: ObsState) -> bool:
@@ -1406,6 +1467,11 @@ class RegelKlimaanlage(RegelHeizpatrone):
         return now_h > sunset and soc < soc_stop
 
     def _soll_klima_laufen(self, obs: ObsState, matrix: dict) -> bool:
+        """Reine Temperatur-/Zeitlogik — ohne Extern-Berücksichtigung.
+
+        Extern-Handling erfolgt in bewerte() und erzeuge_aktionen(),
+        NICHT hier, um Zirkelschlüsse zu vermeiden.
+        """
         if not self._startzeit_erreicht(obs, matrix):
             return False
         if self._sunset_soc_stop(obs, matrix):
@@ -1433,10 +1499,11 @@ class RegelKlimaanlage(RegelHeizpatrone):
         return temp_ist >= temp_tag
 
     def _startzeit_erreicht(self, obs: ObsState, matrix: dict) -> bool:
-        # Startbedingung: ab 1h vor Sonnenaufgang (sunrise - 1h)
         sunrise_h = obs.sunrise if obs.sunrise is not None else 6.0
         now_h = self._now_h()
         return now_h >= (sunrise_h - 1.0)
+
+    # ── Haupt-Regellogik ─────────────────────────────────────
 
     def bewerte(self, obs: ObsState, matrix: dict) -> int:
         if not ist_aktiv(matrix, self.regelkreis):
@@ -1444,10 +1511,25 @@ class RegelKlimaanlage(RegelHeizpatrone):
 
         basis_score = get_score_gewicht(matrix, self.regelkreis)
 
-        # Harte Abschalt-Bedingung: nach Sonnenuntergang und SOC<SOC_STOP.
+        # Extern-Erkennung MUSS IMMER laufen (State-Tracking jeder Zyklus)
+        ist_extern = self._aktualisiere_klima_extern(obs, matrix)
+
+        # Harte Sicherheit: Sunset+SOC-Stop — IMMER aktiv, auch bei extern.
         if self._sunset_soc_stop(obs, matrix):
             if obs.klima_aktiv:
                 return int(basis_score * 2)
+            return 0
+
+        # Extern: Engine greift nicht ein, nur harte Sicherheit (oben) gilt.
+        if ist_extern and obs.klima_aktiv:
+            extern_respekt = float(get_param(
+                matrix, self.regelkreis, 'extern_respekt_s', 1800
+            ))
+            verbleibend = max(0, int(
+                extern_respekt - (time.time() - self._klima_extern_ein_ts)
+            ))
+            LOG.debug('Klima extern → Autorität respektiert (%ds verbleibend)',
+                      verbleibend)
             return 0
 
         soll_laufen = self._soll_klima_laufen(obs, matrix)
@@ -1462,6 +1544,8 @@ class RegelKlimaanlage(RegelHeizpatrone):
             return []
 
         soc_stop = float(get_param(matrix, self.regelkreis, 'sunset_soc_stop_pct', 90))
+
+        # Harte Sicherheit: Sunset+SOC — IMMER, auch bei extern.
         if self._sunset_soc_stop(obs, matrix):
             if obs.klima_aktiv:
                 return [{
@@ -1472,10 +1556,21 @@ class RegelKlimaanlage(RegelHeizpatrone):
                 }]
             return []
 
+        # Extern: Engine greift nicht ein (harte Sicherheit schon oben abgefangen).
+        extern_respekt = float(get_param(
+            matrix, self.regelkreis, 'extern_respekt_s', 1800
+        ))
+        ist_extern = (self._klima_extern_ein_ts > 0
+                      and (time.time() - self._klima_extern_ein_ts) < extern_respekt)
+        if ist_extern:
+            return []
+
         soll_laufen = self._soll_klima_laufen(obs, matrix)
         ist_an = bool(obs.klima_aktiv)
 
         if soll_laufen and not ist_an:
+            # Engine-Einschaltung markieren (für Extern-Erkennung im nächsten Zyklus)
+            self._engine_klima_ein_ts = time.time()
             if self._ist_vor_sunrise(obs):
                 temp_pre = float(get_param(matrix, self.regelkreis, 'initial_temp_c', 15))
                 grund = (f'Klima EIN: Vor Sunrise, Forecast gut und Temp >= {temp_pre:.1f}°C')
