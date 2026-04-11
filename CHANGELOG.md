@@ -7,7 +7,16 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features
+- **Klima Extern-Erkennung:** Manuelles Einschalten der Klimaanlage wird für `extern_respekt_s` (Standard 30 Min) respektiert. Zustandsbasierte Erkennung (OFF→ON ohne Engine-Beteiligung), analog zum HP-Muster. Während Respekt-Zeit greift nur die harte Sicherheit (Sunset+SOC).
+- **Batterie-Zelltemperaturen:** BYD-Zelltemperaturen (min/max/avg) via HTTP in DataCollector integriert (30 s Rate-Limit).
+
+### System
+- **Steuerbox-Monitoring:** `pv-steuerbox.service` in zentrale Überwachung integriert (diagnos, Cron-Keepalive via `monitor_steuerbox.sh`).
+- **Failover-Sync gehärtet:** `.state`-Verzeichnis-Initialisierung über Boot-Service (`pv-failover-init.service`), Error-Logging in `failover_sync_db.sh`.
+
 ### Fixes
+- **Klima Rapid-Shutdown behoben:** Klimaanlage wurde nach manuellem Einschalten sofort wieder abgeschaltet, weil `RegelKlimaanlage` keine Extern-Erkennung hatte. `_uses_respekt_hold()` gibt für Klima `False` zurück → DB-basierter Ansatz war wirkungslos. Lösung: Zustandsübergangs-Erkennung (wie HP).
 - **Verbrauchsformel Tageskopf (counter_totals):** `routes/visualization.py` — Formel von `ertrag + bezug - einspeis` (reiner PV-DC-Ertrag) auf `ac_gesamt + bezug - einspeis` (mit `ac_gesamt = W_AC_Inv + F2 + F3`) umgestellt. `W_AC_Inv` bildet den gesamten AC-Ausgang des Wechselrichters ab (PV + Batterieentladung − Batterieladung), sodass die Batterieentladung korrekt im Tagesverbrauch erscheint.
 
 ### Projektankündigungen

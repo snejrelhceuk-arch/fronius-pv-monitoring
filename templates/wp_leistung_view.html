@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <title>Leistung WP - Netzbetreiber-Nachweis</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <link rel="stylesheet" href="/static/css/monitoring.css">
+    <style>
+        .wp-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            padding: 10px 12px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+        .wp-toolbar .group {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .wp-toolbar .label {
+            color: rgba(255,255,255,0.85);
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 2px;
+        }
+        .wp-toolbar button,
+        .wp-toolbar input {
+            background: rgba(255,255,255,0.12);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.25);
+            border-radius: 4px;
+            padding: 6px 8px;
+            font-size: 12px;
+            font-family: inherit;
+        }
+        .wp-toolbar button:hover {
+            background: rgba(255,255,255,0.22);
+        }
+        .wp-toolbar button.active {
+            background: rgba(255,255,255,0.28);
+            border-color: rgba(255,255,255,0.45);
+        }
+        .wp-toolbar input[type="datetime-local"] {
+            min-width: 180px;
+        }
+        .density-wrap {
+            display: inline-flex;
+            gap: 8px;
+            align-items: center;
+        }
+        #densityRange {
+            width: 120px;
+            accent-color: #14b8a6;
+            padding: 0;
+            border: none;
+            background: transparent;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 8px;
+        }
+        .info-chip {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            padding: 8px 10px;
+            border-radius: 8px;
+            color: white;
+            background: rgba(20,184,166,0.14);
+            border: 1px solid rgba(20,184,166,0.35);
+        }
+        .info-chip .k { font-size: 11px; opacity: 0.85; }
+        .info-chip .v { font-size: 14px; font-weight: 700; }
+        .info-chip.warn {
+            background: rgba(239,68,68,0.2);
+            border-color: rgba(239,68,68,0.5);
+        }
+        .source-note {
+            color: rgba(255,255,255,0.7);
+            font-size: 11px;
+            padding-left: 2px;
+        }
+        #wpLeistungChart {
+            width: 100%;
+            flex: 1;
+            min-height: 0;
+            background: white;
+            border-radius: 8px;
+        }
+        @media (max-width: 800px) {
+            .wp-toolbar {
+                padding: 8px;
+            }
+            .wp-toolbar .group {
+                width: 100%;
+            }
+            .wp-toolbar input[type="datetime-local"] {
+                min-width: 150px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="top-nav-bar">
+        <div class="nav-left">
+            <a href="/" class="nav-main">Flow</a>
+            <a href="/monitoring" id="linkMonitoring" class="nav-main">Monitoring</a>
+            <a href="/analyse" id="linkAnalyse" class="nav-main active">Analyse</a>
+            <div class="nav-separator"></div>
+            <a href="/erzeuger" id="linkErzeuger" class="nav-sub">Erzeuger</a>
+            <a href="/verbraucher" id="linkVerbraucher" class="nav-sub">Verbraucher</a>
+            <a href="/verbraucher/wp-leistung" id="linkWPL" class="nav-sub active">Leistung WP</a>
+            <div class="nav-separator"></div>
+            <a href="/analyse/pv" id="linkAnalysePv" class="nav-sub">PV-Uebersicht</a>
+            <a href="/analyse/haushalt" id="linkAnalyseHaushalt" class="nav-sub">Haushalt</a>
+            <a href="/analyse/amortisation" id="linkAnalyseAmortisation" class="nav-sub">Amortisation</a>
+        </div>
+        <div class="nav-center"></div>
+        <div class="nav-right"></div>
+    </div>
+
+    <div class="chart-area">
+        <div class="wp-toolbar">
+            <div class="group">
+                <span class="label">Zeitraum</span>
+                <button id="btn1d" onclick="setRangeDays(1)">24h</button>
+                <button id="btn7d" onclick="setRangeDays(7)">7d</button>
+                <button id="btn30d" onclick="setRangeDays(30)">30d</button>
+                <button id="btn90d" onclick="setRangeDays(90)">90d</button>
+                <button id="btn365d" onclick="setRangeDays(365)">365d</button>
+                <button id="btnAll" onclick="setAllRange()">Gesamt</button>
+            </div>
+            <div class="group">
+                <span class="label">Von/Bis</span>
+                <input type="datetime-local" id="startInput">
+                <input type="datetime-local" id="endInput">
+                <button onclick="applyCustomRange()">Anwenden</button>
+            </div>
+            <div class="group density-wrap">
+                <span class="label">Aufloesung</span>
+                <input type="range" id="densityRange" min="400" max="8000" step="200" value="2400" oninput="updateDensityLabel()">
+                <span id="densityLabel" class="label">2400 Punkte</span>
+                <button onclick="loadData()">Neu laden</button>
+            </div>
+        </div>
+
+        <div id="infoGrid" class="info-grid" style="display:none;"></div>
+        <div id="sourceNote" class="source-note" style="display:none;"></div>
+
+        <div id="chartLoading" class="loading">Lade WP-Leistungsnachweis...</div>
+        <div id="chartError" class="error" style="display:none;"></div>
+        <div id="wpLeistungChart" style="display:none;"></div>
+    </div>
+</div>
+
+<script>
+    let chart = null;
+    let points = [];
+    let activeStartTs = null;
+    let activeEndTs = null;
+    let limitW = 4200;
+
+    function buildNavQuery() {
+        const params = new URLSearchParams(window.location.search);
+        const period = params.get('period');
+        if (!period) return '';
+
+        const keep = new URLSearchParams();
+        keep.set('period', period);
+        const date = params.get('date');
+        const year = params.get('year');
+        const month = params.get('month');
+        if (date) keep.set('date', date);
+        if (year) keep.set('year', year);
+        if (month) keep.set('month', month);
+        return keep.toString();
+    }
+
+    function updateContextLinks() {
+        const query = buildNavQuery();
+        const links = {
+            linkMonitoring: '/monitoring',
+            linkAnalyse: '/analyse',
+            linkErzeuger: '/erzeuger',
+            linkVerbraucher: '/verbraucher',
+            linkWPL: '/verbraucher/wp-leistung',
+            linkAnalysePv: '/analyse/pv',
+            linkAnalyseHaushalt: '/analyse/haushalt',
+            linkAnalyseAmortisation: '/analyse/amortisation'
+        };
+
+        Object.entries(links).forEach(([id, base]) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.href = query ? `${base}?${query}` : base;
+        });
+    }
+
+    function toLocalInputValue(ts) {
+        const d = new Date(ts * 1000);
+        const pad = n => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    function fromLocalInputValue(val) {
+        if (!val) return null;
+        const d = new Date(val);
+        if (Number.isNaN(d.getTime())) return null;
+        return Math.floor(d.getTime() / 1000);
+    }
+
+    function formatTs(ts) {
+        return new Date(ts * 1000).toLocaleString('de-DE');
+    }
+
+    function updateDensityLabel() {
+        const val = Number(document.getElementById('densityRange').value || 2400);
+        document.getElementById('densityLabel').textContent = `${val} Punkte`;
+    }
+
+    function setActiveRangeButtons(days, isAll = false) {
+        ['1d','7d','30d','90d','365d','All'].forEach(s => {
+            const b = document.getElementById('btn' + s);
+            if (b) b.classList.remove('active');
+        });
+        if (isAll) {
+            document.getElementById('btnAll').classList.add('active');
+        } else {
+            const map = {1: 'btn1d', 7: 'btn7d', 30: 'btn30d', 90: 'btn90d', 365: 'btn365d'};
+            if (map[days]) document.getElementById(map[days]).classList.add('active');
+        }
+    }
+
+    function setRangeDays(days) {
+        const now = Math.floor(Date.now() / 1000);
+        activeEndTs = now;
+        activeStartTs = now - (days * 86400);
+        document.getElementById('startInput').value = toLocalInputValue(activeStartTs);
+        document.getElementById('endInput').value = toLocalInputValue(activeEndTs);
+        setActiveRangeButtons(days, false);
+        loadData();
+    }
+
+    function setAllRange() {
+        const end = Math.floor(Date.now() / 1000);
+        activeEndTs = end;
+        activeStartTs = end - (3650 * 86400);
+        document.getElementById('startInput').value = toLocalInputValue(activeStartTs);
+        document.getElementById('endInput').value = toLocalInputValue(activeEndTs);
+        setActiveRangeButtons(0, true);
+        loadData();
+    }
+
+    function applyCustomRange() {
+        const start = fromLocalInputValue(document.getElementById('startInput').value);
+        const end = fromLocalInputValue(document.getElementById('endInput').value);
+        if (!start || !end || start >= end) {
+            alert('Ungueltiger Zeitraum: Von muss kleiner als Bis sein.');
+            return;
+        }
+        activeStartTs = start;
+        activeEndTs = end;
+        setActiveRangeButtons(0, false);
+        loadData();
+    }
+
+    function guessInitialRangeFromContext() {
+        const params = new URLSearchParams(window.location.search);
+        const now = new Date();
+        const period = params.get('period');
+
+        if (period === 'tag') {
+            const d = params.get('date') ? new Date(`${params.get('date')}T12:00:00`) : now;
+            const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
+            const end = new Date(start.getTime() + 86400 * 1000);
+            return [Math.floor(start.getTime()/1000), Math.floor(end.getTime()/1000), 1];
+        }
+        if (period === 'monat') {
+            const year = parseInt(params.get('year'), 10) || now.getFullYear();
+            const month = (parseInt(params.get('month'), 10) || (now.getMonth()+1)) - 1;
+            const start = new Date(year, month, 1, 0, 0, 0);
+            const end = new Date(year, month + 1, 1, 0, 0, 0);
+            return [Math.floor(start.getTime()/1000), Math.floor(end.getTime()/1000), 30];
+        }
+        if (period === 'jahr') {
+            const year = parseInt(params.get('year'), 10) || now.getFullYear();
+            const start = new Date(year, 0, 1, 0, 0, 0);
+            const end = new Date(year + 1, 0, 1, 0, 0, 0);
+            return [Math.floor(start.getTime()/1000), Math.floor(end.getTime()/1000), 365];
+        }
+
+        const endTs = Math.floor(Date.now() / 1000);
+        return [endTs - 30 * 86400, endTs, 30];
+    }
+
+    function computeStatsForRange(dataPoints, startTs, endTs) {
+        const inRange = dataPoints.filter(p => p.ts >= startTs && p.ts <= endTs);
+        if (inRange.length === 0) {
+            return { maxW: 0, maxTs: null, dayMax: null, monthMax: null, violations: 0, count: 0 };
+        }
+
+        let maxW = -1;
+        let maxTs = null;
+        let violations = 0;
+        const dayMap = new Map();
+        const monthMap = new Map();
+
+        for (const p of inRange) {
+            if (p.power_w > maxW) {
+                maxW = p.power_w;
+                maxTs = p.ts;
+            }
+            if (p.within_limit === 0) violations += 1;
+
+            const d = new Date(p.ts * 1000);
+            const dayKey = d.toISOString().slice(0, 10);
+            const monthKey = dayKey.slice(0, 7);
+
+            if (!dayMap.has(dayKey) || p.power_w > dayMap.get(dayKey).max_w) {
+                dayMap.set(dayKey, { day: dayKey, max_w: p.power_w, ts: p.ts });
+            }
+            if (!monthMap.has(monthKey) || p.power_w > monthMap.get(monthKey).max_w) {
+                monthMap.set(monthKey, { month: monthKey, max_w: p.power_w, ts: p.ts });
+            }
+        }
+
+        const dayMax = Array.from(dayMap.values()).sort((a, b) => b.max_w - a.max_w)[0] || null;
+        const monthMax = Array.from(monthMap.values()).sort((a, b) => b.max_w - a.max_w)[0] || null;
+
+        return { maxW, maxTs, dayMax, monthMax, violations, count: inRange.length };
+    }
+
+    function renderInfo(stats, startTs, endTs, sourceText = '') {
+        const info = document.getElementById('infoGrid');
+        const source = document.getElementById('sourceNote');
+        const days = Math.max(0.01, (endTs - startTs) / 86400);
+        const showDay = days <= 45;
+
+        const peakLabel = showDay ? 'Tages-Max (im Bereich)' : 'Monats-Max (im Bereich)';
+        const peakObj = showDay ? stats.dayMax : stats.monthMax;
+        const peakVal = peakObj ? `${peakObj.max_w.toFixed(1)} W` : 'n/a';
+        const peakTime = peakObj ? formatTs(peakObj.ts) : 'n/a';
+
+        const maxText = stats.maxTs ? `${stats.maxW.toFixed(1)} W @ ${formatTs(stats.maxTs)}` : 'n/a';
+        const limitState = stats.violations > 0
+            ? `${stats.violations} Ueberschreitungen`
+            : 'Keine Ueberschreitung';
+
+        info.innerHTML = `
+            <div class="info-chip">
+                <span class="k">Bereich</span>
+                <span class="v">${formatTs(startTs)} - ${formatTs(endTs)}</span>
+            </div>
+            <div class="info-chip">
+                <span class="k">Maximum (Bereich)</span>
+                <span class="v">${maxText}</span>
+            </div>
+            <div class="info-chip">
+                <span class="k">${peakLabel}</span>
+                <span class="v">${peakVal} @ ${peakTime}</span>
+            </div>
+            <div class="info-chip ${stats.violations > 0 ? 'warn' : ''}">
+                <span class="k">Grenzwert 4.2 kW</span>
+                <span class="v">${limitState}</span>
+            </div>
+            <div class="info-chip">
+                <span class="k">Punkte (sichtbar)</span>
+                <span class="v">${stats.count}</span>
+            </div>
+        `;
+
+        info.style.display = 'grid';
+        if (sourceText) {
+            source.textContent = sourceText;
+            source.style.display = 'block';
+        } else {
+            source.style.display = 'none';
+        }
+    }
+
+    function renderChart() {
+        if (chart) {
+            chart.dispose();
+            chart = null;
+        }
+        chart = echarts.init(document.getElementById('wpLeistungChart'));
+
+        const lineData = points.map(p => [p.ts * 1000, p.power_w]);
+        const violationData = points
+            .filter(p => p.within_limit === 0)
+            .map(p => [p.ts * 1000, p.power_w]);
+
+        const option = {
+            animation: false,
+            tooltip: {
+                trigger: 'axis',
+                formatter: function(params) {
+                    if (!params || params.length === 0) return '';
+                    const ts = Math.floor(params[0].value[0] / 1000);
+                    const power = params[0].value[1];
+                    const limitText = power > limitW ? '<span style="color:#ef4444">Ueberschreitung</span>' : 'OK';
+                    return `<strong>${formatTs(ts)}</strong><br/>` +
+                        `WP Max: <strong>${power.toFixed(1)} W</strong><br/>` +
+                        `Limit ${limitW.toFixed(0)} W: ${limitText}`;
+                }
+            },
+            legend: {
+                data: ['WP-Leistung', 'Grenzwertverletzung'],
+                bottom: 12
+            },
+            toolbox: {
+                right: 20,
+                feature: {
+                    dataZoom: { yAxisIndex: false },
+                    restore: {},
+                    saveAsImage: { title: 'PNG speichern' }
+                }
+            },
+            grid: {
+                left: '4%',
+                right: '3%',
+                top: 50,
+                bottom: 90,
+                containLabel: true
+            },
+            xAxis: {
+                type: 'time',
+                axisLabel: {
+                    formatter: value => new Date(value).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })
+                }
+            },
+            yAxis: {
+                type: 'value',
+                name: 'W',
+                min: 0,
+                max: function(v) {
+                    return Math.max(4600, Math.ceil(v.max / 200) * 200);
+                }
+            },
+            dataZoom: [
+                { type: 'inside', xAxisIndex: 0, filterMode: 'none' },
+                { type: 'slider', xAxisIndex: 0, height: 24, bottom: 50, filterMode: 'none' }
+            ],
+            series: [
+                {
+                    name: 'WP-Leistung',
+                    type: 'line',
+                    showSymbol: false,
+                    smooth: false,
+                    lineStyle: { width: 1.8, color: '#14b8a6' },
+                    areaStyle: { color: 'rgba(20,184,166,0.15)' },
+                    data: lineData,
+                    markLine: {
+                        symbol: ['none', 'none'],
+                        lineStyle: { color: '#dc2626', width: 1.5, type: 'dashed' },
+                        label: { formatter: `Grenzwert ${limitW.toFixed(0)} W` },
+                        data: [{ yAxis: limitW }]
+                    }
+                },
+                {
+                    name: 'Grenzwertverletzung',
+                    type: 'scatter',
+                    data: violationData,
+                    symbolSize: 6,
+                    itemStyle: { color: '#dc2626' }
+                }
+            ]
+        };
+
+        chart.setOption(option);
+
+        let zoomTimer = null;
+        chart.on('datazoom', function() {
+            if (zoomTimer) clearTimeout(zoomTimer);
+            zoomTimer = setTimeout(updateInfoByCurrentZoom, 120);
+        });
+
+        window.addEventListener('resize', () => {
+            if (chart) chart.resize();
+        });
+    }
+
+    function updateInfoByCurrentZoom() {
+        if (!chart || points.length === 0) return;
+        const opt = chart.getOption();
+        const dz = (opt.dataZoom && opt.dataZoom[0]) ? opt.dataZoom[0] : null;
+        if (!dz || dz.start == null || dz.end == null) {
+            const stats = computeStatsForRange(points, activeStartTs, activeEndTs);
+            renderInfo(stats, activeStartTs, activeEndTs);
+            return;
+        }
+
+        const startIdx = Math.floor((dz.start / 100) * (points.length - 1));
+        const endIdx = Math.ceil((dz.end / 100) * (points.length - 1));
+        const safeStart = Math.max(0, Math.min(points.length - 1, startIdx));
+        const safeEnd = Math.max(0, Math.min(points.length - 1, endIdx));
+        const tsFrom = points[Math.min(safeStart, safeEnd)].ts;
+        const tsTo = points[Math.max(safeStart, safeEnd)].ts;
+        const stats = computeStatsForRange(points, tsFrom, tsTo);
+        renderInfo(stats, tsFrom, tsTo);
+    }
+
+    async function loadData() {
+        document.getElementById('chartLoading').style.display = 'block';
+        document.getElementById('chartError').style.display = 'none';
+        document.getElementById('wpLeistungChart').style.display = 'none';
+
+        const maxPoints = Number(document.getElementById('densityRange').value || 2400);
+        const url = `/api/verbraucher/wp_leistung?start_ts=${activeStartTs}&end_ts=${activeEndTs}&max_points=${maxPoints}`;
+
+        try {
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+
+            limitW = data.limit_w || 4200;
+            points = (data.points || []).sort((a, b) => a.ts - b.ts);
+
+            document.getElementById('chartLoading').style.display = 'none';
+            document.getElementById('wpLeistungChart').style.display = 'block';
+
+            if (points.length === 0) {
+                document.getElementById('chartError').style.display = 'block';
+                document.getElementById('chartError').textContent = 'Keine WP-Leistungsdaten im ausgewaehlten Bereich vorhanden.';
+                document.getElementById('wpLeistungChart').style.display = 'none';
+                document.getElementById('infoGrid').style.display = 'none';
+                document.getElementById('sourceNote').style.display = 'none';
+                return;
+            }
+
+            renderChart();
+
+            const stats = computeStatsForRange(points, data.start_ts, data.end_ts);
+            const sourceText = `Quelle: ${data.source_file} | Rohpunkte: ${data.count_raw} | Dargestellt: ${data.count}` +
+                (data.bucket_seconds > 0 ? ` | Verdichtung: ${data.bucket_seconds}s-Buckets` : '');
+            renderInfo(stats, data.start_ts, data.end_ts, sourceText);
+
+        } catch (err) {
+            document.getElementById('chartLoading').style.display = 'none';
+            document.getElementById('chartError').style.display = 'block';
+            document.getElementById('chartError').textContent = `Fehler beim Laden: ${err.message}`;
+        }
+    }
+
+    function init() {
+        updateContextLinks();
+        updateDensityLabel();
+
+        const [s, e, presetDays] = guessInitialRangeFromContext();
+        activeStartTs = s;
+        activeEndTs = e;
+        document.getElementById('startInput').value = toLocalInputValue(activeStartTs);
+        document.getElementById('endInput').value = toLocalInputValue(activeEndTs);
+        setActiveRangeButtons(presetDays, false);
+
+        loadData();
+    }
+
+    init();
+</script>
+
+{% include 'info_overlay.html' %}
+</body>
+</html>
