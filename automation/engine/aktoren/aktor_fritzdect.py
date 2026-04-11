@@ -209,6 +209,8 @@ class AktorFritzDECT(AktorBase):
             hp_aus     — setswitchoff (Heizpatrone AUS)
             klima_ein  — setswitchon  (Klimaanlage EIN)
             klima_aus  — setswitchoff (Klimaanlage AUS)
+            lueftung_ein — setswitchon  (Lueftung EIN)
+            lueftung_aus — setswitchoff (Lueftung AUS)
     """
 
     name = 'fritzdect'
@@ -220,6 +222,9 @@ class AktorFritzDECT(AktorBase):
         'hp_aus': ('setswitchoff', 'heizpatrone'),
         'klima_ein': ('setswitchon', 'klimaanlage'),
         'klima_aus': ('setswitchoff', 'klimaanlage'),
+        # Lueftung: AIN 00000 0000000 (device_id lueftung)
+        'lueftung_ein': ('setswitchon', 'lueftung'),
+        'lueftung_aus': ('setswitchoff', 'lueftung'),
     }
 
     def __init__(self, dry_run: bool = False):
@@ -291,7 +296,7 @@ class AktorFritzDECT(AktorBase):
         """Führe eine Fritz!DECT-Aktion aus.
 
         Args:
-            aktion: dict mit 'kommando' (hp_ein|hp_aus|klima_ein|klima_aus), optional 'grund'
+            aktion: dict mit 'kommando' (hp_ein|hp_aus|klima_ein|klima_aus|lueftung_ein|lueftung_aus), optional 'grund'
 
         Returns:
             dict mit 'ok': bool, 'kommando': str, 'detail': str
