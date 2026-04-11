@@ -142,7 +142,7 @@ BEI MASSIVEM PV-ÜBERSCHUSS:
 ```
 MORGENS (Sonnenaufgang + 2h):
     → Prüfe WW-Temperatur via Modbus (Register 3), WW-Solltemp = 65°C
-  → Prüfe Speicher_oben (MEGA-BAS Thermistor). Wenn < 45°C UND Prognose ≥ potenzial_maessig_kwh (Standard 20 kWh):
+  → Prüfe Speicher_oben (MEGA-BAS Thermistor). Wenn < 45°C UND Prognose mindestens `mittel` ist (ab 40 kWh):
        → Heizpatrone EIN sobald PV_Überschuss > 2 kW
 
 TAGSÜBER (PV-Überschuss > 3 kW):
@@ -254,7 +254,7 @@ WENN now_h >= (sunrise - 1h) UND now_h < 10:00:
 #   SOC muss nahe SOC_MAX sein (Überlaufventil-Prinzip: erst Batterie
 #   füllen, dann HP als Senke). Bei Wiedereintritt nach Burst-Pause:
 #   Schwelle um HP_NENN_W reduziert.
-WENN rest_h > 5 UND rest_kwh ≥ potenzial_maessig_kwh (Standard 20):
+WENN rest_h > 5 UND rest_kwh ≥ 40 kWh (Forecast-Stufe mindestens `mittel`):
     UND SOC >= SOC_MAX - 5%:        ← NEU: SOC≈MAX erforderlich
     UND P_Batt > Schwelle (3000W initial, 1000W bei Wiedereintritt):
     → HP EIN (Burst: 30 Min)
@@ -360,7 +360,7 @@ die Regelung des Nulleinspeisers braucht bis zu 30 s zum Nachregeln.
 
 ```
 05:30 — Sunrise 06:30, drain_fruehstart = 1h → Fenster offen ab 05:30
-  SOC=40%, Prognose 45 kWh ("gut"), Haus=350W, WP=0, Sonnenstunden=9h
+  SOC=40%, Prognose 45 kWh ("mittel"), Haus=350W, WP=0, Sonnenstunden=9h
   Phase 0: sunrise-1h ✓, sunshine_h=9 ≥ 5 ✓, SOC>20% ✓, Verbr. niedrig ✓
   → HP EIN (Drain 45 Min) — Batterie gezielt leeren
 

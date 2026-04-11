@@ -129,7 +129,7 @@ DB: sqlite3 /dev/shm/fronius_data.db "SELECT COUNT(*) FROM raw_data;"
 Batterie: python3 battery_control.py (Status), python3 fronius_api.py --read
 Forecast: python3 solar_forecast.py --today
 Web: lokaler Flask/Gunicorn-Service auf Port 8000 (/flow, /monitoring, /api/dashboard)
-Automation: python3 -m automation.engine.test_skeleton
+Automation: kein gepflegter Standalone-Test-Harness; Regeln gezielt über Engine/Produktionspfade prüfen
 Backup: systemctl status pv-backup-gfs.timer
 
 Stack: Raspbian Bullseye 11, Python 3.9.2, Flask 1.1.2, gunicorn 23.0.0,

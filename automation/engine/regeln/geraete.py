@@ -21,6 +21,7 @@ from automation.engine.obs_state import ObsState
 from automation.engine.regeln.basis import Regel
 from automation.engine.param_matrix import (
     ist_aktiv, get_param, get_score_gewicht,
+    classify_forecast_kwh, get_effective_forecast_quality,
 )
 from automation.engine.schaltlog import logge_extern
 
@@ -145,11 +146,10 @@ class RegelHeizpatrone(Regel):
     Potenzial-gesteuert: Forecast-kWh bestimmt Freigabegrad.
     Kontextabhängig: SOC_MAX-Phase, Verbraucher, Tageszeit.
 
-    Potenzial-Skala (konfigurierbar):
-            < 20 kWh (niedrig)      — HP nur explizit/manuell, kein Parallel-Betrieb
-            20–40 kWh (mäßig)       — HP nur solo, kein Parallel-Betrieb
-            40–60 kWh (ausreichend) — HP + WP ok, EV → HP pausiert
-            ≥ 60 kWh (gut)          — HP parallel mit allen Verbrauchern
+        Potenzial-Skala (zentral über Forecast-Bewertung):
+            < 40 kWh (schlecht)     — HP nur explizit/manuell, kein Parallel-Betrieb
+            40–100 kWh (mittel)     — HP + WP ok, EV → HP pausiert
+            ≥ 100 kWh (gut)         — HP parallel mit allen Verbrauchern
 
     6 Phasen:
       Phase 0:  Morgen-Drain — Batterie leeren ab sunrise-1h, prognosegetrieben
@@ -219,24 +219,13 @@ class RegelHeizpatrone(Regel):
         Keine IST/SOLL-Skalierung — beim Nulleinspeiser bedeutet
         niedrige IST/SOLL nicht schlechtes Wetter sondern Abregelung.
 
-        Returns: 'niedrig' | 'maessig' | 'ausreichend' | 'gut'
+        Returns: 'schlecht' | 'mittel' | 'gut'
         """
         rest_kwh = obs.forecast_rest_kwh
         if rest_kwh is None:
             rest_kwh = obs.forecast_kwh or 0
 
-        gut = get_param(matrix, self.regelkreis, 'potenzial_gut_kwh', 60.0)
-        ausreichend = get_param(matrix, self.regelkreis, 'potenzial_ausreichend_kwh', 40.0)
-        maessig = get_param(matrix, self.regelkreis, 'potenzial_maessig_kwh', 20.0)
-
-        if rest_kwh >= gut:
-            return 'gut'
-        elif rest_kwh >= ausreichend:
-            return 'ausreichend'
-        elif rest_kwh >= maessig:
-            return 'maessig'
-        else:
-            return 'niedrig'
+        return classify_forecast_kwh(rest_kwh, matrix) or 'schlecht'
 
     def _verbraucher_aktiv(self, obs: ObsState, matrix: dict) -> tuple[bool, bool]:
         """Prüfe ob Großverbraucher aktiv sind.
@@ -254,16 +243,15 @@ class RegelHeizpatrone(Regel):
         """Darf HP parallel mit WP/EV laufen?
 
         Potenzial:
-                    gut (≥60 kWh):          HP + WP + EV alles gleichzeitig
-                    ausreichend (40-60):    HP + WP ok, HP + EV → HP pausiert
-                    mäßig (20-40):          HP nur solo (kein WP, kein EV)
-                    niedrig (<20):          HP nicht automatisch (nur Extern)
+                    gut (≥100 kWh):         HP + WP + EV alles gleichzeitig
+                    mittel (40-100):        HP + WP ok, HP + EV → HP pausiert
+                    schlecht (<40):         HP nicht automatisch (nur Extern)
         """
         if potenzial == 'gut':
             return True  # Alles parallel erlaubt
-        if potenzial == 'ausreichend':
+        if potenzial == 'mittel':
             return not ev_aktiv  # WP ok, EV → HP pausiert
-        # mäßig oder niedrig: kein Parallelbetrieb
+        # schlecht: kein Parallelbetrieb
         return not (wp_aktiv or ev_aktiv)
 
     def _min_lade_nach_potenzial(self, potenzial: str, matrix: dict) -> float:
@@ -278,9 +266,9 @@ class RegelHeizpatrone(Regel):
         basis = get_param(matrix, self.regelkreis, 'min_ladeleistung_w', 5000)
         if potenzial == 'gut':
             return max(2000, basis * 0.5)    # 50% → 2500W
-        elif potenzial == 'ausreichend':
+        if potenzial == 'mittel':
             return max(2500, basis * 0.7)    # 70% → 3500W
-        # mäßig/niedrig: volle Schwelle
+        # schlecht: volle Schwelle
         return basis
 
     def _grid_avg(self, obs: ObsState) -> float:
@@ -367,7 +355,7 @@ class RegelHeizpatrone(Regel):
         rest_kwh = obs.forecast_rest_kwh
         if rest_kwh is None:
             rest_kwh = obs.forecast_kwh or 0
-        forecast_quality = (obs.forecast_quality or '').lower()
+        forecast_quality = get_effective_forecast_quality(obs, matrix) or ''
 
         # Veto 2: gute Prognose + ausreichend Rest für Batt+Haushalt+Reserve (+Klima)
         if forecast_quality == 'gut':
@@ -385,17 +373,17 @@ class RegelHeizpatrone(Regel):
         """Wird Batterie-Entladung toleriert (HP darf trotzdem laufen)?
 
         Kontext-Logik:
-                    gut (≥ 60 kWh):       toleriert (ausreichend PV um nachzuladen)
-          ausreichend/mäßig:    toleriert WENN SOC_MAX ≤ 75% (Batt gedeckelt,
-                                füllen noch nicht nötig)
-          niedrig:              nie toleriert
+                                        gut (≥ 100 kWh):     toleriert (ausreichend PV um nachzuladen)
+                    mittel (40-100):      toleriert WENN SOC_MAX ≤ 75% (Batt gedeckelt,
+                                                                füllen noch nicht nötig)
+                    schlecht (<40):       nie toleriert
         """
         if potenzial == 'gut':
             return True
-        if potenzial in ('ausreichend', 'maessig'):
+        if potenzial == 'mittel':
             # Batterie ist noch gedeckelt → Entladung ist "normal"
             return soc_max_eff <= 75
-        return False  # niedrig → keine Toleranz
+        return False  # schlecht → keine Toleranz
 
     def _drain_soc_freigegeben(self, obs: ObsState, matrix: dict) -> bool:
         """Phase 0 nur bei bereits geöffneter Batterie erlauben.
@@ -429,7 +417,7 @@ class RegelHeizpatrone(Regel):
           2) Entweder Lastdeckung jetzt+30min ODER positiver Trend bis +30min
              mit ausreichender SOC-Brücke für die Übergangszeit.
         """
-        quality = (obs.forecast_quality or '').lower()
+        quality = get_effective_forecast_quality(obs, matrix) or ''
         tagesqualitaet_gut = quality == 'gut'
         if not tagesqualitaet_gut:
             return False, ''
@@ -757,7 +745,7 @@ class RegelHeizpatrone(Regel):
                 wp_ok = (obs.wp_power_w or 0) < d_wp
                 ev_ok = (obs.ev_power_w or 0) < d_ev
                 soc_ok = soc > drain_start_soc
-                forecast_ok = (obs.forecast_quality or '') in ('gut', 'mittel')
+                forecast_ok = (get_effective_forecast_quality(obs, matrix) or '') in ('gut', 'mittel')
 
                 # Prognose zeigt ≥ drain_min_prognose_kw zeitnah (sunrise + Horizont)
                 # Nicht den ganzen Tag prüfen — Nachmittagssonne rechtfertigt
@@ -1199,7 +1187,7 @@ class RegelHeizpatrone(Regel):
                 wp_ok = (obs.wp_power_w or 0) < d_wp
                 ev_ok = (obs.ev_power_w or 0) < d_ev
                 soc_ok = soc > drain_start_soc
-                forecast_ok = (obs.forecast_quality or '') in ('gut', 'mittel')
+                forecast_ok = (get_effective_forecast_quality(obs, matrix) or '') in ('gut', 'mittel')
 
                 # Prognose zeitnah: nur Stunden bis sunrise + Horizont
                 prognose_stark = False
@@ -1237,7 +1225,7 @@ class RegelHeizpatrone(Regel):
                                   f'Sonne={sunshine_h:.1f}h, '
                                   f'P_Batt={p_batt:.0f}W, '
                                   f'Haus={obs.house_load_w or 0:.0f}W, '
-                                  f'Prognose={obs.forecast_quality}'),
+                                  f'Prognose={get_effective_forecast_quality(obs, matrix) or "?"}'),
                     }]
 
         # Phase 1: Vormittags (SOC≈MAX erforderlich)
@@ -1448,12 +1436,12 @@ class RegelKlimaanlage(RegelHeizpatrone):
             return float(obs.klima_temp_c)
         return float(get_param(matrix, self.regelkreis, 'initial_temp_c', 15))
 
-    def _forecast_ist_gut(self, obs: ObsState) -> bool:
-        return (obs.forecast_quality or '').lower() == 'gut'
+    def _forecast_ist_gut(self, obs: ObsState, matrix: dict) -> bool:
+        return (get_effective_forecast_quality(obs, matrix) or '') == 'gut'
 
     def _start_temp_nach_sunrise(self, obs: ObsState, matrix: dict) -> float:
         """Start-Schwelle nach Sunrise abhängig von der Prognosequalität."""
-        if self._forecast_ist_gut(obs):
+        if self._forecast_ist_gut(obs, matrix):
             return float(get_param(
                 matrix, self.regelkreis, 'initial_temp_c_gut_nach_sunrise', 15
             ))
@@ -1485,7 +1473,7 @@ class RegelKlimaanlage(RegelHeizpatrone):
             if self._ist_vor_sunrise(obs):
                 temp_start = float(get_param(matrix, self.regelkreis, 'initial_temp_c', 15))
                 temp_stop = temp_start - hyst_k
-                return self._forecast_ist_gut(obs) and temp_ist >= temp_stop
+                return self._forecast_ist_gut(obs, matrix) and temp_ist >= temp_stop
 
             temp_start = self._start_temp_nach_sunrise(obs, matrix)
             temp_stop = temp_start - hyst_k
@@ -1493,7 +1481,7 @@ class RegelKlimaanlage(RegelHeizpatrone):
 
         if self._ist_vor_sunrise(obs):
             temp_pre = float(get_param(matrix, self.regelkreis, 'initial_temp_c', 15))
-            return self._forecast_ist_gut(obs) and temp_ist >= temp_pre
+            return self._forecast_ist_gut(obs, matrix) and temp_ist >= temp_pre
 
         temp_tag = self._start_temp_nach_sunrise(obs, matrix)
         return temp_ist >= temp_tag
@@ -1576,7 +1564,7 @@ class RegelKlimaanlage(RegelHeizpatrone):
                 grund = (f'Klima EIN: Vor Sunrise, Forecast gut und Temp >= {temp_pre:.1f}°C')
             else:
                 temp_tag = self._start_temp_nach_sunrise(obs, matrix)
-                fq = (obs.forecast_quality or 'unbekannt').lower()
+                fq = (get_effective_forecast_quality(obs, matrix) or 'unbekannt').lower()
                 grund = (f'Klima EIN: Nach Sunrise, Temp >= {temp_tag:.1f}°C '
                          f'(Forecast={fq})')
             return [{

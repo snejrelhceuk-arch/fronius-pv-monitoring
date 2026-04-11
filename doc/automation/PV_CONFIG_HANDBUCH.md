@@ -404,7 +404,7 @@ Wenn nachmittags (ab `frueh_reset_ab_h`) die PV-Restprognose unter `erholung_sch
 | Phase | Bedingung | Burst-Dauer | Zweck |
 |-------|-----------|-------------|-------|
 | **0 — Morgen-Drain** | ab sunrise−1h, sunshine_h ≥ 5, SOC > 20%, Prognose gut, Forecast ≥ 4 kW | 45 Min. | Batterie gezielt leeren — Warmwasser als Senke |
-| **1 — Vormittag** | **SOC ≥ MAX−5%**, rest_h > 5, rest_kwh ≥ `potenzial_maessig_kwh` (Standard 20), P_Batt > 3 kW | 30 Min. | Überlaufventil: Batterie am Deckel, HP nutzt Restkapazität |
+| **1 — Vormittag** | **SOC ≥ MAX−5%**, rest_h > 5, rest_kwh ≥ 40 kWh (Forecast mindestens `mittel`), P_Batt > 3 kW | 30 Min. | Überlaufventil: Batterie am Deckel, HP nutzt Restkapazität |
 | **1b — Nulleinspeiser-Probe** | SOC ≥ MAX−2%, Batt idle, Forecast ≥ HP-Last | 120 s (Probe) → 30 Min. bei Erfolg | WR-Drosselung erkennen, stille PV-Kapazität nutzen |
 | **2 — Mittags** | **SOC ≥ MAX−5%**, P_Batt > min_lade, rest_kwh deckt Batt + Reserve | 30 Min. | Hauptphase bei Batterie-Sättigung |
 | **3 — Nachmittags** | **SOC ≥ MAX−5%**, rest_h < 3 und ≥ 2, konservativ | 15 Min. | Kurze Restzeit → nur kurze Bursts |
@@ -456,23 +456,22 @@ oder App) respektiert die Engine die Nutzer-Entscheidung für `extern_respekt_s`
 weichen Kriterien pausieren. Bei manuellem Ausschalten gilt analog eine
 EIN-Sperre für die gleiche Dauer.
 
-**Potenzial-Skala (Tagesprognose kWh):**
+**Forecast-Bewertung (Tagesprognose kWh):**
 
-Die HP-Steuerung klassifiziert die Tagesprognose in Potenzial-Stufen und passt
-die Regeln daran an:
+Die HP-Steuerung nutzt dieselbe zentrale Forecast-Bewertung wie SolarForecast,
+SOC-Regeln und pv-config. Die Schwellen liegen im Regelkreis `forecast_bewertung`.
 
 | Stufe | Schwelle | Parallel-Betrieb | Batterie-Entladung toleriert? |
 |-------|----------|-------------------|-------------------------------|
-| `niedrig` | < `potenzial_maessig_kwh` | HP nur solo (kein WP/EV) | **Nie** — HP immer AUS bei Entladung |
-| `maessig` | `potenzial_maessig_kwh` bis < `potenzial_ausreichend_kwh` | HP nur solo (kein WP/EV) | Nur wenn SOC_MAX ≤ 75% (Batterie noch nicht voll angefordert) |
-| `ausreichend` | `potenzial_ausreichend_kwh` bis < `potenzial_gut_kwh` | HP + WP parallel, EV blockiert | Nur wenn SOC_MAX ≤ 75% |
-| `gut` | ≥ `potenzial_gut_kwh` | HP + WP + EV alle parallel | **Immer** — genug Sonne für alles |
+| `schlecht` | < `schlecht_unter_kwh` | HP nicht automatisch, kein Parallel-Betrieb | **Nie** — HP immer AUS bei Entladung |
+| `mittel` | `schlecht_unter_kwh` bis < `mittel_unter_kwh` | HP + WP parallel, EV blockiert | Nur wenn SOC_MAX ≤ 75% |
+| `gut` | ≥ `mittel_unter_kwh` | HP + WP + EV alle parallel | **Immer** — genug Sonne für alles |
 
-Standardwerte: `potenzial_maessig_kwh = 20`, `potenzial_ausreichend_kwh = 40`, `potenzial_gut_kwh = 60`.
+Standardwerte: `schlecht_unter_kwh = 40`, `mittel_unter_kwh = 100`.
 
 **Logik:** Morgens/Vormittags steht SOC_MAX typisch bei 75% (Batterie wird gedrosselt,
 Verbraucher haben Vorrang). In dieser Phase toleriert die Engine Batterie-Entladung bei
-mäßigem/ausreichendem Potenzial, weil PV die Batterie später wieder füllt. Erst wenn
+mittlerer/guter Prognose, weil PV die Batterie später wieder füllt. Erst wenn
 SOC_MAX auf 100% geht (Nachmittag) wird die Batterie-Entladung strenger bewertet.
 
 **Autoritätsschaltung (Extern-Erkennung):** Wenn die HP außerhalb der Engine eingeschaltet wird (pv-config Menü 6, Fritz!Box-App, physischer Schalter), erkennt die Engine dies automatisch: HP ist EIN, aber kein Burst/Drain läuft. In diesem Fall gilt für `extern_respekt_s` (Standard: 30 Min, einstellbar 15 Min–2 h) die **Nutzer-Autorität**: alle weichen Kriterien UND Phase 4 pausieren. Nur **Übertemperatur**, **SOC ≤ 5%** (Tier-1/Tiefentladeschutz) und **SOC ≤ 15%** (`extern_notaus_soc_pct`) überstimmen sofort. Bei manuellem Ausschalten sperrt die Engine hp_ein für die gleiche Dauer.
@@ -484,8 +483,8 @@ SOC_MAX auf 100% geht (Nachmittag) wird die Batterie-Entladung strenger bewertet
 
 | Parameter | Standard | Bereich | Wirkung |
 |-----------|----------|---------|--------|
-| min_ladeleistung | 5000 W | 2000–10000 W | **Mindest-Batterie-Ladeleistung (Basis).** Wird potenzialabhängig herunterskaliert: gut=50% (2500W), ausreichend=70% (3500W), mäßig/niedrig=100% (5000W). Der Burst-Timer schützt vor Flip-Flop nach dem Einschalten. |
-| min_ladeleistung_morgens | 3000 W | 1000–8000 W | **Vormittags-Schwelle.** Bei mindestens mäßigem Potenzial (`rest_kwh ≥ potenzial_maessig_kwh`, Standard 20 kWh) reichen 3 kW Ladeleistung, weil genug Sonne für Batterie+HP erwartet wird. |
+| min_ladeleistung | 5000 W | 2000–10000 W | **Mindest-Batterie-Ladeleistung (Basis).** Wird prognoseabhängig herunterskaliert: gut=50% (2500W), mittel=70% (3500W), schlecht=100% (5000W). Der Burst-Timer schützt vor Flip-Flop nach dem Einschalten. |
+| min_ladeleistung_morgens | 3000 W | 1000–8000 W | **Vormittags-Schwelle.** Bei Forecast mindestens `mittel` (`rest_kwh ≥ 40 kWh`) reichen 3 kW Ladeleistung, weil genug Sonne für Batterie+HP erwartet wird. |
 | min_rest_kwh | 12.0 kWh | 5–30 kWh | **Mindest-Restprognose.** HP-Burst nur wenn die Rest-Tagesprognose genug kWh zeigt, um Batterie voll zu laden UND HP zu versorgen. |
 | min_rest_kwh_morgens | 20.0 kWh | 10–40 kWh | **Vormittags-Mindestprognose.** Lang genug Sonne erwartet für HP + Batterie + eventuelle EV-Ladung. |
 | min_rest_h | 2.0 h | 1–4 h | **Schwelle für Phase 4 (Abend-Nachladezyklus).** Unter 2 h PV bis Sonnenuntergang → kein normaler Burst. Stattdessen Phase 4: HP nur wenn SOC ≈ MAX und PV noch ausreicht. |
@@ -505,9 +504,8 @@ SOC_MAX auf 100% geht (Nachmittag) wird die Batterie-Entladung strenger bewertet
 | notaus_forecast_klima_last_w | 1300 W | 0–3000 W | **Klima-Zusatzlast.** Wird nur angerechnet, wenn die Klimaanlage aktuell läuft. |
 | notaus_forecast_klima_plan_h | 4.0 h | 0–12 h | **Klima-Planhorizont.** Maximaler Stundenanteil der Klima-Last in der Forecast-Bedarfsrechnung. |
 | speicher_temp_max | 78 °C | 60–85 °C | **Warmwasser-Übertemperatur.** HP sofort AUS bei ≥78 °C. Schutz vor Verbrühung/Überdruck. |
-| potenzial_gut_kwh | 60.0 kWh | 40–200 kWh | **Tagesprognose für Potenzial "gut".** Ab hier: HP + WP + EV alle parallel, Batterie-Entladung immer toleriert. Muss größer als `potenzial_ausreichend_kwh` sein. |
-| potenzial_ausreichend_kwh | 40.0 kWh | 20–100 kWh | **Tagesprognose für "ausreichend".** HP + WP parallel (kein EV). Entladung toleriert wenn SOC_MAX ≤ 75%. Muss zwischen `potenzial_maessig_kwh` und `potenzial_gut_kwh` liegen. |
-| potenzial_maessig_kwh | 20.0 kWh | 10–50 kWh | **Tagesprognose für "mäßig".** HP nur solo (kein WP/EV). Entladung toleriert wenn SOC_MAX ≤ 75%. Unter diesem Wert → "niedrig": HP nur bei explizitem Burst, keine Entladung toleriert. Muss kleiner als `potenzial_ausreichend_kwh` sein. |
+| schlecht_unter_kwh | 40.0 kWh | 5–150 kWh | **Zentrale Grenze für `schlecht`.** Unterhalb davon ist die Prognose schlecht. Wirkt auf SolarForecast, SOC-Regeln, HP und pv-config. |
+| mittel_unter_kwh | 100.0 kWh | 20–250 kWh | **Zentrale Grenze für `mittel`.** Ab diesem Wert gilt die Prognose als `gut`. Muss größer als `schlecht_unter_kwh` sein. |
 | drain_fruehstart_vor_sunrise_h | 1.0 h | 0–3 h | **Drain-Frühstart vor Sonnenaufgang.** Phase 0 startet ab `sunrise − dieser_Wert`. |
 | drain_min_sunshine_h | 5.0 h | 0–12 h | **Mindest-Sonnenstunden für Drain (NEU 2026-03-14).** Phase 0 wird blockiert wenn die prognostizierten Sonnenstunden unter diesem Wert liegen. An Regentagen braucht der Haushalt die Batterie-Energie. 0 = deaktiviert (kein Sonnenstunden-Guard). |
 | drain_start_soc_pct | 20% | 10–50% | **Drain-SOC-Startschwelle.** Phase 0 nur wenn SOC über diesem Wert. |

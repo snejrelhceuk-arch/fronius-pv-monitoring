@@ -37,6 +37,7 @@ import config
 from automation.engine.param_matrix import (
     lade_matrix, validiere_matrix, alle_regelkreise,
     get_param, DEFAULT_MATRIX_PATH,
+    classify_forecast_kwh, get_forecast_quality_thresholds,
 )
 
 # ── Konstanten ─────────────────────────────────────────────────
@@ -1068,6 +1069,7 @@ def menu_forecast():
                 ('heute', 'Tagesprognose heute'),
                 ('genauigkeit', 'Forecast-Genauigkeit (letzte 7 Tage)'),
                 ('kalibrierung', 'Letzte Kalibrierung'),
+                ('bewertung', 'Bewertungsschwellen bearbeiten'),
             ],
         )
 
@@ -1080,6 +1082,25 @@ def menu_forecast():
             _forecast_genauigkeit()
         elif choice == 'kalibrierung':
             _forecast_kalibrierung()
+        elif choice == 'bewertung':
+            _forecast_bewertung()
+
+
+def _forecast_bewertung():
+    """Zentrale Forecast-Bewertung anzeigen/bearbeiten."""
+    matrix = lade_matrix()
+    schlecht_unter, mittel_unter = get_forecast_quality_thresholds(matrix)
+
+    text = f'FORECAST-BEWERTUNG\n{"═" * 50}\n\n'
+    text += f'Schlecht:  < {schlecht_unter:.1f} kWh\n'
+    text += f'Mittel:    < {mittel_unter:.1f} kWh\n'
+    text += f'Gut:       >= {mittel_unter:.1f} kWh\n\n'
+    text += 'Die Schwellen liegen in der Parametermatrix und wirken\n'
+    text += 'auf SolarForecast, Automation und pv-config.\n\n'
+    text += 'Mit OK öffnet sich der Regelkreis forecast_bewertung.'
+
+    wt_msgbox(text)
+    _menu_regelkreis_detail('forecast_bewertung')
 
 
 def _forecast_heute():
@@ -1099,10 +1120,17 @@ def _forecast_heute():
 
     expected, quality, created, hourly_json, weather, cloud, sunrise, sunset = row
     created_str = datetime.fromtimestamp(created).strftime('%H:%M') if created else '?'
+    matrix = lade_matrix()
+    quality_eff = classify_forecast_kwh(expected, matrix) if expected is not None else quality
+    schlecht_unter, mittel_unter = get_forecast_quality_thresholds(matrix)
 
     text = f'TAGESPROGNOSE {today}\n{"═" * 50}\n\n'
     text += f'Prognose:   {expected:.1f} kWh\n'
-    text += f'Qualitaet:  {quality or "?"}\n'
+    text += f'Qualitaet:  {quality_eff or quality or "?"}\n'
+    text += (f'Schwellen:  schlecht < {schlecht_unter:.0f} | mittel < {mittel_unter:.0f} '
+             f'| gut ab {mittel_unter:.0f} kWh\n')
+    if quality and quality_eff and quality != quality_eff:
+        text += f'DB-Wert:    {quality} (vor aktueller Schwellenlogik gespeichert)\n'
     text += f'Erstellt:   {created_str}\n'
     if weather:
         text += f'Wetter:     {weather}\n'

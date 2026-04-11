@@ -23,6 +23,7 @@ from automation.engine.regeln.basis import Regel
 from automation.engine.regeln.soc_extern import soc_extern_tracker
 from automation.engine.param_matrix import (
     ist_aktiv, get_param, get_score_gewicht,
+    get_effective_forecast_quality, get_forecast_quality_thresholds,
 )
 
 LOG = logging.getLogger('engine')
@@ -43,7 +44,7 @@ def _nachtlast_oeffnung_noetig(obs: ObsState, matrix: dict) -> bool:
     Stunden vor Sunrise Netzbezug entsteht, wird SOC_MIN frühzeitig geöffnet.
     So bleibt Nachtlast bei gutem Forecast nicht unnötig am Netz.
     """
-    if (obs.forecast_quality or '').lower() != 'gut':
+    if (get_effective_forecast_quality(obs, matrix) or '') != 'gut':
         return False
 
     sunrise = obs.sunrise
@@ -100,6 +101,7 @@ def _lese_nachtverbrauch_good_days(matrix: dict) -> Optional[dict]:
     min_n = int(get_param(matrix, _RK_NACHT, 'nacht_last_min_samples', 4))
     start_h = float(get_param(matrix, _RK_NACHT, 'nachtfenster_start_h', 22.0))
     ende_h = float(get_param(matrix, _RK_NACHT, 'nachtfenster_ende_h', 6.0))
+    _, gut_ab_kwh = get_forecast_quality_thresholds(matrix)
 
     db_path = next((p for p in [app_config.DB_PATH, app_config.DB_PERSIST_PATH]
                      if p and os.path.exists(p)), None)
@@ -112,8 +114,8 @@ def _lese_nachtverbrauch_good_days(matrix: dict) -> Optional[dict]:
     try:
         rows = conn.execute(
             "SELECT date FROM forecast_daily "
-            "WHERE quality='gut' AND date < date('now','localtime') "
-            "ORDER BY date DESC LIMIT ?", (lookback,)
+            "WHERE expected_kwh >= ? AND date < date('now','localtime') "
+            "ORDER BY date DESC LIMIT ?", (gut_ab_kwh, lookback)
         ).fetchall()
         if not rows:
             return None
@@ -306,7 +308,8 @@ class RegelMorgenSocMin(Regel):
             return 0  # SOC am Boden → Regel nicht mehr nötig
 
         # ── VETO: Prognose-Qualität 'schlecht' → nicht öffnen ──
-        if obs.forecast_quality == 'schlecht':
+        quality = get_effective_forecast_quality(obs, matrix) or ''
+        if quality == 'schlecht':
             LOG.debug("morgen_soc_min: forecast_quality=schlecht → kein Öffnen")
             return 0
 
@@ -319,7 +322,7 @@ class RegelMorgenSocMin(Regel):
             return 0
 
         # ── VERZÖGERUNG: 'mittel' → erst Sunrise + 1h (abzgl. Vorlauf) ──
-        if obs.forecast_quality == 'mittel':
+        if quality == 'mittel':
             now_h = datetime.now().hour + datetime.now().minute / 60.0
             sunrise = obs.sunrise or 7.0
             vorlauf_h = get_param(matrix, self.regelkreis, 'morgen_vorlauf_min', 15) / 60.0
@@ -641,7 +644,7 @@ class RegelKomfortReset(Regel):
         Erweitert (2026-04-06): Prüft SOC_MIN < Komfort statt <= Stress,
         da der Morgen-Algorithmus jetzt dynamisch 5-25% setzt.
         """
-        if (obs.forecast_quality or '').lower() != 'gut':
+        if (get_effective_forecast_quality(obs, matrix) or '') != 'gut':
             return False
 
         sunrise = obs.sunrise

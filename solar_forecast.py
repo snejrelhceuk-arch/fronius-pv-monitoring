@@ -76,6 +76,11 @@ try:
 except ImportError:
     HAS_GEOMETRY = False
 
+try:
+    from automation.engine.param_matrix import classify_forecast_kwh
+except ImportError:
+    classify_forecast_kwh = None
+
 
 # ═══════════════════════════════════════════════════════════════
 # KONFIGURATION (aus config.py + lokale Ergänzungen)
@@ -119,22 +124,9 @@ DEFAULT_MODEL_COEFFS = {
 }
 
 # Tagesqualität-Schwellen (kWh erwartet)
-# Angepasst an 37.59 kWp Anlage
-QUALITY_THRESHOLDS = {
-    # Monat: (schlecht_bis, mittel_bis, gut_ab) in kWh
-    1:  (10, 25, 40),
-    2:  (15, 35, 55),
-    3:  (25, 55, 85),
-    4:  (35, 75, 115),
-    5:  (45, 90, 140),
-    6:  (50, 100, 150),
-    7:  (50, 100, 150),
-    8:  (40, 85, 130),
-    9:  (30, 65, 100),
-    10: (20, 45, 70),
-    11: (10, 25, 40),
-    12: (8, 20, 35),
-}
+# Notfall-Fallback, falls die zentrale Parametermatrix zur Laufzeit
+# nicht importiert oder gelesen werden kann.
+DEFAULT_QUALITY_THRESHOLDS = (40.0, 100.0)
 
 # WMO Wetter-Codes → Klartext
 WMO_CODES = {
@@ -680,15 +672,19 @@ class SolarForecast:
 
     def classify_day(self, expected_kwh, month=None):
         """Klassifiziere einen Tag als gut/mittel/schlecht."""
-        if month is None:
-            month = date.today().month
-        thresholds = QUALITY_THRESHOLDS.get(month, (15, 40, 70))
-        if expected_kwh < thresholds[0]:
+        if classify_forecast_kwh is not None:
+            try:
+                quality = classify_forecast_kwh(expected_kwh)
+                if quality is not None:
+                    return quality
+            except Exception:
+                pass
+
+        if expected_kwh < DEFAULT_QUALITY_THRESHOLDS[0]:
             return 'schlecht'
-        elif expected_kwh < thresholds[1]:
+        if expected_kwh < DEFAULT_QUALITY_THRESHOLDS[1]:
             return 'mittel'
-        else:
-            return 'gut'
+        return 'gut'
 
     def get_day_forecast(self, target_date=None):
         """
