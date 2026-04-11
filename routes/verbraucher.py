@@ -2,14 +2,173 @@
 Blueprint: Verbraucher-APIs (WP, Heizpatrone, Wattpilot, Haushalt).
 
 Enthält: /api/verbraucher, /api/verbraucher/tag, /api/verbraucher/monat,
-         /api/verbraucher/jahr, /api/verbraucher/gesamt
+         /api/verbraucher/jahr, /api/verbraucher/gesamt,
+         /api/verbraucher/wp_leistung
 """
+import csv
+import math
+import os
 import re
 from datetime import datetime, timezone
 from flask import Blueprint, jsonify, request
+import config
 from routes.helpers import get_db_connection, api_error_response, validate_year_month
 
 bp = Blueprint('verbraucher', __name__)
+
+
+def _read_wp_protocol_points(start_ts, end_ts):
+    """Liest WP-Leistungsprotokoll als (ts, power_w, within_limit)."""
+    protocol_file = getattr(
+        config,
+        'WP_POWER_PROTOCOL_FILE',
+        os.path.join(config.BASE_DIR, 'logs', 'wp_netzbetreiber_leistung.csv'),
+    )
+    if not os.path.exists(protocol_file):
+        return [], protocol_file
+
+    points = []
+    with open(protocol_file, 'r') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            try:
+                ts = int(float(row.get('ts_epoch') or 0))
+                if ts <= 0:
+                    continue
+                if ts < start_ts or ts > end_ts:
+                    continue
+                power_w = float(row.get('wp_max_w') or 0.0)
+                within_limit = int(float(row.get('within_limit') or 1))
+                points.append((ts, abs(power_w), 1 if within_limit != 0 else 0))
+            except Exception:
+                continue
+
+    return points, protocol_file
+
+
+def _read_wp_points_from_db_fallback(start_ts, end_ts):
+    """Fallback: WP-Leistung aus data_1min/data_15min lesen (ABCD-konform read-only DB)."""
+    conn = get_db_connection()
+    if not conn:
+        return [], 'db:fallback(unavailable)'
+
+    cursor = conn.cursor()
+
+    table = 'data_1min'
+    try:
+        cursor.execute(
+            """
+            SELECT COUNT(*) FROM data_1min
+            WHERE ts >= ? AND ts <= ?
+            """,
+            (start_ts, end_ts),
+        )
+        count_1min = cursor.fetchone()[0]
+        if not count_1min:
+            table = 'data_15min'
+    except Exception:
+        table = 'data_15min'
+
+    points = []
+    try:
+        limit_w = float(getattr(config, 'WP_LEISTUNG_LIMIT_W', 4200))
+        cursor.execute(
+            f"""
+            SELECT ts, ABS(COALESCE(P_WP_max, 0))
+            FROM {table}
+            WHERE ts >= ? AND ts <= ?
+            ORDER BY ts
+            """,
+            (start_ts, end_ts),
+        )
+        for ts, power_w in cursor.fetchall():
+            p = abs(float(power_w or 0.0))
+            points.append((int(ts), p, 1 if p <= limit_w else 0))
+    finally:
+        conn.close()
+
+    return points, f'db:fallback({table})'
+
+
+def _downsample_wp_points(points, start_ts, end_ts, max_points):
+    """Verdichtet Zeitreihe per Bucket-Maximum, behält Peaks für Nachweis."""
+    if len(points) <= max_points:
+        return points, 0
+
+    span = max(1, end_ts - start_ts)
+    bucket_s = max(60, int(math.ceil(span / max_points)))
+
+    sampled = []
+    bucket_ts = None
+    bucket_max = 0.0
+    bucket_within = 1
+
+    for ts, power_w, within_limit in points:
+        current_bucket = (ts // bucket_s) * bucket_s
+        if bucket_ts is None:
+            bucket_ts = current_bucket
+
+        if current_bucket != bucket_ts:
+            sampled.append((bucket_ts, bucket_max, bucket_within))
+            bucket_ts = current_bucket
+            bucket_max = 0.0
+            bucket_within = 1
+
+        if power_w > bucket_max:
+            bucket_max = power_w
+        if within_limit == 0:
+            bucket_within = 0
+
+    if bucket_ts is not None:
+        sampled.append((bucket_ts, bucket_max, bucket_within))
+
+    return sampled, bucket_s
+
+
+def _compute_wp_stats(points):
+    """Berechnet Kennzahlen für Infozeile aus gefilterter WP-Zeitreihe."""
+    if not points:
+        return {
+            'max_w': 0.0,
+            'max_ts': None,
+            'violations': 0,
+            'day_max': None,
+            'month_max': None,
+        }
+
+    max_point = max(points, key=lambda p: p[1])
+    violations = sum(1 for _, _, within in points if within == 0)
+
+    day_map = {}
+    month_map = {}
+    for ts, power_w, _ in points:
+        dt = datetime.fromtimestamp(ts)
+        day_key = dt.strftime('%Y-%m-%d')
+        month_key = dt.strftime('%Y-%m')
+
+        if day_key not in day_map or power_w > day_map[day_key]['max_w']:
+            day_map[day_key] = {'label': day_key, 'max_w': power_w, 'ts': ts}
+        if month_key not in month_map or power_w > month_map[month_key]['max_w']:
+            month_map[month_key] = {'label': month_key, 'max_w': power_w, 'ts': ts}
+
+    day_max = max(day_map.values(), key=lambda x: x['max_w']) if day_map else None
+    month_max = max(month_map.values(), key=lambda x: x['max_w']) if month_map else None
+
+    return {
+        'max_w': round(max_point[1], 1),
+        'max_ts': int(max_point[0]),
+        'violations': int(violations),
+        'day_max': {
+            'day': day_max['label'],
+            'max_w': round(day_max['max_w'], 1),
+            'ts': int(day_max['ts']),
+        } if day_max else None,
+        'month_max': {
+            'month': month_max['label'],
+            'max_w': round(month_max['max_w'], 1),
+            'ts': int(month_max['ts']),
+        } if month_max else None,
+    }
 
 
 def _load_wattpilot_daily(cursor, first_ts, last_ts):
@@ -392,6 +551,58 @@ def api_verbraucher_tag():
 
     except Exception as e:
         return api_error_response(e, "Verbraucher-Tag")
+
+
+@bp.route('/api/verbraucher/wp_leistung')
+def api_verbraucher_wp_leistung():
+    """WP-Leistungsnachweis (ABCD-konform): Read-only aus Dauerprotokolldatei."""
+    try:
+        now_ts = int(datetime.now().timestamp())
+        range_days = request.args.get('range_days', default=30, type=int)
+        range_days = max(1, min(range_days, 3650))
+
+        start_ts = request.args.get('start_ts', type=int)
+        end_ts = request.args.get('end_ts', type=int)
+        if end_ts is None:
+            end_ts = now_ts
+        if start_ts is None:
+            start_ts = end_ts - (range_days * 86400)
+
+        if start_ts >= end_ts:
+            return jsonify({'error': 'start_ts muss kleiner als end_ts sein'}), 400
+
+        max_points = request.args.get('max_points', default=2400, type=int)
+        max_points = max(200, min(max_points, 20000))
+
+        points, source_file = _read_wp_protocol_points(start_ts, end_ts)
+        if not points:
+            points, source_file = _read_wp_points_from_db_fallback(start_ts, end_ts)
+        stats = _compute_wp_stats(points)
+        sampled, bucket_s = _downsample_wp_points(points, start_ts, end_ts, max_points)
+
+        payload_points = [
+            {
+                'ts': int(ts),
+                'power_w': round(power_w, 1),
+                'within_limit': int(within),
+            }
+            for ts, power_w, within in sampled
+        ]
+
+        return jsonify({
+            'start_ts': int(start_ts),
+            'end_ts': int(end_ts),
+            'limit_w': float(getattr(config, 'WP_LEISTUNG_LIMIT_W', 4200)),
+            'count_raw': len(points),
+            'count': len(payload_points),
+            'bucket_seconds': int(bucket_s),
+            'source_file': source_file,
+            'stats': stats,
+            'points': payload_points,
+        })
+
+    except Exception as e:
+        return api_error_response(e, 'Verbraucher-WP-Leistung')
 
 
 @bp.route('/api/verbraucher/monat')
