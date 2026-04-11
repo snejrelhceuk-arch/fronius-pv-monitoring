@@ -66,6 +66,7 @@ class DataCollector:
         obs.ts = datetime.now().isoformat()
         self._collect_raw_data(obs)
         self._collect_battery_modbus(obs)
+        self._collect_battery_http_temps(obs)
         self._collect_battery_soc_config(obs)
         self._collect_wattpilot(obs)
         self._collect_battery_settings(obs)
@@ -157,6 +158,7 @@ class DataCollector:
     _modbus_fail_count: int = 0
     _MODBUS_MAX_FAIL_LOG = 5  # Log-Flood-Schutz: nur alle 5 Fehler loggen
     _MODBUS_POLL_INTERVAL = 30  # Sekunden — Steuerregister ändern sich selten
+    _BATTERY_HTTP_TEMP_INTERVAL = 30  # Sekunden — Zelltemperaturen ändern sich träge
 
     def _collect_battery_modbus(self, obs: ObsState):
         """StorCtl_Mod, OutWRte, InWRte direkt per Modbus M124 lesen.
@@ -217,6 +219,51 @@ class DataCollector:
             self._modbus_client = None
 
     # ── SOC_MIN/MAX/MODE aus Fronius HTTP API ────────────────
+
+    def _collect_battery_http_temps(self, obs: ObsState):
+        """BYD-Zelltemperaturen über /components/readable → ObsState.
+
+        Nutzt dieselben Rohkanäle wie der frühere BatteryCollector, damit die
+        Zelltemperaturen auch im Daemon-Pfad in obs_state verfügbar sind.
+        """
+        now = time.time()
+        if not hasattr(self, '_battery_http_temp_cache_ts'):
+            self._battery_http_temp_cache_ts = 0.0
+
+        if now - self._battery_http_temp_cache_ts < self._BATTERY_HTTP_TEMP_INTERVAL:
+            return
+
+        try:
+            import requests
+
+            url = f'http://{app_config.INVERTER_IP}/components/readable'
+            resp = requests.get(url, timeout=3)
+            if resp.status_code != 200:
+                LOG.debug(f"Batterie-HTTP-Temp: HTTP {resp.status_code} von {url}")
+                return
+
+            data = resp.json().get('Body', {}).get('Data', {})
+            batt_key = next((key for key in data if 'Storage' in key or 'BYD' in key), None)
+            if batt_key is None:
+                batt_key = '16580608'
+
+            batt_ch = (data.get(batt_key, {}) or {}).get('channels', {})
+
+            temp_avg = batt_ch.get('BAT_TEMPERATURE_CELL_F64')
+            temp_max = batt_ch.get('BAT_TEMPERATURE_CELL_MAX_F64')
+            temp_min = batt_ch.get('BAT_TEMPERATURE_CELL_MIN_F64')
+
+            if temp_avg is not None:
+                obs.batt_temp_c = round(float(temp_avg), 1)
+            if temp_max is not None:
+                obs.batt_temp_max_c = round(float(temp_max), 1)
+            if temp_min is not None:
+                obs.batt_temp_min_c = round(float(temp_min), 1)
+
+            self._battery_http_temp_cache_ts = now
+
+        except Exception as e:
+            LOG.debug(f"Batterie-HTTP-Temp: {e}")
 
     _SOC_CONFIG_INTERVAL = 30
 
