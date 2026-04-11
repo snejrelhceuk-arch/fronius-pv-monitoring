@@ -6,9 +6,9 @@ const controls = [
     action: 'wp_mode',
     type: 'mode',
     states: [
-      { label: 'MIN', value: 'min', flavor: 'other' },
-      { label: 'STD', value: 'std', flavor: 'other' },
-      { label: 'MAX', value: 'max', flavor: 'other' },
+      { label: 'MIN', value: 'min', flavor: 'other', hint: '10°C Absenkung' },
+      { label: 'STD', value: 'std', flavor: 'other', hint: '37/57°C' },
+      { label: 'MAX', value: 'max', flavor: 'other', hint: '42/62°C' },
     ],
     initial: null,
   },
@@ -17,8 +17,8 @@ const controls = [
     action: 'battery_mode',
     type: 'mode',
     states: [
-      { label: 'KOMFORT', value: 'komfort', flavor: 'other' },
-      { label: 'AUTO', value: 'auto', flavor: 'other' },
+      { label: 'KOMFORT', value: 'komfort', flavor: 'other', hint: '25-75%' },
+      { label: 'AUTO', value: 'auto', flavor: 'other', hint: '5-100%' },
     ],
     initial: null,
   },
@@ -176,7 +176,18 @@ function buildControl(control) {
     button.className = 'state-btn';
     button.dataset.value = String(entry.value);
     button.dataset.flavor = entry.flavor;
-    button.textContent = entry.label;
+
+    const label = document.createElement('span');
+    label.className = 'state-btn-label';
+    label.textContent = entry.label;
+    button.appendChild(label);
+
+    if (entry.hint) {
+      const hint = document.createElement('span');
+      hint.className = 'state-btn-hint';
+      hint.textContent = entry.hint;
+      button.appendChild(hint);
+    }
 
     button.addEventListener('click', async () => {
       const previous = state[control.elementId];
