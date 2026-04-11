@@ -28,6 +28,7 @@ from automation.engine.param_matrix import (
     lade_matrix, get_score_gewicht, DEFAULT_MATRIX_PATH,
 )
 from automation.engine.regeln.soc_extern import soc_extern_tracker
+from automation.engine.regeln.waermepumpe import reset_wp_extern_tracking
 
 from automation.engine.regeln import (          # noqa: E402
     Regel,
@@ -129,8 +130,14 @@ class Engine:
             self._matrix = {'regelkreise': {}}
 
     def reload_matrix(self):
-        """Parametermatrix neu laden (z.B. nach Config-Änderung)."""
+        """Parametermatrix neu laden (z.B. nach Config-Änderung).
+
+        Setzt zusätzlich den WP-Extern-Respekt-State zurück, damit
+        geänderte Sollwert-Parameter (standard_temp_c etc.) beim nächsten
+        fast-Zyklus sofort aktiv gesetzt werden.
+        """
         self._lade_matrix()
+        reset_wp_extern_tracking()
         LOG.info("Parametermatrix neu geladen")
 
     def _register_default_regeln(self):
