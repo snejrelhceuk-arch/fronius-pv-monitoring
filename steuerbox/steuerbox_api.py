@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 import socket
+from pathlib import Path
 
 from flask import Flask, abort, jsonify, render_template, request
 
@@ -17,6 +18,14 @@ LOG = logging.getLogger('steuerbox')
 logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
+
+
+def _asset_version(relative_path: str) -> int:
+    asset_path = Path(app.static_folder) / relative_path
+    try:
+        return int(asset_path.stat().st_mtime)
+    except OSError:
+        return 0
 
 
 def _check_port_available(host: str, port: int) -> bool:
@@ -47,6 +56,8 @@ def index():
         default_respekt_s=config.STEUERBOX_DEFAULT_RESPEKT_S,
         min_respekt_s=config.STEUERBOX_MIN_RESPEKT_S,
         max_respekt_s=config.STEUERBOX_MAX_RESPEKT_S,
+        css_version=_asset_version('css/cockpit.css'),
+        js_version=_asset_version('js/cockpit.js'),
     )
 
 
