@@ -222,4 +222,4 @@ des Codes (~85%) wurde von KI-Modellen generiert, gesteuert und validiert durch 
 **Projektleiter (Mensch):** System-Architektur, Hardware-Integration, Domänenwissen PV/Elektrotechnik,
 Datenmodell-Design, Batterie-Strategien, UI/UX-Konzept, Qualitätssicherung, Betrieb.
 
-> Detaillierte Beitragsanalyse: [doc/LEISTUNGSANTEILE_KI_BEDIENER.md](doc/LEISTUNGSANTEILE_KI_BEDIENER.md)
+> Detaillierte Beitragsanalyse (gepflegt): [doc/meta/KI_BEITRAGSANALYSE.md](doc/meta/KI_BEITRAGSANALYSE.md)
