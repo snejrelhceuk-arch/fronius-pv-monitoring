@@ -36,7 +36,10 @@ if ! flock -n 9; then
   exit 0
 fi 9>"$LOCK_FILE"
 
-mkdir -p "$(dirname "$SYNC_MARKER_FILE")"
+# Sicherstellen, dass .state-Verzeichnis existiert
+if ! mkdir -p "$(dirname "$SYNC_MARKER_FILE")" 2>/dev/null; then
+  log "WARN: Konnte .state-Verzeichnis nicht erstellen: $(dirname "$SYNC_MARKER_FILE")"
+fi
 
 # rsync direkt nach tmpfs (incoming) — kein SD-Karten-Write
 if ! rsync -a --timeout="$TIMEOUT_SEC" "${PRIMARY_HOST}:${REMOTE_DB_PATH}" "$TMP_INCOMING"; then
@@ -57,8 +60,11 @@ fi
 
 # Atomar ins tmpfs verschieben (mv innerhalb /dev/shm = instant)
 mv -f "$TMP_INCOMING" "$TMPFS_DB_PATH"
-touch "$SYNC_MARKER_FILE"
-log "OK: DB synchronisiert nach tmpfs von ${PRIMARY_HOST}"
+if ! touch "$SYNC_MARKER_FILE" 2>/dev/null; then
+  log "WARN: Konnte Sync-Marker nicht erstellen: ${SYNC_MARKER_FILE}"
+else
+  log "OK: DB synchronisiert nach tmpfs von ${PRIMARY_HOST}"
+fi
 
 # SD-Fallback: data.db auf SD aktualisieren (nur wenn > 24h alt)
 # Damit ensure_tmpfs_db() nach einem Reboot sofort eine Kopie hat,
