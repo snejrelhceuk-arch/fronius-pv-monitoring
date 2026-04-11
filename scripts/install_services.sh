@@ -4,9 +4,10 @@
 # Erstellt und aktiviert:
 #   1. pv-collector.service  (Modbus-Datensammlung)
 #   2. pv-web.service        (Flask Web-API)
-#   3. pv-wattpilot.service  (Wattpilot Wallbox-Collector)
-#   4. pv-restart.service + .timer (Neustart alle 3 Tage)
-#   5. pv-backup-gfs.service + .timer (GFS-Backup, Sohn alle 3 Tage)
+#   3. pv-steuerbox.service  (Operator-Intent API hinter nginx)
+#   4. pv-wattpilot.service  (Wattpilot Wallbox-Collector)
+#   5. pv-restart.service + .timer (Neustart alle 3 Tage)
+#   6. pv-backup-gfs.service + .timer (GFS-Backup, Sohn alle 3 Tage)
 #
 # Periodische Jobs (Checkpoints, Counter-Checks) laufen via Cron
 # — siehe crontab -l
@@ -63,7 +64,11 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
 
-# 3. Wattpilot Collector Service
+# 3. Steuerbox Service
+echo "→ pv-steuerbox.service installieren..."
+sudo install -m 0644 ${BASE}/pv-steuerbox.service /etc/systemd/system/pv-steuerbox.service
+
+# 4. Wattpilot Collector Service
 echo "→ pv-wattpilot.service erstellen..."
 sudo tee /etc/systemd/system/pv-wattpilot.service > /dev/null <<EOF
 [Unit]
@@ -86,7 +91,7 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
 
-# 4. Restart Service (führt den eigentlichen Neustart durch)
+# 5. Restart Service (führt den eigentlichen Neustart durch)
 echo "→ pv-restart.service erstellen..."
 sudo tee /etc/systemd/system/pv-restart.service > /dev/null <<'EOF'
 [Unit]
@@ -100,11 +105,13 @@ ExecStart=/bin/bash -c '\
     echo "$(date): Collector neugestartet" >> /tmp/pv_restart.log && \
     systemctl restart pv-web.service && \
     echo "$(date): Web-API neugestartet" >> /tmp/pv_restart.log && \
+    systemctl restart pv-steuerbox.service && \
+    echo "$(date): Steuerbox neugestartet" >> /tmp/pv_restart.log && \
     systemctl restart pv-wattpilot.service && \
     echo "$(date): Wattpilot neugestartet" >> /tmp/pv_restart.log'
 EOF
 
-# 5. Timer: Alle 3 Tage um 00:05
+# 6. Timer: Alle 3 Tage um 00:05
 echo "→ pv-restart.timer erstellen..."
 sudo tee /etc/systemd/system/pv-restart.timer > /dev/null <<'EOF'
 [Unit]
@@ -158,13 +165,14 @@ sudo systemctl daemon-reload
 echo "→ Services aktivieren..."
 sudo systemctl enable pv-collector.service
 sudo systemctl enable pv-web.service
+sudo systemctl enable pv-steuerbox.service
 sudo systemctl enable pv-wattpilot.service
 sudo systemctl enable --now pv-restart.timer
 sudo systemctl enable --now pv-backup-gfs.timer
 
 # Alten manuellen Collector stoppen und durch systemd ersetzen
 echo "→ Prüfe laufende Prozesse..."
-for proc in "collector.py" "web_api.py" "wattpilot_collector.py"; do
+for proc in "collector.py" "web_api.py" "steuerbox_api.py" "wattpilot_collector.py"; do
     PID=$(pgrep -f "python3.*${proc}" 2>/dev/null || true)
     if [ -n "$PID" ]; then
         echo "  Stoppe manuellen ${proc} (PID $PID)..."
@@ -176,11 +184,12 @@ sleep 2
 echo "→ Starte Services via systemd..."
 sudo systemctl start pv-collector.service
 sudo systemctl start pv-web.service
+sudo systemctl start pv-steuerbox.service
 sudo systemctl start pv-wattpilot.service
 
 echo ""
 echo "=== Status ==="
-for svc in pv-collector pv-web pv-wattpilot; do
+for svc in pv-collector pv-web pv-steuerbox pv-wattpilot; do
     echo "--- ${svc} ---"
     systemctl status ${svc}.service --no-pager | head -5
     echo ""
@@ -200,6 +209,7 @@ echo ""
 echo "✓ Installation abgeschlossen!"
 echo "  Collector:   systemctl status pv-collector"
 echo "  Web API:     systemctl status pv-web"
+echo "  Steuerbox:   systemctl status pv-steuerbox"
 echo "  Wattpilot:   systemctl status pv-wattpilot"
 echo "  Timer:       systemctl list-timers pv-restart*"
 echo "  Backup:      systemctl list-timers pv-backup-gfs*"

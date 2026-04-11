@@ -45,6 +45,7 @@ from automation.engine.actuator import Actuator
 from automation.engine.engine import Engine
 from automation.engine.event_notifier import EventNotifier
 from automation.engine.param_matrix import DEFAULT_MATRIX_PATH
+from automation.engine.operator_overrides import OperatorOverrideProcessor
 
 LOG = logging.getLogger('automation_daemon')
 
@@ -88,6 +89,7 @@ class AutomationDaemon:
         self._engine = None
         self._notifier = None
         self._forecast_thread = None
+        self._override_processor = OperatorOverrideProcessor()
 
         # Timing
         self._last_fast = 0
@@ -362,6 +364,24 @@ class AutomationDaemon:
                 LOG.info("SIGHUP: Parametermatrix neu geladen")
             except Exception as e:
                 LOG.error(f"Matrix-Reload Fehler: {e}")
+
+        # 5b. Steuerbox-Overrides ueber Actuator ausfuehren (Schicht E -> C).
+        try:
+            summary = self._override_processor.process_pending(
+                actuator=self._actuator,
+                matrix=self._engine._matrix,
+                limit=20,
+            )
+            if summary.get('total', 0) > 0:
+                LOG.info(
+                    "Steuerbox-Overrides: total=%s done=%s failed=%s skipped=%s",
+                    summary.get('total', 0),
+                    summary.get('done', 0),
+                    summary.get('failed', 0),
+                    summary.get('skipped', 0),
+                )
+        except Exception as e:
+            LOG.error(f"Steuerbox-Override-Verarbeitung Fehler: {e}")
 
         # 6. Engine fast-Zyklus (alle 60 s)
         if now - self._last_fast >= FAST_INTERVAL:

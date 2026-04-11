@@ -20,6 +20,7 @@ LOCAL_GFS_DAILY_GLOB = os.path.join(BASE_DIR, 'backup', 'db', 'daily', '*.gz')
 SERVICES = [
     'pv-collector.service',
     'pv-web.service',
+    'pv-steuerbox.service',
     'pv-automation.service',
     'pv-wattpilot.service',
 ]

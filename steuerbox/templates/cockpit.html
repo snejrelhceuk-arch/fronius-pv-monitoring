@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Steuerbox Operator-Cockpit</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/cockpit.css') }}">
+</head>
+<body>
+  <main class="shell">
+    <div class="host-bubble {{ host_role }}" aria-label="Host-Rolle {{ host_role }}">
+      <span class="dot"></span>
+      <span class="label">{{ host_role }}</span>
+    </div>
+
+    <header class="hero">
+      <h1>Steuerbox</h1>
+    </header>
+
+    <section class="grid">
+      <article class="card card-wp">
+        <h2>Wärmepumpe</h2>
+        <p class="sub">Max / Std / Min.</p>
+        <div class="statebar" id="wp-mode"></div>
+      </article>
+
+      <article class="card card-toggles">
+        <h2>Weitere Verbraucher:</h2>
+        <div class="toggle-list">
+          <div class="toggle-row">
+            <span>HP Heizpatrone</span>
+            <div class="statebar" id="hp-toggle"></div>
+          </div>
+          <div class="toggle-row">
+            <span>Klimagerät</span>
+            <div class="statebar" id="klima-toggle"></div>
+          </div>
+          <div class="toggle-row">
+            <span>Lüftung</span>
+            <div class="statebar" id="lueftung-toggle"></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card card-wattpilot">
+        <h2>Wattpilot</h2>
+        <div class="toggle-list">
+          <div class="toggle-row">
+            <span>Modus</span>
+            <div class="statebar" id="wattpilot-mode"></div>
+          </div>
+          <div class="toggle-row">
+            <span>Laden</span>
+            <div class="statebar" id="wattpilot-start-stop"></div>
+          </div>
+          <div class="toggle-row">
+            <span>Strom</span>
+            <div class="statebar" id="wattpilot-amp"></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card card-battery">
+        <h2>Batterie</h2>
+        <div class="toggle-list">
+          <div class="toggle-row">
+            <span>Modus</span>
+            <div class="statebar" id="battery-mode"></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card card-duration">
+        <h2>Dauer</h2>
+        <label class="duration-input" for="respektInput">
+          Dauer
+          <input id="respektInput" type="number" min="{{ min_respekt_s }}" max="{{ max_respekt_s }}" value="{{ default_respekt_s }}">
+          s
+        </label>
+      </article>
+
+      <article class="card card-log">
+        <h2>Intent-Protokoll</h2>
+        <p class="sub">Zuletzt ausgelöste Operator-Intents.</p>
+        <pre id="eventLog" class="log"></pre>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    window.STEUERBOX_CFG = {
+      minRespekt: {{ min_respekt_s }},
+      maxRespekt: {{ max_respekt_s }}
+    };
+  </script>
+  <script src="{{ url_for('static', filename='js/cockpit.js') }}"></script>
+</body>
+</html>
