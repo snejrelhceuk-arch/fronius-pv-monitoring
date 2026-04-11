@@ -8,6 +8,24 @@ PRIMARY_SOURCE="${PRIMARY_SOURCE:-Primary-Host}"
 
 echo "=== Installiere Failover-Services (Mirror + 2-Tage-Backup) ==="
 
+# Boot-Init Service für Verzeichnisstruktur
+sudo tee /etc/systemd/system/pv-failover-init.service >/dev/null <<EOF
+[Unit]
+Description=PV Failover Directory Initialization
+Before=pv-mirror-sync.service pv-mirror-sync.timer
+DefaultDependencies=no
+After=sysinit.target
+
+[Service]
+Type=oneshot
+User=${RUN_USER}
+ExecStart=/bin/bash -c 'mkdir -p ${BASE}/.state ${BASE}/logs ${BASE}/config ${BASE}/backup/db'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 # Mirror Sync Service
 sudo tee /etc/systemd/system/pv-mirror-sync.service >/dev/null <<EOF
 [Unit]
@@ -105,6 +123,12 @@ EOF
 
 sudo systemctl daemon-reload
 
+# Ensure required directories
+mkdir -p "$BASE/.state"
+mkdir -p "$BASE/logs"
+mkdir -p "$BASE/config"
+mkdir -p "$BASE/backup/db"
+
 # Ensure executable scripts
 sudo chmod +x \
   ${BASE}/scripts/failover_sync_db.sh \
@@ -114,7 +138,8 @@ sudo chmod +x \
   ${BASE}/scripts/failover_passive.sh \
   ${BASE}/scripts/failover_activate.sh
 
-# Enable timers
+# Enable services & timers
+sudo systemctl enable pv-failover-init.service
 sudo systemctl enable --now pv-mirror-sync.timer
 sudo systemctl enable --now pv-backup-2d.timer
 sudo systemctl enable --now pv-failover-health.timer
