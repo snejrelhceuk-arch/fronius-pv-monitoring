@@ -104,6 +104,18 @@ def _registriere_engine_wert(register: str, wert: int):
     _wp_extern[f'{prefix}_extern_seit'] = None  # Timer zurücksetzen
 
 
+def reset_wp_extern_tracking():
+    """Extern-Respekt-State zurücksetzen.
+
+    Muss nach Matrix-Reload (SIGHUP) aufgerufen werden, damit geänderte
+    Parameter (z.B. standard_temp_c) sofort in die Aktorik übernommen werden
+    und nicht durch den Extern-Respekt-Mechanismus blockiert bleiben.
+    """
+    LOG.info("WP extern_respekt: State nach Matrix-Reload zurückgesetzt")
+    for key in list(_wp_extern.keys()):
+        _wp_extern[key] = None
+
+
 def _ist_im_zeitfenster(start_h: float, ende_h: float) -> bool:
     """True wenn aktuelle Uhrzeit im (ggf. über-Mitternacht) Fenster liegt."""
     now_h = datetime.now().hour + datetime.now().minute / 60.0
