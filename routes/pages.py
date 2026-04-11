@@ -79,6 +79,13 @@ def verbraucher_page():
     return render_template('verbraucher_view.html')
 
 
+@bp.route('/verbraucher/wp-leistung')
+@bp.route('/analyse/verbraucher/wp-leistung')
+def wp_leistung_page():
+    """WP-Leistungsnachweis (Netzbetreiber) — Zeitreihe aus Dauerprotokoll."""
+    return render_template('wp_leistung_view.html')
+
+
 @bp.route('/erzeuger')
 def erzeuger_page():
     """Erzeuger-Übersicht: F1/F2/F3 Inverter-Aufteilung"""
