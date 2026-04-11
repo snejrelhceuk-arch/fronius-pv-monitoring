@@ -17,3 +17,6 @@ Geänderte Quellen: wattpilot_collector.py, config.py, README.md, automation/eng
 
 ## 2026-03-28 16:20 (Hash: 7141c1ca2b10731c)
 Geänderte Quellen: README.md, aggregate.py, config.py, solar_forecast.py, automation/engine/automation_daemon.py, automation/engine/engine.py, web_api.py, fronius_api.py, wattpilot_collector.py
+
+## 2026-04-08 12:52 (Hash: 92415e036b883fa3)
+Geänderte Quellen: modbus_v3.py, automation/engine/engine.py, config.py, web_api.py, automation/engine/automation_daemon.py, wattpilot_collector.py

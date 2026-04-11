@@ -133,6 +133,28 @@ systemctl status pv-backup-gfs.timer
 systemctl list-timers pv-backup-gfs.timer
 ```
 
+## Monatlicher PDF-Versand per E-Mail
+
+Neuer Versandjob: `scripts/monthly_pdf_report.py`
+
+- erzeugt ein PDF via `tools/generate_anlagendoku_pdf.py`
+- versendet es an `config.NOTIFICATION_EMAIL`
+- ist **stale-prozess-sicher** via `flock`-Lockdatei
+- ist **neustartsicher** via systemd-Timer mit `Persistent=true`
+- dedupliziert pro Berichtsmonat via `.state/monthly_pdf_report_state.json`
+
+Installation des Timers:
+
+```bash
+./scripts/install_monthly_pdf_timer.sh
+```
+
+Manueller Test ohne Versand:
+
+```bash
+python3 scripts/monthly_pdf_report.py --dry-run --verbose
+```
+
 ## API-Endpunkte
 
 - `GET /` - Dashboard (HTML)

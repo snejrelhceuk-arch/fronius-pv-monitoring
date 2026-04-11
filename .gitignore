@@ -34,6 +34,7 @@ automation_daemon.pid
 config/battery_scheduler_state.json
 config/battery_bms_checkpoints.json
 config/fritz_config.json
+config/fronius_attachment_state.json
 
 # TLS-Zertifikate und Schlüssel (sensibel)
 config/tls/
