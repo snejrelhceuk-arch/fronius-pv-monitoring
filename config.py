@@ -77,6 +77,39 @@ FRONIUS_API_BASE = f'http://{INVERTER_IP}/solar_api/v1'
 WEB_API_HOST = '0.0.0.0'
 WEB_API_PORT = 8000
 
+# --- Steuerbox (Operator-Intent-API, Schicht E) ---
+STEUERBOX_HOST = load_local_setting('PV_STEUERBOX_HOST', '0.0.0.0')
+STEUERBOX_PORT = int(load_local_setting('PV_STEUERBOX_PORT', '11933'))
+# Kommagetrennte CIDR-Liste (Default: Loopback + LAN-Subnetz)
+STEUERBOX_ALLOWLIST = [
+    x.strip() for x in load_local_setting(
+        'PV_STEUERBOX_ALLOWLIST',
+        os.environ.get('PV_STEUERBOX_ALLOWLIST', '127.0.0.1/32')
+    ).split(',') if x.strip()
+]
+# Auth via mTLS (nginx Reverse Proxy) – kein Bearer-Token mehr noetig.
+STEUERBOX_DEFAULT_RESPEKT_S = int(load_local_setting('PV_STEUERBOX_DEFAULT_RESPEKT_S', '1800'))
+STEUERBOX_MIN_RESPEKT_S = int(load_local_setting('PV_STEUERBOX_MIN_RESPEKT_S', '900'))
+STEUERBOX_MAX_RESPEKT_S = int(load_local_setting('PV_STEUERBOX_MAX_RESPEKT_S', '7200'))
+
+STEUERBOX_ALLOWED_ACTIONS = {
+    'wp_mode',
+    'battery_mode',
+    'hp_toggle',
+    'klima_toggle',
+    'lueftung_toggle',
+    'wattpilot_mode',
+    'wattpilot_start_stop',
+    'wattpilot_amp',
+}
+
+# Hard Guards (physikalisch/sicherheitsrelevant)
+STEUERBOX_SOC_MIN_PCT = 5
+STEUERBOX_SOC_MAX_PCT = 100
+STEUERBOX_WP_OFFSET_MIN_K = -15
+STEUERBOX_HP_NOTAUS_SOC_PCT = 15
+STEUERBOX_HP_UEBERTEMP_C = 78
+
 # --- Failover-Host ---
 FAILOVER_IP = load_local_setting('PV_FAILOVER_IP', '192.0.2.105')
 FAILOVER_USER = load_local_setting('PV_FAILOVER_USER', 'failover-user')
@@ -113,6 +146,13 @@ WATTPILOT_AUTO_RECOVERY_STATE_FILE = os.path.join(BASE_DIR, 'config', 'wattpilot
 POLL_INTERVAL = 3          # Sekunden zwischen Modbus-Abfragen
 BUFFER_MAXLEN = 400        # RAM-Buffer Größe (~20min bei 3s Polling)
 FLUSH_INTERVAL = 60        # Sekunden zwischen DB-Writes
+
+# --- WP Leistungsnachweis (Netzbetreiber) ---
+# Dauerhafte Protokolldatei mit minutlichen Maximalwerten der WP-Leistung.
+WP_LEISTUNG_LIMIT_W = 4200
+WP_POWER_PROTOCOL_FILE = os.path.join(BASE_DIR, 'logs', 'wp_netzbetreiber_leistung.csv')
+WP_POWER_PROTOCOL_INTERVAL_S = 60
+WP_POWER_PROTOCOL_MAX_AGE_S = 600
 
 # --- tmpfs-DB Persistierung ---
 # Alternierende Sicherung: ungerade Tage → SD lokal, gerade Tage → Pi5

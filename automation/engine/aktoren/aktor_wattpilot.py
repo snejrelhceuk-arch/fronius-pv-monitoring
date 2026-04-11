@@ -59,6 +59,8 @@ class AktorWattpilot(AktorBase):
         'pause_charging':  '_cmd_pause_charging',
         'resume_charging': '_cmd_resume_charging',
         'set_phase_mode':  '_cmd_set_phase_mode',
+        'set_charge_mode_eco': '_cmd_set_charge_mode_eco',
+        'set_charge_mode_default': '_cmd_set_charge_mode_default',
     }
 
     def ausfuehren(self, aktion: dict) -> dict:
@@ -116,6 +118,16 @@ class AktorWattpilot(AktorBase):
                 soll = aktion.get('parameter', {}).get('psm', psm)
                 return {'ok': True, 'verifiziert': True,
                         'ist': psm, 'soll': soll, 'match': psm == soll}
+
+            if kommando == 'set_charge_mode_eco':
+                lmo = int(status.get('charge_mode_raw', 0) or 0)
+                return {'ok': True, 'verifiziert': True,
+                        'ist': lmo, 'soll': 4, 'match': lmo == 4}
+
+            if kommando == 'set_charge_mode_default':
+                lmo = int(status.get('charge_mode_raw', 0) or 0)
+                return {'ok': True, 'verifiziert': True,
+                        'ist': lmo, 'soll': 3, 'match': lmo == 3}
 
             return {'ok': True, 'verifiziert': False,
                     'grund': f'Kein Read-Back für {kommando}'}
@@ -194,6 +206,30 @@ class AktorWattpilot(AktorBase):
         # 3-phasig: A = W / (3 × 230V)
         ampere = max(MIN_CURRENT_A, min(MAX_CURRENT_A, int(watt / 690)))
         return self._cmd_set_max_current({'ampere': ampere})
+
+    def _cmd_set_charge_mode_eco(self, params: dict) -> dict:
+        """Setzt Wattpilot-Lademodus auf ECO (lmo=4)."""
+        try:
+            client = _get_client()
+            result = client.set_value('lmo', 4)
+            LOG.info(f"WattPilot lmo=4 (eco): {result.get('detail')}")
+            result['kommando'] = 'set_charge_mode_eco'
+            return result
+        except Exception as e:
+            LOG.error(f"WattPilot set_charge_mode_eco Exception: {e}")
+            return {'ok': False, 'kommando': 'set_charge_mode_eco', 'detail': str(e)}
+
+    def _cmd_set_charge_mode_default(self, params: dict) -> dict:
+        """Setzt Wattpilot-Lademodus auf Default (lmo=3)."""
+        try:
+            client = _get_client()
+            result = client.set_value('lmo', 3)
+            LOG.info(f"WattPilot lmo=3 (default): {result.get('detail')}")
+            result['kommando'] = 'set_charge_mode_default'
+            return result
+        except Exception as e:
+            LOG.error(f"WattPilot set_charge_mode_default Exception: {e}")
+            return {'ok': False, 'kommando': 'set_charge_mode_default', 'detail': str(e)}
 
     def _cmd_reduce_current(self, params: dict) -> dict:
         """Proportionale Stromreduktion (SLS-Schutz).

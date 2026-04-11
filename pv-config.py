@@ -984,6 +984,7 @@ def _service_status():
     services = [
         'pv-collector.service',
         'pv-web.service',
+        'pv-steuerbox.service',
         'pv-wattpilot.service',
         'pv-backup-gfs.timer',
         'pv-backup-2d.timer',

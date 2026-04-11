@@ -1,0 +1,239 @@
+:root {
+  --bg-1: #f4f7ef;
+  --bg-2: #d9e5d3;
+  --ink: #19361f;
+  --muted: #4e6a54;
+  --panel: rgba(255, 255, 255, 0.8);
+  --line: rgba(25, 54, 31, 0.16);
+  --on: #1d8a42;
+  --off: #d5483f;
+  --neutral: #b5b7b4;
+  --accent: #0e7f79;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: 'Space Grotesk', sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 10% 20%, rgba(255, 255, 255, 0.7), transparent 55%),
+    radial-gradient(circle at 100% 0, rgba(14, 127, 121, 0.24), transparent 45%),
+    linear-gradient(135deg, var(--bg-1), var(--bg-2));
+}
+
+.shell {
+  position: relative;
+  width: min(1180px, 94vw);
+  margin: 0 auto;
+  padding: 2.5rem 0 3.5rem;
+}
+
+.host-bubble {
+  position: absolute;
+  right: 0;
+  top: 0.2rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.86);
+  padding: 0.35rem 0.7rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.host-bubble .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #24b36b;
+  box-shadow: 0 0 0 0 rgba(36, 179, 107, 0.65);
+  animation: pulse 1.6s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(36, 179, 107, 0.65);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(36, 179, 107, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(36, 179, 107, 0);
+  }
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3rem);
+  letter-spacing: 0.02em;
+}
+
+.grid {
+  margin-top: 1.3rem;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 1rem 1.1rem 1.2rem;
+  box-shadow: 0 12px 28px rgba(16, 41, 18, 0.08);
+}
+
+.card h2 {
+  margin: 0 0 0.2rem;
+}
+
+.sub {
+  margin: 0 0 0.9rem;
+  color: var(--muted);
+}
+
+.card-wp,
+.card-toggles,
+.card-wattpilot,
+.card-battery {
+  grid-column: span 12;
+}
+
+.card-log {
+  grid-column: span 12;
+}
+
+.card-duration {
+  grid-column: span 12;
+}
+
+.duration-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  padding: 0.55rem 0.75rem;
+  font-weight: 400;
+}
+
+.duration-input input {
+  width: 96px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.28rem 0.42rem;
+  font-family: inherit;
+}
+
+.toggle-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.toggle-row {
+  display: grid;
+  grid-template-columns: 1fr minmax(320px, 44%);
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.statebar {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.state-btn {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: #fdfefd;
+  color: var(--ink);
+  min-width: 78px;
+  height: 52px;
+  border-radius: 13px;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease, background 150ms ease;
+}
+
+.state-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 16px rgba(20, 34, 22, 0.12);
+}
+
+.state-btn.selected {
+  border-color: transparent;
+  color: #ffffff;
+}
+
+.state-btn.selected.intent-on {
+  background: linear-gradient(135deg, #1aa347, var(--on));
+}
+
+.state-btn.selected.intent-off {
+  background: linear-gradient(135deg, #e95c53, var(--off));
+}
+
+.state-btn.selected.intent-other {
+  background: linear-gradient(135deg, #07808a, var(--accent));
+}
+
+.state-btn.neutral {
+  color: #7b807b;
+  background: #ebedeb;
+}
+
+.log {
+  margin: 0;
+  background: rgba(18, 33, 24, 0.92);
+  color: #d4f7df;
+  min-height: 180px;
+  max-height: 340px;
+  border-radius: 12px;
+  border: 1px solid rgba(212, 247, 223, 0.2);
+  padding: 0.9rem;
+  overflow: auto;
+  font-size: 0.9rem;
+}
+
+@media (min-width: 980px) {
+  .card-wp {
+    grid-column: span 5;
+  }
+
+  .card-toggles {
+    grid-column: span 7;
+  }
+
+  .card-wattpilot,
+  .card-battery,
+  .card-duration,
+  .card-log {
+    grid-column: span 12;
+  }
+}
+
+@media (max-width: 860px) {
+  .toggle-row {
+    grid-template-columns: 1fr;
+  }
+
+  .state-btn {
+    min-width: 72px;
+    height: 50px;
+    font-size: 0.95rem;
+  }
+}
