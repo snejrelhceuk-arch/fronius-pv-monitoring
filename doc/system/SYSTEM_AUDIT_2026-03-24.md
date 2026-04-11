@@ -3,6 +3,10 @@
 Durchgeführt: Copilot-gestützte Prüfung aller Schichten.
 Schwerpunkte: Web-API, Automations-Engine, Code-Qualität, Sensible Daten.
 
+Weiterführend (Urheberschaft/KI-Anteile):
+- `doc/meta/KI_BEITRAGSANALYSE.md` (gepflegt)
+- `doc/archive/LEISTUNGSANTEILE_KI_BEDIENER.md` (historische Langfassung)
+
 ---
 
 ## 1  Web API — Sicherheit
