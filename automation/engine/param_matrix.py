@@ -24,6 +24,7 @@ _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.
 LOG = logging.getLogger('param_matrix')
 
 DEFAULT_MATRIX_PATH = os.path.join(_PROJECT_ROOT, 'config', 'soc_param_matrix.json')
+DEFAULT_FORECAST_QUALITY_THRESHOLDS = (40.0, 100.0)
 
 # Prioritäts-Label und Farben (ANSI)
 PRIO_LABELS = {1: 'SICHERHEIT', 2: 'STEUERUNG', 3: 'WARTUNG'}
@@ -71,17 +72,58 @@ def validiere_matrix(matrix: dict) -> list[str]:
                         f"{rk_name}.{p_name}: {wert} außerhalb [{lo}..{hi}]"
                     )
 
-    hp_params = regelkreise.get('heizpatrone', {}).get('parameter', {})
-    maessig = hp_params.get('potenzial_maessig_kwh', {}).get('wert')
-    ausreichend = hp_params.get('potenzial_ausreichend_kwh', {}).get('wert')
-    gut = hp_params.get('potenzial_gut_kwh', {}).get('wert')
-    if None not in (maessig, ausreichend, gut) and not (maessig < ausreichend < gut):
+    forecast_params = regelkreise.get('forecast_bewertung', {}).get('parameter', {})
+    schlecht_unter = forecast_params.get('schlecht_unter_kwh', {}).get('wert')
+    mittel_unter = forecast_params.get('mittel_unter_kwh', {}).get('wert')
+    if None not in (schlecht_unter, mittel_unter) and not (schlecht_unter < mittel_unter):
         fehler.append(
-            'heizpatrone: potenzial_maessig_kwh < potenzial_ausreichend_kwh < '
-            'potenzial_gut_kwh muss gelten'
+            'forecast_bewertung: schlecht_unter_kwh < mittel_unter_kwh muss gelten'
         )
 
     return fehler
+
+
+def get_forecast_quality_thresholds(matrix: dict | None = None) -> tuple[float, float]:
+    """Hole die zentralen Forecast-Schwellen aus der Parametermatrix.
+
+    Returns:
+        (schlecht_unter_kwh, mittel_unter_kwh)
+    """
+    if matrix is None:
+        try:
+            matrix = lade_matrix(DEFAULT_MATRIX_PATH)
+        except Exception:
+            return DEFAULT_FORECAST_QUALITY_THRESHOLDS
+
+    forecast_params = matrix.get('regelkreise', {}).get('forecast_bewertung', {}).get('parameter', {})
+    schlecht_unter = forecast_params.get('schlecht_unter_kwh', {}).get(
+        'wert', DEFAULT_FORECAST_QUALITY_THRESHOLDS[0]
+    )
+    mittel_unter = forecast_params.get('mittel_unter_kwh', {}).get(
+        'wert', DEFAULT_FORECAST_QUALITY_THRESHOLDS[1]
+    )
+    return float(schlecht_unter), float(mittel_unter)
+
+
+def classify_forecast_kwh(expected_kwh, matrix: dict | None = None) -> str | None:
+    """Klassifiziere Tagesprognose in schlecht/mittel/gut."""
+    if expected_kwh is None:
+        return None
+
+    schlecht_unter, mittel_unter = get_forecast_quality_thresholds(matrix)
+    if expected_kwh < schlecht_unter:
+        return 'schlecht'
+    if expected_kwh < mittel_unter:
+        return 'mittel'
+    return 'gut'
+
+
+def get_effective_forecast_quality(obs, matrix: dict | None = None) -> str | None:
+    """Bevorzuge ObsState.forecast_quality, fallback auf forecast_kwh."""
+    quality = (getattr(obs, 'forecast_quality', None) or '').lower()
+    if quality in ('schlecht', 'mittel', 'gut'):
+        return quality
+    return classify_forecast_kwh(getattr(obs, 'forecast_kwh', None), matrix)
 
 
 def get_regelkreis(matrix: dict, name: str) -> dict:

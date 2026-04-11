@@ -18,6 +18,36 @@
         }
       }
     },
+    "forecast_bewertung": {
+      "_doc": "Zentrale Forecast-Klassifizierung für SolarForecast, Automation und pv-config. Die Schwellen definieren die Stufen schlecht / mittel / gut aus dem prognostizierten Tagesertrag.",
+      "aktiv": true,
+      "prioritaet": 2,
+      "beschreibung": "Zentrale Prognose-Bewertung: schlecht < 40 kWh, mittel < 100 kWh, gut ab 100 kWh",
+      "parameter": {
+        "schlecht_unter_kwh": {
+          "wert": 40.0,
+          "bereich": [
+            5.0,
+            150.0
+          ],
+          "einheit": "kWh",
+          "obs_feld": "forecast_kwh",
+          "beschreibung": "Tagesprognose unterhalb dieser Schwelle wird als schlecht klassifiziert. Wirkt zentral auf SolarForecast und alle Automationsregeln mit Forecast-Qualität."
+        },
+        "mittel_unter_kwh": {
+          "wert": 100.0,
+          "bereich": [
+            20.0,
+            250.0
+          ],
+          "einheit": "kWh",
+          "obs_feld": "forecast_kwh",
+          "beschreibung": "Tagesprognose unterhalb dieser Schwelle wird als mittel klassifiziert. Ab diesem Wert gilt die Prognose als gut. Muss größer als schlecht_unter_kwh sein."
+        }
+      },
+      "score_gewicht": 0,
+      "engine_zyklus": "config"
+    },
     "sls_schutz": {
       "_doc": "SLS-Sicherungsschutz: Konfigurierbare Phasenstrombegrenzung am Zählerplatz F1 (SmartMeter Netz). Standard 35A, mittelfristig 50A nach Anschlussänderung. Proportionale Wattpilot-Abregelung um Überschreitungsbetrag + Sicherheitsmarge.",
       "aktiv": true,
@@ -961,33 +991,6 @@
           ],
           "einheit": "%",
           "beschreibung": "SOC-Schwelle für Autoritäts-Override: Wird HP manuell eingeschaltet, überstimmt die Engine bei SOC ≤ diesem Wert und schaltet HP aus (Batterieschutz). Standard 15%."
-        },
-        "potenzial_gut_kwh": {
-          "wert": 60.0,
-          "bereich": [
-            40.0,
-            200.0
-          ],
-          "einheit": "kWh",
-          "beschreibung": "Tagesprognose ab der HP parallel mit WP+EV laufen darf und Batterie-Entladung immer toleriert wird"
-        },
-        "potenzial_ausreichend_kwh": {
-          "wert": 40.0,
-          "bereich": [
-            20.0,
-            100.0
-          ],
-          "einheit": "kWh",
-          "beschreibung": "Tagesprognose ab der HP parallel mit WP laufen darf (nicht EV). Entladung toleriert wenn SOC_MAX ≤ 75%"
-        },
-        "potenzial_maessig_kwh": {
-          "wert": 20.0,
-          "bereich": [
-            10.0,
-            50.0
-          ],
-          "einheit": "kWh",
-          "beschreibung": "Tagesprognose ab der HP solo laufen darf (kein WP/EV). Entladung toleriert wenn SOC_MAX ≤ 75%"
         },
         "_abend_doc": "Phase 4 — Abend-Nachladezyklus: HP nutzt Rest-PV wenn Batterie nahe SOC_MAX. Zyklus: EIN → SOC sinkt → AUS → Batt lädt → SOC≈MAX → EIN. Adaptiv zu SOC_MAX.",
         "abend_soc_ein_unter_max_pct": {
