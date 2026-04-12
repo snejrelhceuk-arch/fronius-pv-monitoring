@@ -58,6 +58,7 @@ def index():
         max_respekt_s=config.STEUERBOX_MAX_RESPEKT_S,
         css_version=_asset_version('css/cockpit.css'),
         js_version=_asset_version('js/cockpit.js'),
+        favicon_version=_asset_version('img/favicon-steuerbox.svg'),
     )
 
 
