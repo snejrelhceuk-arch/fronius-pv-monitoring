@@ -518,7 +518,11 @@ def jahr_visualization():
         for row in rows:
             month, solar, bezug, einsp, batt_lad, batt_entl, direkt, gesamt, heiz, wattpilot, sonnenstd = row
 
-            eigenverbrauch = (direkt or 0) + (batt_entl or 0)
+            # Legacy-Logik fuer historische Jahre: Wattpilot dem Direktverbrauch zuordnen.
+            # Damit ist links/rechts "Direkt" konsistent und Autarkie folgt der
+            # Formel (Direkt + BattEntl) / (Direkt + BattEntl + Netzbezug).
+            direkt_monitoring = (direkt or 0) + ((wattpilot or 0) if year <= 2025 else 0)
+            eigenverbrauch = direkt_monitoring + (batt_entl or 0)
             gesamtverbrauch = eigenverbrauch + (bezug or 0)
             autarkie = (eigenverbrauch / gesamtverbrauch * 100) if gesamtverbrauch > 0 else 0
 
@@ -527,7 +531,7 @@ def jahr_visualization():
                 'label': f'{month:02d}/{year}',
                 'w_einspeisung': round(einsp or 0, 2),
                 'w_batterieladung': round(batt_lad or 0, 2),
-                'w_direktverbrauch': round(direkt or 0, 2),
+                'w_direktverbrauch': round(direkt_monitoring, 2),
                 'w_wattpilot': round(wattpilot or 0, 2),
                 'w_netzbezug': round(bezug or 0, 2),
                 'w_batterieentladung': round(batt_entl or 0, 2),
@@ -587,7 +591,11 @@ def gesamt_visualization():
             if not solar or solar < 1:
                 continue
 
-            eigenverbrauch = (direkt or 0) + (batt_entl or 0)
+            # Legacy-Logik fuer historische Jahre: Wattpilot dem Direktverbrauch zuordnen.
+            # Damit ist links/rechts "Direkt" konsistent und Autarkie folgt der
+            # Formel (Direkt + BattEntl) / (Direkt + BattEntl + Netzbezug).
+            direkt_monitoring = (direkt or 0) + ((wattpilot or 0) if year <= 2025 else 0)
+            eigenverbrauch = direkt_monitoring + (batt_entl or 0)
             gesamtverbrauch = eigenverbrauch + (bezug or 0)
             autarkie = (eigenverbrauch / gesamtverbrauch * 100) if gesamtverbrauch > 0 else 0
 
@@ -596,7 +604,7 @@ def gesamt_visualization():
                 'label': str(year),
                 'w_einspeisung': round(einsp or 0, 2),
                 'w_batterieladung': round(batt_lad or 0, 2),
-                'w_direktverbrauch': round(direkt or 0, 2),
+                'w_direktverbrauch': round(direkt_monitoring, 2),
                 'w_wattpilot': round(wattpilot or 0, 2),
                 'w_netzbezug': round(bezug or 0, 2),
                 'w_batterieentladung': round(batt_entl or 0, 2),
