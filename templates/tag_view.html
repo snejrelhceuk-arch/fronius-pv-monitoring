@@ -822,6 +822,18 @@
             return `${(kwh / kwp).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kWh/kWp`;
         }
 
+        // Uebergangsregel: Bis inkl. 2025 bleibt Wattpilot im Direktverbrauch.
+        const WATTPILOT_SEPARATE_FROM_YEAR = 2026;
+
+        function shouldSeparateWattpilotByYear(year) {
+            return year >= WATTPILOT_SEPARATE_FROM_YEAR;
+        }
+
+        function getDirectConsumptionForBars(dp, year) {
+            if (!dp) return 0;
+            return dp.w_direktverbrauch || 0;
+        }
+
         /**
          * Formatiert Y-Achsen-Werte für ECharts (ohne Einheit, da im Achsentitel).
          * Tausendertrenner ab 1.000, k-Präfix ab 100.000.
@@ -1894,12 +1906,7 @@
             });
 
             const getDirektVerbrauchForConsumption = (dp) => {
-                if (!dp) return 0;
-                const total = dp.w_gesamtverbrauch || 0;
-                if (total > 0) {
-                    return Math.max(0, total - (dp.w_netzbezug || 0) - (dp.w_batterieentladung || 0));
-                }
-                return (dp.w_direktverbrauch || 0) + (dp.w_wattpilot || 0);
+                return getDirectConsumptionForBars(dp, currentYear);
             };
             
             // Erstelle Daten-Arrays für ERTRAG (linker Balken)
@@ -2355,11 +2362,8 @@
 
             const getDirektVerbrauchForConsumption = (dp) => {
                 if (!dp) return 0;
-                const total = dp.w_gesamtverbrauch || 0;
-                if (total > 0) {
-                    return Math.max(0, total - (dp.w_netzbezug || 0) - (dp.w_batterieentladung || 0));
-                }
-                return (dp.w_direktverbrauch || 0) + (dp.w_wattpilot || 0);
+                const pointYear = currentPeriod === 'gesamt' ? (dp.year || currentYear) : currentYear;
+                return getDirectConsumptionForBars(dp, pointYear);
             };
             
             // Ertrag-Stack
