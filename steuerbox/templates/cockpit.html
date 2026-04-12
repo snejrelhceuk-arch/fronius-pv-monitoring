@@ -29,24 +29,6 @@
         <div class="statebar" id="wp-mode"></div>
       </article>
 
-      <article class="card card-toggles">
-        <h2>Weitere Verbraucher:</h2>
-        <div class="toggle-list">
-          <div class="toggle-row">
-            <span class="toggle-label">HP Heizpatrone</span>
-            <div class="statebar" id="hp-toggle"></div>
-          </div>
-          <div class="toggle-row">
-            <span class="toggle-label">Klimagerät</span>
-            <div class="statebar" id="klima-toggle"></div>
-          </div>
-          <div class="toggle-row">
-            <span class="toggle-label">Lüftung</span>
-            <div class="statebar" id="lueftung-toggle"></div>
-          </div>
-        </div>
-      </article>
-
       <article class="card card-wattpilot">
         <h2>Wattpilot</h2>
         <div class="toggle-list">
@@ -75,8 +57,25 @@
         </div>
       </article>
 
+      <article class="card card-toggles">
+        <h2>Weitere Verbraucher:</h2>
+        <div class="toggle-list">
+          <div class="toggle-row">
+            <span class="toggle-label">Heizpatrone</span>
+            <div class="statebar" id="hp-toggle"></div>
+          </div>
+          <div class="toggle-row">
+            <span class="toggle-label">Klimagerät</span>
+            <div class="statebar" id="klima-toggle"></div>
+          </div>
+          <div class="toggle-row">
+            <span class="toggle-label">Lüftung</span>
+            <div class="statebar" id="lueftung-toggle"></div>
+          </div>
+        </div>
+      </article>
+
       <article class="card card-duration">
-        <h2>Dauer</h2>
         <label class="duration-input" for="respektInput">
           Override-Dauer
           <input id="respektInput" type="number" min="{{ min_respekt_s }}" max="{{ max_respekt_s }}" value="{{ default_respekt_s }}">
@@ -85,7 +84,6 @@
       </article>
 
       <article class="card card-log">
-        <h2>Intent-Protokoll</h2>
         <p class="sub">Zuletzt ausgelöste Operator-Intents.</p>
         <pre id="eventLog" class="log"></pre>
       </article>

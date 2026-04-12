@@ -112,12 +112,19 @@ body {
   background: rgba(30, 41, 59, 0.62);
   border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 11px;
+  padding: 9px 10px;
 }
 
 .card h2 {
   margin: 0;
   font-size: 1rem;
+}
+
+.card h2::after {
+  content: '';
+  display: block;
+  height: 0.68rem;
+  line-height: 0.68rem;
 }
 
 .sub {
@@ -142,7 +149,7 @@ body {
 
 .toggle-row {
   display: grid;
-  grid-template-columns: minmax(110px, 1fr) minmax(0, 2.4fr);
+  grid-template-columns: minmax(92px, 1fr) minmax(0, 2.5fr);
   align-items: center;
   gap: 8px;
 }
@@ -154,8 +161,22 @@ body {
 
 .statebar {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
-  gap: 7px;
+  grid-template-columns: repeat(auto-fit, minmax(clamp(62px, 8.2vw, 102px), 1fr));
+  gap: clamp(5px, 0.9vw, 9px);
+}
+
+#wp-mode {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#battery-mode,
+#wattpilot-mode,
+#wattpilot-start-stop,
+#wattpilot-amp,
+#hp-toggle,
+#klima-toggle,
+#lueftung-toggle {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .state-btn {
@@ -164,7 +185,7 @@ body {
   background: rgba(255, 255, 255, 0.12);
   color: var(--text);
   width: 100%;
-  min-height: 62px;
+  min-height: clamp(48px, 7.8vh, 68px);
   border-radius: 10px;
   font-family: inherit;
   cursor: pointer;
@@ -174,20 +195,20 @@ body {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: 3px;
-  padding: 8px 10px;
+  gap: clamp(1px, 0.4vh, 4px);
+  padding: clamp(5px, 1.2vh, 9px) clamp(6px, 1vw, 10px);
   text-align: center;
 }
 
 .state-btn-label {
-  font-size: 0.97rem;
+  font-size: clamp(0.78rem, 1.45vw, 0.98rem);
   font-weight: 700;
   letter-spacing: 0.01em;
   line-height: 1.1;
 }
 
 .state-btn-hint {
-  font-size: 0.68rem;
+  font-size: clamp(0.56rem, 1.05vw, 0.7rem);
   line-height: 1.15;
   color: rgba(255, 255, 255, 0.72);
   font-weight: 500;
@@ -249,32 +270,74 @@ body {
   margin: 0;
   background: rgba(2, 6, 23, 0.74);
   color: #d1fae5;
-  min-height: 190px;
+  min-height: 150px;
   max-height: 360px;
   border-radius: 10px;
   border: 1px solid rgba(209, 250, 229, 0.18);
-  padding: 0.75rem;
+  padding: 0.62rem;
   overflow: auto;
   font-size: 0.88rem;
 }
 
 @media (min-width: 900px) {
+  .grid {
+    grid-template-columns: minmax(0, 11fr) minmax(0, 9fr);
+    grid-template-areas:
+      'wp wattpilot'
+      'battery wattpilot'
+      'duration toggles'
+      'log toggles';
+    align-items: stretch;
+  }
+
+  .card-wp,
+  .card-battery,
+  .card-wattpilot,
+  .card-toggles,
+  .card-duration,
+  .card-log {
+    grid-column: auto;
+  }
+
   .card-wp {
-    grid-column: span 5;
+    grid-area: wp;
+    min-height: 128px;
+  }
+
+  .card-battery {
+    grid-area: battery;
+    min-height: 128px;
+  }
+
+  .card-wattpilot {
+    grid-area: wattpilot;
   }
 
   .card-toggles {
-    grid-column: span 7;
+    grid-area: toggles;
   }
 
-  .card-wattpilot,
-  .card-battery {
-    grid-column: span 6;
+  .card-duration {
+    grid-area: duration;
   }
 
-  .card-duration,
   .card-log {
-    grid-column: span 12;
+    grid-area: log;
+  }
+}
+
+@media (min-width: 900px) and (max-width: 1180px) {
+  .toggle-row {
+    grid-template-columns: minmax(80px, 0.9fr) minmax(0, 2.9fr);
+    gap: 6px;
+  }
+
+  .state-btn-label {
+    font-size: clamp(0.72rem, 1.15vw, 0.92rem);
+  }
+
+  .state-btn-hint {
+    font-size: clamp(0.52rem, 0.82vw, 0.64rem);
   }
 }
 
@@ -283,8 +346,8 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .statebar {
-    grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
+  #wp-mode {
+    grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
   }
 }
 
@@ -308,28 +371,11 @@ body {
   }
 
   .card {
-    padding: 9px;
+    padding: 7px 8px;
   }
 
   .toggle-label {
     font-size: 0.84rem;
-  }
-
-  .statebar {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .state-btn {
-    min-height: 56px;
-    padding: 7px 8px;
-  }
-
-  .state-btn-label {
-    font-size: 0.9rem;
-  }
-
-  .state-btn-hint {
-    font-size: 0.62rem;
   }
 
   .duration-input {
@@ -342,7 +388,7 @@ body {
   }
 
   .log {
-    min-height: 150px;
+    min-height: 120px;
     font-size: 0.82rem;
   }
 }
