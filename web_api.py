@@ -47,12 +47,20 @@ if MIRROR_MODE:
 @app.context_processor
 def inject_mirror_info():
     """Stellt Mirror-Info in allen Templates bereit."""
+    # Favicon-Versionierung für Cache-Busting
+    try:
+        favicon_stat = os.stat(os.path.join(app.root_path, 'static', 'favicon.ico'))
+        favicon_version = int(favicon_stat.st_mtime)
+    except:
+        favicon_version = int(time.time())
+    
     return {
         'mirror_mode': MIRROR_MODE,
         'mirror_source': MIRROR_SOURCE,
         'local_hostname': _socket.gethostname(),
         'local_ip': os.environ.get('PV_LOCAL_IP', '127.0.0.1'),
         'api_base_url': os.environ.get('PV_API_BASE_URL', ''),
+        'favicon_version': favicon_version,
     }
 
 @app.after_request
