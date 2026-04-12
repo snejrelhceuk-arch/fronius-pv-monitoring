@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <!-- Hintergrund: schwarz -->
-  <rect width="64" height="64" rx="10" fill="#000000"/>
+  <rect width="64" height="64" rx="14" fill="#000000"/>
 
   <!-- Sonnenstrahlen: 8 Strahlen, alle vom Mittelpunkt (32,20) ausgehend -->
   <g stroke="#ffd24d" stroke-width="2.5" stroke-linecap="round">
