@@ -82,7 +82,10 @@ def _registriere_erfolgreiche_wp_aktionen(aktionen: list[dict],
     erzeuge_aktionen() registriert (vor Ausführung). Race-Condition bei
     Actuator-Fehler → falsche Extern-Erkennung im nächsten Zyklus.
     """
-    from automation.engine.regeln.waermepumpe import _registriere_engine_wert
+    from automation.engine.regeln.waermepumpe import (
+        _registriere_engine_wert,
+        _registriere_absenkung_done,
+    )
     for aktion, ergebnis in zip(aktionen, ergebnisse):
         if not ergebnis.get('ok'):
             continue
@@ -91,6 +94,11 @@ def _registriere_erfolgreiche_wp_aktionen(aktionen: list[dict],
             _registriere_engine_wert('ww', aktion.get('wert'))
         elif kommando == 'set_heiz_soll':
             _registriere_engine_wert('heiz', aktion.get('wert'))
+
+        # Absenkung-Transitionen erst nach bestätigtem Schreib-Erfolg sperren
+        tag = aktion.get('meta_absenkung_tag')
+        if tag:
+            _registriere_absenkung_done(str(tag))
 
 
 class Engine:

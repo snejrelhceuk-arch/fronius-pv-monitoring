@@ -30,6 +30,8 @@ class OperatorOverrideProcessor:
         conn = sqlite3.connect(self.db_path, timeout=5.0)
         conn.execute('PRAGMA journal_mode=WAL')
         try:
+            obs_flags = self._read_obs_flags(conn)
+
             active_rows = conn.execute(
                 "SELECT id, action, params_json, created_at, respekt_s FROM operator_overrides "
                 "WHERE status='active' ORDER BY id ASC LIMIT ?",
@@ -85,6 +87,13 @@ class OperatorOverrideProcessor:
                     done += 1
                     continue
 
+                # Hold-Reapply nur bei Zustandsdrift, nicht blind jede Minute.
+                if not self._active_hold_needs_reapply(action, params, obs_flags):
+                    skipped += 1
+                    continue
+
+                self._mark_engine_origin_for_actions(action_plan)
+
                 results = actuator.ausfuehren_plan(action_plan)
                 ok = bool(results) and all(r.get('ok') for r in results)
                 if ok:
@@ -122,6 +131,8 @@ class OperatorOverrideProcessor:
                     skipped += 1
                     continue
 
+                self._mark_engine_origin_for_actions(action_plan)
+
                 results = actuator.ausfuehren_plan(action_plan)
                 ok = bool(results) and all(r.get('ok') for r in results)
                 if ok:
@@ -155,6 +166,50 @@ class OperatorOverrideProcessor:
             }
         finally:
             conn.close()
+
+    @staticmethod
+    def _read_obs_flags(conn: sqlite3.Connection) -> dict[str, bool]:
+        """Liest aktuelle Gerätezustände aus obs_state (RAM-DB)."""
+        try:
+            row = conn.execute(
+                "SELECT state_json FROM obs_state WHERE id=1"
+            ).fetchone()
+            if not row or not row[0]:
+                return {}
+            data = json.loads(row[0])
+            return {
+                'heizpatrone_aktiv': bool(data.get('heizpatrone_aktiv', False)),
+                'klima_aktiv': bool(data.get('klima_aktiv', False)),
+            }
+        except Exception:
+            return {}
+
+    @staticmethod
+    def _active_hold_needs_reapply(action: str, params: dict[str, Any],
+                                   obs_flags: dict[str, bool]) -> bool:
+        """True wenn ein aktiver Hold erneut ausgeführt werden muss."""
+        if action == 'hp_toggle':
+            state = params.get('state')
+            ist_an = obs_flags.get('heizpatrone_aktiv')
+            if state == 'on' and ist_an is True:
+                return False
+            if state == 'off' and ist_an is False:
+                return False
+        # Für andere Actions konservativ: Reapply erlaubt.
+        return True
+
+    @staticmethod
+    def _mark_engine_origin_for_actions(action_plan: list[dict[str, Any]]) -> None:
+        """Brücke für Extern-Erkennung: Klima-EIN aus Override als Engine markieren."""
+        try:
+            from automation.engine.regeln.geraete import registriere_klima_engine_ein
+        except Exception:
+            return
+
+        for action in action_plan:
+            if action.get('aktor') == 'fritzdect' and action.get('kommando') == 'klima_ein':
+                registriere_klima_engine_ein()
+                break
 
     @staticmethod
     def _remaining_respekt_s(created_at: str, respekt_s: int) -> int:
