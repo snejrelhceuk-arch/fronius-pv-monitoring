@@ -27,6 +27,30 @@ from automation.engine.schaltlog import logge_extern
 
 LOG = logging.getLogger('engine')
 
+# Override-Bridge: Steuerbox-Klima-Aktionen als engine-initiiert markieren,
+# damit die Extern-Erkennung keinen falschen OFF->ON Extern-Event loggt.
+_klima_engine_ein_ts: float = 0.0
+
+
+def registriere_klima_engine_ein() -> None:
+    """Markiere eine engine-initiierte Klima-Einschaltung.
+
+    Wird sowohl von RegelKlimaanlage als auch vom Override-Processor genutzt.
+    """
+    global _klima_engine_ein_ts
+    _klima_engine_ein_ts = time.time()
+
+
+def klima_engine_ein_kuerzlich(timeout_s: float = 180.0) -> bool:
+    """True wenn kürzlich ein engine-initiiertes Klima-EIN markiert wurde."""
+    global _klima_engine_ein_ts
+    if _klima_engine_ein_ts <= 0:
+        return False
+    if (time.time() - _klima_engine_ein_ts) < timeout_s:
+        return True
+    _klima_engine_ein_ts = 0.0  # Remanenz sauber abbauen
+    return False
+
 
 # ═════════════════════════════════════════════════════════════
 # WATTPILOT BATTERIESCHUTZ (P1 — Sicherheit, fast)
@@ -1392,7 +1416,8 @@ class RegelKlimaanlage(RegelHeizpatrone):
                 and self._klima_letzter_zustand is not None
                 and not self._klima_letzter_zustand):
             # War das die Engine? (klima_ein innerhalb 180s erzeugt)
-            if (time.time() - self._engine_klima_ein_ts) < 180:
+            if ((time.time() - self._engine_klima_ein_ts) < 180
+                    or klima_engine_ein_kuerzlich(180.0)):
                 self._engine_klima_ein_ts = 0  # verbraucht
                 LOG.debug('Klima EIN: Engine-initiiert (erkannt)')
             else:
@@ -1559,6 +1584,7 @@ class RegelKlimaanlage(RegelHeizpatrone):
         if soll_laufen and not ist_an:
             # Engine-Einschaltung markieren (für Extern-Erkennung im nächsten Zyklus)
             self._engine_klima_ein_ts = time.time()
+            registriere_klima_engine_ein()
             if self._ist_vor_sunrise(obs):
                 temp_pre = float(get_param(matrix, self.regelkreis, 'initial_temp_c', 15))
                 grund = (f'Klima EIN: Vor Sunrise, Forecast gut und Temp >= {temp_pre:.1f}°C')

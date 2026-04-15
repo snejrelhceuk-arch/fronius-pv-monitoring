@@ -34,8 +34,19 @@ LOG = logging.getLogger('engine')
 _verschoben = {
     'ww_aktiv': False,
     'ww_seit': None,
+    'ww_letzte_ruecknahme': None,   # Cooldown: Zeitpunkt letzte Rücknahme
     'heiz_aktiv': False,
     'heiz_seit': None,
+    'heiz_letzte_ruecknahme': None,  # Cooldown: Zeitpunkt letzte Rücknahme
+}
+
+# ── WP-Laufzeit-Tracker (modul-global) ───────────────────────
+# Schützt Scroll-Kompressor vor Kurzzeittakten.
+# Verschiebungsregeln dürfen Sollwerte nicht ändern, solange die
+# WP weniger als 15 Minuten ununterbrochen läuft.
+# GILT NUR für Automations-Regeln, NICHT für Steuerbox-Overrides.
+_wp_laufzeit = {
+    'aktiv_seit': None,   # datetime: wann WP zuletzt aktiv wurde
 }
 
 # ── Extern-Respekt-Tracker (modul-global) ────────────────────
@@ -116,6 +127,62 @@ def reset_wp_extern_tracking():
         _wp_extern[key] = None
 
 
+def _aktualisiere_wp_laufzeit(obs: ObsState) -> None:
+    """WP-Laufzeit-Tracker aktualisieren anhand obs.wp_active.
+
+    Wird von den Verschiebungsregeln in bewerte() aufgerufen.
+    """
+    if obs.wp_active:
+        if _wp_laufzeit['aktiv_seit'] is None:
+            _wp_laufzeit['aktiv_seit'] = datetime.now()
+    else:
+        _wp_laufzeit['aktiv_seit'] = None
+
+
+def _wp_laeuft_kuerzer_als(min_minuten: float) -> bool:
+    """True wenn WP gerade läuft, aber kürzer als min_minuten.
+
+    Schützt den Scroll-Kompressor vor Kurzzeittakten.
+    Verschiebungsregeln dürfen nur umschalten, wenn die WP
+    mindestens min_minuten ununterbrochen gelaufen ist (oder aus ist).
+    """
+    seit = _wp_laufzeit['aktiv_seit']
+    if seit is None:
+        return False  # WP läuft nicht → kein Schutz nötig
+    lauf_min = (datetime.now() - seit).total_seconds() / 60.0
+    return lauf_min < min_minuten
+
+
+def _verschiebung_cooldown_aktiv(prefix: str, cooldown_s: float) -> bool:
+    """True wenn seit letzter Rücknahme weniger als cooldown_s vergangen.
+
+    Verhindert Oszillation: Nach jeder Rücknahme muss die Verschiebung
+    mindestens cooldown_s warten, bevor sie erneut aktiviert werden darf.
+    """
+    key = f'{prefix}_letzte_ruecknahme'
+    letzte = _verschoben.get(key)
+    if letzte is None:
+        return False
+    alter_s = (datetime.now() - letzte).total_seconds()
+    if alter_s < cooldown_s:
+        LOG.debug(f"{prefix.upper()}-Verschiebung: Cooldown aktiv "
+                  f"(noch {cooldown_s - alter_s:.0f}s bis Reaktivierung)")
+        return True
+    return False
+
+
+# ── Absenkung: Einmal-pro-Tag-Tracker (date pro Transition) ──
+_absenkung_done: dict[str, object] = {}   # key → date
+
+
+def _registriere_absenkung_done(tag: str) -> None:
+    """Markiert eine Absenkungs-Transition als erledigt (heutiges Datum).
+
+    Wird nur nach bestätigtem Actuator-Erfolg aufgerufen.
+    """
+    _absenkung_done[tag] = datetime.now().date()
+
+
 def _ist_im_zeitfenster(start_h: float, ende_h: float) -> bool:
     """True wenn aktuelle Uhrzeit im (ggf. über-Mitternacht) Fenster liegt."""
     now_h = datetime.now().hour + datetime.now().minute / 60.0
@@ -131,9 +198,7 @@ class RegelWwAbsenkung(Regel):
       23:00–03:00  →  Nacht-Soll = standard - absenkung
       03:00–23:00  →  Tag-Soll   = standard
 
-        Schutz:
-            - Schreibt nur bei Abweichung (Soll ≠ aktueller WW-Soll)
-            - Deaktivierbar via param_matrix (aktiv: false)
+    Schutz: Jede Transition 1×/Tag; deaktivierbar via param_matrix.
     """
 
     name = 'ww_absenkung'
@@ -163,23 +228,23 @@ class RegelWwAbsenkung(Regel):
         if _verschoben['ww_aktiv']:
             return 0
 
-        ziel = self._ziel_temp(matrix)
-        aktuell = obs.wp_ww_soll_c
-
-        # Kein aktueller Wert → nicht eingreifen
-        if aktuell is None:
+        # WW-Boost hat Vorrang → Absenkung darf nicht gegen Boost arbeiten
+        if _boost['ww_aktiv']:
             return 0
 
-        # Bereits korrekt? (exakter Vergleich — beide Werte ganzzahlig)
+        tag = 'ww_nacht' if self._ist_nachtzeit(matrix) else 'ww_tag'
+        if _absenkung_done.get(tag) == datetime.now().date():
+            return 0
+
+        ziel = self._ziel_temp(matrix)
+        aktuell = obs.wp_ww_soll_c
+        if aktuell is None:
+            return 0
         if int(aktuell) == ziel:
+            _registriere_absenkung_done(tag)
             _registriere_engine_wert('ww', ziel)
             return 0
 
-        # Extern-Respekt: Wert wurde extern geändert → Toleranzzeit abwarten
-        if _prüfe_extern_respekt('ww', int(aktuell), matrix, self.regelkreis):
-            return 0
-
-        # Änderung nötig
         return get_score_gewicht(matrix, self.regelkreis)
 
     def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
@@ -191,14 +256,14 @@ class RegelWwAbsenkung(Regel):
         standard = get_param(matrix, self.regelkreis, 'standard_temp_c', 57)
         absenkung = get_param(matrix, self.regelkreis, 'absenkung_k', 5)
 
-        # K2-Fix: _registriere_engine_wert() wird NICHT hier aufgerufen,
-        # sondern erst in engine.py nach Actuator-Erfolg (ok=True).
+        tag = 'ww_nacht' if ist_nacht else 'ww_tag'
 
         return [{
             'tier': 2,
             'aktor': 'waermepumpe',
             'kommando': 'set_ww_soll',
             'wert': ziel,
+            'meta_absenkung_tag': tag,
             'grund': (f'WW {phase}: {aktuell}°C → {ziel}°C '
                       f'(Standard {standard}°C, Absenkung {absenkung}K)'),
         }]
@@ -239,8 +304,6 @@ class RegelHeizAbsenkung(Regel):
             return 0
 
         # FBH-Heizbedarf hat Vorrang vor Tagwert-Wiederherstellung.
-        # Ausnahme "Heizperiode verschieben" ist separat ueber
-        # _verschoben['heiz_aktiv'] modelliert und wird unten behandelt.
         if _heizbedarf['aktiv']:
             return 0
 
@@ -252,17 +315,17 @@ class RegelHeizAbsenkung(Regel):
         if _pflichtlauf['boost_aktiv']:
             return 0
 
+        tag = 'heiz_nacht' if self._ist_absenkzeit(matrix) else 'heiz_tag'
+        if _absenkung_done.get(tag) == datetime.now().date():
+            return 0
+
         ziel = self._ziel_temp(matrix)
         aktuell = obs.wp_heiz_soll_c
-
         if aktuell is None:
             return 0
         if int(aktuell) == ziel:
+            _registriere_absenkung_done(tag)
             _registriere_engine_wert('heiz', ziel)
-            return 0
-
-        # Extern-Respekt: Wert wurde extern geändert → Toleranzzeit abwarten
-        if _prüfe_extern_respekt('heiz', int(aktuell), matrix, self.regelkreis):
             return 0
 
         return get_score_gewicht(matrix, self.regelkreis)
@@ -276,14 +339,14 @@ class RegelHeizAbsenkung(Regel):
         standard = get_param(matrix, self.regelkreis, 'standard_temp_c', 37)
         absenkung = get_param(matrix, self.regelkreis, 'absenkung_k', 2)
 
-        # K2-Fix: _registriere_engine_wert() wird NICHT hier aufgerufen,
-        # sondern erst in engine.py nach Actuator-Erfolg (ok=True).
+        tag = 'heiz_nacht' if ist_absenkung else 'heiz_tag'
 
         return [{
             'tier': 2,
             'aktor': 'waermepumpe',
             'kommando': 'set_heiz_soll',
             'wert': ziel,
+            'meta_absenkung_tag': tag,
             'grund': (f'Heiz-Soll {phase}: {aktuell}°C → {ziel}°C '
                       f'(Standard {standard}°C, Absenkung {absenkung}K)'),
         }]
@@ -398,14 +461,27 @@ class RegelWwVerschiebung(Regel):
             _verschoben['ww_aktiv'] = False
             return 0
 
+        # WP-Laufzeit-Tracker aktualisieren
+        _aktualisiere_wp_laufzeit(obs)
+
         verschiebung_temp = self._verschiebung_temp(matrix)
         aktuell = obs.wp_ww_soll_c
+
+        # Laufzeitschutz-Parameter (konfigurierbar)
+        min_lauf_min = get_param(matrix, self.regelkreis, 'wp_min_lauf_min', 15)
+        cooldown_s = get_param(matrix, self.regelkreis, 'cooldown_nach_ruecknahme_s', 3600)
 
         if _verschoben['ww_aktiv']:
             # Verschiebung läuft — prüfe Rücknahme
             if self._soll_zuruecknehmen(obs, matrix):
+                # Kompressorschutz: Nicht umschalten während WP < 15min läuft
+                if _wp_laeuft_kuerzer_als(min_lauf_min):
+                    LOG.info(f"WW-Verschiebung: Rücknahme blockiert — "
+                             f"WP-Kompressorschutz ({min_lauf_min} min Mindestlauf)")
+                    return 0
                 _verschoben['ww_aktiv'] = False
                 _verschoben['ww_seit'] = None
+                _verschoben['ww_letzte_ruecknahme'] = datetime.now()
                 LOG.info("WW-Verschiebung: Rücknahme → Standard wiederherstellen")
                 standard = self._standard_temp(matrix)
                 if aktuell is not None and int(aktuell) != standard:
@@ -418,6 +494,14 @@ class RegelWwVerschiebung(Regel):
         else:
             # Nicht verschoben — prüfe Aktivierung
             if self._soll_verschieben(obs, matrix):
+                # Cooldown: Mindestens 1h seit letzter Rücknahme
+                if _verschiebung_cooldown_aktiv('ww', cooldown_s):
+                    return 0
+                # Kompressorschutz: Nicht umschalten während WP < 15min läuft
+                if _wp_laeuft_kuerzer_als(min_lauf_min):
+                    LOG.info(f"WW-Verschiebung: Aktivierung blockiert — "
+                             f"WP-Kompressorschutz ({min_lauf_min} min Mindestlauf)")
+                    return 0
                 _verschoben['ww_aktiv'] = True
                 _verschoben['ww_seit'] = datetime.now()
                 LOG.info(f"WW-Verschiebung: Aktiviert "
@@ -539,13 +623,26 @@ class RegelHeizVerschiebung(Regel):
             _verschoben['heiz_aktiv'] = False
             return 0
 
+        # WP-Laufzeit-Tracker aktualisieren (idempotent, WW hat ggf. schon)
+        _aktualisiere_wp_laufzeit(obs)
+
         verschiebung_temp = self._verschiebung_temp(matrix)
         aktuell = obs.wp_heiz_soll_c
 
+        # Laufzeitschutz-Parameter (konfigurierbar)
+        min_lauf_min = get_param(matrix, self.regelkreis, 'wp_min_lauf_min', 15)
+        cooldown_s = get_param(matrix, self.regelkreis, 'cooldown_nach_ruecknahme_s', 3600)
+
         if _verschoben['heiz_aktiv']:
             if self._soll_zuruecknehmen(obs, matrix):
+                # Kompressorschutz: Nicht umschalten während WP < 15min läuft
+                if _wp_laeuft_kuerzer_als(min_lauf_min):
+                    LOG.info(f"Heiz-Verschiebung: Rücknahme blockiert — "
+                             f"WP-Kompressorschutz ({min_lauf_min} min Mindestlauf)")
+                    return 0
                 _verschoben['heiz_aktiv'] = False
                 _verschoben['heiz_seit'] = None
+                _verschoben['heiz_letzte_ruecknahme'] = datetime.now()
                 LOG.info("Heiz-Verschiebung: Rücknahme → Standard wiederherstellen")
                 standard = self._standard_temp(matrix)
                 if aktuell is not None and int(aktuell) != standard:
@@ -556,6 +653,14 @@ class RegelHeizVerschiebung(Regel):
             return 0
         else:
             if self._soll_verschieben(obs, matrix):
+                # Cooldown: Mindestens 1h seit letzter Rücknahme
+                if _verschiebung_cooldown_aktiv('heiz', cooldown_s):
+                    return 0
+                # Kompressorschutz: Nicht umschalten während WP < 15min läuft
+                if _wp_laeuft_kuerzer_als(min_lauf_min):
+                    LOG.info(f"Heiz-Verschiebung: Aktivierung blockiert — "
+                             f"WP-Kompressorschutz ({min_lauf_min} min Mindestlauf)")
+                    return 0
                 _verschoben['heiz_aktiv'] = True
                 _verschoben['heiz_seit'] = datetime.now()
                 LOG.info(f"Heiz-Verschiebung: Aktiviert "
@@ -598,6 +703,7 @@ class RegelHeizVerschiebung(Regel):
 _boost = {
     'ww_aktiv': False,
     'ww_seit': None,
+    'ww_letzte_ruecknahme': None,
 }
 
 
@@ -705,12 +811,20 @@ class RegelWwBoost(Regel):
             _boost['ww_aktiv'] = False
             return 0
 
+        _aktualisiere_wp_laufzeit(obs)
         aktuell = obs.wp_ww_soll_c
+        min_lauf_min = get_param(matrix, self.regelkreis, 'wp_min_lauf_min', 15)
+        cooldown_s = get_param(matrix, self.regelkreis, 'cooldown_nach_ruecknahme_s', 3600)
 
         if _boost['ww_aktiv']:
             if self._soll_zuruecknehmen(obs, matrix):
+                if _wp_laeuft_kuerzer_als(min_lauf_min):
+                    LOG.info(f"WW-Boost: Rücknahme blockiert — "
+                             f"WP-Kompressorschutz ({min_lauf_min} min Mindestlauf)")
+                    return 0
                 _boost['ww_aktiv'] = False
                 _boost['ww_seit'] = None
+                _boost['ww_letzte_ruecknahme'] = datetime.now()
                 LOG.info("WW-Boost: Rücknahme → Standard wiederherstellen")
                 standard = self._standard_temp(matrix)
                 if aktuell is not None and int(aktuell) != standard:
@@ -723,6 +837,14 @@ class RegelWwBoost(Regel):
             return 0
         else:
             if self._soll_boosten(obs, matrix):
+                # Cooldown: 1h seit letzter Rücknahme
+                letzte = _boost.get('ww_letzte_ruecknahme')
+                if letzte and (datetime.now() - letzte).total_seconds() < cooldown_s:
+                    return 0
+                if _wp_laeuft_kuerzer_als(min_lauf_min):
+                    LOG.info(f"WW-Boost: Aktivierung blockiert — "
+                             f"WP-Kompressorschutz ({min_lauf_min} min Mindestlauf)")
+                    return 0
                 _boost['ww_aktiv'] = True
                 _boost['ww_seit'] = datetime.now()
                 LOG.info(f"WW-Boost: Aktiviert "
