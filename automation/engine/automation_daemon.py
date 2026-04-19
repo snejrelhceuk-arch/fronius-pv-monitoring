@@ -194,11 +194,11 @@ class AutomationDaemon:
     # ── HP-Startup-Schutz ───────────────────────────────────
 
     def _hp_startup_check(self):
-        """Prüfe HP-Status beim Start und schalte ggf. ab.
+        """Prüfe HP- und Klima-Status beim Start und schalte ggf. ab.
 
-        Wenn der Daemon nach einem Crash neu startet, kann die HP noch
-        ein sein (Fritz!DECT-Steckdose behält Zustand). Hier wird der
-        Status geprüft und bei Bedarf sofort abgeschaltet.
+        Wenn der Daemon nach einem Crash neu startet, können Fritz!DECT-
+        Steckdosen noch eingeschaltet sein. Hier wird der Status geprüft
+        und bei Bedarf sofort abgeschaltet.
         """
         try:
             from automation.engine.aktoren.aktor_fritzdect import (
@@ -206,39 +206,64 @@ class AutomationDaemon:
             )
             cfg = _load_fritz_config()
             host = cfg.get('fritz_ip', '192.168.178.1')
-            ain = cfg.get('ain', '')
             user = cfg.get('fritz_user', '')
             pw = cfg.get('fritz_password', '')
-            if not (ain and user and pw):
-                LOG.debug("HP-Startup-Check: Fritz!DECT nicht konfiguriert")
+            if not (user and pw):
+                LOG.debug("FritzDECT-Startup-Check: nicht konfiguriert")
                 return
 
             sid = _get_session_id(host, user, pw)
             if not sid:
-                LOG.warning("HP-Startup-Check: Fritz!Box nicht erreichbar")
+                LOG.warning("FritzDECT-Startup-Check: Fritz!Box nicht erreichbar")
                 return
 
-            info = _aha_device_info(host, ain, sid)
-            if not info:
-                LOG.warning("HP-Startup-Check: Gerät nicht gefunden")
-                return
+            # Geräte-Liste aus fritz_config.json
+            geraete = cfg.get('geraete', [])
+            # Prüfe HP und Klimaanlage
+            for geraet in geraete:
+                gid = geraet.get('id', '')
+                ain = geraet.get('ain', '')
+                if gid not in ('heizpatrone', 'klimaanlage') or not ain:
+                    continue
+                if not geraet.get('active', True):
+                    continue
 
-            if str(info.get('state', '0')).strip() == '1':
-                LOG.warning("HP-Startup-Check: HP war EIN beim Daemon-Start → schalte AUS")
-                if not self.dry_run:
-                    self._actuator.ausfuehren({
-                        'tier': 1,
-                        'aktor': 'fritzdect',
-                        'kommando': 'hp_aus',
-                        'grund': 'HP-Startup-Schutz: HP war EIN nach Daemon-(Neu-)Start',
-                    })
+                info = _aha_device_info(host, ain, sid)
+                if not info:
+                    LOG.warning(f"FritzDECT-Startup-Check: {gid} nicht gefunden (AIN {ain})")
+                    continue
+
+                if str(info.get('state', '0')).strip() == '1':
+                    kommando = 'hp_aus' if gid == 'heizpatrone' else 'klima_aus'
+                    LOG.warning(f"FritzDECT-Startup-Check: {gid} war EIN → schalte AUS")
+                    if not self.dry_run:
+                        self._actuator.ausfuehren({
+                            'tier': 1,
+                            'aktor': 'fritzdect',
+                            'kommando': kommando,
+                            'grund': f'Startup-Schutz: {gid} war EIN nach Daemon-(Neu-)Start',
+                        })
+                    else:
+                        LOG.info(f"  [DRY-RUN] Würde {gid} abschalten")
                 else:
-                    LOG.info("  [DRY-RUN] Würde HP abschalten")
-            else:
-                LOG.info("HP-Startup-Check: HP ist AUS — OK")
+                    LOG.info(f"FritzDECT-Startup-Check: {gid} ist AUS — OK")
+
+            # Fallback: Legacy ain-Feld (falls geraete[] nicht konfiguriert)
+            if not geraete:
+                ain = cfg.get('ain', '')
+                if ain:
+                    info = _aha_device_info(host, ain, sid)
+                    if info and str(info.get('state', '0')).strip() == '1':
+                        LOG.warning("HP-Startup-Check: HP war EIN → schalte AUS")
+                        if not self.dry_run:
+                            self._actuator.ausfuehren({
+                                'tier': 1, 'aktor': 'fritzdect',
+                                'kommando': 'hp_aus',
+                                'grund': 'HP-Startup-Schutz (Legacy-AIN)',
+                            })
 
         except Exception as e:
-            LOG.warning(f"HP-Startup-Check fehlgeschlagen: {e}")
+            LOG.warning(f"FritzDECT-Startup-Check fehlgeschlagen: {e}")
 
     # ── Tier-3 Forecast ─────────────────────────────────────
 
@@ -356,12 +381,22 @@ class AutomationDaemon:
                 except Exception as e:
                     LOG.error(f"Integrity-Alarm Fehler: {e}")
 
-        # 5. Matrix-Reload bei SIGHUP
-        if self._reload_requested:
+        # 5. Matrix-Reload bei SIGHUP oder Dateiänderung
+        reload_needed = self._reload_requested
+        if not reload_needed:
+            try:
+                current_mtime = os.path.getmtime(DEFAULT_MATRIX_PATH)
+                if current_mtime != self._matrix_mtime:
+                    reload_needed = True
+                    LOG.info("Parametermatrix geändert (mtime) → Auto-Reload")
+            except OSError:
+                pass
+        if reload_needed:
             self._reload_requested = False
             try:
                 self._engine.reload_matrix()
-                LOG.info("SIGHUP: Parametermatrix neu geladen")
+                self._matrix_mtime = os.path.getmtime(DEFAULT_MATRIX_PATH)
+                LOG.info("Parametermatrix neu geladen")
             except Exception as e:
                 LOG.error(f"Matrix-Reload Fehler: {e}")
 
@@ -529,7 +564,10 @@ def engine_vorausschau() -> list[dict]:
             RegelKomfortReset,
             RegelMorgenSocMin, RegelNachmittagSocMax, RegelZellausgleich,
             RegelForecastPlausi, RegelWattpilotBattSchutz,
-            RegelHeizpatrone,
+            RegelHeizpatrone, RegelKlimaanlage,
+            RegelWwVerschiebung, RegelHeizVerschiebung,
+            RegelWwBoost, RegelWpPflichtlauf,
+            RegelHeizBedarf, RegelWwAbsenkung, RegelHeizAbsenkung,
         )
 
         regeln = [
@@ -537,7 +575,11 @@ def engine_vorausschau() -> list[dict]:
             RegelKomfortReset(),
             RegelMorgenSocMin(), RegelNachmittagSocMax(), RegelZellausgleich(),
             RegelForecastPlausi(), RegelWattpilotBattSchutz(),
+            RegelKlimaanlage(),
             RegelHeizpatrone(),
+            RegelWwVerschiebung(), RegelHeizVerschiebung(),
+            RegelWwBoost(), RegelWpPflichtlauf(),
+            RegelHeizBedarf(), RegelWwAbsenkung(), RegelHeizAbsenkung(),
         ]
 
         vorschau = []

@@ -10,6 +10,14 @@ from pathlib import Path
 from flask import Flask, abort, jsonify, render_template, request
 
 import config
+from automation.engine.param_matrix import DEFAULT_MATRIX_PATH, lade_matrix
+from automation.engine.operator_overrides import (
+    WP_ABSENK_K,
+    WP_HEIZ_MAX_C,
+    WP_HEIZ_STD_C,
+    WP_WW_MAX_C,
+    WP_WW_STD_C,
+)
 from host_role import is_failover
 from steuerbox.intent_handler import get_audit, get_status, handle_intent
 from steuerbox.validators import check_allowlist
@@ -18,6 +26,73 @@ LOG = logging.getLogger('steuerbox')
 logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
+
+
+def _matrix_param(matrix: dict, regelkreis: str, param: str, fallback: float | int) -> float:
+    try:
+        return float(matrix['regelkreise'][regelkreis]['parameter'][param]['wert'])
+    except Exception:
+        return float(fallback)
+
+
+def _resolve_wp_mode_targets(mode: str, matrix: dict) -> tuple[int, int]:
+    heiz_std = int(_matrix_param(matrix, 'heiz_absenkung', 'standard_temp_c', WP_HEIZ_STD_C))
+    ww_std = int(_matrix_param(matrix, 'ww_absenkung', 'standard_temp_c', WP_WW_STD_C))
+
+    heiz_abs_k = int(_matrix_param(matrix, 'heiz_absenkung', 'absenkung_k', WP_ABSENK_K))
+    ww_abs_k = int(_matrix_param(matrix, 'ww_absenkung', 'absenkung_k', WP_ABSENK_K))
+
+    ww_boost = int(_matrix_param(matrix, 'ww_boost', 'boost_temp_c', WP_WW_MAX_C))
+
+    if mode == 'std':
+        return heiz_std, ww_std
+    if mode == 'min':
+        return max(18, heiz_std - heiz_abs_k), max(10, ww_std - ww_abs_k)
+    if mode == 'max':
+        return WP_HEIZ_MAX_C, ww_boost
+    raise ValueError(f'unsupported wp_mode: {mode}')
+
+
+def _load_matrix_safe() -> dict:
+    try:
+        return lade_matrix(DEFAULT_MATRIX_PATH)
+    except Exception as exc:
+        LOG.warning('Parametermatrix konnte nicht geladen werden: %s', exc)
+        return {'regelkreise': {}}
+
+
+def _build_wp_mode_meta() -> dict:
+    matrix = _load_matrix_safe()
+    states = {}
+    for mode in ('min', 'std', 'max'):
+        heiz_temp_c, ww_temp_c = _resolve_wp_mode_targets(mode, matrix)
+        states[mode] = {
+            'sent_params': {
+                'mode': mode,
+                'heiz_temp_c': heiz_temp_c,
+                'ww_temp_c': ww_temp_c,
+            },
+            'button_hint': f'Heiz {heiz_temp_c}\u00b0C / WW {ww_temp_c}\u00b0C',
+        }
+    return {
+        'action': 'wp_mode',
+        'states': states,
+    }
+
+
+def _resolve_effective_params(action: str, normalized_params: dict) -> dict:
+    if action != 'wp_mode':
+        return dict(normalized_params)
+
+    mode = str(normalized_params.get('mode') or '').strip().lower()
+    if mode not in {'min', 'std', 'max'}:
+        return dict(normalized_params)
+
+    heiz_temp_c, ww_temp_c = _resolve_wp_mode_targets(mode, _load_matrix_safe())
+    result = dict(normalized_params)
+    result['heiz_temp_c'] = heiz_temp_c
+    result['ww_temp_c'] = ww_temp_c
+    return result
 
 
 def _asset_version(relative_path: str) -> int:
@@ -89,6 +164,20 @@ def api_intent():
             'respekt_s': result.respekt_s,
             'respekt_remaining_s': result.respekt_remaining_s,
             'status': result.status,
+            'normalized_params': result.normalized_params,
+            'effective_params': _resolve_effective_params(action, result.normalized_params),
+        }
+    )
+
+
+@app.route('/api/ops/control-meta', methods=['GET'])
+def api_control_meta():
+    return jsonify(
+        {
+            'ok': True,
+            'controls': {
+                'wp_mode': _build_wp_mode_meta(),
+            },
         }
     )
 

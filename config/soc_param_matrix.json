@@ -1,7 +1,7 @@
 {
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
-  "_updated": "2026-04-11",
+  "_updated": "2026-04-13",
   "regelkreise": {
     "soc_extern": {
       "_doc": "Toleranz für extern geänderte SOC-Werte (z.B. manuell via Fronius App). Wenn SOC_MIN oder SOC_MAX außerhalb der Automation geändert werden, respektiert die Engine die Werte für die konfigurierte Dauer.",
@@ -1328,7 +1328,7 @@
           "beschreibung": "PV-Leistung unter diesem Wert: Verschiebung möglich (1–10 kW)"
         },
         "forecast_rest_min_kwh": {
-          "wert": 10,
+          "wert": 20,
           "bereich": [
             3,
             30
@@ -1426,7 +1426,7 @@
           "beschreibung": "PV-Leistung unter diesem Wert: Verschiebung möglich (1–10 kW)"
         },
         "forecast_rest_min_kwh": {
-          "wert": 10,
+          "wert": 20,
           "bereich": [
             3,
             30
@@ -1504,7 +1504,7 @@
           "beschreibung": "WW-Ist unter diesem Wert: noch Platz für Wärme"
         },
         "boost_temp_c": {
-          "wert": 62,
+          "wert": 60,
           "bereich": [
             58,
             65

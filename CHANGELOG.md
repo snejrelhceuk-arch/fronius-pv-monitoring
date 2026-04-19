@@ -5,6 +5,29 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## v1.3.1 — 2026-04-19
+
+### Automation — Deep Audit & Fixes (4 kritische Findings behoben)
+- **K-01 AktorBatterie Verifikation:** `verifiziere()` war TODO-Stub (immer `ok=True`). Jetzt Read-Back via `BatteryConfig.get_values()` mit Cache-Invalidierung und `BAT_M0_SOC_MIN/MAX`-Abgleich.
+- **K-02 engine_vorausschau() vervollständigt:** Web-API-Vorausschau hatte nur 8 von 17 Regeln. 9 fehlende Regeln (Klimaanlage, WP-Regeln) nachgetragen.
+- **K-03 Klimaanlage Startup-Check:** `_hp_startup_check()` prüft jetzt alle Fritz!DECT `geraete[]` (HP + Klimaanlage) bei Daemon-(Neu-)Start. Verhindert unkontrollierten Weiterlauf nach Crash.
+- **K-04 Matrix-Auto-Reload:** Engine prüft `os.path.getmtime()` der Parametermatrix in jedem Zyklus. pv-config-Änderungen wirken ohne SIGHUP/Restart (≤60s).
+
+### Dateilayout & Housekeeping
+- **14 Scripts nach `scripts/` verschoben:** `monitor_*.sh`, `stop_services.sh`, `restart_webserver.sh`, `check_single_instance.sh`, `logrotate.sh`.
+- `.gitignore`, `crontab`, `install_services.sh`, `install_shutdown_persist_service.sh` auf neue Pfade angepasst.
+
+### Dokumentation
+- **`doc/TODO.md` konsolidiert:** 5 verstreute TODO-Dateien (meta, automation, steuerbox, netzqualitaet) in eine zentrale Datei zusammengeführt.
+- **6 obsolete Docs gelöscht**, 3 archiviert (SYSTEM_AUDIT, SOC-VERIFY, ARBEITSFORTSCHRITT).
+- **`doc/DEEP_AUDIT_ENGINE_2026-06.md`:** Vollständiger statischer Audit-Report (17 Regeln, 4 Aktoren, Parametermatrix, Score-Hierarchie).
+- `SYSTEM_BRIEFING.md`, `GIT_WORKFLOW.md`, `VEROEFFENTLICHUNGSRICHTLINIE.md`, `KI_BEITRAGSANALYSE.md` aktualisiert.
+
+### Projekt
+- Version: 1.3.0 → 1.3.1
+
+---
+
 ## [Unreleased]
 
 ### Features

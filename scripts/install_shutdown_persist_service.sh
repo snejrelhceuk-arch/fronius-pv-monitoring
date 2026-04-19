@@ -4,7 +4,7 @@
 set -euo pipefail
 
 BASE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-UNIT_SRC="${BASE_DIR}/pv-shutdown-persist.service"
+UNIT_SRC="${BASE_DIR}/config/systemd/pv-shutdown-persist.service"
 UNIT_DST="/etc/systemd/system/pv-shutdown-persist.service"
 
 if [[ ! -f "$UNIT_SRC" ]]; then

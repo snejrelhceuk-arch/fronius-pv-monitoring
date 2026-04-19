@@ -408,6 +408,7 @@ class SolarForecast:
         self.api = OpenMeteoClient(self.cache)
         self._ghi_factor = self._load_calibration()
         self._forecast_data = None
+        self._forecast_fetched_at = 0  # Unix-TS des letzten API-Fetch
 
     # ─── Kalibrierung ──────────────────────────────────────
 
@@ -615,13 +616,23 @@ class SolarForecast:
     # ─── Daten holen ───────────────────────────────────────
 
     def _ensure_forecast(self, days=7):
-        """Stelle sicher, dass Forecast-Daten geladen sind."""
-        if self._forecast_data is None:
+        """Stelle sicher, dass Forecast-Daten geladen und aktuell sind.
+
+        Invalidiert den In-Memory-Cache nach CACHE_TTL_FORECAST Sekunden,
+        damit die Worker-Prozesse nicht dauerhaft veraltete Daten verwenden.
+        """
+        age = time.time() - self._forecast_fetched_at
+        if self._forecast_data is None or age > CACHE_TTL_FORECAST:
             self._forecast_data = self.api.fetch_forecast(days)
+            self._forecast_fetched_at = time.time()
         return self._forecast_data
 
     def _day_index(self, target_date=None):
-        """Finde Index für Zieldatum in den daily-Daten."""
+        """Finde Index für Zieldatum in den daily-Daten.
+
+        Falls das Datum nicht enthalten ist, wird einmalig ein Re-Fetch
+        erzwungen (Cache-Miss-Recovery), bevor None zurueckgegeben wird.
+        """
         data = self._ensure_forecast()
         if not data or 'daily' not in data:
             return None, None
@@ -637,7 +648,17 @@ class SolarForecast:
             idx = daily['time'].index(target_str)
             return daily, idx
         except ValueError:
-            return daily, None
+            # Datum nicht in gecachten Daten — einmal re-fetchen
+            self._forecast_data = None
+            data = self._ensure_forecast()
+            if not data or 'daily' not in data:
+                return None, None
+            daily = data['daily']
+            try:
+                idx = daily['time'].index(target_str)
+                return daily, idx
+            except ValueError:
+                return daily, None
 
     # ─── Hochlevel-Methoden ────────────────────────────────
 

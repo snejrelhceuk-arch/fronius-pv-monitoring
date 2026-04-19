@@ -46,6 +46,7 @@ class IntentResult:
     respekt_s: int
     respekt_remaining_s: int
     status: str
+    normalized_params: dict[str, Any]
 
 
 def _utc_now_iso() -> str:
@@ -164,6 +165,7 @@ def handle_intent(action: str, params: dict[str, Any], client_ip: str, respekt_s
             respekt_s=effektive_respekt_s,
             respekt_remaining_s=0 if neutral_release else effektive_respekt_s,
             status='released' if neutral_release else 'accepted',
+            normalized_params=normalized,
         )
     except Exception as exc:
         _write_audit(

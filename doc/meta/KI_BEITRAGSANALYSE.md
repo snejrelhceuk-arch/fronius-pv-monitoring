@@ -1,6 +1,6 @@
 # KI-Beitragsanalyse (gepflegte Fassung)
 
-Stand: 11.04.2026
+Stand: 19.04.2026
 Geltungsbereich: gesamtes Repository (tracked files)
 Status: aktiv gepflegt
 
@@ -16,27 +16,27 @@ langere Interpretation bleiben im Archivdokument:
 
 ---
 
-## 2) Aktueller Mengenstand (11.04.2026)
+## 2) Aktueller Mengenstand (19.04.2026)
 
 | Kennzahl | Wert |
 |---|---:|
-| Tracked Dateien gesamt | 241 |
+| Tracked Dateien gesamt | 246 |
 | Code/Config-Dateien | 170 |
-| Code/Config-Zeilen | 56.729 |
-| Doku-Dateien | 57 |
-| Doku-Zeilen | 10.663 |
+| Code/Config-Zeilen | 56.844 |
+| Doku-Dateien | 58 |
+| Doku-Zeilen | 10.105 |
 
 Top-Sprachen nach Zeilen:
 
 | Sprache | Dateien | Zeilen |
 |---|---:|---:|
-| Python | 100 | 38.869 |
-| HTML | 14 | 9.504 |
-| JSON | 10 | 3.605 |
-| Shell | 31 | 2.659 |
+| Python | 100 | 39.442 |
+| HTML | 14 | 9.559 |
+| JSON | 10 | 3.601 |
+| Shell | 31 | 2.059 |
 | SQL | 8 | 969 |
-| CSS | 3 | 850 |
-| JavaScript | 1 | 221 |
+| CSS | 3 | 896 |
+| JavaScript | 1 | 272 |
 
 ---
 
@@ -128,4 +128,4 @@ git ls-files | grep -E '\.(md|rst|txt)$' | xargs -r wc -l | tail -n 1
 
 - `doc/archive/LEISTUNGSANTEILE_KI_BEDIENER.md`
 - `README.md`
-- Live-Mengenscan vom 11.04.2026
+- Live-Mengenscan vom 19.04.2026

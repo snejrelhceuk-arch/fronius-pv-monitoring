@@ -11,6 +11,8 @@ Siehe: doc/WATTPILOT_ARCHITECTURE.md, automation/STRATEGIEN.md §2.6
 from __future__ import annotations
 
 import logging
+import json
+import sqlite3
 import time
 from collections import deque
 from datetime import datetime
@@ -26,6 +28,7 @@ from automation.engine.param_matrix import (
 from automation.engine.schaltlog import logge_extern
 
 LOG = logging.getLogger('engine')
+RAM_DB_PATH = '/dev/shm/automation_obs.db'
 
 # Override-Bridge: Steuerbox-Klima-Aktionen als engine-initiiert markieren,
 # damit die Extern-Erkennung keinen falschen OFF->ON Extern-Event loggt.
@@ -1381,11 +1384,11 @@ class RegelKlimaanlage(RegelHeizpatrone):
     # Eigenstaendige Thermoschutzregel fuer das Heizhaus via Fritz!DECT.
     #
     # Extern-Erkennung:
-    #   Identisches Muster wie HP: Zustandsübergangs-Erkennung (OFF→ON ohne
-    #   Engine-Beteiligung). Während extern_respekt_s gelten NUR harte
-    #   Sicherheitskriterien (Sunset+SOC); Temperatur-AUS wird pausiert.
-    #   Kein DB-basierter Override-Check nötig (Override-Processor setzt Klima-
-    #   Overrides sofort auf 'done'; Hold ist deshalb architekturfremd).
+    #   Identisches Muster wie HP: Zustandsübergangs-Erkennung (OFF↔ON ohne
+    #   Engine-Beteiligung). Während extern_respekt_s wird der erkannte Zustand
+    #   (ON oder OFF) aktiv gehalten.
+    #   Zusätzlich wird ein aktiver Steuerbox-Override-Hold (status=active)
+    #   für klima_toggle ON/OFF symmetrisch respektiert.
 
     name = 'klimaanlage'
     regelkreis = 'klimaanlage'
@@ -1397,15 +1400,17 @@ class RegelKlimaanlage(RegelHeizpatrone):
         # Klima-spezifische Extern-Erkennung (getrennt von HP-State)
         self._klima_letzter_zustand: Optional[bool] = None
         self._klima_extern_ein_ts: float = 0
+        self._klima_extern_aus_ts: float = 0
         self._engine_klima_ein_ts: float = 0
+        self._engine_klima_aus_ts: float = 0
 
     # ── Extern-Erkennung ─────────────────────────────────────
 
     def _aktualisiere_klima_extern(self, obs: ObsState, matrix: dict) -> bool:
         """Zustandsübergangs-basierte Extern-Erkennung. Muss JEDEN Zyklus laufen.
 
-        Erkennt ob Klima AUS→EIN ging ohne dass die Engine es veranlasst hat.
-        Returns: True wenn ein externer Override aktuell respektiert wird.
+        Erkennt ob Klima OFF↔ON ging ohne dass die Engine es veranlasst hat.
+        Returns: True wenn ein externer Hold (ON/OFF) aktuell aktiv ist.
         """
         extern_respekt = float(get_param(
             matrix, self.regelkreis, 'extern_respekt_s', 1800
@@ -1422,29 +1427,83 @@ class RegelKlimaanlage(RegelHeizpatrone):
                 LOG.debug('Klima EIN: Engine-initiiert (erkannt)')
             else:
                 self._klima_extern_ein_ts = time.time()
+                self._klima_extern_aus_ts = 0
                 LOG.info('Klima extern eingeschaltet erkannt → Respekt %ds aktiv',
                          int(extern_respekt))
                 logge_extern('fritzdect', 'Klima extern EIN',
                              'Manuell eingeschaltet (nicht durch Engine)')
 
-        # ── ON→OFF Transition: Extern-Hold beenden ──
+        # ── ON→OFF Transition ──
         if (not obs.klima_aktiv
                 and self._klima_letzter_zustand is not None
                 and self._klima_letzter_zustand):
-            if self._klima_extern_ein_ts > 0:
-                LOG.info('Klima extern AUS → Extern-Hold beendet')
+            if (time.time() - self._engine_klima_aus_ts) < 180:
+                self._engine_klima_aus_ts = 0
+                LOG.debug('Klima AUS: Engine-initiiert (erkannt)')
+            else:
+                self._klima_extern_aus_ts = time.time()
+                self._klima_extern_ein_ts = 0
+                LOG.info('Klima extern ausgeschaltet erkannt → Respekt %ds aktiv',
+                         int(extern_respekt))
                 logge_extern('fritzdect', 'Klima extern AUS',
-                             'Ausgeschaltet während Extern-Hold')
-            self._klima_extern_ein_ts = 0
-
-        # Klima nicht aktiv → Timer immer auf 0
-        if not obs.klima_aktiv:
-            self._klima_extern_ein_ts = 0
+                             'Manuell ausgeschaltet (nicht durch Engine)')
 
         self._klima_letzter_zustand = obs.klima_aktiv
+        now = time.time()
+        return (
+            (self._klima_extern_ein_ts > 0 and (now - self._klima_extern_ein_ts) < extern_respekt)
+            or
+            (self._klima_extern_aus_ts > 0 and (now - self._klima_extern_aus_ts) < extern_respekt)
+        )
 
-        return (self._klima_extern_ein_ts > 0
-                and (time.time() - self._klima_extern_ein_ts) < extern_respekt)
+    def _aktiver_klima_extern_hold(self, matrix: dict) -> tuple[str | None, int]:
+        extern_respekt = float(get_param(
+            matrix, self.regelkreis, 'extern_respekt_s', 1800
+        ))
+        now = time.time()
+
+        if self._klima_extern_ein_ts > 0:
+            verbleibend = int(extern_respekt - (now - self._klima_extern_ein_ts))
+            if verbleibend > 0:
+                return 'on', verbleibend
+            self._klima_extern_ein_ts = 0
+
+        if self._klima_extern_aus_ts > 0:
+            verbleibend = int(extern_respekt - (now - self._klima_extern_aus_ts))
+            if verbleibend > 0:
+                return 'off', verbleibend
+            self._klima_extern_aus_ts = 0
+
+        return None, 0
+
+    @staticmethod
+    def _aktiver_steuerbox_klima_hold() -> tuple[str | None, int]:
+        try:
+            conn = sqlite3.connect(RAM_DB_PATH, timeout=2.0)
+            row = conn.execute(
+                "SELECT params_json, created_at, respekt_s FROM operator_overrides "
+                "WHERE action='klima_toggle' AND status='active' "
+                "ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+            conn.close()
+        except Exception:
+            return None, 0
+
+        if not row:
+            return None, 0
+
+        try:
+            params = json.loads(row[0] or '{}')
+            state = str(params.get('state') or '').strip().lower()
+            if state not in {'on', 'off'}:
+                return None, 0
+            created_at = datetime.fromisoformat(row[1])
+            remaining = int(created_at.timestamp() + int(row[2] or 0) - time.time())
+            if remaining <= 0:
+                return None, 0
+            return state, remaining
+        except Exception:
+            return None, 0
 
     # ── Hilfsfunktionen ──────────────────────────────────────
 
@@ -1533,17 +1592,32 @@ class RegelKlimaanlage(RegelHeizpatrone):
                 return int(basis_score * 2)
             return 0
 
-        # Extern: Engine greift nicht ein, nur harte Sicherheit (oben) gilt.
-        if ist_extern and obs.klima_aktiv:
-            extern_respekt = float(get_param(
-                matrix, self.regelkreis, 'extern_respekt_s', 1800
-            ))
-            verbleibend = max(0, int(
-                extern_respekt - (time.time() - self._klima_extern_ein_ts)
-            ))
-            LOG.debug('Klima extern → Autorität respektiert (%ds verbleibend)',
-                      verbleibend)
+        # Steuerbox-Hold (ON/OFF) hat Vorrang vor normaler Regelautomatik.
+        sb_state, sb_rem = self._aktiver_steuerbox_klima_hold()
+        if sb_state == 'on':
+            if not obs.klima_aktiv:
+                return int(basis_score * 2)
+            LOG.debug('Klima Steuerbox-Hold ON aktiv (%ds verbleibend)', sb_rem)
             return 0
+        if sb_state == 'off':
+            if obs.klima_aktiv:
+                return int(basis_score * 2)
+            LOG.debug('Klima Steuerbox-Hold OFF aktiv (%ds verbleibend)', sb_rem)
+            return 0
+
+        # Extern-Hold (ON/OFF) symmetrisch respektieren.
+        if ist_extern:
+            ext_state, ext_rem = self._aktiver_klima_extern_hold(matrix)
+            if ext_state == 'on':
+                if not obs.klima_aktiv:
+                    return int(basis_score * 2)
+                LOG.debug('Klima extern-Hold ON aktiv (%ds verbleibend)', ext_rem)
+                return 0
+            if ext_state == 'off':
+                if obs.klima_aktiv:
+                    return int(basis_score * 2)
+                LOG.debug('Klima extern-Hold OFF aktiv (%ds verbleibend)', ext_rem)
+                return 0
 
         soll_laufen = self._soll_klima_laufen(obs, matrix)
         ist_an = bool(obs.klima_aktiv)
@@ -1561,6 +1635,7 @@ class RegelKlimaanlage(RegelHeizpatrone):
         # Harte Sicherheit: Sunset+SOC — IMMER, auch bei extern.
         if self._sunset_soc_stop(obs, matrix):
             if obs.klima_aktiv:
+                self._engine_klima_aus_ts = time.time()
                 return [{
                     'tier': 2,
                     'aktor': 'fritzdect',
@@ -1569,13 +1644,52 @@ class RegelKlimaanlage(RegelHeizpatrone):
                 }]
             return []
 
-        # Extern: Engine greift nicht ein (harte Sicherheit schon oben abgefangen).
-        extern_respekt = float(get_param(
-            matrix, self.regelkreis, 'extern_respekt_s', 1800
-        ))
-        ist_extern = (self._klima_extern_ein_ts > 0
-                      and (time.time() - self._klima_extern_ein_ts) < extern_respekt)
-        if ist_extern:
+        # Steuerbox-Hold (ON/OFF) erzwingen.
+        sb_state, sb_rem = self._aktiver_steuerbox_klima_hold()
+        if sb_state == 'on':
+            if not obs.klima_aktiv:
+                self._engine_klima_ein_ts = time.time()
+                registriere_klima_engine_ein()
+                return [{
+                    'tier': 2,
+                    'aktor': 'fritzdect',
+                    'kommando': 'klima_ein',
+                    'grund': f'Klima EIN: Steuerbox-Respekt-Hold aktiv ({sb_rem}s verbleibend)',
+                }]
+            return []
+        if sb_state == 'off':
+            if obs.klima_aktiv:
+                self._engine_klima_aus_ts = time.time()
+                return [{
+                    'tier': 2,
+                    'aktor': 'fritzdect',
+                    'kommando': 'klima_aus',
+                    'grund': f'Klima AUS: Steuerbox-Respekt-Hold aktiv ({sb_rem}s verbleibend)',
+                }]
+            return []
+
+        # Extern-Hold (ON/OFF) erzwingen.
+        ext_state, ext_rem = self._aktiver_klima_extern_hold(matrix)
+        if ext_state == 'on':
+            if not obs.klima_aktiv:
+                self._engine_klima_ein_ts = time.time()
+                registriere_klima_engine_ein()
+                return [{
+                    'tier': 2,
+                    'aktor': 'fritzdect',
+                    'kommando': 'klima_ein',
+                    'grund': f'Klima EIN: Extern-Respekt-Hold aktiv ({ext_rem}s verbleibend)',
+                }]
+            return []
+        if ext_state == 'off':
+            if obs.klima_aktiv:
+                self._engine_klima_aus_ts = time.time()
+                return [{
+                    'tier': 2,
+                    'aktor': 'fritzdect',
+                    'kommando': 'klima_aus',
+                    'grund': f'Klima AUS: Extern-Respekt-Hold aktiv ({ext_rem}s verbleibend)',
+                }]
             return []
 
         soll_laufen = self._soll_klima_laufen(obs, matrix)
@@ -1601,6 +1715,7 @@ class RegelKlimaanlage(RegelHeizpatrone):
             }]
 
         if (not soll_laufen) and ist_an:
+            self._engine_klima_aus_ts = time.time()
             temp_ist = self._get_temp_ist_c(obs, matrix)
             hyst_k = float(get_param(matrix, self.regelkreis, 'temp_hysterese_k', 1.0))
             if not self._startzeit_erreicht(obs, matrix):
