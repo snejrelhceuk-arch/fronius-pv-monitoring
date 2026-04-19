@@ -217,18 +217,46 @@ class AktorBatterie(AktorBase):
 
         Returns:
             dict mit 'ok': bool, 'ist': <tatsächl. Wert>, 'soll': <Zielwert>
-
-        TODO W3: HTTP-API Read-Back implementieren für set_soc_min/set_soc_max.
-          → BatteryConfig.get_values() nach 0.5s Pause aufrufen und mit
-            aktion['wert'] vergleichen. Analog für set_soc_mode.
-          Modbus-basierte Verifikation (Rate-Limits) wurde 2026-03-07 entfernt
-          da GEN24 DC-DC-Wandler die Werte ignoriert.
         """
         kommando = aktion.get('kommando', '')
         wert = aktion.get('wert')
 
-        # Aktuell: Keine echte Verifikation — HTTP-API read-back ausstehend (W3)
-        return {'ok': True, 'grund': f'Keine Verifikation für {kommando} (TODO: W3 HTTP read-back)'}
+        # Mapping Kommando → Fronius-API-Schlüssel
+        param_key = {
+            'set_soc_min': 'BAT_M0_SOC_MIN',
+            'set_soc_max': 'BAT_M0_SOC_MAX',
+        }.get(kommando)
+
+        if not param_key:
+            # Kommandos ohne Read-Back (grid_charge, set_soc_mode)
+            return {'ok': True, 'grund': f'Keine Verifikation für {kommando}'}
+
+        try:
+            time.sleep(0.5)
+            api = self._get_http_api()
+            if not api:
+                return {'ok': False, 'grund': 'HTTP-API nicht verfügbar'}
+
+            # Cache invalidieren für frischen Read-Back
+            api._cache_time = 0
+            values = api.get_values()
+            ist = values.get(param_key)
+
+            if ist is None:
+                return {'ok': False, 'grund': f'{param_key} nicht in API-Antwort'}
+
+            # Toleranz: Integer-Vergleich (SOC-Werte sind ganzzahlig)
+            ok = int(ist) == int(wert)
+            if not ok:
+                LOG.warning(f"Verifikation {kommando}: SOLL={wert}, IST={ist}")
+            else:
+                LOG.debug(f"Verifikation {kommando}: OK (IST={ist})")
+
+            return {'ok': ok, 'ist': ist, 'soll': wert}
+
+        except Exception as e:
+            LOG.warning(f"Verifikation {kommando} fehlgeschlagen: {e}")
+            return {'ok': False, 'grund': str(e)}
 
     # ── Cleanup ──────────────────────────────────────────────
 

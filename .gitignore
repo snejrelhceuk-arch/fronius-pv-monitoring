@@ -92,9 +92,9 @@ doc/meta/TODO.md
 tools/PV_Anlagendokumentation.pdf
 
 # Systemd-Service-Dateien (enthalten host-spezifische Pfade)
-pv-automation.service
-pv-observer.service
-pv-wattpilot.service
-pv-steuerbox.service
-pv-shutdown-persist.service
+config/systemd/pv-automation.service
+config/systemd/pv-observer.service
+config/systemd/pv-wattpilot.service
+config/systemd/pv-steuerbox.service
+config/systemd/pv-shutdown-persist.service
 OLLI/

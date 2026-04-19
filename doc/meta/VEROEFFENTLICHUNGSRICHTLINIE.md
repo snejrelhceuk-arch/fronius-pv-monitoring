@@ -1,6 +1,6 @@
 # Veröffentlichungs- und Compliance-Richtlinie
 
-**Stand:** 22. Februar 2026  
+**Stand:** 19. April 2026  
 **Status:** Governance-Dokument  
 **Geltungsbereich:** Externe Veröffentlichung von Code, Doku, Screenshots, Daten und Beispielen aus dem Repo `pv-system`
 
@@ -86,8 +86,8 @@ Vor jedem öffentlichen Push/Release:
 ## 8. Abgrenzung zu technischer Architektur
 
 - **Technische Systemgrenzen (A/B/C/D):** `doc/system/ABCD_ROLLENMODELL.md`
-- **Betriebs- und Schutzregeln:** `doc/SCHUTZREGELN.md`
-- **Rollen/Failover-Betrieb:** `doc/DUAL_HOST_ARCHITECTURE.md`
+- **Betriebs- und Schutzregeln:** `doc/automation/SCHUTZREGELN.md`
+- **Rollen/Failover-Betrieb:** `doc/system/DUAL_HOST_ARCHITECTURE.md`
 - **Technische Publish-Absicherung:** `doc/system/PUBLISH_GUARD.md`
 - **Recht/Veröffentlichung/Compliance:** diese Datei
 

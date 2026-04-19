@@ -168,7 +168,7 @@ class OperatorOverrideProcessor:
             conn.close()
 
     @staticmethod
-    def _read_obs_flags(conn: sqlite3.Connection) -> dict[str, bool]:
+    def _read_obs_flags(conn: sqlite3.Connection) -> dict[str, bool | None]:
         """Liest aktuelle Gerätezustände aus obs_state (RAM-DB)."""
         try:
             row = conn.execute(
@@ -178,19 +178,31 @@ class OperatorOverrideProcessor:
                 return {}
             data = json.loads(row[0])
             return {
-                'heizpatrone_aktiv': bool(data.get('heizpatrone_aktiv', False)),
-                'klima_aktiv': bool(data.get('klima_aktiv', False)),
+                # Unknown bleibt None; nur bekannte Zustände dürfen Hold-Reapply triggern.
+                'heizpatrone_aktiv': bool(data['heizpatrone_aktiv']) if 'heizpatrone_aktiv' in data else None,
+                'klima_aktiv': bool(data['klima_aktiv']) if 'klima_aktiv' in data else None,
             }
         except Exception:
             return {}
 
     @staticmethod
     def _active_hold_needs_reapply(action: str, params: dict[str, Any],
-                                   obs_flags: dict[str, bool]) -> bool:
+                                   obs_flags: dict[str, bool | None]) -> bool:
         """True wenn ein aktiver Hold erneut ausgeführt werden muss."""
         if action == 'hp_toggle':
             state = params.get('state')
             ist_an = obs_flags.get('heizpatrone_aktiv')
+            if ist_an is None:
+                return False
+            if state == 'on' and ist_an is True:
+                return False
+            if state == 'off' and ist_an is False:
+                return False
+        if action == 'klima_toggle':
+            state = params.get('state')
+            ist_an = obs_flags.get('klima_aktiv')
+            if ist_an is None:
+                return False
             if state == 'on' and ist_an is True:
                 return False
             if state == 'off' and ist_an is False:
@@ -212,6 +224,35 @@ class OperatorOverrideProcessor:
                 break
 
     @staticmethod
+    def _matrix_param(matrix: dict[str, Any], regelkreis: str,
+                      param: str, fallback: float | int) -> float:
+        """Liest einen numerischen Parameter robust aus der Parametermatrix."""
+        try:
+            return float(matrix['regelkreise'][regelkreis]['parameter'][param]['wert'])
+        except Exception:
+            return float(fallback)
+
+    def _resolve_wp_mode_targets(self, mode: str, matrix: dict[str, Any]) -> tuple[int, int]:
+        """Leitet WP-Zielwerte aus Matrix-Regelkreisen ab (weniger Hardcode)."""
+        heiz_std = int(self._matrix_param(matrix, 'heiz_absenkung', 'standard_temp_c', WP_HEIZ_STD_C))
+        ww_std = int(self._matrix_param(matrix, 'ww_absenkung', 'standard_temp_c', WP_WW_STD_C))
+
+        heiz_abs_k = int(self._matrix_param(matrix, 'heiz_absenkung', 'absenkung_k', WP_ABSENK_K))
+        ww_abs_k = int(self._matrix_param(matrix, 'ww_absenkung', 'absenkung_k', WP_ABSENK_K))
+
+        ww_boost = int(self._matrix_param(matrix, 'ww_boost', 'boost_temp_c', WP_WW_MAX_C))
+
+        if mode == 'std':
+            return heiz_std, ww_std
+        if mode == 'min':
+            return max(18, heiz_std - heiz_abs_k), max(10, ww_std - ww_abs_k)
+        if mode == 'max':
+            # WW-Boost-Temperatur stammt aus Matrix; Heiz-Boost bleibt konservativ.
+            return WP_HEIZ_MAX_C, ww_boost
+
+        raise ValueError(f'Unsupported wp_mode: {mode}')
+
+    @staticmethod
     def _remaining_respekt_s(created_at: str, respekt_s: int) -> int:
         try:
             ts = datetime.fromisoformat(created_at)
@@ -224,9 +265,7 @@ class OperatorOverrideProcessor:
 
     @staticmethod
     def _uses_respekt_hold(action: str, params: dict[str, Any]) -> bool:
-        # Klima nutzt KEIN Hold — RegelKlimaanlage erkennt externes Schalten
-        # selbstständig über Zustandsübergänge (analog HP-Extern-Erkennung).
-        if action in {'hp_toggle', 'lueftung_toggle'}:
+        if action in {'hp_toggle', 'klima_toggle', 'lueftung_toggle'}:
             return params.get('state') in {'on', 'off'}
         return False
 
@@ -322,15 +361,11 @@ class OperatorOverrideProcessor:
             if mode == 'neutral':
                 return []
 
-            if mode == 'max':
-                heiz = WP_HEIZ_MAX_C
-                ww = WP_WW_MAX_C
-            elif mode == 'std':
-                heiz = WP_HEIZ_STD_C
-                ww = WP_WW_STD_C
-            elif mode == 'min':
-                heiz = max(18, WP_HEIZ_STD_C - WP_ABSENK_K)
-                ww = max(10, WP_WW_STD_C - WP_ABSENK_K)
+            if mode in {'max', 'std', 'min'}:
+                try:
+                    heiz, ww = self._resolve_wp_mode_targets(mode, matrix)
+                except Exception:
+                    return None
             else:
                 return None
 

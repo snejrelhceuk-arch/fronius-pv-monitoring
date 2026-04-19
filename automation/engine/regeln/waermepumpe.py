@@ -241,7 +241,11 @@ class RegelWwAbsenkung(Regel):
         if aktuell is None:
             return 0
         if int(aktuell) == ziel:
-            _registriere_absenkung_done(tag)
+            # Nur engine_wert registrieren, NICHT absenkung_done.
+            # done wird erst nach bestätigtem Actuator-Schreiberfolg gesetzt
+            # (Engine-Callback via meta_absenkung_tag). Sonst bewirkt der
+            # Mitternachts-Datumswechsel (aktuell==ziel vom Vortag) eine
+            # falsche done-Registrierung für den neuen Tag.
             _registriere_engine_wert('ww', ziel)
             return 0
 
@@ -324,7 +328,11 @@ class RegelHeizAbsenkung(Regel):
         if aktuell is None:
             return 0
         if int(aktuell) == ziel:
-            _registriere_absenkung_done(tag)
+            # Nur engine_wert registrieren, NICHT absenkung_done.
+            # done wird erst nach bestätigtem Actuator-Schreiberfolg gesetzt
+            # (Engine-Callback via meta_absenkung_tag). Sonst bewirkt der
+            # Mitternachts-Datumswechsel (aktuell==ziel vom Vortag) eine
+            # falsche done-Registrierung für den neuen Tag.
             _registriere_engine_wert('heiz', ziel)
             return 0
 
@@ -795,7 +803,7 @@ class RegelWwBoost(Regel):
 
     def _boost_temp(self, matrix: dict) -> int:
         """Boost-Zieltemperatur."""
-        return int(get_param(matrix, self.regelkreis, 'boost_temp_c', 62))
+        return int(get_param(matrix, self.regelkreis, 'boost_temp_c', 60))
 
     def _standard_temp(self, matrix: dict) -> int:
         """Standard-WW-Soll aus ww_absenkung."""

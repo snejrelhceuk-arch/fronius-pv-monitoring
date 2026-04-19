@@ -418,15 +418,23 @@ class EventNotifier:
                 ausgeloest.append(alarm_key)
 
         # Alarm 3: Reconnect fehlgeschlagen
+        # Nur alarmieren wenn der fehlgeschlagene Reconnect NACH dem letzten
+        # erfolgreichen Poll liegt — sonst hat sich das System bereits erholt.
         reconnect = attachment.get('last_reconnect')
         if reconnect and not reconnect.get('success', True):
-            alarm_key = 'integrity:reconnect_fehlgeschlagen'
-            if self._sende_integrity_alarm(
-                alarm_key,
-                f'Reconnect-Retry fehlgeschlagen (Trigger: {reconnect.get("trigger", "?")})',
-                attachment,
-            ):
-                ausgeloest.append(alarm_key)
+            rc_ts = reconnect.get('ts', 0)
+            poll_age = attachment.get('last_poll_age_s')
+            # poll_age = Sekunden seit letztem OK-Poll → last_poll_ts ≈ now - poll_age
+            # Wenn last_poll_ts > rc_ts → System hat sich erholt → kein Alarm
+            poll_ts = (time.time() - poll_age) if poll_age is not None else 0
+            if not poll_ts or rc_ts > poll_ts:
+                alarm_key = 'integrity:reconnect_fehlgeschlagen'
+                if self._sende_integrity_alarm(
+                    alarm_key,
+                    f'Reconnect-Retry fehlgeschlagen (Trigger: {reconnect.get("trigger", "?")})',
+                    attachment,
+                ):
+                    ausgeloest.append(alarm_key)
 
         # Optionale Auto-Recovery fuer anhaltende Wattpilot-Stoerung.
         # Erfolgt nur bei explizit aktivierter Konfiguration.

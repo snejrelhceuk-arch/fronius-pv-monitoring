@@ -66,7 +66,7 @@ EOF
 
 # 3. Steuerbox Service
 echo "→ pv-steuerbox.service installieren..."
-sudo install -m 0644 ${BASE}/pv-steuerbox.service /etc/systemd/system/pv-steuerbox.service
+sudo install -m 0644 ${BASE}/config/systemd/pv-steuerbox.service /etc/systemd/system/pv-steuerbox.service
 
 # 4. Wattpilot Collector Service
 echo "→ pv-wattpilot.service erstellen..."

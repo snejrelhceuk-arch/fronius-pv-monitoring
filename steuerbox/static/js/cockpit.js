@@ -6,9 +6,9 @@ const controls = [
     action: 'wp_mode',
     type: 'mode',
     states: [
-      { label: 'MIN', value: 'min', flavor: 'other', hint: '10°C Absenkung' },
-      { label: 'STD', value: 'std', flavor: 'other', hint: '37/57°C' },
-      { label: 'MAX', value: 'max', flavor: 'other', hint: '42/62°C' },
+      { label: 'MIN', value: 'min', flavor: 'other', hint: '' },
+      { label: 'STD', value: 'std', flavor: 'other', hint: '' },
+      { label: 'MAX', value: 'max', flavor: 'other', hint: '' },
     ],
     initial: null,
   },
@@ -93,6 +93,44 @@ function logLine(line) {
   logEl.textContent = `[${stamp}] ${line}\n` + logEl.textContent;
 }
 
+async function fetchControlMeta() {
+  const response = await fetch('/api/ops/control-meta', { method: 'GET' });
+  let data;
+  try {
+    data = await response.json();
+  } catch (err) {
+    throw new Error(`control-meta parse failed: HTTP ${response.status}`);
+  }
+  if (!response.ok || !data.ok) {
+    throw new Error(data.description || data.error || `control-meta HTTP ${response.status}`);
+  }
+  return data;
+}
+
+function applyControlMeta(meta) {
+  const controlsMeta = (meta && meta.controls) || {};
+  const wpMeta = controlsMeta.wp_mode;
+  if (!wpMeta || !wpMeta.states) {
+    return;
+  }
+
+  const wpControl = controls.find((entry) => entry.action === 'wp_mode');
+  if (!wpControl) {
+    return;
+  }
+
+  wpControl.states = wpControl.states.map((entry) => {
+    const perState = wpMeta.states[String(entry.value)];
+    if (!perState) {
+      return entry;
+    }
+    return {
+      ...entry,
+      hint: perState.button_hint || entry.hint || '',
+    };
+  });
+}
+
 function getRespekt() {
   const v = Number.parseInt(respektInput.value, 10);
   if (!Number.isFinite(v)) {
@@ -148,6 +186,12 @@ async function sendIntent(control, selectedValue) {
     throw new Error(data.description || data.error || `HTTP ${response.status}`);
   }
 
+  if (data.effective_params && control.action === 'wp_mode') {
+    const hp = data.effective_params.heiz_temp_c;
+    const ww = data.effective_params.ww_temp_c;
+    logLine(`${control.action}: ${selectedValue} -> Heiz ${hp}\u00b0C / WW ${ww}\u00b0C (override ${data.override_id})`);
+    return;
+  }
   logLine(`${control.action}: ${selectedValue} -> override ${data.override_id}`);
 }
 
@@ -208,14 +252,21 @@ function buildControl(control) {
   updateButtons(container, state[control.elementId]);
 }
 
-function init() {
+async function init() {
+  try {
+    const meta = await fetchControlMeta();
+    applyControlMeta(meta);
+  } catch (err) {
+    logLine(`Parameter-Vorschau nicht geladen: ${err.message}`);
+  }
+
   controls.forEach(buildControl);
   if (respektInput) {
     respektInput.addEventListener('input', refreshDurationHint);
     respektInput.addEventListener('change', refreshDurationHint);
   }
   refreshDurationHint();
-  logLine('Schalter initial ohne aktive Auswahl.');
+  logLine('Schalter initial ohne aktive Auswahl (inkl. Parameter-Vorschau).');
 }
 
 init();
