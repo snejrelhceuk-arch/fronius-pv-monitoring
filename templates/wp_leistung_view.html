@@ -11,6 +11,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
     <title>Leistung WP - Netzbetreiber-Nachweis</title>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="/static/js/nav-context.js"></script>
     <link rel="stylesheet" href="/static/css/monitoring.css">
     <style>
         .wp-toolbar {
@@ -175,19 +176,9 @@
     let limitW = 4200;
 
     function buildNavQuery() {
-        const params = new URLSearchParams(window.location.search);
-        const period = params.get('period');
-        if (!period) return '';
-
-        const keep = new URLSearchParams();
-        keep.set('period', period);
-        const date = params.get('date');
-        const year = params.get('year');
-        const month = params.get('month');
-        if (date) keep.set('date', date);
-        if (year) keep.set('year', year);
-        if (month) keep.set('month', month);
-        return keep.toString();
+        const navState = PVNavContext.parse(window.location.search);
+        if (!navState.hasContext || navState.isExpired) return '';
+        return PVNavContext.buildQuery(navState.context);
     }
 
     function updateContextLinks() {
@@ -279,25 +270,25 @@
     }
 
     function guessInitialRangeFromContext() {
-        const params = new URLSearchParams(window.location.search);
         const now = new Date();
-        const period = params.get('period');
+        const navState = PVNavContext.parse(window.location.search);
+        const period = (navState.hasContext && !navState.isExpired) ? navState.context.period : null;
 
         if (period === 'tag') {
-            const d = params.get('date') ? new Date(`${params.get('date')}T12:00:00`) : now;
+            const d = navState.context.date ? new Date(`${navState.context.date}T12:00:00`) : now;
             const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
             const end = new Date(start.getTime() + 86400 * 1000);
             return [Math.floor(start.getTime()/1000), Math.floor(end.getTime()/1000), 1];
         }
         if (period === 'monat') {
-            const year = parseInt(params.get('year'), 10) || now.getFullYear();
-            const month = (parseInt(params.get('month'), 10) || (now.getMonth()+1)) - 1;
+            const year = navState.context.year || now.getFullYear();
+            const month = (navState.context.month || (now.getMonth()+1)) - 1;
             const start = new Date(year, month, 1, 0, 0, 0);
             const end = new Date(year, month + 1, 1, 0, 0, 0);
             return [Math.floor(start.getTime()/1000), Math.floor(end.getTime()/1000), 30];
         }
         if (period === 'jahr') {
-            const year = parseInt(params.get('year'), 10) || now.getFullYear();
+            const year = navState.context.year || now.getFullYear();
             const start = new Date(year, 0, 1, 0, 0, 0);
             const end = new Date(year + 1, 0, 1, 0, 0, 0);
             return [Math.floor(start.getTime()/1000), Math.floor(end.getTime()/1000), 365];

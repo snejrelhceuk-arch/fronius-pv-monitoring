@@ -10,6 +10,7 @@ import config
 from routes.helpers import get_db_connection, get_strompreis_fuer_monat
 
 bp = Blueprint('pages', __name__)
+NAV_CONTEXT_MAX_AGE_MS = 60 * 60 * 1000
 
 
 def _get_installed_kwp_for_month(year, month):
@@ -24,19 +25,25 @@ def _get_installed_kwp_for_month(year, month):
 def _get_nav_context(args):
     """Normalisiere den UI-Zeitkontext für Links zwischen verwandten Ansichten."""
     now = datetime.now()
-    period = args.get('period', 'tag')
+    now_ms = int(now.timestamp() * 1000)
+    nav_ts = args.get('nav_ts', type=int)
+    is_expired = nav_ts is not None and abs(now_ms - nav_ts) > NAV_CONTEXT_MAX_AGE_MS
+
+    period = 'tag' if is_expired else args.get('period', 'tag')
     if period not in {'tag', 'monat', 'jahr', 'gesamt'}:
         period = 'tag'
 
     ctx = {'period': period}
     if period == 'tag':
-        date_str = args.get('date') or now.strftime('%Y-%m-%d')
+        date_str = (None if is_expired else args.get('date')) or now.strftime('%Y-%m-%d')
         ctx['date'] = date_str
     elif period == 'monat':
-        ctx['year'] = args.get('year', type=int) or now.year
-        ctx['month'] = args.get('month', type=int) or now.month
+        ctx['year'] = (None if is_expired else args.get('year', type=int)) or now.year
+        ctx['month'] = (None if is_expired else args.get('month', type=int)) or now.month
     elif period == 'jahr':
-        ctx['year'] = args.get('year', type=int) or now.year
+        ctx['year'] = (None if is_expired else args.get('year', type=int)) or now.year
+
+    ctx['nav_ts'] = now_ms
 
     return ctx
 
