@@ -400,24 +400,6 @@ class AutomationDaemon:
             except Exception as e:
                 LOG.error(f"Matrix-Reload Fehler: {e}")
 
-        # 5b. Steuerbox-Overrides ueber Actuator ausfuehren (Schicht E -> C).
-        try:
-            summary = self._override_processor.process_pending(
-                actuator=self._actuator,
-                matrix=self._engine._matrix,
-                limit=20,
-            )
-            if summary.get('total', 0) > 0:
-                LOG.info(
-                    "Steuerbox-Overrides: total=%s done=%s failed=%s skipped=%s",
-                    summary.get('total', 0),
-                    summary.get('done', 0),
-                    summary.get('failed', 0),
-                    summary.get('skipped', 0),
-                )
-        except Exception as e:
-            LOG.error(f"Steuerbox-Override-Verarbeitung Fehler: {e}")
-
         # 6. Engine fast-Zyklus (alle 60 s)
         if now - self._last_fast >= FAST_INTERVAL:
             try:
@@ -437,6 +419,27 @@ class AutomationDaemon:
                 self._last_strategic = now
             except Exception as e:
                 LOG.error(f"Engine strategic-Zyklus: {e}")
+
+        # 8. Steuerbox-Overrides ueber Actuator ausfuehren (Schicht E -> C).
+        # Reihenfolge bewusst: Operator-Intent wird als letzter Schreibvorgang
+        # im Zyklus angewendet und kann Regel-Drift direkt korrigieren.
+        try:
+            summary = self._override_processor.process_pending(
+                actuator=self._actuator,
+                matrix=self._engine._matrix,
+                limit=20,
+            )
+            if summary.get('total', 0) > 0:
+                LOG.info(
+                    "Steuerbox-Overrides: total=%s done=%s failed=%s skipped=%s held=%s",
+                    summary.get('total', 0),
+                    summary.get('done', 0),
+                    summary.get('failed', 0),
+                    summary.get('skipped', 0),
+                    summary.get('held', 0),
+                )
+        except Exception as e:
+            LOG.error(f"Steuerbox-Override-Verarbeitung Fehler: {e}")
 
         # 7. Sunset-Erkennung → Tagesbericht senden
         with self._obs_lock:
