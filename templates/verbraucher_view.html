@@ -19,6 +19,7 @@
         .status-chip.heizpatrone { background: rgba(230,81,0,0.3); }
         .status-chip.wattpilot { background: rgba(21,101,192,0.3); }
         .status-chip.haushalt { background: rgba(158,158,158,0.2); }
+        .status-chip .split { font-size: 10px; opacity: 0.8; font-style: italic; }
         #verbraucherChart {
             width: 100%;
             flex: 1;
@@ -234,7 +235,7 @@
                 document.getElementById('verbraucherChart').style.display = 'block';
                 document.getElementById('summaryGrid').style.display = 'flex';
 
-                updateSummary(data.totals);
+                updateSummary(data.totals, data.average_summary || null);
 
                 if (currentView === 'tag') {
                     createDayChart(data);
@@ -258,7 +259,7 @@
             return `${kwh.toFixed(2)} kWh`;
         }
 
-        function updateSummary(totals) {
+        function updateSummary(totals, averageSummary = null) {
             if (!totals) return;
             const grid = document.getElementById('summaryGrid');
             const gesamt = totals.gesamt || 0.001;
@@ -266,22 +267,33 @@
             const pctHP   = (totals.heizpatrone / gesamt * 100).toFixed(0);
             const pctWatt = (totals.wattpilot   / gesamt * 100).toFixed(0);
             const pctHH   = (totals.haushalt    / gesamt * 100).toFixed(0);
+            const showAverages = currentView !== 'tag' && averageSummary && averageSummary.values;
+
+            function averageLine(key) {
+                if (!showAverages) return '';
+                const value = averageSummary.values[key];
+                if (typeof value !== 'number') return '';
+                return `<span class="split">Ø ${averageSummary.unit_label}: ${formatEnergy(value)}</span>`;
+            }
 
             grid.innerHTML = `
                 <div class="status-chip wp">
                     <span class="label">WP</span>
                     <span class="val">${formatEnergy(totals.wp)}</span>
                     <span class="pct">${pctWP}%</span>
+                    ${averageLine('wp')}
                 </div>
                 <div class="status-chip heizpatrone">
                     <span class="label">HP</span>
                     <span class="val">${formatEnergy(totals.heizpatrone)}</span>
                     <span class="pct">${pctHP}%</span>
+                    ${averageLine('heizpatrone')}
                 </div>
                 <div class="status-chip wattpilot">
                     <span class="label">E-Auto</span>
                     <span class="val">${formatEnergy(totals.wattpilot)}</span>
                     <span class="pct">${pctWatt}%</span>
+                    ${averageLine('wattpilot')}
                 </div>
                 <div class="status-chip haushalt">
                     <span class="label">Sonstige</span>

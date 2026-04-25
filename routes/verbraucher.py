@@ -276,6 +276,22 @@ def _get_heizpatrone_month_total_kwh(cursor, year, month, first_ts, last_ts):
     return 0.0
 
 
+def _build_average_summary(totals, divisor, unit_label):
+    """Leitet Durchschnittswerte fuer die Kopfzeile aus bestehenden Aggregaten ab."""
+    if divisor <= 0:
+        return None
+
+    return {
+        'unit_label': unit_label,
+        'count': int(divisor),
+        'values': {
+            'wp': round((totals.get('wp') or 0) / divisor, 2),
+            'heizpatrone': round((totals.get('heizpatrone') or 0) / divisor, 2),
+            'wattpilot': round((totals.get('wattpilot') or 0) / divisor, 2),
+        },
+    }
+
+
 @bp.route('/api/verbraucher')
 def verbraucher_chart():
     """
@@ -693,11 +709,14 @@ def api_verbraucher_monat():
                 totals['gesamt'] - totals['wp'] - totals['heizpatrone'] - totals['wattpilot'],
             )
 
+        average_summary = _build_average_summary(totals, len(datapoints), 'Tag')
+
         return jsonify({
             'year': year,
             'month': month,
             'datapoints': datapoints,
             'totals': {k: round(v, 2) for k, v in totals.items()},
+            'average_summary': average_summary,
         })
 
     except Exception as e:
@@ -758,10 +777,13 @@ def api_verbraucher_jahr():
                 'w_gesamt': round(gesamt, 2),
             })
 
+        average_summary = _build_average_summary(totals, len(datapoints), 'Monat')
+
         return jsonify({
             'year': year,
             'datapoints': datapoints,
             'totals': {k: round(v, 2) for k, v in totals.items()},
+            'average_summary': average_summary,
         })
 
     except Exception as e:
@@ -779,7 +801,8 @@ def api_verbraucher_gesamt():
 
         cursor.execute(
             """
-            SELECT year,
+             SELECT year,
+                 COUNT(*),
                    SUM(gesamt_verbrauch_kwh), SUM(waermepumpe_kwh),
                    SUM(heizpatrone_kwh), SUM(wattpilot_kwh)
             FROM monthly_statistics
@@ -795,8 +818,9 @@ def api_verbraucher_gesamt():
 
         datapoints = []
         totals = {'wp': 0, 'heizpatrone': 0, 'wattpilot': 0, 'haushalt': 0, 'gesamt': 0}
+        month_count_total = 0
 
-        for yr, gesamt, wp, heiz, wattpilot in rows:
+        for yr, month_count, gesamt, wp, heiz, wattpilot in rows:
             gesamt = gesamt or 0
             wp = wp or 0
             heiz = heiz or 0
@@ -804,6 +828,7 @@ def api_verbraucher_gesamt():
             if gesamt < 1:
                 continue
             haushalt = max(0, gesamt - wp - heiz - wattpilot)
+            month_count_total += month_count or 0
 
             totals['wp'] += wp
             totals['heizpatrone'] += heiz
@@ -821,10 +846,13 @@ def api_verbraucher_gesamt():
                 'w_gesamt': round(gesamt, 2),
             })
 
+        average_summary = _build_average_summary(totals, month_count_total, 'Monat')
+
         return jsonify({
             'datapoints': datapoints,
             'totals': {k: round(v, 2) for k, v in totals.items()},
             'year_range': [yr_range[0] or 2022, yr_range[1] or datetime.now().year],
+            'average_summary': average_summary,
         })
 
     except Exception as e:
