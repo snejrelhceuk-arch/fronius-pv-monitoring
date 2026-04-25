@@ -1,6 +1,6 @@
 # Netzqualität — Messtechnik
 
-**Stand:** 2026-04-02
+**Stand:** 2026-04-19
 
 ## Ausgangslage
 
@@ -30,80 +30,6 @@ Netzqualitaet am Netzanschlusspunkt.
 Wenn Netzqualitaet kuenftig **entkoppelt vom Produktiv-Collector** gelesen werden
 soll, braucht es daher **ein zusaetzliches Messgeraet am PCC**, nicht die
 Umwidmung eines vorhandenen Unterzaehlers.
-
-## Soll man in den Collector eingreifen?
-
-### Empfehlung
-
-**Nicht als ersten Schritt.**
-
-Der produktive Collector:
-
-- pollt bereits Inverter + 4 SmartMeter
-- ist bewusst als Single Instance abgesichert
-- soll den Modbus-Pfad fuer den regulaeren Anlagenbetrieb nicht stoeren
-
-Ein kuerzeres Polling im Produktivpfad ist deshalb nur vertretbar, wenn ein
-kurzer, isolierter Benchmark zeigt, dass:
-
-- die Poll-Zeiten stabil bleiben
-- keine Read-Timeouts zunehmen
-- keine Datenluecken entstehen
-- keine Seiteneffekte fuer den restlichen Anlagenbetrieb auftreten
-
-### Empfohlene Testreihenfolge
-
-1. **Bestehende 3s-Daten maximal auswerten**.
-2. Falls weiter noetig: kurzer Benchmark, der **nur das Netz-SmartMeter** liest.
-3. Erst danach ueber Produktiv-Aenderung entscheiden.
-4. Falls NQ dauerhaft dichter sampeln soll: **eigenen NQ-Messpfad** aufbauen.
-
-## 1 kHz: sinnvoll oder nicht?
-
-### Sinnvoll fuer
-
-- Grundschwingung 50 Hz mit guter zeitlicher Aufloesung
-- niedrige Harmonische bis grob einige hundert Hz
-- THD-nahe Auswertungen
-- schnellere lokale Spannungs- und Stromspruenge
-
-### Nicht ausreichend fuer
-
-- echte Breitbandanalyse im kHz-Bereich
-- Supraharmonics
-- HF-Stoerungen von Inverter-, Wallbox- oder Schaltnetzteil-Schaltvorgaengen
-
-### Urteil
-
-**1 kHz ist sinnvoll, wenn die Frage lautet:**
-
-- Wie sehen niedrige Harmonische aus?
-- Gibt es im Bereich bis einige hundert Hz erkennbare Muster?
-- Wie verhaelt sich die 50-Hz-Groesse kurzfristig?
-
-**1 kHz ist nicht ausreichend, wenn die Frage lautet:**
-
-- Was passiert im Bereich mehrerer kHz bis 100 kHz?
-- Welche Leistungselektronik erzeugt welche HF-Struktur?
-
-## Was kommt vom europaeischen Netz wirklich bei uns an?
-
-### Kommt klar durch
-
-- Netzfrequenz und ihre langsamen Abweichungen
-- grossraeumige Fahrplan- und Regelleistungs-Effekte
-- langsame Spannungsniveau-Verschiebungen
-
-### Kommt gemischt an
-
-- niedrige Oberschwingungen
-- Spannungsunsymmetrien und Lastmuster
-
-### Ist meist lokal oder regional gepraegt
-
-- schnellere Schaltmuster von Leistungselektronik
-- kHz-Anteile und Supraharmonics
-- Stoerspektren einzelner lokaler Verbraucher oder Umrichter
 
 ## PAC4200 am PCC
 
