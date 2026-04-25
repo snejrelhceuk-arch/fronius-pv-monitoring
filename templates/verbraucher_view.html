@@ -433,27 +433,6 @@
             };
 
             chart.setOption(option);
-            if (currentView === 'gesamt') {
-                chart.on('click', function(params) {
-                    if (params.componentType !== 'series') return;
-                    const selected = byKey[labels[params.dataIndex]];
-                    if (!selected || !selected.year) return;
-                    currentYear = selected.year;
-                    switchView('jahr');
-                });
-            } else if (currentView === 'jahr') {
-                chart.on('click', function(params) {
-                    if (params.componentType !== 'series') return;
-                    currentMonth = params.dataIndex + 1;
-                    switchView('monat');
-                });
-            } else if (currentView === 'monat') {
-                chart.on('click', function(params) {
-                    if (params.componentType !== 'series') return;
-                    currentDate = new Date(currentYear, currentMonth - 1, params.dataIndex + 1);
-                    switchView('tag');
-                });
-            }
             window.addEventListener('resize', () => { if (chart) chart.resize(); });
         }
 
@@ -606,6 +585,27 @@
             };
 
             chart.setOption(option);
+            if (currentView === 'gesamt') {
+                chart.on('click', function(params) {
+                    if (params.componentType !== 'series') return;
+                    const selected = byKey[labels[params.dataIndex]];
+                    if (!selected || !selected.year) return;
+                    currentYear = selected.year;
+                    switchView('jahr');
+                });
+            } else if (currentView === 'jahr') {
+                chart.on('click', function(params) {
+                    if (params.componentType !== 'series') return;
+                    currentMonth = params.dataIndex + 1;
+                    switchView('monat');
+                });
+            } else if (currentView === 'monat') {
+                chart.on('click', function(params) {
+                    if (params.componentType !== 'series') return;
+                    currentDate = new Date(currentYear, currentMonth - 1, params.dataIndex + 1);
+                    switchView('tag');
+                });
+            }
             window.addEventListener('resize', () => { if (chart) chart.resize(); });
         }
 
