@@ -18,6 +18,7 @@ WP_HEIZ_MAX_C = 42
 WP_WW_MAX_C = 62
 WP_ABSENK_K = 10
 WP_WW_BARRIER_C = 55
+BATTERY_AUTO_PHASE2_DELAY_S = 60   # Sekunden bis Fronius-Auto-Modus nach manuellem Voll-Lade-Anlauf
 
 
 class OperatorOverrideProcessor:
@@ -73,7 +74,8 @@ class OperatorOverrideProcessor:
                     done += 1
                     continue
 
-                action_plan = self._map_override_to_actions(action, params, matrix)
+                elapsed_s = respekt_s - self._remaining_respekt_s(created_at, respekt_s)
+                action_plan = self._map_override_to_actions(action, params, matrix, elapsed_s=elapsed_s)
                 if not action_plan:
                     self._set_status(conn, override_id, 'done')
                     self._audit(
@@ -88,7 +90,7 @@ class OperatorOverrideProcessor:
                     continue
 
                 # Hold-Reapply nur bei Zustandsdrift, nicht blind jede Minute.
-                if not self._active_hold_needs_reapply(action, params, obs_flags):
+                if not self._active_hold_needs_reapply(action, params, obs_flags, elapsed_s=elapsed_s):
                     skipped += 1
                     continue
 
@@ -181,13 +183,17 @@ class OperatorOverrideProcessor:
                 # Unknown bleibt None; nur bekannte Zustände dürfen Hold-Reapply triggern.
                 'heizpatrone_aktiv': bool(data['heizpatrone_aktiv']) if 'heizpatrone_aktiv' in data else None,
                 'klima_aktiv': bool(data['klima_aktiv']) if 'klima_aktiv' in data else None,
+                'soc_mode': str(data['soc_mode']).lower() if data.get('soc_mode') is not None else None,
+                'soc_min': int(data['soc_min']) if data.get('soc_min') is not None else None,
+                'soc_max': int(data['soc_max']) if data.get('soc_max') is not None else None,
             }
         except Exception:
             return {}
 
     @staticmethod
     def _active_hold_needs_reapply(action: str, params: dict[str, Any],
-                                   obs_flags: dict[str, bool | None]) -> bool:
+                                   obs_flags: dict[str, bool | None],
+                                   elapsed_s: int = 0) -> bool:
         """True wenn ein aktiver Hold erneut ausgeführt werden muss."""
         if action == 'hp_toggle':
             state = params.get('state')
@@ -207,12 +213,44 @@ class OperatorOverrideProcessor:
                 return False
             if state == 'off' and ist_an is False:
                 return False
+        if action == 'battery_mode':
+            mode = params.get('mode')
+            ist_mode = obs_flags.get('soc_mode')
+            ist_min = obs_flags.get('soc_min')
+            ist_max = obs_flags.get('soc_max')
+            if mode == 'komfort':
+                if ist_mode == 'manual' and ist_min == 25 and ist_max == 75:
+                    return False
+                return True
+            if mode == 'auto':
+                if elapsed_s >= BATTERY_AUTO_PHASE2_DELAY_S:
+                    # Phase 2: Zielzustand = Fronius-Auto-Modus
+                    if ist_mode == 'auto':
+                        return False
+                    return True
+                # Phase 1: Zielzustand = manual/5/100 (Fronius lädt bis SOC_MAX=100)
+                if ist_mode == 'manual' and ist_min == 5 and ist_max == 100:
+                    return False
+                return True
         # Für andere Actions konservativ: Reapply erlaubt.
         return True
 
     @staticmethod
     def _mark_engine_origin_for_actions(action_plan: list[dict[str, Any]]) -> None:
-        """Brücke für Extern-Erkennung: Klima-EIN aus Override als Engine markieren."""
+        """Brücke für Extern-Erkennung: Override-Batterie-SOC-Aktionen als engine-intern
+        beim soc_extern_tracker registrieren, damit der Tracker sie nicht als
+        'fremde F1-Änderung' klassifiziert und die Engine fälschlicherweise 30 min sperrt.
+        Klima-EIN aus Override ebenfalls als Engine markieren."""
+        try:
+            from automation.engine.regeln.soc_extern import soc_extern_tracker
+            for act in action_plan:
+                if act.get('aktor') == 'batterie':
+                    kommando = act.get('kommando', '')
+                    if kommando in ('set_soc_min', 'set_soc_max'):
+                        soc_extern_tracker.registriere_aktion(kommando, act.get('wert'))
+        except Exception:
+            pass
+
         try:
             from automation.engine.regeln.geraete import registriere_klima_engine_ein
         except Exception:
@@ -267,6 +305,8 @@ class OperatorOverrideProcessor:
     def _uses_respekt_hold(action: str, params: dict[str, Any]) -> bool:
         if action in {'hp_toggle', 'klima_toggle', 'lueftung_toggle'}:
             return params.get('state') in {'on', 'off'}
+        if action == 'battery_mode':
+            return params.get('mode') in {'komfort', 'auto'}
         return False
 
     def _set_status(self, conn: sqlite3.Connection, override_id: int, status: str) -> None:
@@ -297,7 +337,7 @@ class OperatorOverrideProcessor:
             ),
         )
 
-    def _map_override_to_actions(self, action: str, params: dict[str, Any], matrix: dict) -> list[dict[str, Any]] | None:
+    def _map_override_to_actions(self, action: str, params: dict[str, Any], matrix: dict, elapsed_s: int = 0) -> list[dict[str, Any]] | None:
         if action == 'hp_toggle':
             state = params.get('state')
             if state == 'on':
@@ -405,10 +445,17 @@ class OperatorOverrideProcessor:
                     self._mk('batterie', 'set_soc_max', 75, 'Steuerbox Override: Batterie Komfort (SOC_MAX 75%)'),
                 ]
             if mode == 'auto':
+                if elapsed_s >= BATTERY_AUTO_PHASE2_DELAY_S:
+                    # Phase 2: Fronius-Auto-Modus aktivieren (Batterie hat ~100% geladen)
+                    return [
+                        self._mk('batterie', 'set_soc_mode', 'auto', 'Steuerbox Override: Batterie Auto Phase 2 (Fronius-Auto-Modus)'),
+                    ]
+                # Phase 1: SOC_MODE=manual, damit Fronius auf 100% lädt
+                # (Fronius-'auto' ignoriert SOC_MAX als Ladeziel, kapped meist bei ~75%)
                 return [
-                    self._mk('batterie', 'set_soc_mode', 'auto', 'Steuerbox Override: Batterie Auto (SOC_MODE auto)'),
-                    self._mk('batterie', 'set_soc_min', 5, 'Steuerbox Override: Batterie Auto (SOC_MIN 5%)'),
-                    self._mk('batterie', 'set_soc_max', 100, 'Steuerbox Override: Batterie Auto (SOC_MAX 100%)'),
+                    self._mk('batterie', 'set_soc_mode', 'manual', 'Steuerbox Override: Batterie Auto Phase 1 (SOC_MODE manual, Grenzen 5-100%)'),
+                    self._mk('batterie', 'set_soc_min', 5, 'Steuerbox Override: Batterie Auto Phase 1 (SOC_MIN 5%)'),
+                    self._mk('batterie', 'set_soc_max', 100, 'Steuerbox Override: Batterie Auto Phase 1 (SOC_MAX 100%)'),
                 ]
             return None
 
@@ -421,6 +468,7 @@ class OperatorOverrideProcessor:
             'aktor': aktor,
             'kommando': kommando,
             'grund': grund,
+            'dedup_bypass': True,
         }
         if wert is not None:
             payload['wert'] = wert
