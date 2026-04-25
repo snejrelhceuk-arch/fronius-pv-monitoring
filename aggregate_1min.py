@@ -269,8 +269,9 @@ def _aggregate_1min_impl(conn, cur, bucket_ts):
     W_Direct = W_Ertrag - W_Einspeis - W_inBatt_PV
     
     # W_Verbrauch = Gesamtverbrauch
-    # Formel: W_Ertrag - W_Einspeis + W_Bezug
-    W_Verbrauch = W_Ertrag - W_Einspeis + W_Bezug
+    # Formel: Direktverbrauch PV + Netzbezug + Batterieentladung
+    # (damit Nacht-Entladung korrekt im Verbrauch landet)
+    W_Verbrauch = W_Direct + W_Bezug + W_outBatt
     
     # === SPEICHERE IN DATENBANK ===
     

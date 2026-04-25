@@ -705,7 +705,13 @@ def api_flow_realtime():
                         SELECT
                             SUM(W_Ertrag) / 1000.0 as pv_sum,
                             SUM(W_Bezug) / 1000.0 as grid_import_sum,
-                            SUM(W_Verbrauch) / 1000.0 as consumption_sum
+                            SUM(
+                                CASE
+                                    WHEN W_Direct IS NULL AND W_Bezug IS NULL AND W_outBatt IS NULL
+                                        THEN COALESCE(W_Verbrauch, 0)
+                                    ELSE COALESCE(W_Direct, 0) + COALESCE(W_Bezug, 0) + COALESCE(W_outBatt, 0)
+                                END
+                            ) / 1000.0 as consumption_sum
                         FROM data_1min
                         WHERE ts >= ?
                     """, (today_start,))
