@@ -177,6 +177,7 @@ class Actuator:
         kommando = aktion.get('kommando', '?')
         wert_str = str(aktion.get('wert', ''))
         dedup_key = (aktor_name, kommando, wert_str)
+        dedup_bypass = bool(aktion.get('dedup_bypass'))
 
         aktor = self._aktoren.get(aktor_name)
 
@@ -190,7 +191,7 @@ class Actuator:
         # ── Deduplizierung: identischen Befehl nicht wiederholen ──
         now = time.time()
         letzte_ts = self._letzte_aktion.get(dedup_key, 0)
-        if (now - letzte_ts) < DEDUP_INTERVALL_S:
+        if not dedup_bypass and (now - letzte_ts) < DEDUP_INTERVALL_S:
             LOG.debug(f"Dedup: {aktor_name}.{kommando}={wert_str} übersprungen "
                       f"(vor {now - letzte_ts:.0f}s bereits gesendet)")
             return {'ok': True, 'kommando': kommando,
