@@ -81,7 +81,8 @@ class RegelWattpilotBattSchutz(Regel):
         if not ist_aktiv(matrix, self.regelkreis):
             return 0
 
-        schwelle = get_param(matrix, self.regelkreis, 'ev_leistung_schwelle_w', 2000)
+        # Default an Matrix angeglichen (2026-04-26): Matrix=5000W, Code war 2000W.
+        schwelle = get_param(matrix, self.regelkreis, 'ev_leistung_schwelle_w', 5000)
         ev_aktiv = False
         if obs.ev_charging:
             ev_aktiv = True
@@ -236,6 +237,98 @@ class RegelHeizpatrone(Regel):
     def _geraet_label(self) -> str:
         """Kurzlabel für menschenlesbare Extern-Logs."""
         return 'HP'
+
+    def _cancel_conflicting_overrides(self, desired_state: str, geraet: str = 'hp') -> None:
+        """Cancelt konfligierende Toggle-Overrides bei externer Schaltung.
+
+        Symmetrische Behandlung beider Richtungen (Stand 2026-04-26):
+          desired_state='off'  → cancelt alle (open|active) toggle-Overrides
+                                  mit params.state='on'.
+                                  Anwendung: extern AUS erkannt — eine alte
+                                  „EIN"-Override darf nicht mehr reapplied
+                                  werden.
+          desired_state='on'   → cancelt alle (open|active) toggle-Overrides
+                                  mit params.state='off'.
+                                  Anwendung: extern EIN erkannt — eine alte
+                                  „AUS"-Override darf nicht mehr reapplied
+                                  werden.
+
+        Schreibt zusätzlich einen `steuerbox_audit`-Eintrag pro
+        cancelltem Override für die forensische Spur.
+
+        Args:
+            desired_state: 'off' oder 'on'.
+            geraet:        'hp' oder 'klima' (entscheidet `action`).
+        """
+        if desired_state not in ('off', 'on'):
+            return
+
+        action_name = 'hp_toggle' if geraet == 'hp' else 'klima_toggle'
+        # Wir wollen Overrides der GEGENRICHTUNG canceln.
+        konflikt_state = 'on' if desired_state == 'off' else 'off'
+
+        try:
+            db_path = '/dev/shm/automation_obs.db'
+            conn = sqlite3.connect(db_path, timeout=5.0)
+            conn.execute('PRAGMA journal_mode=WAL')
+
+            # Welche IDs werden betroffen sein? (für Audit-Trail)
+            cur = conn.execute(
+                "SELECT id FROM operator_overrides "
+                "WHERE action=? AND status IN ('open','active') "
+                "AND json_extract(params_json, '$.state')=?",
+                (action_name, konflikt_state),
+            )
+            betroffene_ids = [row[0] for row in cur.fetchall()]
+
+            if not betroffene_ids:
+                conn.close()
+                return
+
+            conn.execute(
+                "UPDATE operator_overrides SET status='released' "
+                "WHERE action=? AND status IN ('open','active') "
+                "AND json_extract(params_json, '$.state')=?",
+                (action_name, konflikt_state),
+            )
+
+            # Audit-Trail je betroffenem Override
+            now_iso = datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
+            note = (
+                f'external action cancelled conflicting '
+                f'{action_name}(state={konflikt_state}) override '
+                f'(extern_{desired_state}_detected)'
+            )
+            for oid in betroffene_ids:
+                conn.execute(
+                    "INSERT INTO steuerbox_audit "
+                    "(ts, action, params_json, result_json, override_id, note) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        now_iso,
+                        action_name,
+                        json.dumps({'state': konflikt_state}, ensure_ascii=False),
+                        json.dumps(
+                            {'cancelled': True,
+                             'reason': f'extern_{desired_state}_detected'},
+                            ensure_ascii=False,
+                        ),
+                        oid,
+                        note,
+                    ),
+                )
+            conn.commit()
+            conn.close()
+            LOG.info(
+                f'Cancelled {len(betroffene_ids)} conflicting '
+                f'{action_name}(state={konflikt_state}) override(s) '
+                f'due to external {desired_state.upper()}'
+            )
+        except Exception as e:
+            LOG.warning(
+                f'Failed to cancel conflicting overrides for {action_name} '
+                f'(desired={desired_state}): {e}'
+            )
 
     # ── Potenzial-Klassifikation ─────────────────────────────
 
@@ -517,7 +610,8 @@ class RegelHeizpatrone(Regel):
         score = get_score_gewicht(matrix, self.regelkreis)
 
         # ── Extern-Erkennung (in bewerte(), da immer aufgerufen) ──
-        extern_respekt = get_param(matrix, self.regelkreis, 'extern_respekt_s', 3600)
+        # Default an Matrix angeglichen (2026-04-26): Matrix=1800s, Code war 3600s.
+        extern_respekt = get_param(matrix, self.regelkreis, 'extern_respekt_s', 1800)
         geraet = self._geraet_label()
 
         # Erwartete Engine-AUS-Bestätigung nicht ewig halten
@@ -541,6 +635,11 @@ class RegelHeizpatrone(Regel):
                 LOG.info(f'{geraet} extern eingeschaltet erkannt → Hysterese aktiv')
                 logge_extern('fritzdect', f'{geraet} extern EIN',
                              'Manuell eingeschaltet (nicht durch Engine)')
+                # Symmetrie zu Extern-AUS (2026-04-26):
+                # Cancelt alle konfligierenden hp_toggle(state=off)-Overrides,
+                # damit eine alte „AUS"-Intent nicht über das manuelle
+                # Einschalten hinweg reapplied wird.
+                self._cancel_conflicting_overrides('on')
 
         # Extern-AUS: HP ging EIN→AUS ohne Engine-hp_aus
         if (not obs.heizpatrone_aktiv and self._letzter_hp_zustand is not None
@@ -557,6 +656,8 @@ class RegelHeizpatrone(Regel):
                 LOG.info(f'{geraet} extern ausgeschaltet erkannt → EIN-Sperre aktiv')
                 logge_extern('fritzdect', f'{geraet} extern AUS',
                              'Manuell ausgeschaltet (nicht durch Engine) → EIN-Sperre aktiv')
+                # Race-Condition-Fix: Cancelt alle konfliktierenden hp_toggle(state=on) Overrides
+                self._cancel_conflicting_overrides('off')
 
         if not obs.heizpatrone_aktiv:
             self._extern_ein_ts = 0
@@ -719,7 +820,8 @@ class RegelHeizpatrone(Regel):
             return 0
 
         # Extern-AUS respektieren: HP wurde manuell ausgeschaltet → Sperre
-        extern_respekt = get_param(matrix, self.regelkreis, 'extern_respekt_s', 3600)
+        # Default an Matrix angeglichen (2026-04-26): Matrix=1800s.
+        extern_respekt = get_param(matrix, self.regelkreis, 'extern_respekt_s', 1800)
         if (self._extern_aus_ts > 0
                 and (time.time() - self._extern_aus_ts) < extern_respekt):
             verbleibend = int(extern_respekt - (time.time() - self._extern_aus_ts))
@@ -924,7 +1026,8 @@ class RegelHeizpatrone(Regel):
             temp_max = get_param(matrix, self.regelkreis, 'speicher_temp_max_c', 78)
 
             # Extern-Erkennung auch im Aktion-Pfad nutzen
-            extern_respekt = get_param(matrix, self.regelkreis, 'extern_respekt_s', 3600)
+            # Default an Matrix angeglichen (2026-04-26): Matrix=1800s.
+            extern_respekt = get_param(matrix, self.regelkreis, 'extern_respekt_s', 1800)
             ist_extern = (self._extern_ein_ts > 0
                           and (time.time() - self._extern_ein_ts) < extern_respekt)
             soc_schutz_abs = get_param(matrix, 'soc_schutz', 'stop_entladung_unter_pct', 5)
@@ -1432,6 +1535,9 @@ class RegelKlimaanlage(RegelHeizpatrone):
                          int(extern_respekt))
                 logge_extern('fritzdect', 'Klima extern EIN',
                              'Manuell eingeschaltet (nicht durch Engine)')
+                # Symmetrie zu Extern-AUS (2026-04-26):
+                # cancelt alle konfligierenden klima_toggle(state=off)-Overrides.
+                self._cancel_conflicting_overrides('on', geraet='klima')
 
         # ── ON→OFF Transition ──
         if (not obs.klima_aktiv
@@ -1447,6 +1553,8 @@ class RegelKlimaanlage(RegelHeizpatrone):
                          int(extern_respekt))
                 logge_extern('fritzdect', 'Klima extern AUS',
                              'Manuell ausgeschaltet (nicht durch Engine)')
+                # Race-Condition-Fix: Cancelt alle konfliktierenden klima_toggle(state=on) Overrides
+                self._cancel_conflicting_overrides('off', geraet='klima')
 
         self._klima_letzter_zustand = obs.klima_aktiv
         now = time.time()

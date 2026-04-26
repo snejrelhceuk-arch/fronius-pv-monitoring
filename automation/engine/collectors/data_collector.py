@@ -44,6 +44,9 @@ class DataCollector:
         self._modbus_last_poll: float = 0
         # W4: Cache-Variablen als Instanzvariablen (nicht class-level)
         self._soc_config_cache_ts: float = 0
+        # Throttle für SOC-Config-API-Fehler (siehe _collect_battery_soc_config)
+        self._soc_config_err_last: str = ''
+        self._soc_config_err_ts: float = 0
         self._fritzdect_cache_ts: float = 0
         # _fritzdect_device_cache ist als class-Attribut definiert (siehe Methode)
 
@@ -290,9 +293,25 @@ class DataCollector:
                 obs.soc_mode = str(soc_mode_val).lower()
 
             self._soc_config_cache_ts = now
+            # Erfolg: Fehler-Throttle zurücksetzen
+            self._soc_config_err_last = ''
+            self._soc_config_err_ts = 0.0
 
         except Exception as e:
-            LOG.debug(f"SOC-Config API: {e}")
+            # Sichtbar machen (vorher LOG.debug → unsichtbar bei INFO-Level).
+            # Throttle, um die Logs nicht zu fluten: gleiche Fehler-Signatur
+            # nur alle 5 Min wiederholen.
+            err_sig = type(e).__name__ + ':' + str(e)[:120]
+            if (err_sig != getattr(self, '_soc_config_err_last', '')
+                    or (now - getattr(self, '_soc_config_err_ts', 0.0)) > 300):
+                LOG.warning(
+                    "SOC-Config API (Fronius HTTP) nicht lesbar: %s — "
+                    "obs.soc_min/max/mode bleiben veraltet, "
+                    "Steuerbox-Eingaben können nicht verifiziert werden.",
+                    e,
+                )
+                self._soc_config_err_last = err_sig
+                self._soc_config_err_ts = now
 
     # ── WattPilot ────────────────────────────────────────────
 

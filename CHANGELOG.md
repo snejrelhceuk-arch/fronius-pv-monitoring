@@ -5,6 +5,49 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## v1.3.2 — 2026-04-26
+
+### Automation — Tiefenprüfung & Härtung (A+B+E)
+
+**A. SOC-Grenzen-Steuerbox: Root-Cause-Fix (D1+D2+D3)**
+- **D1** `data_collector._collect_battery_soc_config`: Fehler beim Lesen der
+  Fronius-SOC-Konfiguration werden jetzt als `LOG.warning` (300 s same-error
+  throttle) sichtbar gemacht statt als `LOG.debug` zu verschwinden.
+- **D2** `aktor_batterie._ensure_manual_mode()`: Neuer SOC-Mode-Guard. Vor
+  jedem Schreiben auf `BAT_M0_SOC_MIN/MAX` wird `BAT_M0_SOC_MODE` gelesen
+  (Cache-invalidiert); steht der Modus auf `auto`, wird automatisch auf
+  `manual` umgestellt. Hintergrund: Bei `SOC_MODE='auto'` ignoriert die
+  GEN24-Firmware SOC-MIN/MAX-Schreibvorgänge stillschweigend → Steuerbox-UI
+  zeigte gespeichert, Hardware übernahm nicht.
+- **D3** `actuator.ausfuehren_plan`: Bei `verifiziere().ok=False` wird jetzt
+  `ergebnis['ok']=False` propagiert, der Dedup-Erfolgs-Timestamp
+  zurückgenommen und der Fehler-Cooldown gesetzt. Damit beendet die
+  Engine endlose Reapply-Schleifen bei nicht-wirksamen Schreibvorgängen.
+
+**B. Respekt-Symmetrie (HP / Klima / Override-Layer)**
+- `_cancel_conflicting_overrides(desired_state, geraet)`: generalisiert,
+  cancelt Overrides der Gegenrichtung in beiden Richtungen und schreibt
+  pro betroffenem Override einen `steuerbox_audit`-Eintrag.
+- Erkennung von extern-EIN (HP, Klima) ruft jetzt symmetrisch
+  `_cancel_conflicting_overrides('on', …)` — vorher nur AUS-Pfad.
+- `operator_overrides._active_hold_needs_reapply`: spekulative
+  „könnte-ja-extern-sein"-Branches entfernt; Idempotenz via Soll==Ist;
+  Drift → Reapply.
+
+**E. Konsistenz Code ↔ Matrix ↔ Doku**
+- `extern_respekt_s` Code-Default 3600 → **1800 s** (HP/Klima),
+  `start_h` `RegelWwAbsenkung` 23 → **22**, `ev_leistung_schwelle_w`
+  `RegelWattpilotBattSchutz` 2000 → **5000**.
+- `HP_TOGGLE_OVERRIDE_FLOW.md` von Repo-Wurzel → `doc/automation/`,
+  Two-Layer-Verkopplung dokumentiert, alle `3600`-Beispiele auf `1800`
+  korrigiert.
+- Audit-Bericht: `doc/AUTOMATION_AUDIT_2026-04-26.md`.
+
+### Projekt
+- Version: 1.3.1 → 1.3.2
+
+---
+
 ## v1.3.1 — 2026-04-19
 
 ### Automation — Deep Audit & Fixes (4 kritische Findings behoben)

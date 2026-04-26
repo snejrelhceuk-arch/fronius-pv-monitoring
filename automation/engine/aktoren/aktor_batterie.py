@@ -179,8 +179,54 @@ class AktorBatterie(AktorBase):
 
     # ── HTTP-API-Kommandos ───────────────────────────────────
 
+    def _ensure_manual_mode(self) -> bool:
+        """SOC_MODE-Guard für SOC_MIN/SOC_MAX-Schreibvorgänge.
+
+        Hintergrund (2026-04-26): Bei Fronius `SOC_MODE='auto'` sind die
+        Hardware-Grenzen 5–100 % firmware-fix; HTTP-Schreibvorgänge auf
+        SOC_MIN/SOC_MAX werden ohne Fehler akzeptiert, aber NICHT wirksam.
+        Ohne diesen Guard schlägt die Verifikation immer fehl, ohne dass
+        klar ist warum.
+
+        Verhalten:
+          - mode unbekannt / API-Fehler  → True (best effort, kein Block)
+          - mode == 'manual'             → True (kein Eingriff nötig)
+          - mode == 'auto'               → versucht set_soc_mode='manual';
+                                            Erfolg → True, sonst False.
+
+        Returns: True wenn der nachfolgende SOC-Schreibvorgang sinnvoll ist.
+        """
+        api = self._get_http_api()
+        if not api:
+            # Kein API → nichts zu tun, der eigentliche Schreibvorgang
+            # wird denselben Fehler erneut sehen.
+            return True
+        try:
+            api._cache_time = 0
+            mode = str(api.get_values().get('BAT_M0_SOC_MODE') or '').lower()
+        except Exception as e:
+            LOG.warning(f"  SOC-Mode-Guard: Mode nicht lesbar ({e}) — "
+                        f"führe Schreibvorgang trotzdem aus")
+            return True
+        if mode != 'auto':
+            return True
+        LOG.warning("  SOC-Mode-Guard: SOC_MODE=auto erkannt → "
+                    "schalte zuerst auf 'manual' (sonst sind "
+                    "SOC_MIN/SOC_MAX-Schreibvorgänge wirkungslos)")
+        ok = self._retry(
+            "SOC_MODE='manual' (auto-fix)", self._get_http_api, '_http_api',
+            lambda a: a.set_soc_mode('manual'),
+        )
+        if not ok:
+            LOG.error("  SOC-Mode-Guard: Wechsel auf 'manual' fehlgeschlagen — "
+                      "SOC_MIN/SOC_MAX-Schreibvorgang wird voraussichtlich "
+                      "wirkungslos bleiben.")
+        return ok
+
     def _cmd_set_soc_min(self, value) -> bool:
         """SOC_MIN via HTTP API."""
+        if not self._ensure_manual_mode():
+            return False
         return self._retry(
             f'SOC_MIN={value}', self._get_http_api, '_http_api',
             lambda api: api.set_soc_min(value)
@@ -188,6 +234,8 @@ class AktorBatterie(AktorBase):
 
     def _cmd_set_soc_max(self, value) -> bool:
         """SOC_MAX via HTTP API."""
+        if not self._ensure_manual_mode():
+            return False
         return self._retry(
             f'SOC_MAX={value}', self._get_http_api, '_http_api',
             lambda api: api.set_soc_max(value)

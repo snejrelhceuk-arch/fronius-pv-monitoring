@@ -208,7 +208,8 @@ class RegelWwAbsenkung(Regel):
 
     def _ist_nachtzeit(self, matrix: dict) -> bool:
         """Prüfe ob aktuelle Uhrzeit im Absenkungsfenster liegt."""
-        start = get_param(matrix, self.regelkreis, 'start_h', 23)
+        # Default an Matrix angeglichen (2026-04-26): Matrix=22, Code war 23.
+        start = get_param(matrix, self.regelkreis, 'start_h', 22)
         ende = get_param(matrix, self.regelkreis, 'ende_h', 3)
         return _ist_im_zeitfenster(start, ende)
 
