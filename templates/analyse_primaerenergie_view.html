@@ -1,0 +1,2033 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico?v={{ favicon_version }}">
+    <link rel="shortcut icon" href="/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png?v={{ favicon_version }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <title>Primärenergie-Importe — PV-Anlage</title>
+    <link rel="stylesheet" href="/static/css/analyse-dark.css?v=20260302">
+    <style>
+        .charts-grid-full {
+            margin: 32px 0;
+        }
+        .charts-grid-half {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin: 24px 0;
+        }
+        @media (max-width: 900px) {
+            .charts-grid-half { grid-template-columns: 1fr; }
+        }
+        .chart-card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 20px 16px 12px;
+        }
+        .chart-card h3 {
+            font-size: 13px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.7);
+            margin: 0 0 4px 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .chart-card .chart-subtitle {
+            font-size: 11px;
+            color: rgba(255,255,255,0.35);
+            margin-bottom: 14px;
+        }
+        .chart-canvas-wrap {
+            position: relative;
+        }
+        .dm-badge {
+            display: inline-block;
+            background: rgba(251,191,36,0.15);
+            border: 1px solid rgba(251,191,36,0.35);
+            color: rgba(251,191,36,0.8);
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+        .event-badge {
+            display: inline-block;
+            background: rgba(239,68,68,0.15);
+            border: 1px solid rgba(239,68,68,0.4);
+            color: rgba(239,68,68,0.85);
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 6px;
+        }
+        .table-scroll {
+            overflow-x: auto;
+        }
+        .data-table {
+            font-size: 12px;
+            min-width: 900px;
+        }
+        .data-table thead th {
+            font-size: 11px;
+            padding: 8px 10px;
+            white-space: nowrap;
+        }
+        .data-table td {
+            padding: 7px 10px;
+            font-size: 12px;
+        }
+        .data-table tr.dm-row td:first-child::after {
+            content: " ᴅᴍ";
+            color: rgba(251,191,36,0.6);
+            font-size: 9px;
+        }
+        .data-table tr.crisis-row {
+            background: rgba(239,68,68,0.12) !important;
+        }
+        .data-table tr.crisis-row td {
+            color: rgba(239,68,68,0.9);
+        }
+        .data-table tr.partial-row td {
+            color: rgba(255,255,255,0.45);
+            font-style: italic;
+        }
+        .legend-row {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: rgba(255,255,255,0.6);
+        }
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+        .stat-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 14px;
+            margin-bottom: 28px;
+        }
+        .stat-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 16px;
+        }
+        .stat-card .s-label {
+            font-size: 11px;
+            color: rgba(255,255,255,0.4);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin-bottom: 4px;
+        }
+        .stat-card .s-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: rgba(255,255,255,0.92);
+        }
+        .stat-card .s-sub {
+            font-size: 11px;
+            color: rgba(255,255,255,0.38);
+            margin-top: 3px;
+        }
+        .stat-card.accent-red  .s-value { color: #f87171; }
+        .stat-card.accent-blue .s-value { color: #60a5fa; }
+        .stat-card.accent-amber .s-value { color: #fbbf24; }
+        .stat-card.accent-green .s-value { color: #4ade80; }
+
+        /* ── Dokumentationsanhang ─────────────────────────────────────────── */
+        .doc-appendix {
+            margin-top: 48px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding-top: 32px;
+        }
+        .doc-appendix > h2 {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: rgba(255,255,255,0.25);
+            margin: 0 0 28px 0;
+        }
+        .doc-section {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 22px 22px 16px;
+            margin-bottom: 20px;
+        }
+        .doc-section h3 {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: rgba(255,255,255,0.55);
+            margin: 0 0 14px 0;
+        }
+        .doc-section p, .doc-section li {
+            font-size: 12px;
+            color: rgba(255,255,255,0.42);
+            line-height: 1.75;
+        }
+        .doc-section ul { margin: 0; padding-left: 18px; }
+        .doc-section ul li { margin-bottom: 4px; }
+        .doc-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin-top: 6px;
+        }
+        .doc-table th {
+            text-align: left;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: rgba(255,255,255,0.3);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding: 6px 10px;
+            font-weight: 600;
+        }
+        .doc-table td {
+            padding: 8px 10px;
+            color: rgba(255,255,255,0.48);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            vertical-align: top;
+        }
+        .doc-table tr:last-child td { border-bottom: none; }
+        .doc-table .tc { text-align: center; }
+        .doc-table .tr { text-align: right; font-variant-numeric: tabular-nums; }
+        .doc-table tr.sum-row td {
+            color: rgba(255,255,255,0.75);
+            font-weight: 600;
+            border-top: 1px solid rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.04);
+        }
+        .tag-in  { color: #4ade80; }
+        .tag-out { color: rgba(255,255,255,0.28); }
+        .tag-part { color: #fbbf24; }
+        .doc-callout {
+            background: rgba(74,222,128,0.07);
+            border-left: 3px solid rgba(74,222,128,0.45);
+            border-radius: 0 8px 8px 0;
+            padding: 12px 16px;
+            margin: 14px 0 4px 0;
+            font-size: 12px;
+            color: rgba(255,255,255,0.48);
+            line-height: 1.7;
+        }
+        .doc-callout strong { color: rgba(74,222,128,0.85); }
+        .doc-callout.amber {
+            background: rgba(251,191,36,0.06);
+            border-left-color: rgba(251,191,36,0.45);
+        }
+        .doc-callout.amber strong { color: rgba(251,191,36,0.85); }
+        .doc-callout.red {
+            background: rgba(239,68,68,0.07);
+            border-left-color: rgba(239,68,68,0.45);
+        }
+        .doc-callout.red strong { color: rgba(239,68,68,0.85); }
+        .doc-grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 800px) { .doc-grid-2 { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="top-nav">
+            <a href="/" class="nav-main">Flow</a>
+            <a href="/monitoring{{ nav_query }}" class="nav-main">Monitoring</a>
+            <a href="/analyse{{ nav_query }}" class="nav-main active">Analyse</a>
+            <div class="nav-separator"></div>
+            <a href="/erzeuger{{ nav_query }}" class="nav-sub">Erzeuger</a>
+            <a href="/verbraucher{{ nav_query }}" class="nav-sub">Verbraucher</a>
+            <div class="nav-separator"></div>
+            <a href="/analyse/pv{{ nav_query }}" class="nav-sub">PV-Übersicht</a>
+            <a href="/analyse/haushalt{{ nav_query }}" class="nav-sub">Haushalt</a>
+            <a href="/analyse/amortisation{{ nav_query }}" class="nav-sub">Amortisation</a>
+            <a href="/analyse/primaerenergie{{ nav_query }}" class="nav-sub active">🌍 Primärenergie</a>
+        </div>
+
+        <h1>🌍 Primärenergie-Importe Deutschland</h1>
+        <div style="color:rgba(255,255,255,0.4); font-size:13px; margin-top:-20px; margin-bottom:24px;">
+            Öl · Erdgas · Steinkohle &nbsp;·&nbsp; 1990–Q1 2026
+            <span class="dm-badge">1990–2001 in DM umgerechnet</span>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="stat-cards">
+            <div class="stat-card" style="grid-column: span 2; background: rgba(255,255,255,0.05);">
+                <div class="s-label" style="margin-bottom:10px">Ø Importkosten pro Dekade (Öl + Gas + Kohle, DM→€)</div>
+                <div style="display:grid; grid-template-columns: repeat(4,1fr); gap:12px; text-align:center">
+                    <div>
+                        <div style="font-size:10px; color:rgba(255,255,255,0.38); margin-bottom:3px">1990er</div>
+                        <div style="font-size:18px; font-weight:700; color:rgba(255,255,255,0.75)">18,7 Mrd.</div>
+                        <div style="font-size:10px; color:rgba(255,255,255,0.3)">Ø/Jahr · DM-bereinigt</div>
+                    </div>
+                    <div>
+                        <div style="font-size:10px; color:rgba(255,255,255,0.38); margin-bottom:3px">2000er</div>
+                        <div style="font-size:18px; font-weight:700; color:rgba(96,165,250,0.85)">49,2 Mrd. €</div>
+                        <div style="font-size:10px; color:rgba(255,255,255,0.3)">Ø/Jahr</div>
+                    </div>
+                    <div>
+                        <div style="font-size:10px; color:rgba(255,255,255,0.38); margin-bottom:3px">2010er</div>
+                        <div style="font-size:18px; font-weight:700; color:rgba(251,146,60,0.85)">69,0 Mrd. €</div>
+                        <div style="font-size:10px; color:rgba(255,255,255,0.3)">Ø/Jahr</div>
+                    </div>
+                    <div>
+                        <div style="font-size:10px; color:rgba(255,255,255,0.38); margin-bottom:3px">2020er</div>
+                        <div style="font-size:18px; font-weight:700; color:#f87171">93,6 Mrd. €</div>
+                        <div style="font-size:10px; color:rgba(255,255,255,0.3)">Ø/Jahr · 2020–2024</div>
+                    </div>
+                </div>
+            </div>
+            <div class="stat-card accent-blue">
+                <div class="s-label">Aktuell (2024)</div>
+                <div class="s-value">73,5 Mrd. €</div>
+                <div class="s-sub">−65 % gegenüber 2022</div>
+            </div>
+            <div class="stat-card accent-amber">
+                <div class="s-label">Kumuliert seit 1990</div>
+                <div class="s-value">~1.918 Mrd. €</div>
+                <div class="s-sub">Öl + Gas + Kohle</div>
+            </div>
+            <div class="stat-card accent-green">
+                <div class="s-label">Brent Q1 2026</div>
+                <div class="s-value">~72 $/b</div>
+                <div class="s-sub">Ø Strom ~28,5 ct/kWh</div>
+            </div>
+        </div>
+
+        <!-- Chart 1: Import costs stacked -->
+        <div class="charts-grid-full">
+            <div class="chart-card">
+                <h3>Importkosten Öl · Gas · Kohle <span class="dm-badge">DM→€ vor 2002</span></h3>
+                <div class="chart-subtitle">Mrd. € (Jahreswerte, Q1 2026 = ein Quartal) — gestapelte Balken + Summen-Linie</div>
+                <div class="legend-row">
+                    <span class="legend-item"><span class="legend-dot" style="background:#60a5fa"></span>Öl</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#f97316"></span>Erdgas</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#94a3b8"></span>Steinkohle</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#4ade80; border-radius:50%"></span>Summe</span>
+                </div>
+                <div class="chart-canvas-wrap" style="height:300px">
+                    <canvas id="chartImportKosten"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row: Fossile Kosten vs. Energiewende-Invest -->
+        <div class="charts-grid-half">
+            <div class="chart-card">
+                <h3>Jährlich: Fossile Importkosten vs. Energiewende-Invest</h3>
+                <div class="chart-subtitle">Mrd. €/a · Gelb: enger Stromsystem-Pfad · Rot transparent: Zusatzanteil (exklusiv) · Rot gestrichelt: Gesamt breit = Gelb + Rot</div>
+                <div class="legend-row">
+                    <span class="legend-item"><span class="legend-dot" style="background:#60a5fa"></span>Fossile Importkosten</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#fbbf24; border-radius:50%"></span>Energiewende-Invest (eng)</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:rgba(248,113,113,0.45); border-radius:50%"></span>Zusatz Transformation (exklusiv)</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#f87171; border-radius:50%"></span>Transformation gesamt (breit)</span>
+                </div>
+                <div class="chart-canvas-wrap" style="height:240px">
+                    <canvas id="chartInvestAnnual"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>Kumulativ: Fossile Kosten vs. Energiewende-Invest</h3>
+                <div class="chart-subtitle">Mrd. € kumuliert ab 1990 · gestapelt: eng + Zusatz = breite Transformation (gestrichelte Kontrolllinie)</div>
+                <div class="legend-row">
+                    <span class="legend-item"><span class="legend-dot" style="background:#60a5fa; border-radius:50%"></span>Fossile Kosten kumuliert</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#fbbf24; border-radius:50%"></span>Energiewende-Invest kumuliert (eng)</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:rgba(248,113,113,0.45); border-radius:50%"></span>Zusatz kumuliert (exklusiv)</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#f87171; border-radius:50%"></span>Transformation kumuliert gesamt</span>
+                </div>
+                <div class="chart-canvas-wrap" style="height:240px">
+                    <canvas id="chartInvestCum"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row: Brent + Strom -->
+        <div class="charts-grid-half">
+            <div class="chart-card">
+                <h3>Brent-Rohölpreis</h3>
+                <div class="chart-subtitle">Ø $/Barrel · ICE/EIA Jahresdurchschnitt</div>
+                <div class="chart-canvas-wrap" style="height:220px">
+                    <canvas id="chartBrent"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>Ø Haushaltsstrompreis <span class="dm-badge">Pf→ct vor 2002</span></h3>
+                <div class="chart-subtitle">ct/kWh · Grundversorgung inkl. Steuern (BDEW)</div>
+                <div class="chart-canvas-wrap" style="height:220px">
+                    <canvas id="chartStrom"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart 4: Importmengen + EE-Anteil % -->
+        <div class="charts-grid-full">
+            <div class="chart-card">
+                <h3>Fossile Importmengen &amp; EE-Anteil am Primärenergieverbrauch</h3>
+                <div class="chart-subtitle">Balken: fossile Importe in Mio.&thinsp;t SKE (linke Achse) · Linie: EE-Anteil am PEV in % (rechte Achse, 0–100 %) · Quelle: AGEB</div>
+                <div class="legend-row">
+                    <span class="legend-item"><span class="legend-dot" style="background:#60a5fa"></span>Öl (SKE)</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#f97316"></span>Gas (SKE)</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#94a3b8"></span>Kohle (SKE)</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#39ff14; border-radius:50%"></span>EE-Anteil % (rechts)</span>
+                </div>
+                <div class="chart-canvas-wrap" style="height:280px">
+                    <canvas id="chartMengen"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart 5: Fossil vs EE Extrapolation 2050 -->
+        <div class="charts-grid-full">
+            <div class="chart-card">
+                <h3>Fossile Importe vs. Erneuerbare — Entwicklung &amp; Projektion bis 2050</h3>
+                <div class="chart-subtitle">Mio.&thinsp;t SKE · Solid: historisch 2000–2024 · Gestrichelt: Projektion (Energiewende-Szenario) · Kreuzungspunkt = Importunabhängigkeit</div>
+                <div class="legend-row">
+                    <span class="legend-item"><span class="legend-dot" style="background:#60a5fa"></span>Fossile Importe gesamt</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#39ff14; border-radius:50%"></span>EE — Wirkungsgradmethode</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#39ff14; opacity:0.45; border-radius:50%"></span>EE — Substitution (× 1,7)</span>
+                </div>
+                <div class="chart-canvas-wrap" style="height:300px">
+                    <canvas id="chartProjektion"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart 6: Kumulative Kostenszenarien 2000–2050 -->
+        <div class="charts-grid-full">
+            <div class="chart-card">
+                <h3>Transformationsangst vs. Realität — Kumulative Kosten ab 2000 bis 2050</h3>
+                <div class="chart-subtitle">
+                    Kumuliert ab 2000 · Historisch: solid · Annotation: Peak konv. Öl 2006 (IEA) · Projektion ab 2025: gestrichelt
+                    · <strong style="color:#ef4444">Weiter-so: Peak-Öl-Szenario</strong>: +2,5&thinsp;%/a bis 2030, dann +4,5&thinsp;%/a (Shale-Peak ab ~2031) — bereits konservativ
+                    · <strong style="color:#4ade80">Transformation</strong>: sinkende fossile Mengen + Invest-Hochlauf
+                </div>
+                <div class="legend-row">
+                    <span class="legend-item"><span class="legend-dot" style="background:rgba(96,165,250,0.75); border-radius:50%"></span>Historisch: Fossile kumuliert</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:rgba(74,222,128,0.75); border-radius:50%"></span>Historisch: Fossil + Invest kumuliert</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#ef4444; border-radius:50%"></span>Weiter-so: Peak-Öl-Szenario (+4,5&thinsp;%/a ab 2031)</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:#4ade80; border-radius:50%"></span>Transformation Gesamt (Fossil+Invest)</span>
+                </div>
+                <div class="chart-canvas-wrap" style="height:360px">
+                    <canvas id="chartKostenSzenario"></canvas>
+                </div>
+                <div style="margin-top:12px; font-size:11px; color:rgba(255,255,255,0.35); line-height:1.7">
+                    <strong style="color:rgba(255,255,255,0.5)">Peak konventionelles Öl 2006:</strong> IEA (WEO 2010) bestätigte, dass konventionelle Rohölförderung 2006 bei ~70&thinsp;mb/d ihr Maximum erreichte. US-Shale ab 2009 schob Gesamtförderung auf >100&thinsp;mb/d, setzt aber Preis-Untergrenze bei $50–80/b (höher als konventionell). Shale-Peak-Schätzungen: 2028–2035 (EIA, Wood Mackenzie).
+                    &nbsp;·&nbsp; <strong style="color:rgba(255,255,255,0.5)">Weiter-so: Peak-Öl-Szenario:</strong> IEA-Referenz (+2,5&thinsp;%/a) bis 2030, nach Shale-Peak (~2031) Angebotsknappheit → +4,5&thinsp;%/a (entspricht historischem Brent-CAGR 2000–2008). Selbst diese konservative Schätzung liegt deutlich über dem Transformationspfad. Kein Invest, alle Kosten fließen ins Ausland.
+                    &nbsp;·&nbsp; <strong style="color:rgba(251,191,36,0.7)">Entscheidend:</strong> Transformations-Invest bleibt als Produktivvermögen in Deutschland. Weiter-so-Zahlungen = reiner Kapitalabfluss ohne Gegenwert.
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart 7: Energiekosten pro Haushalt -->
+        <div class="charts-grid-full">
+            <div class="chart-card">
+                <h3>Energiekosten pro Haushalt — Historisch &amp; Szenario 2000–2050</h3>
+                <div class="chart-subtitle">
+                    Ø-Haushalt (3&thinsp;500&thinsp;kWh Strom · 18&thinsp;000&thinsp;kWh Wärme) · Strom: Haushaltsstrompreis DE · Wärme: anteilig Gas/Öl → Weiter-so vs. Transformation (Wärmepumpe + PV-Eigenverbrauch)
+                </div>
+                <div class="legend-row">
+                    <span class="legend-item"><span class="legend-dot" style="background:rgba(251,191,36,0.8); border-radius:50%"></span>Strom: historisch (€/Jahr)</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:rgba(96,165,250,0.8); border-radius:50%"></span>Wärme fossil: historisch (€/Jahr)</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:rgba(239,68,68,0.85); border-radius:50%"></span>Gesamt Weiter-so: Projektion</span>
+                    <span class="legend-item"><span class="legend-dot" style="background:rgba(74,222,128,0.85); border-radius:50%"></span>Gesamt Transformation: Projektion</span>
+                </div>
+                <div class="chart-canvas-wrap" style="height:340px">
+                    <canvas id="chartHaushalt"></canvas>
+                </div>
+                <div style="margin-top:12px; font-size:11px; color:rgba(255,255,255,0.35); line-height:1.7">
+                    <strong style="color:rgba(255,255,255,0.5)">Datenbasis:</strong> Bundesnetzagentur / BDEW Haushaltsstrompreise 2000–2024. Wärme: ~60&thinsp;% Gas, ~40&thinsp;% Öl (Durchschnitt DE Gebäudebestand).
+                    &nbsp;·&nbsp; <strong style="color:rgba(239,68,68,0.7)">Weiter-so-Projektion:</strong> Strom +2&thinsp;%/a nominal (moderate Netzkosten-Steigerung). Wärme: Peak-Öl-Szenario +4,5&thinsp;%/a ab 2031. Keine Effizienzgewinne.
+                    &nbsp;·&nbsp; <strong style="color:rgba(74,222,128,0.7)">Transformations-Projektion:</strong> Wärmepumpen-Hochlauf bis 2035 → Wärmekosten sinken ~60&thinsp;% (COP&thinsp;3–4, PV-Eigenverbrauch). Stromkosten steigen zunächst, dann stabil durch PV-Eigenverbrauch und sinkende EEG-Umlage.
+                    &nbsp;·&nbsp; <strong style="color:rgba(251,191,36,0.6)">Hinweis:</strong> Haushaltsstrompreis enthält bereits Steuern, Abgaben, Netzentgelte (~55&thinsp;% des Preises 2024). Die Transformation senkt vor allem den Beschaffungsanteil und die fossilen Wärmekosten — nicht primär Steuern.
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="section">
+            <div class="section-title">Datentabelle (vollständig)</div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th style="text-align:left">Jahr</th>
+                            <th>Öl<br>Mio. t</th>
+                            <th>Öl<br>Mrd. DM/€</th>
+                            <th>Erdgas<br>Mrd. m³</th>
+                            <th>Gas<br>Mrd. DM/€</th>
+                            <th>Kohle<br>Mio. t</th>
+                            <th>Kohle<br>Mrd. DM/€</th>
+                            <th>∑ Import<br>Mrd. DM/€</th>
+                            <th>Brent<br>Ø $/b</th>
+                            <th>Ø Strom<br>Pf/ct</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="dm-row"><td>1990</td><td>110</td><td>23 DM</td><td>55</td><td>10 DM</td><td>20</td><td>3,0 DM</td><td><strong>36,0 DM</strong></td><td>23</td><td>23 Pf</td></tr>
+                        <tr class="dm-row"><td>1991</td><td>112</td><td>22 DM</td><td>58</td><td>11 DM</td><td>22</td><td>3,0 DM</td><td><strong>36,0 DM</strong></td><td>20</td><td>24 Pf</td></tr>
+                        <tr class="dm-row"><td>1992</td><td>112</td><td>21 DM</td><td>60</td><td>11 DM</td><td>24</td><td>3,0 DM</td><td><strong>35,0 DM</strong></td><td>19</td><td>25 Pf</td></tr>
+                        <tr class="dm-row"><td>1993</td><td>110</td><td>19 DM</td><td>61</td><td>11 DM</td><td>25</td><td>3,2 DM</td><td><strong>33,2 DM</strong></td><td>17</td><td>26 Pf</td></tr>
+                        <tr class="dm-row"><td>1994</td><td>110</td><td>18 DM</td><td>63</td><td>11 DM</td><td>26</td><td>3,2 DM</td><td><strong>32,2 DM</strong></td><td>16</td><td>27 Pf</td></tr>
+                        <tr class="dm-row"><td>1995</td><td>112</td><td>22 DM</td><td>67</td><td>14 DM</td><td>28</td><td>3,5 DM</td><td><strong>39,5 DM</strong></td><td>17</td><td>28 Pf</td></tr>
+                        <tr class="dm-row"><td>1996</td><td>115</td><td>27 DM</td><td>71</td><td>15 DM</td><td>30</td><td>4,0 DM</td><td><strong>46,0 DM</strong></td><td>22</td><td>29 Pf</td></tr>
+                        <tr class="dm-row"><td>1997</td><td>115</td><td>25 DM</td><td>73</td><td>13 DM</td><td>32</td><td>4,0 DM</td><td><strong>42,0 DM</strong></td><td>19</td><td>28 Pf</td></tr>
+                        <tr class="dm-row"><td>1998</td><td>118</td><td>18 DM</td><td>74</td><td>11 DM</td><td>33</td><td>3,5 DM</td><td><strong>32,5 DM</strong></td><td>13</td><td>27 Pf</td></tr>
+                        <tr class="dm-row"><td>1999</td><td>118</td><td>20 DM</td><td>75</td><td>10 DM</td><td>33</td><td>3,0 DM</td><td><strong>33,0 DM</strong></td><td>18</td><td>26 Pf</td></tr>
+                        <tr class="dm-row"><td>2000</td><td>120</td><td>40 DM</td><td>79</td><td>17 DM</td><td>35</td><td>4,0 DM</td><td><strong>61,0 DM</strong></td><td>29</td><td>24 Pf</td></tr>
+                        <tr class="dm-row"><td>2001</td><td>118</td><td>37 DM</td><td>83</td><td>21 DM</td><td>38</td><td>4,5 DM</td><td><strong>62,5 DM</strong></td><td>25</td><td>27 Pf</td></tr>
+                        <tr><td>2002</td><td>116</td><td>19 €</td><td>84</td><td>11 €</td><td>40</td><td>2,0 €</td><td><strong>32,0 €</strong></td><td>25</td><td>14,1 ct</td></tr>
+                        <tr><td>2003</td><td>114</td><td>20 €</td><td>86</td><td>13 €</td><td>43</td><td>3,0 €</td><td><strong>36,0 €</strong></td><td>29</td><td>15,1 ct</td></tr>
+                        <tr><td>2004</td><td>113</td><td>24 €</td><td>87</td><td>14 €</td><td>45</td><td>3,5 €</td><td><strong>41,5 €</strong></td><td>38</td><td>16,8 ct</td></tr>
+                        <tr><td>2005</td><td>111</td><td>30 €</td><td>91</td><td>18 €</td><td>47</td><td>4,0 €</td><td><strong>52,0 €</strong></td><td>55</td><td>18,0 ct</td></tr>
+                        <tr><td>2006</td><td>113</td><td>35 €</td><td>92</td><td>22 €</td><td>48</td><td>4,5 €</td><td><strong>61,5 €</strong></td><td>66</td><td>19,1 ct</td></tr>
+                        <tr><td>2007</td><td>110</td><td>38 €</td><td>90</td><td>22 €</td><td>48</td><td>5,0 €</td><td><strong>65,0 €</strong></td><td>73</td><td>21,0 ct</td></tr>
+                        <tr><td>2008</td><td>108</td><td>49 €</td><td>88</td><td>28 €</td><td>50</td><td>7,0 €</td><td><strong>84,0 €</strong></td><td>97</td><td>22,8 ct</td></tr>
+                        <tr><td>2009</td><td>105</td><td>31 €</td><td>83</td><td>22 €</td><td>45</td><td>4,0 €</td><td><strong>57,0 €</strong></td><td>62</td><td>23,2 ct</td></tr>
+                        <tr><td>2010</td><td>109</td><td>40 €</td><td>88</td><td>23 €</td><td>46</td><td>5,0 €</td><td><strong>68,0 €</strong></td><td>80</td><td>23,7 ct</td></tr>
+                        <tr><td>2011</td><td>106</td><td>55 €</td><td>87</td><td>28 €</td><td>47</td><td>6,0 €</td><td><strong>89,0 €</strong></td><td>111</td><td>25,3 ct</td></tr>
+                        <tr><td>2012</td><td>103</td><td>57 €</td><td>87</td><td>32 €</td><td>48</td><td>5,5 €</td><td><strong>94,5 €</strong></td><td>112</td><td>26,8 ct</td></tr>
+                        <tr><td>2013</td><td>100</td><td>54 €</td><td>85</td><td>30 €</td><td>46</td><td>4,5 €</td><td><strong>88,5 €</strong></td><td>109</td><td>29,3 ct</td></tr>
+                        <tr><td>2014</td><td>98</td><td>46 €</td><td>84</td><td>27 €</td><td>45</td><td>4,0 €</td><td><strong>77,0 €</strong></td><td>99</td><td>29,1 ct</td></tr>
+                        <tr><td>2015</td><td>95</td><td>30 €</td><td>86</td><td>20 €</td><td>52</td><td>4,0 €</td><td><strong>54,0 €</strong></td><td>52</td><td>29,2 ct</td></tr>
+                        <tr><td>2016</td><td>93</td><td>26 €</td><td>88</td><td>17 €</td><td>55</td><td>3,5 €</td><td><strong>46,5 €</strong></td><td>44</td><td>29,0 ct</td></tr>
+                        <tr><td>2017</td><td>91</td><td>32 €</td><td>88</td><td>18 €</td><td>53</td><td>4,0 €</td><td><strong>54,0 €</strong></td><td>55</td><td>30,0 ct</td></tr>
+                        <tr><td>2018</td><td>89</td><td>38 €</td><td>87</td><td>22 €</td><td>50</td><td>5,0 €</td><td><strong>65,0 €</strong></td><td>72</td><td>30,5 ct</td></tr>
+                        <tr><td>2019</td><td>86</td><td>31 €</td><td>86</td><td>18 €</td><td>43</td><td>4,0 €</td><td><strong>53,0 €</strong></td><td>64</td><td>30,9 ct</td></tr>
+                        <tr><td>2020</td><td>80</td><td>20 €</td><td>85</td><td>12 €</td><td>31</td><td>2,5 €</td><td><strong>34,5 €</strong></td><td>42</td><td>31,9 ct</td></tr>
+                        <tr><td>2021</td><td>83</td><td>36 €</td><td>87</td><td>22 €</td><td>36</td><td>5,0 €</td><td><strong>63,0 €</strong></td><td>71</td><td>32,2 ct</td></tr>
+                        <tr class="crisis-row"><td>2022 ⚡</td><td>79</td><td>107 €</td><td>70</td><td>85 €</td><td>51</td><td>19,0 €</td><td><strong>211,0 €</strong></td><td>99</td><td>37,1 ct</td></tr>
+                        <tr><td>2023</td><td>74</td><td>51 €</td><td>66</td><td>30 €</td><td>36</td><td>5,0 €</td><td><strong>86,0 €</strong></td><td>83</td><td>41,4 ct</td></tr>
+                        <tr><td>2024</td><td>72</td><td>48 €</td><td>62</td><td>22 €</td><td>30</td><td>3,5 €</td><td><strong>73,5 €</strong></td><td>80</td><td>31,4 ct</td></tr>
+                        <tr class="partial-row"><td>2025 ⚠</td><td>~68</td><td>~42 €</td><td>~59</td><td>~20 €</td><td>~28</td><td>~3,0 €</td><td><strong>~65,0 €</strong></td><td>~75</td><td>~29,5 ct</td></tr>
+                        <tr class="partial-row"><td>Q1 2026 ⚠</td><td>~17</td><td>~10 €</td><td>~16</td><td>~6 €</td><td>~7</td><td>~0,8 €</td><td><strong>~16,8 €</strong></td><td>~72</td><td>~28,5 ct</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════════════════
+             DOKUMENTATIONSANHANG
+        ═══════════════════════════════════════════════════════════════ -->
+        <div class="doc-appendix">
+            <h2>Dokumentation &amp; Methodik</h2>
+
+            <!-- 1. Historische Ereignisse -->
+            <div class="doc-section">
+                <h3>📌 Historische Hintergründe &amp; Preisereignisse</h3>
+                <table class="doc-table">
+                    <thead>
+                        <tr><th style="width:90px">Jahr</th><th>Ereignis &amp; Ursache</th><th style="width:130px">Brent-Effekt</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><strong>1998</strong></td><td>Ölpreiscrash: OPEC-Überproduktion trifft Asienkrise. Importwert trotz gestiegener Menge auf Tiefstand.</td><td>~13 $/b</td></tr>
+                        <tr><td><strong>2000/01</strong></td><td>Erster Ölpreisanstieg nach Asienkrise. Gaspreise folgen mit ~1 Jahr Verzögerung (ölindexierte Langfristverträge).</td><td>25–29 $/b</td></tr>
+                        <tr><td><strong>2008</strong></td><td>Geopolitische Spannungen + spekulative Nachfrage. Intraday-Spitze 147 $/b (Juli). Erster Importrekord.</td><td>Ø 97 $/b</td></tr>
+                        <tr><td><strong>2011–2014</strong></td><td>Arabischer Frühling (Libyen-Ausfall ~1,6 Mio. b/d) + Iran-Sanktionen (−1 Mio. b/d) + Syrienkrieg → Risikoprämie. China überschreitet 10 Mio. b/d (2013), kaum freie OPEC-Kapazitäten.</td><td>99–112 $/b (4 Jahre)</td></tr>
+                        <tr><td><strong>2015/16</strong></td><td>OPEC-Preiskrieg: US-Fracking-Boom flutet Markt. Saudi-Arabien verweigert Kürzungen → Ölpreis halbiert. Importrechnung fällt auf 46–54 Mrd. €.</td><td>44–52 $/b</td></tr>
+                        <tr><td><strong>2020</strong></td><td>COVID-19: globaler Nachfrageeinbruch. WTI kurzzeitig negativ (Lagerproblem). Importrechnung auf Tiefstand seit 2002.</td><td>Ø 42 $/b</td></tr>
+                        <tr style="background:rgba(239,68,68,0.08)"><td><strong style="color:#f87171">2022 ⚡</strong></td><td><strong style="color:rgba(255,255,255,0.7)">Russland-Einmarsch Ukraine:</strong> Gas +286 %, Öl +197 %, Kohle +280 % ggü. 2021. Gesamtrechnung vervierfacht auf 211 Mrd. €.</td><td style="color:#f87171">Ø 99 $/b</td></tr>
+                        <tr><td><strong>2023/24</strong></td><td>Preiskorrektur. Gasmengen bleiben strukturell niedriger (LNG-Diversifizierung, Effizienz, milde Winter).</td><td>80–83 $/b</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 2. SKE / Substitutionsmethodik -->
+            <div class="doc-section">
+                <h3>⚖️ Energieeinheiten: SKE-Umrechnung &amp; Substitutionsmethodik</h3>
+                <div class="doc-grid-2">
+                    <div>
+                        <p style="color:rgba(255,255,255,0.3); font-size:11px; margin-bottom:8px">SKE-Faktoren fossiler Importe (1 t SKE = 29.308 GJ)</p>
+                        <table class="doc-table">
+                            <thead><tr><th>Energieträger</th><th class="tc">Faktor</th><th>Formel</th></tr></thead>
+                            <tbody>
+                                <tr><td>Rohöl</td><td class="tc">× 1,428</td><td>41.868 GJ/t ÷ 29.308</td></tr>
+                                <tr><td>Erdgas</td><td class="tc">× 1,228</td><td>36 PJ/Mrd. m³ ÷ 29.308</td></tr>
+                                <tr><td>Steinkohle</td><td class="tc">× 0,97</td><td>~28.500 GJ/t ÷ 29.308</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div>
+                        <p style="color:rgba(255,255,255,0.3); font-size:11px; margin-bottom:8px">EE-Methodik: Wirkungsgrad- vs. Substitutionsmethode</p>
+                        <table class="doc-table">
+                            <thead><tr><th>Methode</th><th class="tc">Faktor</th><th>Bedeutung</th></tr></thead>
+                            <tbody>
+                                <tr><td>Wirkungsgradmethode (AGEB)</td><td class="tc">× 1,0</td><td>Tatsächlicher Energieinhalt — international Standard</td></tr>
+                                <tr><td>Substitutionsmethode (Chart 4)</td><td class="tc">× 1,7</td><td>Primärenergieäquivalent eines Kraftwerks (~40 % η)</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <p style="margin-top:14px">Der Faktor × 1,7 ist ein gewichteter Durchschnittswert (65 % Strom-EE × 2,5 + 35 % Wärme-EE × 1,1). Er <em>unterschätzt</em> den Substituierungseffekt im Wärmesektor (Wärmepumpe: effektiv × 3,5–4,5) und <em>überschätzt</em> ihn im Hochtemperatur-Industriebereich (H₂-Stahl: effektiv × 0,5). Als makroökonomischer Mittelwert vertretbar.</p>
+                <table class="doc-table" style="margin-top:10px">
+                    <thead><tr><th>Anwendung</th><th>Technologie</th><th class="tc">Faktor</th><th>Begründung</th></tr></thead>
+                    <tbody>
+                        <tr><td>Raumwärme / Warmwasser</td><td>Wärmepumpe (Luft/Erde)</td><td class="tc" style="color:#4ade80"><strong>≈ 3,5–4,5</strong></td><td>COP 3–4: 1 kWh EE-Strom → 4 kWh Nutzwärme; Gaskessel 95 % η braucht dafür 4,2 kWh Primärenergie</td></tr>
+                        <tr><td>Prozesswärme &lt;200 °C</td><td>Industrielle WP / Dampf-WP</td><td class="tc" style="color:#4ade80">≈ 2–3</td><td>Niedrigere COPs, aber klar positiver Substituierungseffekt</td></tr>
+                        <tr><td>Prozesswärme &gt;400 °C</td><td>Grüner Wasserstoff (H₂)</td><td class="tc" style="color:#fbbf24">≈ 0,5–0,7</td><td>Elektrolyse ~70 % + Transport → Round-Trip ~45–55 %</td></tr>
+                        <tr><td>Stahl (DRI-Verfahren)</td><td>H₂-Direktreduktion</td><td class="tc" style="color:#fbbf24">≈ 0,5</td><td>Thermodynamisch aufwändiger Prozess; EE-Einsatz &gt; fossile Einsparung</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 3. Volkswirtschaftliche Dimension -->
+            <div class="doc-section">
+                <h3>💸 Volkswirtschaftliche Dimension: Kapitalabfluss vs. Inlandsinvestition</h3>
+                <p>Die kumulierte fossile Importrechnung 1990–2024 beläuft sich auf <strong style="color:rgba(255,255,255,0.75)">~1.900 Mrd. €</strong> — eine Transferzahlung ins Ausland ohne Gegenwert. Im Gegensatz dazu erzeugt Investition in heimische Erneuerbare eine fundamental andere Wertschöpfungsstruktur:</p>
+                <table class="doc-table">
+                    <thead><tr><th>Aspekt</th><th>Fossile Importe</th><th>PV · Wind · Netz · H₂-Technik</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>Geldfluss</strong></td><td>Aus Deutschland heraus (Petrodollar nach Saudi-Arabien, Norwegen, Russland, USA)</td><td>Im Wesentlichen im Inland (Planung, Bau, Betrieb, Wartung)</td></tr>
+                        <tr><td><strong>Folgekosten</strong></td><td>Laufende Betriebskosten = Importkosten → dauerhafter Abfluss</td><td>Einmalige Kapitalkosten — danach ~0 Brennstoffkosten</td></tr>
+                        <tr><td><strong>Wertschöpfung</strong></td><td>Nahezu keine inländische Wertschöpfung außer Raffinerie und Vertrieb</td><td>Ingenieurleistungen, Handwerk, Netzausbau, lokale Betreiber</td></tr>
+                        <tr><td><strong>Preisrisiko</strong></td><td>Vollständig dem Weltmarkt ausgesetzt (Brent, TTF, API2)</td><td>Nach Investition preissicher für 20–30 Jahre</td></tr>
+                        <tr><td><strong>Beschäftigung</strong></td><td>Marginal inländisch (Transport, Handel)</td><td>~300.000 Arbeitsplätze EE-Sektor DE (2024, IRENA)</td></tr>
+                        <tr><td><strong>Geopolitik</strong></td><td>Abhängigkeit von Exportregimen — Russland 2022 als Extrembeispiel</td><td>Energiesouveränität → keine erpressbare Importabhängigkeit</td></tr>
+                        <tr><td><strong>Residualwert</strong></td><td>Nach Verbrennung: null</td><td>Anlage nach Abschreibung weiter produktiv; Land &amp; Netz als Asset</td></tr>
+                    </tbody>
+                </table>
+                <div class="doc-callout amber">
+                    <strong>Maßstab 2022:</strong> Die 211 Mrd. € des Krisenjahres wären ausreichend gewesen, um ~140 GW neue PV-Kapazität zu installieren (zu 2022-Preisen ~1.500 €/kWp) — mehr als die gesamte damals installierte Basis.
+                </div>
+            </div>
+
+            <!-- 4. Investitionsrahmen -->
+            <div class="doc-section">
+                <h3>🏗️ Investitionsrahmen Energiewende Deutschland 2000–2024</h3>
+
+                <p style="color:rgba(255,255,255,0.3); font-size:11px; margin-bottom:6px">4a · Direkte EE-Anlagenkosten (Erzeugung)</p>
+                <table class="doc-table">
+                    <thead><tr><th>Technologie</th><th class="tc">Installiert 2024</th><th class="tc">Ø €/kW (fallend)</th><th class="tr">Invest-Schätzung</th><th>Quelle</th></tr></thead>
+                    <tbody>
+                        <tr><td>Photovoltaik</td><td class="tc">~90 GWp</td><td class="tc">~1.000 (5.000→700)</td><td class="tr">75–95 Mrd. €</td><td>AGEE-Stat, BSW-Solar</td></tr>
+                        <tr><td>Wind onshore</td><td class="tc">~69 GW</td><td class="tc">~1.200 (1.500→1.100)</td><td class="tr">80–90 Mrd. €</td><td>AGEE-Stat, Fraunhofer IEE</td></tr>
+                        <tr><td>Wind offshore</td><td class="tc">~8,5 GW</td><td class="tc">~3.000</td><td class="tr">25–28 Mrd. €</td><td>AGEE-Stat, BWO</td></tr>
+                        <tr><td>Bioenergie (Strom + Wärme)</td><td class="tc">~8 GW_el</td><td class="tc">variabel</td><td class="tr">25–35 Mrd. €</td><td>AGEE-Stat</td></tr>
+                        <tr><td>Wasserkraft (Neu + Repowering)</td><td class="tc">~5,6 GW</td><td class="tc">Sanierungen</td><td class="tr">5–8 Mrd. €</td><td>AGEE-Stat</td></tr>
+                        <tr><td>Solarthermie / Geothermie</td><td class="tc">—</td><td class="tc">—</td><td class="tr">8–12 Mrd. €</td><td>AGEE-Stat</td></tr>
+                        <tr class="sum-row"><td colspan="3"><strong>Summe Erzeugung</strong></td><td class="tr"><strong>220–260 Mrd. €</strong></td><td></td></tr>
+                    </tbody>
+                </table>
+
+                <p style="color:rgba(255,255,255,0.3); font-size:11px; margin:18px 0 6px 0">4b · Netzausbaukosten — EE-bedingt abgrenzbar</p>
+                <table class="doc-table">
+                    <thead><tr><th>Maßnahme</th><th class="tr">Kosten</th><th class="tc">Einordnung</th><th>Begründung</th></tr></thead>
+                    <tbody>
+                        <tr><td>SuedLink (DC, 700 km, Wilster→Grafenrheinfeld)</td><td class="tr">~10 Mrd. €</td><td class="tc tag-in">✅ einrechnen</td><td>Einziger Zweck: Nordseewind nach Bayern/BW — ohne EE nicht nötig</td></tr>
+                        <tr><td>SuedOstLink (DC, 580 km)</td><td class="tr">~6 Mrd. €</td><td class="tc tag-in">✅ einrechnen</td><td>Analog SuedLink</td></tr>
+                        <tr><td>NordLink (HVDC DE–NO)</td><td class="tr">~2 Mrd. €</td><td class="tc tag-out">❌ heraus</td><td>Handelskupplung — auch im fossilen System wirtschaftlich</td></tr>
+                        <tr><td>Übrige NEP-Maßnahmen bis 2035</td><td class="tr">35–45 Mrd. €</td><td class="tc tag-part">⚠ ~70 %</td><td>~70 % EE-bedingt, ~30 % Sowieso (Alterung, Lasterhöhung)</td></tr>
+                        <tr><td>Verteilnetz EE-bedingt (PV-Rückspeisung, WP, BEV)</td><td class="tr">30–45 Mrd. €</td><td class="tc tag-in">✅ einrechnen</td><td>~35–45 % der DSO-Investitionen 2000–2024 (~90 Mrd. €). Klimatisierung + Alterung herausgerechnet.</td></tr>
+                        <tr class="sum-row"><td colspan="2"><strong>Summe EE-bedingte Netzkosten</strong></td><td></td><td><strong>30–45 Mrd. €</strong></td></tr>
+                    </tbody>
+                </table>
+
+                <p style="color:rgba(255,255,255,0.3); font-size:11px; margin:18px 0 6px 0">4c · Gesamtzusammenfassung</p>
+                <table class="doc-table">
+                    <thead><tr><th>Kategorie</th><th class="tr">Betrag</th><th>Bemerkung</th></tr></thead>
+                    <tbody>
+                        <tr><td>EE-Erzeugungsanlagen</td><td class="tr">220–260 Mrd. €</td><td>PV, Wind, Bio, Geo, Wasser</td></tr>
+                        <tr><td>Netz EE-bedingt</td><td class="tr">30–45 Mrd. €</td><td>Ohne Sowieso-Kosten, NordLink, ALEGrO</td></tr>
+                        <tr class="sum-row"><td><strong>Gesamtsumme EE-Investition 2000–2024</strong></td><td class="tr"><strong>~280–350 Mrd. €</strong></td><td>Kumuliert, nicht inflationsbereinigt</td></tr>
+                        <tr style="background:rgba(239,68,68,0.07)"><td style="color:#f87171"><strong>Fossile Importrechnung 2000–2024</strong></td><td class="tr" style="color:#f87171"><strong>~1.600 Mrd. €</strong></td><td style="color:rgba(239,68,68,0.55)">Davon allein 2022: 211 Mrd. €</td></tr>
+                    </tbody>
+                </table>
+                <div class="doc-callout">
+                    <strong>Schlussfolgerung:</strong> Die gesamte Energiewende-Investition entspricht etwa 18–22 % der fossilen Importausgaben im selben Zeitraum — und schafft Anlagevermögen mit 20–30 Jahren Restlaufzeit. EEG-Förderung (~250 Mrd. € 2000–2024) ist hier <em>nicht</em> als Invest-Kosten gewertet — sie ist Einkommenstransfer vom Stromkunden zum EE-Betreiber, kein volkswirtschaftlicher Kapitalverzehr.
+                </div>
+                <p style="font-size:11px; color:rgba(255,255,255,0.28); margin-top:10px"><strong style="color:rgba(255,255,255,0.32)">Offene Positionen:</strong> Speicherkosten und H₂-Infrastruktur sind historisch noch &lt;5 Mrd. € — werden 2025–2030 relevant. Die Verteilnetz-Abgrenzung hat eine Bandbreite von ±30 %.</p>
+            </div>
+
+            <!-- 5. Quellen & Methodik -->
+            <div class="doc-section">
+                <h3>📖 Quellen &amp; Methodik</h3>
+                <ul>
+                    <li><strong>Fossile Importe (Mengen &amp; Werte):</strong> AGEB Auswertungstabellen (jährlich); Destatis Außenhandelsstatistik; IEA World Energy Balances</li>
+                    <li><strong>Erneuerbare Energien (EE-Anteil %):</strong> AGEB — Anteil am Primärenergieverbrauch (PEV). 1990: ~1,3 %, EEG 2000: ~2,9 %, 2010: ~10,3 %, 2020: ~17,1 %, 2024: ~21 %. EE-Anteil am PEV liegt unter dem am Endenergieverbrauch (Bruttofaktor-Methodik).</li>
+                    <li><strong>EE-Investitionen:</strong> AGEE-Stat „Erneuerbare Energien in Deutschland" (BMWK, jährlich); BSW-Solar Marktzahlen; Fraunhofer ISE Energy Charts</li>
+                    <li><strong>Netzausbau:</strong> BNetzA NEP 2023; TSO-Projektlisten; BDEW Investitionsstatistik DSO; dena Verteilnetzstudie 2021; Fraunhofer IEE „Netzausbaubedarf Verteilnetz" 2022</li>
+                    <li><strong>Brent-Preis:</strong> ICE / EIA Jahresdurchschnitt in USD/Barrel</li>
+                    <li><strong>Haushaltsstrompreis:</strong> BDEW Strompreisanalyse — Grundversorgung Haushalt (≈ 3.500 kWh/a), inkl. Steuern &amp; Abgaben. 1990–2001 in Pfennig. ~55 % des Preises (2024) entfallen auf Steuern, Abgaben und Netzentgelte.</li>
+                    <li><strong>Wärmekosten Haushalt:</strong> Destatis Verbraucherpreisindex Energie; Techem Energiekennwerte; BDEW Gaspreisanalyse</li>
+                    <li><strong>SKE-Faktoren:</strong> Rohöl 41.868 GJ/t ÷ 29.308 = 1,428 · Erdgas 36 PJ/Mrd. m³ = 1,228 · Steinkohle ~28.500 GJ/t = 0,97</li>
+                    <li><strong>Kostenvergleich „eng" vs. „breit":</strong> <em>eng</em> = EE-Erzeugung + EE-bedingter Netzanteil (SuedLink ✅, NordLink ❌, WP/BEV-Netz ✅, Klimatisierung ❌). <em>breit</em> = zusätzlich Gebäude-/Industrie-Transformation + Verkehrswende. Breite Reihe = Größenordnungsschätzung.</li>
+                    <li><strong>DM-Umrechnung:</strong> 1 € = 1,95583 DM (Fixkurs seit 1.1.1999). Importkosten 1990–2001 als Näherung.</li>
+                    <li><strong>Erdgas:</strong> Mrd. m³ Normvolumen (0 °C, 1,01325 bar). 1 Mrd. m³ ≈ 0,73 Mio. t SKE.</li>
+                    <li><strong>Vorläufige Daten:</strong> 2025 vorläufig (AGEB-Schätzung) · Q1 2026 = ein Quartal, AGEB-Quartalsdaten ausstehend bis Mai 2026.</li>
+                    <li><strong>Projektions-Annahmen (Charts 5–7):</strong> Fossile Mengen −5 %/a (Energiewende-Szenario). Weiter-so: IEA WEO 2024 Stated Policies +2,5 %/a bis 2030, dann Peak-Öl +4,5 %/a. Transformation: Wärmepumpen-Ziel 6 Mio. WP bis 2030 (Bundesregierung), EEG 2023 Ausbaukorridore.</li>
+                </ul>
+            </div>
+
+        </div><!-- /doc-appendix -->
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <script>
+    // ── Data ─────────────────────────────────────────────────────────────────
+    const labels = [
+        '1990','1991','1992','1993','1994','1995','1996','1997','1998','1999',
+        '2000','2001','2002','2003','2004','2005','2006','2007','2008','2009',
+        '2010','2011','2012','2013','2014','2015','2016','2017','2018','2019',
+        '2020','2021','2022','2023','2024','2025','Q1 26'
+    ];
+    const N = labels.length;
+
+    // DM era: indices 0–11 (1990–2001), EUR era: 12+ (2002–)
+    // All cost values converted to EUR for chart continuity (DM / 1.95583)
+    const DM = 1.95583;
+
+    const oilCost = [
+        23/DM, 22/DM, 21/DM, 19/DM, 18/DM, 22/DM, 27/DM, 25/DM, 18/DM, 20/DM,
+        40/DM, 37/DM,
+        19, 20, 24, 30, 35, 38, 49, 31,
+        40, 55, 57, 54, 46, 30, 26, 32, 38, 31,
+        20, 36, 107, 51, 48, 42, 10
+    ];
+    const gasCost = [
+        10/DM, 11/DM, 11/DM, 11/DM, 11/DM, 14/DM, 15/DM, 13/DM, 11/DM, 10/DM,
+        17/DM, 21/DM,
+        11, 13, 14, 18, 22, 22, 28, 22,
+        23, 28, 32, 30, 27, 20, 17, 18, 22, 18,
+        12, 22, 85, 30, 22, 20, 6
+    ];
+    const coalCost = [
+        3.0/DM, 3.0/DM, 3.0/DM, 3.2/DM, 3.2/DM, 3.5/DM, 4.0/DM, 4.0/DM, 3.5/DM, 3.0/DM,
+        4.0/DM, 4.5/DM,
+        2.0, 3.0, 3.5, 4.0, 4.5, 5.0, 7.0, 4.0,
+        5.0, 6.0, 5.5, 4.5, 4.0, 4.0, 3.5, 4.0, 5.0, 4.0,
+        2.5, 5.0, 19.0, 5.0, 3.5, 3.0, 0.8
+    ];
+    const totalCost = oilCost.map((v, i) => Math.round((v + gasCost[i] + coalCost[i]) * 10) / 10);
+
+    // Energiewende-Invest (Schätzung) in Mrd. €/a, gleiche Zeitachse wie totalCost.
+    // Abgrenzung: EE-Erzeugung + zurechenbarer Netzausbau (SuedLink inkl., NordLink exkl., WP/BEV inkl., Klimatisierung exkl.)
+    const investTransition = [
+        0.5, 0.5, 0.6, 0.7, 0.8, 1.0, 1.1, 1.3, 1.6, 2.0,
+        3.0, 3.5, 4.0, 4.5, 5.0, 6.0, 7.0, 8.0, 9.0, 9.5,
+        10.5, 11.0, 11.5, 12.0, 12.5, 13.0, 13.5, 14.0, 14.5, 15.0,
+        16.0, 17.0, 20.0, 22.0, 24.0, 25.0, 6.0
+    ];
+
+    // Breiter Transformationspfad in Mrd. €/a (Systemebene):
+    // Stromsystem (oben) + Gebäudesanierung/Wärmewende + BEV/Ladeinfrastruktur + Industrieprozess-Umstellung.
+    // Ziel: Größenordnung der in Studien genannten Gesamtkosten abbilden (nicht buchhalterische Ist-Werte).
+    const investTransitionBroad = [
+        2.0, 2.0, 2.1, 2.2, 2.4, 2.6, 2.8, 3.1, 3.5, 4.0,
+        6.0, 6.8, 7.5, 8.5, 9.5, 11.0, 12.5, 14.0, 15.5, 17.0,
+        19.0, 20.5, 22.0, 23.5, 25.0, 27.0, 29.0, 31.0, 33.0, 35.0,
+        38.0, 42.0, 50.0, 55.0, 60.0, 62.0, 16.0
+    ];
+
+    function cumulative(series) {
+        let sum = 0;
+        return series.map(v => {
+            sum += v;
+            return Math.round(sum * 10) / 10;
+        });
+    }
+
+    const totalCostCum = cumulative(totalCost);
+    const investTransitionCum = cumulative(investTransition);
+    const investTransitionAdditional = investTransitionBroad.map((v, i) => Math.round(Math.max(0, v - investTransition[i]) * 10) / 10);
+    const investTransitionAdditionalCum = cumulative(investTransitionAdditional);
+    const investTransitionBroadCum = cumulative(investTransitionBroad);
+
+    const brent = [
+        23, 20, 19, 17, 16, 17, 22, 19, 13, 18,
+        29, 25, 25, 29, 38, 55, 66, 73, 97, 62,
+        80, 111, 112, 109, 99, 52, 44, 55, 72, 64,
+        42, 71, 99, 83, 80, 75, 72
+    ];
+    // Strom: DM era Pf/1.95583 → ct, EUR era directly in ct
+    const strom = [
+        23/DM, 24/DM, 25/DM, 26/DM, 27/DM, 28/DM, 29/DM, 28/DM, 27/DM, 26/DM,
+        24/DM, 27/DM,
+        14.1, 15.1, 16.8, 18.0, 19.1, 21.0, 22.8, 23.2,
+        23.7, 25.3, 26.8, 29.3, 29.1, 29.2, 29.0, 30.0, 30.5, 30.9,
+        31.9, 32.2, 37.1, 41.4, 31.4, 29.5, 28.5
+    ];
+    const oilVol  = [110,112,112,110,110,112,115,115,118,118,120,118,116,114,113,111,113,110,108,105,109,106,103,100,98,95,93,91,89,86,80,83,79,74,72,68,17];
+    const gasVol  = [55,58,60,61,63,67,71,73,74,75,79,83,84,86,87,91,92,90,88,83,88,87,87,85,84,86,88,88,87,86,85,87,70,66,62,59,16];
+    const coalVol = [20,22,24,25,26,28,30,32,33,33,35,38,40,43,45,47,48,48,50,45,46,47,48,46,45,52,55,53,50,43,31,36,51,36,30,28,7];
+    // Erneuerbare Energien — Anteil am Primärenergieverbrauch (%) · Quelle: AGEB
+    const eeShare = [
+        1.3, 1.4, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 2.2,  // 1990–1999
+        2.9, 3.0, 3.3, 3.5, 4.2, 5.1, 5.8, 7.0, 8.0, 9.3,  // 2000–2009
+        10.3,11.3,12.0,11.8,13.0,13.1,13.0,13.9,14.6,15.8, // 2010–2019
+        17.1,16.4,18.2,20.7,21.0,22.0,23.0                  // 2020–Q1 2026
+    ];
+    // ── Umrechnung fossile Importe → Mio. t SKE (29,308 GJ/t SKE) ─────────────────
+    // Röhöl:        41,868 GJ/t   / 29,308 GJ/t SKE = 1.428
+    // Erdgas:    1 Mrd. m³ ≈ 36 PJ  / 29.308 GJ/t     = 1,228 Mio. t SKE
+    // Steinkohle: ~28.5 GJ/t      / 29,308 GJ/t SKE = 0.97
+    const OIL_SKE = 1.428, GAS_SKE = 1.228, COAL_SKE = 0.97;
+    const oilSKE  = oilVol.map(v  => Math.round(v * OIL_SKE));
+    const gasSKE  = gasVol.map(v  => Math.round(v * GAS_SKE));
+    const coalSKE = coalVol.map(v => Math.round(v * COAL_SKE));
+    // EE in Mio. t SKE (Wirkungsgradmethode, gleiche Primärenergieebasis wie fossile Importe)
+    // Berechnet aus: eeShare[i] % × deutschem PEV-Trend (AGEB)
+    const eeSKE = [
+         4.6,  5.0,  5.2,  5.5,  5.7,  6.2,  6.5,  6.8,  7.0,  7.5,  // 1990–1999
+         9.9, 10.2, 11.0, 11.9, 14.0, 17.0, 19.2, 23.2, 26.0, 29.5,  // 2000–2009
+        33.0, 34.8, 37.2, 37.2, 39.7, 40.7, 40.8, 43.4, 44.8, 47.2,  // 2010–2019
+        47.9, 46.9, 50.8, 55.9, 55.7, 57.0, 15.0                     // 2020–Q1 2026
+    ];
+    // EE (Substitutionsmethode): Strom-EE × 2.5 + Wärme-EE × 1.1 → Faktor ~1.7 im Mittel
+    // Bildet ab: was wäre der Primärenergieaufwand gewesen, hätte man diese EE-Menge
+    // konventionell (Kraftwerk ~40 % Wirkungsgrad) erzeugen müssen?
+    const eeSKESub = eeSKE.map(v => Math.round(v * 1.7 * 10) / 10);
+    // Per-bar alpha: DM era slightly lighter, 2022 crisis highlighted, Q1 2026 faded
+    function barColors(base, alpha, dmAlpha, crisisColor, partialAlpha) {
+        return labels.map((_, i) => {
+            if (i === 32) return crisisColor;          // 2022
+            if (i >= 35)  return base.replace('X', partialAlpha); // 2025, Q1 2026
+            if (i <= 11)  return base.replace('X', dmAlpha);      // DM era
+            return base.replace('X', alpha);
+        });
+    }
+
+    const oilFill  = labels.map((_, i) => i===32 ? 'rgba(96,165,250,0.95)'  : i>=35 ? 'rgba(96,165,250,0.45)'  : i<=11 ? 'rgba(96,165,250,0.60)'  : 'rgba(96,165,250,0.85)');
+    const gasFill  = labels.map((_, i) => i===32 ? 'rgba(249,115,22,0.95)' : i>=35 ? 'rgba(249,115,22,0.45)' : i<=11 ? 'rgba(249,115,22,0.60)' : 'rgba(249,115,22,0.85)');
+    const coalFill = labels.map((_, i) => i===32 ? 'rgba(148,163,184,0.95)' : i>=35 ? 'rgba(148,163,184,0.45)' : i<=11 ? 'rgba(148,163,184,0.55)' : 'rgba(148,163,184,0.75)');
+
+    // Shared chart defaults
+    Chart.defaults.color = 'rgba(255,255,255,0.5)';
+    Chart.defaults.borderColor = 'rgba(255,255,255,0.08)';
+    Chart.defaults.font.family = "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
+
+    const gridStyle = {
+        color: 'rgba(255,255,255,0.07)',
+        drawBorder: false
+    };
+    const tickStyle = {
+        color: 'rgba(255,255,255,0.45)',
+        font: { size: 11 }
+    };
+
+    // ── Annotation helpers ───────────────────────────────────────────────────
+    const annotDmEur = {
+        type: 'line',
+        scaleID: 'x',
+        value: '2001',
+        borderColor: 'rgba(251,191,36,0.35)',
+        borderWidth: 1.5,
+        borderDash: [5, 4],
+        label: {
+            display: true,
+            content: '€ ab 2002',
+            color: 'rgba(251,191,36,0.85)',
+            backgroundColor: 'rgba(15,23,42,0.75)',
+            padding: { x: 5, y: 3 },
+            borderRadius: 3,
+            font: { size: 10 },
+            position: 'start',
+            yAdjust: 6
+        }
+    };
+    const annotCrisis = {
+        type: 'line',
+        scaleID: 'x',
+        value: '2022',
+        borderColor: 'rgba(239,68,68,0.45)',
+        borderWidth: 1.5,
+        borderDash: [4, 3],
+        label: {
+            display: true,
+            content: '⚡ 2022',
+            color: 'rgba(239,68,68,0.9)',
+            backgroundColor: 'rgba(15,23,42,0.75)',
+            padding: { x: 5, y: 3 },
+            borderRadius: 3,
+            font: { size: 10 },
+            position: 'start',
+            yAdjust: 6
+        }
+    };
+    const annotOilCrash = {
+        type: 'line',
+        scaleID: 'x',
+        value: '1998',
+        borderColor: 'rgba(148,163,184,0.3)',
+        borderWidth: 1,
+        borderDash: [3, 4],
+        label: {
+            display: true,
+            content: '↓ Ölpreiscrash',
+            color: 'rgba(148,163,184,0.75)',
+            backgroundColor: 'rgba(15,23,42,0.75)',
+            padding: { x: 5, y: 3 },
+            borderRadius: 3,
+            font: { size: 9 },
+            position: 'end',
+            yAdjust: -6
+        }
+    };
+
+    // ── Chart 1: Import costs stacked bar ────────────────────────────────────
+    new Chart(document.getElementById('chartImportKosten'), {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Öl',
+                    data: oilCost,
+                    backgroundColor: oilFill,
+                    borderWidth: 0,
+                    stack: 'costs',
+                    order: 3
+                },
+                {
+                    label: 'Erdgas',
+                    data: gasCost,
+                    backgroundColor: gasFill,
+                    borderWidth: 0,
+                    stack: 'costs',
+                    order: 3
+                },
+                {
+                    label: 'Steinkohle',
+                    data: coalCost,
+                    backgroundColor: coalFill,
+                    borderWidth: 0,
+                    stack: 'costs',
+                    order: 3
+                },
+                {
+                    label: 'Summe',
+                    data: totalCost,
+                    type: 'line',
+                    borderColor: 'rgba(74,222,128,0.85)',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    pointRadius: labels.map((_, i) => i === 32 ? 6 : i >= 35 ? 3 : 2),
+                    pointBackgroundColor: labels.map((_, i) => i === 32 ? '#f87171' : 'rgba(74,222,128,0.8)'),
+                    tension: 0.35,
+                    stack: null,
+                    order: 1,
+                    yAxisID: 'y'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    backgroundColor: 'rgba(15,23,42,0.95)',
+                    borderColor: 'rgba(255,255,255,0.15)',
+                    borderWidth: 1,
+                    callbacks: {
+                        label: ctx => {
+                            const v = ctx.parsed.y;
+                            if (v === null || v === undefined) return null;
+                            return ` ${ctx.dataset.label}: ${v.toFixed(1)} Mrd. €`;
+                        },
+                        title: ttItems => {
+                            const lbl = ttItems[0]?.label || '';
+                            const isDm = parseInt(lbl) <= 2001 && lbl !== 'Q1 26';
+                            return lbl + (isDm ? ' (DM→€)' : '');
+                        }
+                    }
+                },
+                annotation: {
+                    annotations: { annotDmEur, annotCrisis, annotOilCrash }
+                }
+            },
+            scales: {
+                x: {
+                    stacked: true,
+                    grid: gridStyle,
+                    ticks: { ...tickStyle, maxRotation: 45, minRotation: 45 }
+                },
+                y: {
+                    stacked: true,
+                    grid: gridStyle,
+                    ticks: {
+                        ...tickStyle,
+                        callback: v => v + ' Mrd.'
+                    },
+                    title: {
+                        display: true,
+                        text: 'Mrd. €',
+                        color: 'rgba(255,255,255,0.35)',
+                        font: { size: 11 }
+                    }
+                }
+            }
+        }
+    });
+
+    // ── Chart 1b: Jährliche Kosten — Fossile vs Energiewende-Invest ─────────
+    new Chart(document.getElementById('chartInvestAnnual'), {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Fossile Importkosten (Mrd. €)',
+                    data: totalCost,
+                    backgroundColor: labels.map((_, i) => i === 32 ? 'rgba(96,165,250,0.95)' : i >= 35 ? 'rgba(96,165,250,0.45)' : 'rgba(96,165,250,0.75)'),
+                    borderWidth: 0,
+                    stack: 'fossil',
+                    order: 2
+                },
+                {
+                    label: 'Energiewende-Invest eng (Mrd. €)',
+                    data: investTransition,
+                    backgroundColor: labels.map((_, i) => i >= 35 ? 'rgba(251,191,36,0.40)' : 'rgba(251,191,36,0.60)'),
+                    borderWidth: 0,
+                    stack: 'transition',
+                    order: 1
+                },
+                {
+                    label: 'Zusatz Transformation (exklusiv, Mrd. €)',
+                    data: investTransitionAdditional,
+                    backgroundColor: labels.map((_, i) => i >= 35 ? 'rgba(248,113,113,0.35)' : 'rgba(248,113,113,0.45)'),
+                    borderWidth: 0,
+                    stack: 'transition',
+                    order: 1
+                },
+                {
+                    label: 'Transformation gesamt (breit, Mrd. €)',
+                    data: investTransitionBroad,
+                    type: 'line',
+                    borderColor: 'rgba(248,113,113,0.95)',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    borderDash: [6, 4],
+                    pointRadius: 0,
+                    pointBackgroundColor: 'rgba(248,113,113,0.9)',
+                    fill: false,
+                    tension: 0.35,
+                    order: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: { color: 'rgba(255,255,255,0.5)', font: { size: 11 }, boxWidth: 14, padding: 12 }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    backgroundColor: 'rgba(15,23,42,0.95)',
+                    borderColor: 'rgba(255,255,255,0.15)',
+                    borderWidth: 1,
+                    callbacks: {
+                        label: ctx => {
+                            const v = ctx.parsed.y;
+                            if (v === null || v === undefined) return null;
+                            return ` ${ctx.dataset.label}: ${v.toFixed(1)} Mrd. €`;
+                        }
+                    }
+                },
+                annotation: {
+                    annotations: {
+                        annotDmEur: { ...annotDmEur, label: { ...annotDmEur.label, display: false } },
+                        annotCrisis
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    stacked: false,
+                    grid: gridStyle,
+                    ticks: { ...tickStyle, maxRotation: 45, minRotation: 45 }
+                },
+                y: {
+                    stacked: true,
+                    min: 0,
+                    grid: gridStyle,
+                    ticks: { ...tickStyle, callback: v => v + ' Mrd.' },
+                    title: { display: true, text: 'Mrd. € / Jahr', color: 'rgba(255,255,255,0.35)', font: { size: 11 } }
+                }
+            }
+        }
+    });
+
+    // ── Chart 1c: Kumuliert — Fossile vs Energiewende-Invest ────────────────
+    new Chart(document.getElementById('chartInvestCum'), {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Fossile Kosten kumuliert (Mrd. €)',
+                    data: totalCostCum,
+                    backgroundColor: labels.map((_, i) => i >= 35 ? 'rgba(96,165,250,0.35)' : 'rgba(96,165,250,0.55)'),
+                    borderWidth: 0,
+                    stack: 'fossil'
+                },
+                {
+                    label: 'Energiewende-Invest kumuliert eng (Mrd. €)',
+                    data: investTransitionCum,
+                    backgroundColor: labels.map((_, i) => i >= 35 ? 'rgba(251,191,36,0.35)' : 'rgba(251,191,36,0.60)'),
+                    borderWidth: 0,
+                    stack: 'transition'
+                },
+                {
+                    label: 'Zusatz kumuliert (exklusiv, Mrd. €)',
+                    data: investTransitionAdditionalCum,
+                    backgroundColor: labels.map((_, i) => i >= 35 ? 'rgba(248,113,113,0.30)' : 'rgba(248,113,113,0.45)'),
+                    borderWidth: 0,
+                    stack: 'transition'
+                },
+                {
+                    label: 'Transformation kumuliert gesamt (Mrd. €)',
+                    data: investTransitionBroadCum,
+                    type: 'line',
+                    borderColor: 'rgba(248,113,113,0.95)',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    borderDash: [6, 4],
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.35,
+                    order: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: { color: 'rgba(255,255,255,0.5)', font: { size: 11 }, boxWidth: 14, padding: 12 }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    backgroundColor: 'rgba(15,23,42,0.95)',
+                    borderColor: 'rgba(255,255,255,0.15)',
+                    borderWidth: 1,
+                    callbacks: {
+                        label: ctx => {
+                            const v = ctx.parsed.y;
+                            if (v === null || v === undefined) return null;
+                            return ` ${ctx.dataset.label}: ${v.toFixed(1)} Mrd. €`;
+                        }
+                    }
+                },
+                annotation: {
+                    annotations: {
+                        annotCrisis: { ...annotCrisis, label: { ...annotCrisis.label, display: false } }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    stacked: false,
+                    grid: gridStyle,
+                    ticks: { ...tickStyle, maxRotation: 45, minRotation: 45 }
+                },
+                y: {
+                    stacked: true,
+                    min: 0,
+                    grid: gridStyle,
+                    ticks: { ...tickStyle, callback: v => v + ' Mrd.' },
+                    title: { display: true, text: 'Mrd. € kumuliert', color: 'rgba(255,255,255,0.35)', font: { size: 11 } }
+                }
+            }
+        }
+    });
+
+    // ── Chart 2: Brent price ─────────────────────────────────────────────────
+    new Chart(document.getElementById('chartBrent'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Brent Ø $/b',
+                data: brent,
+                borderColor: 'rgba(251,146,60,0.9)',
+                backgroundColor: 'rgba(251,146,60,0.12)',
+                borderWidth: 2,
+                pointRadius: labels.map((_, i) => [8, 18, 32].includes(i) ? 5 : i >= 35 ? 3 : 2),
+                pointBackgroundColor: labels.map((_, i) => i === 32 ? '#f87171' : 'rgba(251,146,60,0.85)'),
+                fill: true,
+                tension: 0.35
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(15,23,42,0.95)',
+                    borderColor: 'rgba(255,255,255,0.15)',
+                    borderWidth: 1,
+                    callbacks: {
+                        label: ctx => ` ${ctx.parsed.y} $/b`
+                    }
+                },
+                annotation: {
+                    annotations: {
+                        annotDmEur: { ...annotDmEur, label: { ...annotDmEur.label, display: false } },
+                        annotCrisis
+                    }
+                }
+            },
+            scales: {
+                x: { grid: gridStyle, ticks: { ...tickStyle, maxRotation: 45, minRotation: 45 } },
+                y: {
+                    grid: gridStyle,
+                    ticks: { ...tickStyle, callback: v => v + ' $' },
+                    title: { display: true, text: '$/Barrel', color: 'rgba(255,255,255,0.35)', font: { size: 11 } }
+                }
+            }
+        }
+    });
+
+    // ── Chart 3: Electricity price ───────────────────────────────────────────
+    new Chart(document.getElementById('chartStrom'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Ø Strompreis ct/kWh',
+                data: strom,
+                borderColor: 'rgba(251,191,36,0.9)',
+                backgroundColor: 'rgba(251,191,36,0.1)',
+                borderWidth: 2,
+                pointRadius: labels.map((_, i) => i === 32 || i === 33 ? 5 : i >= 35 ? 3 : 2),
+                pointBackgroundColor: labels.map((_, i) => i === 32 || i === 33 ? '#f87171' : 'rgba(251,191,36,0.85)'),
+                fill: true,
+                tension: 0.35
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(15,23,42,0.95)',
+                    borderColor: 'rgba(255,255,255,0.15)',
+                    borderWidth: 1,
+                    callbacks: {
+                        label: ctx => ` ${ctx.parsed.y.toFixed(1)} ct/kWh`,
+                        title: ttItems => {
+                            const lbl = ttItems[0]?.label || '';
+                            const yr = parseInt(lbl);
+                            return lbl + (yr <= 2001 ? ' (Pf→ct)' : '');
+                        }
+                    }
+                },
+                annotation: {
+                    annotations: {
+                        annotDmEur: { ...annotDmEur },
+                        annotCrisis
+                    }
+                }
+            },
+            scales: {
+                x: { grid: gridStyle, ticks: { ...tickStyle, maxRotation: 45, minRotation: 45 } },
+                y: {
+                    grid: gridStyle,
+                    ticks: { ...tickStyle, callback: v => v.toFixed(0) + ' ct' },
+                    title: { display: true, text: 'ct/kWh', color: 'rgba(255,255,255,0.35)', font: { size: 11 } }
+                }
+            }
+        }
+    });
+
+    // ── Chart 4: Fossile Importe vs. EE — gemeinsame Einheit Mio. t SKE ─────────
+    new Chart(document.getElementById('chartMengen'), {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Öl (Mio. t SKE)',
+                    data: oilSKE,
+                    backgroundColor: oilFill,
+                    borderWidth: 0,
+                    stack: 'fossil',
+                    order: 2,
+                    yAxisID: 'yFossil'
+                },
+                {
+                    label: 'Gas (Mio. t SKE)',
+                    data: gasSKE,
+                    backgroundColor: gasFill,
+                    borderWidth: 0,
+                    stack: 'fossil',
+                    order: 2,
+                    yAxisID: 'yFossil'
+                },
+                {
+                    label: 'Kohle (Mio. t SKE)',
+                    data: coalSKE,
+                    backgroundColor: coalFill,
+                    borderWidth: 0,
+                    stack: 'fossil',
+                    order: 2,
+                    yAxisID: 'yFossil'
+                },
+                {
+                    label: 'EE-Anteil am PEV (%)',
+                    data: eeShare,
+                    type: 'line',
+                    borderColor: '#39ff14',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2.5,
+                    pointRadius: labels.map((_, i) => i >= 35 ? 3 : 2),
+                    pointBackgroundColor: '#39ff14',
+                    fill: false,
+                    tension: 0.4,
+                    order: 1,
+                    yAxisID: 'yEE'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: { color: 'rgba(255,255,255,0.5)', font: { size: 11 }, boxWidth: 14, padding: 12 }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    backgroundColor: 'rgba(15,23,42,0.95)',
+                    borderColor: 'rgba(255,255,255,0.15)',
+                    borderWidth: 1,
+                    callbacks: {
+                        label: ctx => {
+                            if (ctx.dataset.yAxisID === 'yEE')
+                                return ` EE-Anteil: ${ctx.parsed.y.toFixed(1)} %`;
+                            const v = ctx.parsed.y;
+                            if (v === null || v === undefined) return null;
+                            return ` ${ctx.dataset.label}: ${v} Mio. t SKE`;
+                        }
+                    }
+                },
+                annotation: {
+                    annotations: {
+                        annotDmEur: { ...annotDmEur, label: { ...annotDmEur.label, display: false } },
+                        annotCrisis,
+                        annotEEG: {
+                            type: 'line',
+                            scaleID: 'x',
+                            value: '2000',
+                            borderColor: 'rgba(57,255,20,0.3)',
+                            borderWidth: 1.5,
+                            borderDash: [4, 4],
+                            label: {
+                                display: true,
+                                content: '⚡ EEG 2000',
+                                color: 'rgba(57,255,20,0.85)',
+                                backgroundColor: 'rgba(15,23,42,0.75)',
+                                padding: { x: 5, y: 3 },
+                                borderRadius: 3,
+                                font: { size: 9 },
+                                position: 'end',
+                                yAdjust: -6
+                            }
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    stacked: true,
+                    grid: gridStyle,
+                    ticks: { ...tickStyle, maxRotation: 45, minRotation: 45 }
+                },
+                yFossil: {
+                    type: 'linear',
+                    position: 'left',
+                    stacked: true,
+                    min: 0,
+                    grid: gridStyle,
+                    ticks: { ...tickStyle, callback: v => v + ' Mt' },
+                    title: { display: true, text: 'Mio. t SKE', color: 'rgba(255,255,255,0.35)', font: { size: 11 } }
+                },
+                yEE: {
+                    type: 'linear',
+                    position: 'right',
+                    min: 0,
+                    max: 100,
+                    grid: { drawOnChartArea: false },
+                    ticks: { ...tickStyle, color: 'rgba(57,255,20,0.65)', callback: v => v + ' %' },
+                    title: { display: true, text: 'EE-Anteil %', color: 'rgba(57,255,20,0.55)', font: { size: 11 } }
+                }
+            }
+        }
+    });
+
+    // ── Chart 5: Fossil vs EE — historisch + Projektion 2050 ────────────────
+    // labels5: 2000-2050 (51 Einträge) — gleiche Zeitachse wie Chart 6
+    const labels5 = Array.from({length: 51}, (_, i) => String(2000 + i));
+
+    // Historische fossile Gesamtmengen in Mio. t SKE (1990-2024, Index 0-34 der 37er-Arrays)
+    const fossilTotalSKE = oilSKE.slice(0, 35).map((v, i) => Math.round(v + gasSKE[i] + coalSKE[i]));
+    const eeSKE35    = eeSKE.slice(0, 35);
+    const eeSKESub35 = eeSKE35.map(v => Math.round(v * 1.7 * 10) / 10);
+
+    // Historische Datasets ab 2000: slice(10,35) = Indizes 10-34 = 2000-2024 (25 Werte) + 26 nulls
+    const d_fossilHist = [...fossilTotalSKE.slice(10), ...Array(26).fill(null)];
+    const d_eeHist     = [...eeSKE35.slice(10),        ...Array(26).fill(null)];
+    const d_eeSubHist  = [...eeSKESub35.slice(10),     ...Array(26).fill(null)];
+
+    // Projektion 2025-2050 (Energiewende-Szenario: fossile ~-5%/a, EE Wachstum bis Plateau)
+    // Anker bei Index 34 (2024) in Originalarray = Index 24 in labels5 (2000-Basis)
+    const fossilProjVals = [195,180,162,145,128,112, 97, 84, 72, 62,
+                             52, 44, 37, 31, 26, 22, 18, 15, 13, 11,
+                              9,  8,  7,  6,  5,  5];
+    const eeProjVals     = [ 60, 65, 71, 78, 86, 94,102,110,118,126,
+                            133,140,146,151,155,159,162,164,166,167,
+                            168,169,170,170,171,171];
+    const eeSubProjVals  = eeProjVals.map(v => Math.round(v * 1.7 * 10) / 10);
+
+    // Stitch: 24 nulls (2000-2023) + Anker 2024 (Index 24) + 26 Projektionspunkte = 51
+    const d_fossilProj = [...Array(24).fill(null), fossilTotalSKE[34], ...fossilProjVals];
+    const d_eeProj     = [...Array(24).fill(null), eeSKE35[34],        ...eeProjVals];
+    const d_eeSubProj  = [...Array(24).fill(null), eeSKESub35[34],     ...eeSubProjVals];
+
+    new Chart(document.getElementById('chartProjektion'), {
+        type: 'line',
+        data: {
+            labels: labels5,
+            datasets: [
+                {
+                    label: 'Fossile Importe gesamt (Mio. t SKE)',
+                    data: d_fossilHist,
+                    borderColor: 'rgba(96,165,250,0.9)',
+                    backgroundColor: 'rgba(96,165,250,0.08)',
+                    borderWidth: 2.5,
+                    pointRadius: 1,
+                    fill: true,
+                    tension: 0.35,
+                    order: 2
+                },
+                {
+                    label: 'Fossile Importe — Projektion',
+                    data: d_fossilProj,
+                    borderColor: 'rgba(96,165,250,0.5)',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    borderDash: [6, 4],
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.35,
+                    order: 2
+                },
+                {
+                    label: 'EE — Wirkungsgradmethode (AGEB)',
+                    data: d_eeHist,
+                    borderColor: '#39ff14',
+                    backgroundColor: 'rgba(57,255,20,0.07)',
+                    borderWidth: 2.5,
+                    pointRadius: 1,
+                    fill: true,
+                    tension: 0.4,
+                    order: 1
+                },
+                {
+                    label: 'EE Wirkungsgrad — Projektion',
+                    data: d_eeProj,
+                    borderColor: 'rgba(57,255,20,0.55)',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    borderDash: [6, 4],
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.4,
+                    order: 1
+                },
+                {
+                    label: 'EE Substitution (× 1,7) — Projektion',
+                    data: d_eeSubProj,
+                    borderColor: 'rgba(57,255,20,0.3)',
+                    backgroundColor: 'transparent',
+                    borderWidth: 1.5,
+                    borderDash: [3, 5],
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.4,
+                    order: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: { color: 'rgba(255,255,255,0.5)', font: { size: 11 }, boxWidth: 14, padding: 12 }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    backgroundColor: 'rgba(15,23,42,0.95)',
+                    borderColor: 'rgba(255,255,255,0.15)',
+                    borderWidth: 1,
+                    callbacks: {
+                        label: ctx => {
+                            const v = ctx.parsed.y;
+                            if (v === null || v === undefined) return null;
+                            return ` ${ctx.dataset.label}: ${v} Mio. t SKE`;
+                        }
+                    }
+                },
+                annotation: {
+                    annotations: {
+                        annotCrisis5: {
+                            type: 'line', scaleID: 'x', value: '2022',
+                            borderColor: 'rgba(239,68,68,0.35)', borderWidth: 1.5, borderDash: [4, 3],
+                            label: {
+                                display: true, content: '⚡ 2022',
+                                color: 'rgba(239,68,68,0.8)', backgroundColor: 'rgba(15,23,42,0.75)',
+                                padding: { x: 5, y: 3 }, borderRadius: 3, font: { size: 9 },
+                                position: 'start', yAdjust: 6
+                            }
+                        },
+                        annotCross1: {
+                            type: 'line', scaleID: 'x', value: '2031',
+                            borderColor: 'rgba(57,255,20,0.35)', borderWidth: 1.5, borderDash: [4, 4],
+                            label: {
+                                display: true, content: '↔ ~2031 (Wirkungsgrad)',
+                                color: 'rgba(57,255,20,0.75)', backgroundColor: 'rgba(15,23,42,0.8)',
+                                padding: { x: 5, y: 3 }, borderRadius: 3, font: { size: 9 },
+                                position: 'end', yAdjust: -6
+                            }
+                        },
+                        annotCross2: {
+                            type: 'line', scaleID: 'x', value: '2029',
+                            borderColor: 'rgba(57,255,20,0.2)', borderWidth: 1, borderDash: [3, 5],
+                            label: {
+                                display: true, content: '↔ ~2029 (Substitution)',
+                                color: 'rgba(57,255,20,0.5)', backgroundColor: 'rgba(15,23,42,0.8)',
+                                padding: { x: 5, y: 3 }, borderRadius: 3, font: { size: 9 },
+                                position: 'end', yAdjust: 16
+                            }
+                        },
+                        annotProjStart5: {
+                            type: 'line', scaleID: 'x', value: '2024',
+                            borderColor: 'rgba(255,255,255,0.18)', borderWidth: 1.5, borderDash: [5, 4],
+                            label: {
+                                display: true, content: '→ Projektion ab 2024',
+                                color: 'rgba(255,255,255,0.4)',
+                                backgroundColor: 'rgba(15,23,42,0.75)',
+                                padding: { x: 5, y: 3 }, borderRadius: 3, font: { size: 9 },
+                                position: 'start', yAdjust: 40
+                            }
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: gridStyle,
+                    ticks: {
+                        ...tickStyle,
+                        maxRotation: 45, minRotation: 45,
+                        callback: function(val, i) {
+                            const lbl = this.getLabelForValue(val);
+                            return (parseInt(lbl) % 5 === 0) ? lbl : '';
+                        }
+                    }
+                },
+                y: {
+                    min: 0,
+                    grid: gridStyle,
+                    ticks: { ...tickStyle, callback: v => v + ' Mt' },
+                    title: { display: true, text: 'Mio. t SKE', color: 'rgba(255,255,255,0.35)', font: { size: 11 } }
+                }
+            }
+        }
+    });
+    // ── Chart 6: Kumulative Kostenszenarien 2000–2050 ────────────────────────
+    // Zeitachse: 2000–2050 (51 Einträge) — gleiche Achse wie Chart 5
+    // 2000–2025: historische Daten (Indizes 10–35 der 37-Elemente-Arrays)
+    // 2026–2050: Projektion (25 Werte)
+    const labels6 = labels5; // identische Zeitachse 2000–2050
+
+    // ── Historische Reihen 2000–2025 (26 Werte, Indizes 10–35) ──────────────
+    const histFossil6  = totalCost.slice(10, 36);             // 26 Jahreswerte
+    const histInvest6  = investTransitionBroad.slice(10, 36); // 26 Jahreswerte
+    const histTotal6   = histFossil6.map((v, i) => Math.round((v + histInvest6[i]) * 10) / 10);
+
+    function cumArr(arr) {
+        let s = 0;
+        return arr.map(v => { s += v; return Math.round(s * 10) / 10; });
+    }
+    const histFossilCum6 = cumArr(histFossil6); // kumuliert ab 0 (Basis 2000)
+    const histInvestCum6 = cumArr(histInvest6);
+    const histTotalCum6  = histFossilCum6.map((v, i) => Math.round((v + histInvestCum6[i]) * 10) / 10);
+
+    // Anker für Projektion: Endwert 2025 (Index 25 = letzter Wert in hist-Arrays)
+    const anchorFossil6 = histFossilCum6[25]; // kumuliert 2000–2025
+    const anchorTotal6  = histTotalCum6[25];  // kumuliert 2000–2025
+
+    // ── Projektion 2026–2050 (25 Werte) ─────────────────────────────────────
+    const unitCost2024 = 73.5 / 208; // Mrd.€/Mio.t SKE (Basis 2024)
+    const bau_rate_std  = 0.025;     // IEA STEPS 2024: +2,5 %/a nominal
+    const bau_rate_peak = 0.045;     // Peak-Oil-pessimistisch ab 2031: +4,5 %/a
+    const bau_base6     = 65.0;      // Fossile Kosten 2025 in Mrd. €
+
+    // BAU Standard: +2,5 %/a durchgehend (Volumen eingefroren)
+    const bauAnn6std = Array.from({length: 25}, (_, n) =>
+        Math.round(bau_base6 * Math.pow(1 + bau_rate_std, n + 1) * 10) / 10
+    );
+
+    // BAU Peak Oil: +2,5 %/a 2026–2030, danach +4,5 %/a (Shale-Peak ~2031)
+    const base2030 = bau_base6 * Math.pow(1 + bau_rate_std, 5); // ~73.5 Mrd.
+    const bauAnn6peak = Array.from({length: 25}, (_, n) => {
+        const cost = n < 5
+            ? bau_base6 * Math.pow(1 + bau_rate_std, n + 1)
+            : base2030  * Math.pow(1 + bau_rate_peak, n - 4);
+        return Math.round(cost * 10) / 10;
+    });
+
+    // Transformation: sinkende Fossile (per Chart-5-Projektion) + Invest
+    // fossilProjVals[1..25] = Mengen Mio.t SKE für 2026–2050
+    const transFossAnn6 = fossilProjVals.slice(1, 26).map((ske, n) =>
+        Math.round(ske * unitCost2024 * Math.pow(1 + bau_rate_std, n + 2) * 10) / 10
+    );
+    const transInvAnn6 = [
+         70, 78, 85, 90, 95, 95, 90, 85, 80, 75,   // 2026–2035
+         70, 65, 60, 55, 50, 45, 40, 35, 30, 25,   // 2036–2045
+         22, 20, 18, 16, 14                          // 2046–2050
+    ];
+    const transTotAnn6 = transFossAnn6.map((v, i) => Math.round((v + transInvAnn6[i]) * 10) / 10);
+
+    // Kumulierte Projektions-Werte (fortlaufend von Anker)
+    function cumFromAnchor6(anchor, arr) {
+        let s = anchor;
+        return arr.map(v => { s += v; return Math.round(s * 10) / 10; });
+    }
+    const bauStdProjCum6  = cumFromAnchor6(anchorFossil6, bauAnn6std);
+    const bauPeakProjCum6 = cumFromAnchor6(anchorFossil6, bauAnn6peak);
+    const transTotProjCum6= cumFromAnchor6(anchorTotal6,  transTotAnn6);
+
+    // Vollständige 51-Elemente-Arrays (hist=26 Werte 2000-2025, proj=25 Werte 2026-2050)
+    // Historische Linien: 26 Werte (2000-2025), dann 25 nulls = 51
+    const d6_histFossil = [...histFossilCum6, ...Array(25).fill(null)];
+    const d6_histTotal  = [...histTotalCum6,  ...Array(25).fill(null)];
+    // Projektions-Linien: 25 nulls (2000-2024) + Nahtpunkt 2025 (Index 25) + 25 Werte = 51
+    const d6_bauStd  = [...Array(25).fill(null), anchorFossil6, ...bauStdProjCum6];
+    const d6_bauPeak = [...Array(25).fill(null), anchorFossil6, ...bauPeakProjCum6];
+    const d6_trans   = [...Array(25).fill(null), anchorTotal6,  ...transTotProjCum6];
+
+    // Tooltip-Differenz Weiter-so vs. Transformation
+    const d6_diffStd  = d6_bauStd.map( (v, i) => v !== null && d6_trans[i] !== null ? Math.round((v - d6_trans[i]) * 10) / 10 : null);
+    const d6_diffPeak = d6_bauPeak.map((v, i) => v !== null && d6_trans[i] !== null ? Math.round((v - d6_trans[i]) * 10) / 10 : null);
+
+    new Chart(document.getElementById('chartKostenSzenario'), {
+        type: 'line',
+        data: {
+            labels: labels6,
+            datasets: [
+                {
+                    label: 'Historisch: Fossile kumuliert (Mrd. €)',
+                    data: d6_histFossil,
+                    borderColor: 'rgba(96,165,250,0.85)',
+                    backgroundColor: 'rgba(96,165,250,0.08)',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    fill: true,
+                    tension: 0.35,
+                    order: 3
+                },
+                {
+                    label: 'Historisch: Fossil + Invest kumuliert (Mrd. €)',
+                    data: d6_histTotal,
+                    borderColor: 'rgba(74,222,128,0.85)',
+                    backgroundColor: 'rgba(74,222,128,0.07)',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    fill: true,
+                    tension: 0.35,
+                    order: 3
+                },
+                {
+                    label: 'Weiter-so: Peak-Öl +4,5 %/a ab 2031 (Mrd. €)',
+                    data: d6_bauPeak,
+                    borderColor: '#ef4444',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    borderDash: [4, 3],
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.35,
+                    order: 1
+                },
+                {
+                    label: 'Transformation Gesamt: Fossil + Invest (Mrd. €)',
+                    data: d6_trans,
+                    borderColor: '#4ade80',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2.5,
+                    borderDash: [6, 4],
+                    pointRadius: labels6.map((lbl) => lbl === '2048' ? 6 : 0),
+                    pointBackgroundColor: '#4ade80',
+                    fill: false,
+                    tension: 0.35,
+                    order: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: { color: 'rgba(255,255,255,0.5)', font: { size: 11 }, boxWidth: 14, padding: 12 }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    backgroundColor: 'rgba(15,23,42,0.95)',
+                    borderColor: 'rgba(255,255,255,0.15)',
+                    borderWidth: 1,
+                    callbacks: {
+                        label: ctx => {
+                            const v = ctx.parsed.y;
+                            if (v === null || v === undefined) return null;
+                            const i = ctx.dataIndex;
+                            let suffix = '';
+                            if (ctx.datasetIndex === 2 && d6_diffStd[i] !== null)
+                                suffix = d6_diffStd[i] > 0 ? ` (Trans ${d6_diffStd[i].toFixed(0)} Mrd. günstiger)` : ` (Trans ${Math.abs(d6_diffStd[i]).toFixed(0)} Mrd. teurer)`;
+                            if (ctx.datasetIndex === 3 && d6_diffPeak[i] !== null)
+                                suffix = d6_diffPeak[i] > 0 ? ` (Trans ${d6_diffPeak[i].toFixed(0)} Mrd. günstiger)` : ` (Trans ${Math.abs(d6_diffPeak[i]).toFixed(0)} Mrd. teurer)`;
+                            return ` ${ctx.dataset.label}: ${v.toFixed(0)} Mrd. €` + suffix;
+                        }
+                    }
+                },
+                annotation: {
+                    annotations: {
+                        annotPeakOil: {
+                            type: 'line', scaleID: 'x', value: '2006',
+                            borderColor: 'rgba(251,191,36,0.4)', borderWidth: 1.5, borderDash: [5, 4],
+                            label: {
+                                display: true,
+                                content: '▲ Peak konv. Öl (IEA)',
+                                color: 'rgba(251,191,36,0.8)',
+                                backgroundColor: 'rgba(15,23,42,0.8)',
+                                padding: { x: 5, y: 3 }, borderRadius: 3,
+                                font: { size: 9 }, position: 'start', yAdjust: 6
+                            }
+                        },
+                        annotShale: {
+                            type: 'line', scaleID: 'x', value: '2009',
+                            borderColor: 'rgba(96,165,250,0.25)', borderWidth: 1, borderDash: [3, 5],
+                            label: {
+                                display: true,
+                                content: '↑ US-Shale-Boom',
+                                color: 'rgba(96,165,250,0.6)',
+                                backgroundColor: 'rgba(15,23,42,0.75)',
+                                padding: { x: 5, y: 3 }, borderRadius: 3,
+                                font: { size: 9 }, position: 'end', yAdjust: -6
+                            }
+                        },
+                        annotProjStart: {
+                            type: 'line', scaleID: 'x', value: '2025',
+                            borderColor: 'rgba(255,255,255,0.2)', borderWidth: 1.5, borderDash: [6, 4],
+                            label: {
+                                display: true,
+                                content: '→ Projektion',
+                                color: 'rgba(255,255,255,0.45)',
+                                backgroundColor: 'rgba(15,23,42,0.75)',
+                                padding: { x: 5, y: 3 }, borderRadius: 3,
+                                font: { size: 9 }, position: 'start', yAdjust: 24
+                            }
+                        },
+                        annotShalePeak: {
+                            type: 'line', scaleID: 'x', value: '2031',
+                            borderColor: 'rgba(239,68,68,0.25)', borderWidth: 1, borderDash: [3, 5],
+                            label: {
+                                display: true,
+                                content: '? Shale-Peak',
+                                color: 'rgba(239,68,68,0.55)',
+                                backgroundColor: 'rgba(15,23,42,0.75)',
+                                padding: { x: 5, y: 3 }, borderRadius: 3,
+                                font: { size: 9 }, position: 'end', yAdjust: 16
+                            }
+                        },
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: gridStyle,
+                    ticks: {
+                        ...tickStyle,
+                        maxRotation: 45,
+                        minRotation: 45,
+                        callback: function(val, i) {
+                            const lbl = this.getLabelForValue(val);
+                            const yr = parseInt(lbl);
+                            return (yr % 5 === 0 || lbl === '2006') ? lbl : '';
+                        }
+                    }
+                },
+                y: {
+                    min: 0,
+                    grid: gridStyle,
+                    ticks: { ...tickStyle, callback: v => v + ' Mrd.' },
+                    title: {
+                        display: true,
+                        text: 'Mrd. € kumuliert (ab 2000)',
+                        color: 'rgba(255,255,255,0.35)',
+                        font: { size: 11 }
+                    }
+                }
+            }
+        }
+    });
+    // ── Chart 7: Energiekosten pro Haushalt ─────────────────────────────────
+    // Strom: historische Haushaltsstrompreise DE (Ct/kWh) × 3500 kWh/a → €/a
+    // Wärme fossil: Gaspreise + Ölpreise (Heizenergie), 60/40-Mix, 18000 kWh/a
+    // Quellen: BDEW Strompreisanalyse, Stat. Bundesamt, Techem Energiekennwerte
+    const labelsHH = Array.from({length: 51}, (_, i) => String(2000 + i));
+
+    // Haushaltsstrompreis ct/kWh (BDEW, 2000–2024, 25 Werte)
+    const stromCtHist = [
+        14.0, 15.4, 17.2, 18.9, 20.1, 21.0, 22.2, 23.4, 24.1, 25.0,
+        24.7, 25.8, 28.2, 29.1, 29.8, 28.7, 29.0, 29.2, 29.8, 31.5,
+        32.0, 33.0, 40.2, 31.2, 31.5
+    ];
+    // Wärme-Jahreskosten fossil €/a (18000 kWh, Mix Gas/Öl, BDEW/destatis)
+    const waermeHistRaw = [
+        620, 640, 680, 750, 840, 870, 950, 1020, 1120, 1180,
+        880, 950, 1080, 1150, 1200, 1020, 1080, 1040, 1060, 1150,
+        1200, 1380, 1960, 1650, 1520
+    ];
+    // Daraus Jahreskosten Strom €/a
+    const stromEurHist = stromCtHist.map(ct => Math.round(ct * 3500 / 100));
+    // Gesamt historisch
+    const gesamtHist = stromEurHist.map((s, i) => s + waermeHistRaw[i]);
+
+    // Chart-Arrays: 25 hist + 26 null = 51
+    const d7_stromHist    = [...stromEurHist,  ...Array(26).fill(null)];
+    const d7_waermeHist   = [...waermeHistRaw, ...Array(26).fill(null)];
+    const d7_gesamtHist   = [...gesamtHist,    ...Array(26).fill(null)];
+
+    // ── Projektion 2025–2050 (26 Werte) ─────────────────────────────────────
+    const stromBase = stromCtHist[24] * 3500 / 100; // ~1102 €/a
+    const waermeBase = waermeHistRaw[24];            // 1520 €/a
+
+    // Weiter-so: Strom +2 %/a, Wärme +2,5 %/a bis 2030, +4,5 %/a danach
+    const d7_gesamtBau = [
+        ...Array(24).fill(null),
+        gesamtHist[24], // Nahtpunkt 2024
+        ...Array.from({length: 26}, (_, n) => {
+            const strom = Math.round(stromBase * Math.pow(1.02, n + 1));
+            const waerme = n < 6
+                ? Math.round(waermeBase * Math.pow(1.025, n + 1))
+                : Math.round(waermeBase * Math.pow(1.025, 6) * Math.pow(1.045, n - 5));
+            return strom + waerme;
+        })
+    ];
+
+    // Transformation: WP-Hochlauf 2025–2035 (Wärme -60%), PV-Eigenverbrauch → Strom stabil
+    // Wärme: sinkt auf ~35% des fossilen Basiswerts bis 2035 (WP COP~3, 70% Hochlauf), danach stabil
+    // Strom: +5 %/a bis 2030 (WP-Mehrstrom), dann -2 %/a durch PV-Eigenverbrauch, Stabil ab 2038
+    const d7_gesamtTrans = [
+        ...Array(24).fill(null),
+        gesamtHist[24],
+        ...Array.from({length: 26}, (_, n) => {
+            const yr = 2025 + n;
+            // Wärme: linearer Rückgang von 100% (2025) auf 35% (2035), dann stabil
+            const waermeFactor = yr <= 2035
+                ? 1.0 - (yr - 2025) * 0.065
+                : 0.35;
+            const waermeTrans = Math.round(waermeBase * waermeFactor);
+            // Strom: steigt bis 2030, sinkt dann (PV-Eigenstrom, EEG-Reform)
+            const stromFactor = yr <= 2030
+                ? Math.pow(1.04, yr - 2025)
+                : Math.pow(1.04, 5) * Math.pow(0.975, yr - 2030);
+            const stromTrans = Math.round(stromBase * Math.min(stromFactor, 1.35));
+            return waermeTrans + stromTrans;
+        })
+    ];
+
+    new Chart(document.getElementById('chartHaushalt'), {
+        type: 'line',
+        data: {
+            labels: labelsHH,
+            datasets: [
+                {
+                    label: 'Strom historisch (€/Jahr)',
+                    data: d7_stromHist,
+                    borderColor: 'rgba(251,191,36,0.8)',
+                    backgroundColor: 'rgba(251,191,36,0.06)',
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    fill: true,
+                    tension: 0.3,
+                    order: 4
+                },
+                {
+                    label: 'Wärme fossil historisch (€/Jahr)',
+                    data: d7_waermeHist,
+                    borderColor: 'rgba(96,165,250,0.8)',
+                    backgroundColor: 'rgba(96,165,250,0.06)',
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    fill: true,
+                    tension: 0.3,
+                    order: 4
+                },
+                {
+                    label: 'Gesamt historisch (€/Jahr)',
+                    data: d7_gesamtHist,
+                    borderColor: 'rgba(255,255,255,0.45)',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.3,
+                    order: 3
+                },
+                {
+                    label: 'Weiter-so: Gesamt-Projektion (€/Jahr)',
+                    data: d7_gesamtBau,
+                    borderColor: 'rgba(239,68,68,0.9)',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2.5,
+                    borderDash: [7, 4],
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.3,
+                    order: 1
+                },
+                {
+                    label: 'Transformation: Gesamt-Projektion (€/Jahr)',
+                    data: d7_gesamtTrans,
+                    borderColor: '#4ade80',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2.5,
+                    borderDash: [6, 4],
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.3,
+                    order: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: { color: 'rgba(255,255,255,0.5)', font: { size: 11 }, boxWidth: 14, padding: 12 }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    backgroundColor: 'rgba(15,23,42,0.95)',
+                    borderColor: 'rgba(255,255,255,0.15)',
+                    borderWidth: 1,
+                    callbacks: {
+                        label: ctx => {
+                            const v = ctx.parsed.y;
+                            if (v === null || v === undefined) return null;
+                            return ` ${ctx.dataset.label}: ${v.toLocaleString('de-DE')} €`;
+                        }
+                    }
+                },
+                annotation: {
+                    annotations: {
+                        annotHHProjStart: {
+                            type: 'line', scaleID: 'x', value: '2024',
+                            borderColor: 'rgba(255,255,255,0.18)', borderWidth: 1.5, borderDash: [5, 4],
+                            label: {
+                                display: true, content: '→ Projektion',
+                                color: 'rgba(255,255,255,0.4)',
+                                backgroundColor: 'rgba(15,23,42,0.75)',
+                                padding: { x: 5, y: 3 }, borderRadius: 3, font: { size: 9 },
+                                position: 'start', yAdjust: 30
+                            }
+                        },
+                        annotHHShalePeak: {
+                            type: 'line', scaleID: 'x', value: '2031',
+                            borderColor: 'rgba(239,68,68,0.25)', borderWidth: 1, borderDash: [3, 5],
+                            label: {
+                                display: true, content: '? Shale-Peak',
+                                color: 'rgba(239,68,68,0.55)',
+                                backgroundColor: 'rgba(15,23,42,0.75)',
+                                padding: { x: 5, y: 3 }, borderRadius: 3, font: { size: 9 },
+                                position: 'end', yAdjust: 8
+                            }
+                        },
+                        annotHHWPHochlauf: {
+                            type: 'line', scaleID: 'x', value: '2035',
+                            borderColor: 'rgba(74,222,128,0.3)', borderWidth: 1, borderDash: [3, 5],
+                            label: {
+                                display: true, content: '✓ WP-Ziel 2035',
+                                color: 'rgba(74,222,128,0.6)',
+                                backgroundColor: 'rgba(15,23,42,0.75)',
+                                padding: { x: 5, y: 3 }, borderRadius: 3, font: { size: 9 },
+                                position: 'start', yAdjust: 8
+                            }
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: gridStyle,
+                    ticks: {
+                        ...tickStyle,
+                        maxRotation: 45, minRotation: 45,
+                        callback: function(val, i) {
+                            const lbl = this.getLabelForValue(val);
+                            return (parseInt(lbl) % 5 === 0) ? lbl : '';
+                        }
+                    }
+                },
+                y: {
+                    min: 0,
+                    grid: gridStyle,
+                    ticks: { ...tickStyle, callback: v => v.toLocaleString('de-DE') + ' €' },
+                    title: {
+                        display: true,
+                        text: '€ pro Jahr (Ø-Haushalt)',
+                        color: 'rgba(255,255,255,0.35)',
+                        font: { size: 11 }
+                    }
+                }
+            }
+        }
+    });
+    </script>
+</body>
+</html>
