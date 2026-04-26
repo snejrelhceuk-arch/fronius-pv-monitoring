@@ -107,6 +107,15 @@ def analyse_redirect():
     return redirect(f"/erzeuger?{nav_query}" if nav_query else '/erzeuger')
 
 
+@bp.route('/analyse/primaerenergie')
+def analyse_primaerenergie():
+    """Primärenergie-Importe Deutschland 1990–2026 — statische Übersicht"""
+    nav_context = _get_nav_context(request.args)
+    nav_query = urlencode(nav_context)
+    return render_template('analyse_primaerenergie_view.html',
+                           nav_query=('?' + nav_query) if nav_query else '')
+
+
 @bp.route('/analyse/pv')
 @bp.route('/analyse/haushalt')
 @bp.route('/analyse/amortisation')
