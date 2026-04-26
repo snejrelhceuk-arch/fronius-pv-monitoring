@@ -220,8 +220,27 @@ class Actuator:
             verify = aktor.verifiziere(aktion)
             ergebnis['verify'] = verify
             if not verify.get('ok'):
-                LOG.warning(f"VERIFIKATION FEHLGESCHLAGEN: {aktion.get('kommando')} "
-                            f"— soll={verify.get('soll')}, ist={verify.get('ist')}")
+                # Eskalation (2026-04-26): Verifikations-Fehler propagieren.
+                # Vorher wurde nur LOG.warning geschrieben und das Ergebnis
+                # mit `ok=True` weitergereicht — der OperatorOverrideProcessor
+                # hielt den Hold dadurch unbegrenzt für „erfolgreich" und
+                # die Steuerbox-UI sah ein gespeichertes, aber wirkungsloses
+                # Setting. Jetzt:
+                #   - ergebnis.ok = False
+                #   - dedup-Erfolgs-Timestamp zurücknehmen
+                #   - Fehler-Cooldown setzen (verhindert Endlos-Reapply)
+                LOG.warning(
+                    f"VERIFIKATION FEHLGESCHLAGEN: {aktion.get('kommando')} "
+                    f"— soll={verify.get('soll')}, ist={verify.get('ist')}, "
+                    f"grund={verify.get('grund', '')} → ergebnis.ok=False"
+                )
+                ergebnis['ok'] = False
+                ergebnis['detail'] = (
+                    f"Verifikation fehlgeschlagen "
+                    f"(soll={verify.get('soll')}, ist={verify.get('ist')})"
+                )
+                self._letzte_aktion.pop(dedup_key, None)
+                self._letzte_fehler[dedup_key] = now
 
         # In Persist-DB loggen
         self._log_aktion(aktion, ergebnis)

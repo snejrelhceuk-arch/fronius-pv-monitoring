@@ -194,25 +194,47 @@ class OperatorOverrideProcessor:
     def _active_hold_needs_reapply(action: str, params: dict[str, Any],
                                    obs_flags: dict[str, bool | None],
                                    elapsed_s: int = 0) -> bool:
-        """True wenn ein aktiver Hold erneut ausgeführt werden muss."""
+        """True wenn ein aktiver Hold erneut ausgeführt werden muss.
+
+        Vereinfachtes Modell (2026-04-26):
+        Eine externe Schaltung wird in `RegelHeizpatrone`/`RegelKlimaanlage`
+        erkannt und ruft synchron `_cancel_conflicting_overrides()` auf.
+        Cancellation setzt den Override-Status auf `released` — er erscheint
+        anschließend nicht mehr im `status='active'`-Cursor.
+
+        Wenn wir HIER landen, ist der Override also gültig und keine externe
+        Aktion hat ihn verworfen. Konsequenz:
+          - IST == SOLL  → kein Reapply nötig (idempotent)
+          - IST != SOLL  → Reapply nötig (Engine oder anderer Aktor hat
+                            den Zustand verändert; User-Intent gilt weiter)
+
+        Vorher hat dieser Code im Drift-Fall spekuliert, ob die Abweichung
+        extern verursacht war, und vorsichtshalber nicht reapplied — was
+        echte User-Intents stillschweigend hat verfallen lassen. Diese
+        Spekulation entfällt jetzt: Externe Aktionen werden eigenständig
+        durch die Cancellation behandelt.
+        """
         if action == 'hp_toggle':
             state = params.get('state')
             ist_an = obs_flags.get('heizpatrone_aktiv')
             if ist_an is None:
+                # Zustand unbekannt → konservativ NICHT reapplien.
                 return False
-            if state == 'on' and ist_an is True:
-                return False
-            if state == 'off' and ist_an is False:
-                return False
+            if state == 'on':
+                return ist_an is False  # Drift → reapply
+            if state == 'off':
+                return ist_an is True  # Drift → reapply
+            return False
         if action == 'klima_toggle':
             state = params.get('state')
             ist_an = obs_flags.get('klima_aktiv')
             if ist_an is None:
                 return False
-            if state == 'on' and ist_an is True:
-                return False
-            if state == 'off' and ist_an is False:
-                return False
+            if state == 'on':
+                return ist_an is False
+            if state == 'off':
+                return ist_an is True
+            return False
         if action == 'battery_mode':
             mode = params.get('mode')
             ist_mode = obs_flags.get('soc_mode')
