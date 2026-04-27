@@ -283,7 +283,21 @@ class BatteryConfig:
         
         if not changes:
             print("Keine Änderungen nötig.")
-            return None
+            # Sentinel-Objekt: kein HTTP-Aufruf nötig (Werte bereits am Ziel),
+            # darf von Aufrufern nicht als Fehler interpretiert werden.
+            # Truthy + erkennbar via .noop=True. Vorher wurde None geliefert,
+            # was im aktor_batterie._retry als FEHLER gewertet wurde und einen
+            # 5-min FEHLER-Cooldown auf den Dedup-Key auslöste
+            # (Audit 2026-04-27, Override #104).
+            class _NoOpResult:
+                noop = True
+                status_code = 204
+                text = ''
+                def __bool__(self):  # truthy für `if not result`-Checks
+                    return True
+                def json(self):  # API-kompatibel
+                    return {'writeSuccess': [], 'writeFailure': [], 'noop': True}
+            return _NoOpResult()
         
         # Anzeigen
         print("Geplante Änderungen:")

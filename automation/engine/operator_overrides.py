@@ -240,6 +240,14 @@ class OperatorOverrideProcessor:
             ist_mode = obs_flags.get('soc_mode')
             ist_min = obs_flags.get('soc_min')
             ist_max = obs_flags.get('soc_max')
+            # Grace-Period: obs_state wird nur im fast-Zyklus (60 s) durch den
+            # data_collector aktualisiert. Direkt nach dem ersten Schreibvorgang
+            # hinkt obs noch hinterher. Ohne diesen Schutz triggert der erste
+            # Reapply (~17 s spaeter, Audit 2026-04-27 Override #106) einen
+            # ueberfluessigen set_soc_mode-Befehl auf veralteten Daten, der
+            # vor dem No-Op-Fix einen 5-min FEHLER-Cooldown ausgeloest hat.
+            if elapsed_s < 90:
+                return False
             if mode == 'komfort':
                 if ist_mode == 'manual' and ist_min == 25 and ist_max == 75:
                     return False

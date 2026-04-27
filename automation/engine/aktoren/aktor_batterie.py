@@ -215,7 +215,7 @@ class AktorBatterie(AktorBase):
                     "SOC_MIN/SOC_MAX-Schreibvorgänge wirkungslos)")
         ok = self._retry(
             "SOC_MODE='manual' (auto-fix)", self._get_http_api, '_http_api',
-            lambda a: a.set_soc_mode('manual'),
+            lambda a: self._write_ok(a.set_soc_mode('manual')),
         )
         if not ok:
             LOG.error("  SOC-Mode-Guard: Wechsel auf 'manual' fehlgeschlagen — "
@@ -223,13 +223,41 @@ class AktorBatterie(AktorBase):
                       "wirkungslos bleiben.")
         return ok
 
+    @staticmethod
+    def _write_ok(result) -> bool:
+        """Erfolgsbewertung eines Fronius-`BatteryConfig.write()`-Returns.
+
+        Vorher hat `_retry` jedes None als Fehler gewertet. `write()` liefert
+        aber für No-Ops (Soll == Ist) ein leeres Ergebnis und ist damit kein
+        HTTP-Fehler, sondern ein erfolgreich-aufgelöster Schreibwunsch.
+        Dieses Helper-Verfahren erkennt:
+          - None  → Fehler (echter API-Aufruf-Fehler)
+          - Result mit .noop == True → Erfolg (kein HTTP nötig)
+          - Result mit status_code in {200, 204} und ohne writeFailure → Erfolg
+          - alles andere → Fehler
+        """
+        if result is None:
+            return False
+        if getattr(result, 'noop', False):
+            return True
+        status = getattr(result, 'status_code', None)
+        if status not in (200, 204):
+            return False
+        try:
+            body = result.json() if getattr(result, 'text', '') else {}
+        except Exception:
+            body = {}
+        if body.get('writeFailure') or body.get('validationErrors'):
+            return False
+        return True
+
     def _cmd_set_soc_min(self, value) -> bool:
         """SOC_MIN via HTTP API."""
         if not self._ensure_manual_mode():
             return False
         return self._retry(
             f'SOC_MIN={value}', self._get_http_api, '_http_api',
-            lambda api: api.set_soc_min(value)
+            lambda api: self._write_ok(api.set_soc_min(value))
         )
 
     def _cmd_set_soc_max(self, value) -> bool:
@@ -238,14 +266,14 @@ class AktorBatterie(AktorBase):
             return False
         return self._retry(
             f'SOC_MAX={value}', self._get_http_api, '_http_api',
-            lambda api: api.set_soc_max(value)
+            lambda api: self._write_ok(api.set_soc_max(value))
         )
 
     def _cmd_set_soc_mode(self, mode) -> bool:
         """SOC_MODE via HTTP API ('auto'/'manual')."""
         return self._retry(
             f'SOC_MODE={mode}', self._get_http_api, '_http_api',
-            lambda api: api.set_soc_mode(mode)
+            lambda api: self._write_ok(api.set_soc_mode(mode))
         )
 
     def _cmd_grid_charge(self, enabled) -> bool:
