@@ -955,155 +955,220 @@ def _fetch_temperatures(result):
 
 
 def _fetch_hp_status(now, result):
-    """Fritz!DECT Heizpatronen-Status: Log-Daten + Live-Abfrage."""
-    # Log-Daten aus schaltlog.txt (Engine schreibt HP-Events nur dorthin)
+    """Schaltprotokoll der letzten 24h aus schaltlog.txt (von Schicht C geschrieben).
+
+    Liefert HP-, Klima-, WP-Sollwert- und Batt-SOC-Schaltvorgänge.
+    Doppel-Logging (ENGINE Steuerbox-Override + EXTERN-Detection desselben
+    physischen Schaltvorgangs) wird unterdrückt: EXTERN-Einträge die innerhalb
+    ±DOUBLET_WINDOW_S zu einem ENGINE-Event mit "Steuerbox Override"-Grund
+    passen, werden als Duplikat verworfen.
+    """
     import re as _re_hp
+    DOUBLET_WINDOW_S = 120  # ±2 Min: Übergangs-Fenster für ENGINE/EXTERN-Doppel
+    BATT_DEDUP_WINDOW_S = 90  # gleiche EXTERN-Drift mehrfach geloggt → entdoppeln
+    cutoff_24h = now - 86400
+
+    def _parse_ts(_d, _t):
+        try:
+            return time.mktime(time.strptime(f'{_d} {_t}', '%Y-%m-%d %H:%M:%S'))
+        except Exception:
+            return None
+
     try:
         _schaltlog_path = str(Path(__file__).resolve().parent.parent / 'logs' / 'schaltlog.txt')
-        _today_str = time.strftime('%Y-%m-%d', time.localtime(now))
-        hp_aktionen = []
-        klima_aktionen = []
-        hp_seen = set()
-        klima_seen = set()
-        _hp_pattern = _re_hp.compile(
+
+        _hp_engine_pat = _re_hp.compile(
             r'^\s*(\d{4}-\d{2}-\d{2}),\s*(\d{2}:\d{2}:\d{2})\s+'
-            r'ENGINE\s+fritzdect\s+'
-            r'(hp_ein|hp_aus)\S*\s+'
-            r'(OK|FEHLER)\s*(.*)')
-        _klima_pattern = _re_hp.compile(
+            r'ENGINE\s+fritzdect\s+(hp_ein|hp_aus)\S*\s+(OK|FEHLER)\s*(.*)')
+        _klima_engine_pat = _re_hp.compile(
             r'^\s*(\d{4}-\d{2}-\d{2}),\s*(\d{2}:\d{2}:\d{2})\s+'
-            r'ENGINE\s+fritzdect\s+'
-            r'(klima_ein|klima_aus)\S*\s+'
-            r'(OK|FEHLER)\s*(.*)')
-        _hp_extern_pattern = _re_hp.compile(
+            r'ENGINE\s+fritzdect\s+(klima_ein|klima_aus)\S*\s+(OK|FEHLER)\s*(.*)')
+        _hp_extern_pat = _re_hp.compile(
             r'^\s*~?\s*(\d{4}-\d{2}-\d{2}),\s*(\d{2}:\d{2}:\d{2})\s+'
             r'EXTERN\s+fritzdect\s+HP\s+extern\s+(EIN|AUS)\s+--\s*(.*)',
             _re_hp.IGNORECASE)
-        _klima_extern_pattern = _re_hp.compile(
+        _klima_extern_pat = _re_hp.compile(
             r'^\s*~?\s*(\d{4}-\d{2}-\d{2}),\s*(\d{2}:\d{2}:\d{2})\s+'
             r'EXTERN\s+fritzdect\s+Klima\s+extern\s+(EIN|AUS)\s+--\s*(.*)',
             _re_hp.IGNORECASE)
+        _wp_engine_pat = _re_hp.compile(
+            r'^\s*(\d{4}-\d{2}-\d{2}),\s*(\d{2}:\d{2}:\d{2})\s+'
+            r'ENGINE\s+waermepumpe\s+(set_ww_soll|set_heiz_soll)=(\S+)\s+'
+            r'(OK|FEHLER)\s*(.*)')
+        _batt_engine_pat = _re_hp.compile(
+            r'^\s*(\d{4}-\d{2}-\d{2}),\s*(\d{2}:\d{2}:\d{2})\s+'
+            r'ENGINE\s+batterie\s+(set_soc_min|set_soc_max|set_soc_mode)=(\S+)\s+'
+            r'(OK|FEHLER)\s*(.*)')
+        _batt_extern_pat = _re_hp.compile(
+            r'^\s*~?\s*(\d{4}-\d{2}-\d{2}),\s*(\d{2}:\d{2}:\d{2})\s+'
+            r'EXTERN\s+batterie\s+(SOC_MIN|SOC_MAX|SOC_MODE)\s+(\S+)\s+--\s*(.*)',
+            _re_hp.IGNORECASE)
+
+        # Phase 1: Roh-Events (im 24h-Fenster) sammeln
+        hp_events, klima_events = [], []
+        wp_events, batt_events = [], []
+
         if os.path.exists(_schaltlog_path):
             with open(_schaltlog_path, 'r') as _slf:
                 for _line in _slf:
-                    _m = _hp_pattern.match(_line)
+                    _m = _hp_engine_pat.match(_line)
                     if _m:
-                        _datum, _zeit, _cmd, _erg, _grund = _m.groups()
-                        if _datum == _today_str and _erg == 'OK':
-                            _grund_txt = (_grund or '').strip()[:120]
-                            _key = (_datum, _zeit, _cmd, 'OK', _grund_txt, 'automation')
-                            if _key in hp_seen:
-                                continue
-                            hp_seen.add(_key)
-                            hp_aktionen.append({
-                                'ts': f'{_datum} {_zeit[:5]}',
-                                'kommando': _cmd,
-                                'wert': '',
-                                'grund': _grund_txt,
-                                'ergebnis': _erg,
-                                'quelle': 'automation',
+                        _d, _t, _cmd, _erg, _g = _m.groups()
+                        _ep = _parse_ts(_d, _t)
+                        if _ep is not None and _ep >= cutoff_24h:
+                            hp_events.append({
+                                'epoch': _ep, 'ts': f'{_d} {_t[:5]}',
+                                'kommando': _cmd, 'wert': '',
+                                'grund': (_g or '').strip()[:120],
+                                'ergebnis': _erg, 'quelle': 'automation',
+                            })
+                        continue
+                    _m = _klima_engine_pat.match(_line)
+                    if _m:
+                        _d, _t, _cmd, _erg, _g = _m.groups()
+                        _ep = _parse_ts(_d, _t)
+                        if _ep is not None and _ep >= cutoff_24h:
+                            klima_events.append({
+                                'epoch': _ep, 'ts': f'{_d} {_t[:5]}',
+                                'kommando': _cmd, 'wert': '',
+                                'grund': (_g or '').strip()[:120],
+                                'ergebnis': _erg, 'quelle': 'automation',
+                            })
+                        continue
+                    _m = _hp_extern_pat.match(_line)
+                    if _m:
+                        _d, _t, _state, _g = _m.groups()
+                        _ep = _parse_ts(_d, _t)
+                        if _ep is not None and _ep >= cutoff_24h:
+                            _cmd = 'hp_ein' if _state.upper() == 'EIN' else 'hp_aus'
+                            hp_events.append({
+                                'epoch': _ep, 'ts': f'{_d} {_t[:5]}',
+                                'kommando': _cmd, 'wert': '',
+                                'grund': (_g or 'Manuell/extern').strip()[:120],
+                                'ergebnis': 'EXTERN', 'quelle': 'extern',
+                            })
+                        continue
+                    _m = _klima_extern_pat.match(_line)
+                    if _m:
+                        _d, _t, _state, _g = _m.groups()
+                        _ep = _parse_ts(_d, _t)
+                        if _ep is not None and _ep >= cutoff_24h:
+                            _cmd = 'klima_ein' if _state.upper() == 'EIN' else 'klima_aus'
+                            klima_events.append({
+                                'epoch': _ep, 'ts': f'{_d} {_t[:5]}',
+                                'kommando': _cmd, 'wert': '',
+                                'grund': (_g or 'Manuell/extern').strip()[:120],
+                                'ergebnis': 'EXTERN', 'quelle': 'extern',
+                            })
+                        continue
+                    _m = _wp_engine_pat.match(_line)
+                    if _m:
+                        _d, _t, _cmd, _wert, _erg, _g = _m.groups()
+                        _ep = _parse_ts(_d, _t)
+                        if _ep is not None and _ep >= cutoff_24h and _erg == 'OK':
+                            wp_events.append({
+                                'epoch': _ep, 'ts': f'{_d} {_t[:5]}',
+                                'kommando': _cmd, 'wert': _wert,
+                                'grund': (_g or '').strip()[:120],
+                                'ergebnis': _erg, 'quelle': 'automation',
+                            })
+                        continue
+                    _m = _batt_engine_pat.match(_line)
+                    if _m:
+                        _d, _t, _cmd, _wert, _erg, _g = _m.groups()
+                        _ep = _parse_ts(_d, _t)
+                        if _ep is not None and _ep >= cutoff_24h:
+                            batt_events.append({
+                                'epoch': _ep, 'ts': f'{_d} {_t[:5]}',
+                                'kommando': _cmd, 'wert': _wert.strip('"'),
+                                'grund': (_g or '').strip()[:120],
+                                'ergebnis': _erg, 'quelle': 'automation',
+                            })
+                        continue
+                    _m = _batt_extern_pat.match(_line)
+                    if _m:
+                        _d, _t, _key, _val, _g = _m.groups()
+                        _ep = _parse_ts(_d, _t)
+                        if _ep is not None and _ep >= cutoff_24h:
+                            _cmd_map = {'SOC_MIN': 'set_soc_min',
+                                        'SOC_MAX': 'set_soc_max',
+                                        'SOC_MODE': 'set_soc_mode'}
+                            batt_events.append({
+                                'epoch': _ep, 'ts': f'{_d} {_t[:5]}',
+                                'kommando': _cmd_map.get(_key.upper(), 'extern'),
+                                'wert': _val,
+                                'grund': (_g or 'Drift erkannt').strip()[:120],
+                                'ergebnis': 'EXTERN', 'quelle': 'extern',
                             })
                         continue
 
-                    _mk = _klima_pattern.match(_line)
-                    if _mk:
-                        _datum, _zeit, _cmd, _erg, _grund = _mk.groups()
-                        if _datum == _today_str and _erg == 'OK':
-                            _grund_txt = (_grund or '').strip()[:120]
-                            _key = (_datum, _zeit, _cmd, 'OK', _grund_txt, 'automation')
-                            if _key in klima_seen:
-                                continue
-                            klima_seen.add(_key)
-                            klima_aktionen.append({
-                                'ts': f'{_datum} {_zeit[:5]}',
-                                'kommando': _cmd,
-                                'wert': '',
-                                'grund': _grund_txt,
-                                'ergebnis': _erg,
-                                'quelle': 'automation',
-                            })
+        # Phase 2: Doublet-Filter (ENGINE-Schreibvorgang + EXTERN-Drift-Detect
+        # desselben physischen Vorgangs, von C zweifach geloggt). EXTERN-Eintrag
+        # verwerfen, wenn ein ENGINE-OK-Eintrag für denselben Aktor/Kommando
+        # innerhalb ±DOUBLET_WINDOW_S existiert. Damit fallen sowohl
+        # Steuerbox-Override-Echos als auch Drift-Echos der C-Aktoren weg.
+        def _filter_doublets(events, eng_cmd_pairs):
+            """eng_cmd_pairs: dict {extern_cmd: matching_engine_cmd} (für Übersetzung)."""
+            engine_oks = [
+                e for e in events
+                if e['quelle'] == 'automation' and e['ergebnis'] == 'OK'
+            ]
+            out = []
+            for ev in events:
+                if ev['quelle'] == 'extern':
+                    matching_cmd = eng_cmd_pairs.get(ev['kommando'], ev['kommando'])
+                    is_doublet = any(
+                        eng['kommando'] == matching_cmd
+                        and abs(eng['epoch'] - ev['epoch']) <= DOUBLET_WINDOW_S
+                        for eng in engine_oks
+                    )
+                    if is_doublet:
                         continue
+                out.append(ev)
+            return out
 
-                    _mx = _hp_extern_pattern.match(_line)
-                    if _mx:
-                        _datum, _zeit, _state, _grund = _mx.groups()
-                        if _datum == _today_str:
-                            _cmd = 'hp_ein' if str(_state).upper() == 'EIN' else 'hp_aus'
-                            _grund_txt = (_grund or 'Manuell/extern geschaltet').strip()[:120]
-                            _key = (_datum, _zeit, _cmd, 'EXTERN', _grund_txt, 'extern')
-                            if _key in hp_seen:
-                                continue
-                            hp_seen.add(_key)
-                            hp_aktionen.append({
-                                'ts': f'{_datum} {_zeit[:5]}',
-                                'kommando': _cmd,
-                                'wert': '',
-                                'grund': _grund_txt,
-                                'ergebnis': 'EXTERN',
-                                'quelle': 'extern',
-                            })
-                        continue
+        hp_events = _filter_doublets(hp_events, {'hp_ein': 'hp_ein', 'hp_aus': 'hp_aus'})
+        klima_events = _filter_doublets(klima_events,
+                                        {'klima_ein': 'klima_ein', 'klima_aus': 'klima_aus'})
+        # Batt: EXTERN matcht generisch auf set_soc_min/max/mode mit gleichem kommando
+        batt_events = _filter_doublets(batt_events, {})
+        # Zusätzlich: EXTERN-Drift-Echos entdoppeln (gleicher kommando+wert
+        # innerhalb BATT_DEDUP_WINDOW_S → nur den ersten behalten)
+        batt_events.sort(key=lambda e: e['epoch'])
+        _last_seen = {}
+        _dedup = []
+        for ev in batt_events:
+            if ev['quelle'] == 'extern':
+                _k = (ev['kommando'], ev['wert'])
+                if _k in _last_seen and (ev['epoch'] - _last_seen[_k]) <= BATT_DEDUP_WINDOW_S:
+                    continue
+                _last_seen[_k] = ev['epoch']
+            _dedup.append(ev)
+        batt_events = _dedup
 
-                    _mxk = _klima_extern_pattern.match(_line)
-                    if _mxk:
-                        _datum, _zeit, _state, _grund = _mxk.groups()
-                        if _datum == _today_str:
-                            _cmd = 'klima_ein' if str(_state).upper() == 'EIN' else 'klima_aus'
-                            _grund_txt = (_grund or 'Manuell/extern geschaltet').strip()[:120]
-                            _key = (_datum, _zeit, _cmd, 'EXTERN', _grund_txt, 'extern')
-                            if _key in klima_seen:
-                                continue
-                            klima_seen.add(_key)
-                            klima_aktionen.append({
-                                'ts': f'{_datum} {_zeit[:5]}',
-                                'kommando': _cmd,
-                                'wert': '',
-                                'grund': _grund_txt,
-                                'ergebnis': 'EXTERN',
-                                'quelle': 'extern',
-                            })
-            # Neueste zuerst
-            hp_aktionen.reverse()
-            hp_aktionen = hp_aktionen[:120]
-            klima_aktionen.reverse()
-            klima_aktionen = klima_aktionen[:120]
+        # Phase 3: Sortierung (neueste zuerst) und Begrenzung
+        for _lst in (hp_events, klima_events, wp_events, batt_events):
+            _lst.sort(key=lambda e: e['epoch'], reverse=True)
+        # epoch-Feld nicht ans Frontend
+        def _strip(lst, n=120):
+            return [{k: v for k, v in e.items() if k != 'epoch'} for e in lst[:n]]
 
-        result['hp_aktionen'] = hp_aktionen
-        result['klima_aktionen'] = klima_aktionen
+        result['hp_aktionen'] = _strip(hp_events)
+        result['klima_aktionen'] = _strip(klima_events)
+        result['wp_aktionen'] = _strip(wp_events)
+        result['batt_aktionen'] = _strip(batt_events)
         result['hp_bursts_heute'] = sum(
-            1 for a in hp_aktionen
-            if a['kommando'] == 'hp_ein' and a['ergebnis'] == 'OK')
-
-        # ── WP-Sollwert-Schaltaktionen (set_ww_soll, set_heiz_soll) ──
-        wp_aktionen = []
-        _wp_pattern = _re_hp.compile(
-            r'^\s*(\d{4}-\d{2}-\d{2}),\s*(\d{2}:\d{2}:\d{2})\s+'
-            r'ENGINE\s+waermepumpe\s+'
-            r'(set_ww_soll|set_heiz_soll)=(\S+)\s+'
-            r'(OK|FEHLER)\s*(.*)')
-        if os.path.exists(_schaltlog_path):
-            with open(_schaltlog_path, 'r') as _wlf:
-                for _wline in _wlf:
-                    _mw = _wp_pattern.match(_wline)
-                    if _mw:
-                        _datum, _zeit, _cmd, _wert, _erg, _grund = _mw.groups()
-                        if _datum == _today_str and _erg == 'OK':
-                            wp_aktionen.append({
-                                'ts': f'{_datum} {_zeit[:5]}',
-                                'kommando': _cmd,
-                                'wert': _wert,
-                                'grund': (_grund or '').strip()[:120],
-                            })
-            wp_aktionen.reverse()
-            wp_aktionen = wp_aktionen[:120]
-        result['wp_aktionen'] = wp_aktionen
+            1 for a in hp_events
+            if a['kommando'] == 'hp_ein' and a['ergebnis'] == 'OK'
+            and a['epoch'] >= now - 86400)
 
     except Exception as _he:
-        logging.debug(f"HP-Log (schaltlog): {_he}")
+        logging.debug(f"Schaltlog-Parse: {_he}")
         result['hp_aktionen'] = []
         result['klima_aktionen'] = []
         result['hp_bursts_heute'] = 0
         result['wp_aktionen'] = []
+        result['batt_aktionen'] = []
 
     # Live-Status von Fritz!Box (eigener Cache 120s)
     try:
@@ -1165,6 +1230,35 @@ def _fetch_hp_status(now, result):
         result['hp_status'] = {
             'zustand': '?', 'live': False, 'seit': None,
             'grund': '', 'kommando': None,
+        }
+
+    # Klima-Status: Live-Power (klima_w aus fritzdect_readings, schon im result)
+    # + letzter Schaltvorgang aus klima_aktionen
+    try:
+        _klima_w = result.get('klima_w', 0) or 0
+        _klima_akt = result.get('klima_aktionen', [])
+        _last_klima = _klima_akt[0] if _klima_akt else {}
+        # Schwelle 5W: Stand-by/Geist-Power vermeiden
+        if _klima_w >= 5:
+            _zustand = 'EIN'
+        elif _klima_w is not None:
+            _zustand = 'AUS'
+        else:
+            _zustand = '?'
+        result['klima_status'] = {
+            'zustand': _zustand,
+            'live': True,
+            'power_w': round(_klima_w, 1),
+            'seit': _last_klima.get('ts'),
+            'grund': _last_klima.get('grund', ''),
+            'kommando': _last_klima.get('kommando'),
+            'quelle_letzte': _last_klima.get('quelle'),
+        }
+    except Exception as _kle:
+        logging.debug(f"Klima-Status: {_kle}")
+        result['klima_status'] = {
+            'zustand': '?', 'live': False, 'seit': None,
+            'grund': '', 'kommando': None, 'quelle_letzte': None,
         }
 
 

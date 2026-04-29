@@ -1691,38 +1691,36 @@
             document.getElementById('it-f2-dc').textContent = d.f2_temp_dc != null ? d.f2_temp_dc : '--';
             // Batt-Temp (in Temp-Zeile 5)
             document.getElementById('bd-temp').textContent = d.battery_temp != null ? d.battery_temp : '--';
-            // ── Zeile 2: Batt-Automation (einzeilig) ────────────────
-            const phasen = d.automation_phasen || {};
+            // ── Zeile 2: Batt-Schaltvorgänge der letzten 24h ─────────
+            // (ersetzt frühere predicted-Phasenzeile; Quelle: schaltlog.txt via C)
+            const battAktionen = d.batt_aktionen || [];
             const battBody = document.getElementById('battAutoBody');
-
-            const statusIcons = {
-                done: '✓', active: '●', pending: '⏳',
-                skipped: '–', waiting: '⏳',
-            };
-            const phaseKeys = [
-                {key: 'morgen',      label: 'Früh'},
-                {key: 'nachmittag',  label: 'Nachm.'},
-                {key: 'komfort',     label: 'Abend'},
-            ];
-
-            let battParts = [];
-            for (const pd of phaseKeys) {
-                const p = phasen[pd.key];
-                if (!p) continue;
-                const st = p.status || 'pending';
-                const icon = statusIcons[st] || '○';
-                const zeit = p.zeit ? ` <span class="ap-zeit">(${p.zeit})</span>` : '';
-                let desc = '';
-                const aktionClean = (p.aktion || '').replace(/^Grenzen\s*→\s*/i, '');
-                if (aktionClean) desc += `<span class="ap-val">${aktionClean}</span>`;
-                if (!desc) desc = '—';
-                battParts.push(`${icon} ${pd.label}: ${desc}${zeit}`);
+            if (battAktionen.length > 0) {
+                const battItems = battAktionen.slice().reverse().map(a => {
+                    const zeit = a.ts ? a.ts.substring(11, 16) : '?';
+                    const cmd = a.kommando || '';
+                    const isExtern = String(a.quelle || '').toLowerCase() === 'extern';
+                    const isFehler = a.ergebnis === 'FEHLER';
+                    // Farbpaar Batt: auto=emerald / extern=amber (verwandt warm)
+                    let color = isExtern ? '#f59e0b' : '#10b981';
+                    if (isFehler) color = '#6b7280';  // grau für gescheitert
+                    let kuerzel;
+                    if (cmd === 'set_soc_min') kuerzel = `min=${a.wert}`;
+                    else if (cmd === 'set_soc_max') kuerzel = `max=${a.wert}`;
+                    else if (cmd === 'set_soc_mode') kuerzel = `${a.wert}`;
+                    else kuerzel = cmd;
+                    const suffix = isFehler ? '✖' : '';
+                    const src = isExtern ? 'extern' : 'auto';
+                    const titleAttr = `${src}: ${a.grund || ''}`.replace(/"/g, '&quot;');
+                    return `<span style="color:${color}" title="${titleAttr}">${zeit} ${kuerzel}${suffix}</span>`;
+                });
+                const battTimeline = buildTimelineSnippet(battItems);
+                battBody.innerHTML = `<span class="ap-icon">⚡</span><span class="ap-label" style="color:#10b981">Batt 24h:</span> ${battTimeline}`;
+            } else {
+                battBody.innerHTML = `<span class="ap-icon">⚡</span><span class="ap-label" style="color:#10b981">Batt 24h:</span> <span class="ap-text">keine SOC-Schaltungen</span>`;
             }
-            battBody.innerHTML = battParts.length
-                ? `<span class="ap-icon">⚡</span><span class="ap-label" style="color:#10b981">Batt:</span> ${battParts.join(' <span class="ap-sep">│</span> ')}`
-                : '<span class="ap-icon">⏳</span> <span class="ap-text">—</span>';
 
-            // ── Zeile 3: HP-Schaltzeiten (einzeilig, ohne Live-Statuswert) ───────
+            // ── Zeile 3: HP-Schaltzeiten (24h, einzeilig) ───────
             const hpAktionen = d.hp_aktionen || [];
             const hpBody = document.getElementById('hpAutoBody');
             if (hpAktionen.length > 0) {
@@ -1730,34 +1728,51 @@
                     const zeit    = a.ts ? a.ts.substring(11, 16) : '?';
                     const aIsEin  = a.kommando === 'hp_ein';
                     const isExtern = String(a.quelle || '').toLowerCase() === 'extern';
-                    const color   = isExtern ? '#ef4444' : '#fb923c';
+                    const isFehler = a.ergebnis === 'FEHLER';
+                    // Farbpaar HP: auto=orange / extern=rot (warmer Verwandter)
+                    let color = isExtern ? '#dc2626' : '#fb923c';
+                    if (isFehler) color = '#6b7280';
                     const symbol  = aIsEin ? '\u25b2' : '\u25bc';
+                    const suffix = isFehler ? '✖' : '';
                     const src     = isExtern ? 'extern' : 'auto';
-                    return `<span style="color:${color}" title="${src}: ${a.grund || ''}">${zeit}${symbol}</span>`;
+                    const titleAttr = `${src}: ${a.grund || ''}`.replace(/"/g, '&quot;');
+                    return `<span style="color:${color}" title="${titleAttr}">${zeit}${symbol}${suffix}</span>`;
                 });
                 const hpTimeline = buildTimelineSnippet(hpItems);
-                hpBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#fb923c">HP:</span> ${hpTimeline}`;
+                hpBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#fb923c">HP 24h:</span> ${hpTimeline}`;
             } else {
-                hpBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#fb923c">HP:</span> <span class="ap-text">keine Schaltungen heute</span>`;
+                hpBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#fb923c">HP 24h:</span> <span class="ap-text">keine Schaltungen</span>`;
             }
 
-            // ── Zeile 4: Klima-Schaltzeiten (einzeilig) ─────────────────
+            // ── Zeile 4: Klima-Schaltzeiten (24h, einzeilig) ─────────────────
             const klimaAktionen = d.klima_aktionen || [];
+            const klimaStatus = d.klima_status || {};
             const klimaBody = document.getElementById('klimaAutoBody');
+            // Live-Status-Präfix (EIN/AUS aus klima_w)
+            const kZustand = klimaStatus.zustand || '?';
+            const kPow = klimaStatus.power_w != null ? klimaStatus.power_w : null;
+            const kPowText = (kZustand === 'EIN' && kPow != null) ? ` ${kPow}W` : '';
+            const kStateColor = kZustand === 'EIN' ? '#06b6d4' : (kZustand === 'AUS' ? '#475569' : '#9ca3af');
+            const kPrefix = `<span style="color:${kStateColor};font-weight:600" title="Live (klima_w)">${kZustand}${kPowText}</span>`;
             if (klimaAktionen.length > 0) {
                 const klimaItems = klimaAktionen.slice().reverse().map(a => {
                     const zeit = a.ts ? a.ts.substring(11, 16) : '?';
                     const aIsEin = a.kommando === 'klima_ein';
                     const isExtern = String(a.quelle || '').toLowerCase() === 'extern';
-                    const color = isExtern ? '#ef4444' : '#fb923c';
+                    const isFehler = a.ergebnis === 'FEHLER';
+                    // Farbpaar Klima: auto=cyan / extern=blau (kühler Verwandter)
+                    let color = isExtern ? '#3b82f6' : '#06b6d4';
+                    if (isFehler) color = '#6b7280';
                     const symbol  = aIsEin ? '\u25b2' : '\u25bc';
-                    const src = isExtern ? 'extern' : 'automation';
-                    return `<span style="color:${color}" title="${src}: ${a.grund || ''}">${zeit}${symbol}</span>`;
+                    const suffix = isFehler ? '✖' : '';
+                    const src = isExtern ? 'extern' : 'auto';
+                    const titleAttr = `${src}: ${a.grund || ''}`.replace(/"/g, '&quot;');
+                    return `<span style="color:${color}" title="${titleAttr}">${zeit}${symbol}${suffix}</span>`;
                 });
                 const klimaTimeline = buildTimelineSnippet(klimaItems);
-                klimaBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#00bcd4">Klima:</span> ${klimaTimeline}`;
+                klimaBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#06b6d4">Klima 24h:</span> ${kPrefix} <span class="ap-sep">·</span> ${klimaTimeline}`;
             } else {
-                klimaBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#00bcd4">Klima:</span> <span class="ap-text">keine Schaltungen heute</span>`;
+                klimaBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#06b6d4">Klima 24h:</span> ${kPrefix} <span class="ap-sep">·</span> <span class="ap-text">keine Schaltungen</span>`;
             }
 
             // ── Zeile 5: WP Wärmepumpe (zweizeilig) ─────────────────
