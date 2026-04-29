@@ -29,7 +29,9 @@ Siehe: doc/AUTOMATION_ARCHITEKTUR.md
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 import smtplib
 import socket
 import sqlite3
@@ -40,6 +42,7 @@ from typing import Optional
 
 import config as app_config
 from automation.engine import credential_store
+from automation.engine import diagnos_alert_state
 from automation.engine.obs_state import ObsState
 from automation.engine.wattpilot_recovery import WattpilotRecoveryManager
 from diagnos.health import run_all as run_diagnos_health
@@ -48,15 +51,66 @@ from diagnos.integrity import run_all as run_diagnos_integrity
 LOG = logging.getLogger('event_notifier')
 
 
+# ═══════════════════════════════════════════════════════════
+# Persistenter Dedup-State
+# ═══════════════════════════════════════════════════════════
+# Sofortalarme und Live-Events werden 1× pro Kalendertag pro Key versandt.
+# Bisher lag der Versandzustand nur in einer In-Memory-Map. Folge: Bei
+# Daemon-Restart (deploy/reboot/crash) gingen die "schon gesendet"-Marker
+# verloren → Doppelmails möglich. Persistierung in einer kleinen JSON-
+# Datei vermeidet das. Heilung erfolgt automatisch bei Tageswechsel.
+
+_DEDUP_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    'config',
+    'event_notifier_dedup.json',
+)
+
+
+def _dedup_load(path: str = _DEDUP_PATH) -> dict[str, str]:
+    """Lade Dedup-Map (event_key → ISO-Datum). Defekte Dateien sind kein Fehler."""
+    try:
+        with open(path, encoding='utf-8') as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return {}
+        return {str(k): str(v) for k, v in data.items()}
+    except FileNotFoundError:
+        return {}
+    except (OSError, json.JSONDecodeError) as exc:
+        LOG.warning(f"Dedup-State nicht lesbar ({path}): {exc} → fresh start")
+        return {}
+
+
+def _dedup_save(state: dict[str, str], path: str = _DEDUP_PATH) -> None:
+    """Speichere Dedup-Map atomar. Tagesalte Einträge werden mitgenommen,
+    Aufräumen erfolgt im EventNotifier (entfernt Einträge < heute)."""
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(state, f, indent=2, sort_keys=True)
+        os.replace(tmp, path)
+    except OSError as exc:
+        LOG.error(f"Dedup-State nicht schreibbar ({path}): {exc}")
+
+
 class EventNotifier:
     """Einmalige E-Mail-Benachrichtigung bei kritischen Events.
 
     Deduplizierung: Jeder Event-Key wird maximal 1× pro Kalendertag
     gemeldet. Reset bei Tageswechsel.
+
+    Persistenz: Versandmarker werden in ``config/event_notifier_dedup.json``
+    geschrieben, sodass ein Daemon-Restart keine Doppelmails verursacht.
     """
 
     def __init__(self):
-        self._gesendet: dict[str, str] = {}  # event_key → ISO-Datum des Versands
+        # event_key → ISO-Datum des Versands. Wird beim Start aus
+        # config/event_notifier_dedup.json geladen, alte Einträge (< heute)
+        # werden gleich entrümpelt.
+        self._gesendet: dict[str, str] = _dedup_load()
+        self._dedup_cleanup()
         self._email = getattr(app_config, 'NOTIFICATION_EMAIL', '')
         self._smtp_host = getattr(app_config, 'NOTIFICATION_SMTP_HOST', 'smtp.example.invalid')
         self._smtp_port = getattr(app_config, 'NOTIFICATION_SMTP_PORT', 465)
@@ -65,6 +119,24 @@ class EventNotifier:
         self._events = getattr(app_config, 'NOTIFICATION_EVENTS', [])
         self._thresholds = getattr(app_config, 'EVENT_THRESHOLDS', {})
         self._wattpilot_recovery = WattpilotRecoveryManager()
+
+    # ── Persistenter Dedup ──────────────────────────────────
+    def _dedup_cleanup(self) -> None:
+        """Entferne Marker, die nicht zum heutigen Datum gehören."""
+        heute = date.today().isoformat()
+        before = len(self._gesendet)
+        self._gesendet = {k: v for k, v in self._gesendet.items() if v == heute}
+        if len(self._gesendet) != before:
+            _dedup_save(self._gesendet)
+
+    def _dedup_mark(self, event_key: str) -> None:
+        """Markiere einen Event-Key als heute versandt und persistiere."""
+        self._gesendet[event_key] = date.today().isoformat()
+        _dedup_save(self._gesendet)
+
+    def _dedup_already_sent(self, event_key: str) -> bool:
+        """True, wenn der Key heute bereits markiert ist."""
+        return self._gesendet.get(event_key) == date.today().isoformat()
 
     def prüfe_und_melde(self, obs: ObsState) -> list[str]:
         """Prüfe alle konfigurierten Events gegen ObsState.
@@ -84,14 +156,14 @@ class EventNotifier:
                 continue
 
             # Schon heute gemeldet?
-            if self._gesendet.get(event_key) == heute:
+            if self._dedup_already_sent(event_key):
                 continue
 
             # Schwelle prüfen
             if self._schwelle_verletzt(obs, threshold):
                 ausgeloest.append(event_key)
                 self._sende_mail(event_key, threshold, obs)
-                self._gesendet[event_key] = heute
+                self._dedup_mark(event_key)
 
         return ausgeloest
 
@@ -220,8 +292,7 @@ class EventNotifier:
             return False
 
         # Deduplizierung: 1× pro Tag
-        heute = date.today().isoformat()
-        if self._gesendet.get(event_key) == heute:
+        if self._dedup_already_sent(event_key):
             LOG.debug("Sunset-Bericht: heute bereits gesendet")
             return False
 
@@ -233,10 +304,30 @@ class EventNotifier:
 
             health_data = self._hole_diagnos_snapshot()
             integrity_data = self._hole_integrity_snapshot()
-            koerper = self._formatiere_sunset_bericht(daten, obs, health_data, integrity_data)
-            self._sende_sunset_mail(koerper)
-            self._gesendet[event_key] = heute
-            LOG.info(f"Sunset-Tagesbericht gesendet → {self._email}")
+
+            # Diff-Filter: nur neue/eskalierte/heartbeat-fällige Befunde
+            # erscheinen als "Auffälligkeit". Stabile Wiederholungen werden
+            # unterdrückt (verfallen lassen). Heilung wird via State-Reset
+            # selbsttätig gelöscht.
+            reportable_names, alert_summary, severity_counts = (
+                self._diff_diagnos_alerts(health_data, integrity_data)
+            )
+
+            koerper = self._formatiere_sunset_bericht(
+                daten, obs, health_data, integrity_data,
+                reportable_names=reportable_names,
+                alert_summary=alert_summary,
+            )
+            self._sende_sunset_mail(koerper, severity_counts)
+            self._dedup_mark(event_key)
+            LOG.info(
+                f"Sunset-Tagesbericht gesendet → {self._email} "
+                f"(neu={alert_summary.get('new', 0)}, "
+                f"changed={alert_summary.get('changed', 0)}, "
+                f"reminder={alert_summary.get('reminder', 0)}, "
+                f"suppressed={alert_summary.get('suppressed', 0)}, "
+                f"healed={alert_summary.get('healed', 0)})"
+            )
             return True
         except Exception as e:
             LOG.error(f"Sunset-Bericht FEHLGESCHLAGEN: {e}")
@@ -352,6 +443,54 @@ class EventNotifier:
         finally:
             conn.close()
 
+    def _diff_diagnos_alerts(
+        self,
+        health_data: Optional[dict],
+        integrity_data: Optional[dict],
+    ) -> tuple[set[str], dict, dict]:
+        """Filtere Diagnos-Befunde gegen den persistenten Alert-State.
+
+        Stabil-wiederkehrende Befunde (= gleicher Fingerprint) werden
+        unterdrückt; nur neue, eskalierte oder Reminder-fällige Befunde
+        landen in der Mail. Severity-Counts dieses gefilterten Sets dienen
+        als Subject-Suffix.
+
+        Returns:
+            (reportable_check_names, alert_summary, severity_counts)
+        """
+        try:
+            state = diagnos_alert_state.load_state()
+        except Exception as exc:
+            LOG.warning(f"Alert-State Laden fehlgeschlagen: {exc}")
+            state = {}
+
+        all_checks: list = []
+        for snapshot in (health_data, integrity_data):
+            if snapshot:
+                all_checks.extend(snapshot.get('checks', []) or [])
+
+        try:
+            reportable, new_state, summary = diagnos_alert_state.filter_reportable(
+                all_checks, state
+            )
+        except Exception as exc:
+            LOG.error(f"Alert-Filter fehlgeschlagen, zeige alle Bad-Checks: {exc}")
+            reportable = [
+                c for c in all_checks
+                if (c.get('severity') or '').lower() in ('warn', 'crit', 'fail')
+            ]
+            new_state = state
+            summary = {'new': 0, 'changed': 0, 'reminder': 0, 'suppressed': 0, 'healed': 0}
+
+        try:
+            diagnos_alert_state.save_state(new_state)
+        except Exception as exc:
+            LOG.warning(f"Alert-State Speichern fehlgeschlagen: {exc}")
+
+        reportable_names = {c.get('check') for c in reportable if c.get('check')}
+        severity_counts = diagnos_alert_state.severity_counts(reportable)
+        return reportable_names, summary, severity_counts
+
     def _hole_diagnos_snapshot(self) -> Optional[dict]:
         """Lese einen kompakten read-only Diagnos-Snapshot zum Versandzeitpunkt."""
         try:
@@ -448,10 +587,158 @@ class EventNotifier:
 
         return ausgeloest
 
+    def pruefe_health_alarme(self) -> list[str]:
+        """Prüfe Diagnos-Health-Snapshot auf akute Sofortbedingungen.
+
+        Sofortpfad analog zu pruefe_integrity_alarme(): wenn ein Health-Check
+        eine kritische Schwelle (severity == crit / fail) reißt, wird sofort
+        eine Mail abgesetzt — 1× pro Tag pro Alarm-Key (persistiert).
+
+        Aktuell überwachte Sofort-Kandidaten:
+          - cpu_temp           (CRIT/FAIL)
+          - throttle           (CRIT — Unterspannung aktiv)
+          - disk_root          (CRIT — kein Platz)
+          - service:*          (CRIT/FAIL — wichtige Dienste tot)
+
+        WARN-Stufen kommen weiter via Sunset-Mail mit Diff-Filter — die
+        sind nicht zeitkritisch genug für einen Sofortalarm.
+
+        Returns: Liste ausgelöster Alarm-Keys.
+        """
+        if not self._email:
+            return []
+
+        try:
+            health = run_diagnos_health()
+        except Exception as exc:
+            LOG.debug(f"Health-Alarm-Check fehlgeschlagen: {exc}")
+            return []
+
+        checks = health.get('checks', []) or []
+        ausgeloest: list[str] = []
+
+        # Schwere Severities, die sofort gemeldet werden sollen.
+        # WARN bleibt bewusst draußen → Sunset-Mail.
+        akute = {'crit', 'fail'}
+
+        for check in checks:
+            name = check.get('check') or ''
+            sev = (check.get('severity') or '').lower()
+            if sev not in akute:
+                continue
+
+            # Whitelist: nur die Checks, deren Sofortpfad fachlich
+            # gerechtfertigt ist (Hardware-/Hostprobleme, tote Services).
+            if not (
+                name in ('cpu_temp', 'throttle', 'disk_root')
+                or name.startswith('service:')
+            ):
+                continue
+
+            alarm_key = f'health:{name}:{sev}'
+            text, details = self._format_health_alarm(name, sev, check)
+            if self._sende_diagnos_alarm(alarm_key, text, details, kategorie='HEALTH'):
+                ausgeloest.append(alarm_key)
+
+        return ausgeloest
+
+    @staticmethod
+    def _format_health_alarm(name: str, sev: str, check: dict) -> tuple[str, dict]:
+        """Baue Alarm-Text + Detaildict für eine Health-Check-Sofortmeldung."""
+        sev_label = {'crit': 'KRIT', 'fail': 'FAIL'}.get(sev, sev.upper())
+        if name == 'cpu_temp':
+            text = f"CPU-Temperatur {sev_label}: {check.get('value_c')}°C"
+        elif name == 'throttle':
+            flags = check.get('hex') or '?'
+            text = f"Pi-Throttle/Unterspannung {sev_label}: {flags}"
+        elif name == 'disk_root':
+            text = f"Disk root {sev_label}: belegt {check.get('used_pct')}%"
+        elif name.startswith('service:'):
+            unit = name.split(':', 1)[1]
+            state = check.get('active_state') or check.get('error') or '?'
+            text = f"Service {unit} {sev_label}: {state}"
+        else:
+            text = f"{name} {sev_label}"
+
+        # Schmales Detail-Dict, damit der Alarm-Body kompakt bleibt.
+        details = {k: v for k, v in check.items() if k != 'check'}
+        return text, details
+
+    def _sende_diagnos_alarm(
+        self,
+        alarm_key: str,
+        text: str,
+        details: dict,
+        kategorie: str = 'WARN',
+    ) -> bool:
+        """Generischer Sofort-Alarm-Versand mit persistenter 1×/Tag-Dedup.
+
+        Wird sowohl von ``pruefe_health_alarme`` als auch perspektivisch von
+        NQ-/anderen Sofortpfaden genutzt. ``kategorie`` landet im Subject
+        (z. B. ``[PV-System KRIT]``).
+        """
+        if self._dedup_already_sent(alarm_key):
+            return False
+
+        now_str = datetime.now().strftime('%d.%m.%Y %H:%M')
+        hostname = socket.gethostname()
+        detail_lines = '\n'.join(
+            f'  {k:20s} {v}' for k, v in sorted(details.items())
+            if not isinstance(v, (dict, list))
+        )
+
+        koerper = (
+            f'Sofort-Alarm von {hostname}\n'
+            f'Zeitpunkt: {now_str}\n'
+            f'\n'
+            f'Alarm:     {text}\n'
+            f'\n'
+            f'── Details ──\n'
+            f'{detail_lines}\n'
+            f'\n'
+            f'Diese Meldung wird 1× pro Tag pro Alarm gesendet (persistent).\n'
+        )
+
+        betreff = f'[PV-System {kategorie}] {text}'
+        msg = MIMEText(koerper, 'plain', 'utf-8')
+        msg['Subject'] = betreff
+        msg['From'] = self._from
+        msg['To'] = self._email
+        msg['X-PV-Event'] = alarm_key
+
+        try:
+            smtp_pass = credential_store.lade('smtp_pass')
+            if self._smtp_user and not smtp_pass:
+                LOG.error(f"Sofort-Alarm FEHLGESCHLAGEN: {alarm_key} — SMTP-Passwort fehlt")
+                return False
+
+            if self._smtp_port == 465:
+                smtp = smtplib.SMTP_SSL(self._smtp_host, self._smtp_port, timeout=15)
+            else:
+                smtp = smtplib.SMTP(self._smtp_host, self._smtp_port, timeout=15)
+                if self._smtp_port == 587:
+                    smtp.starttls()
+
+            try:
+                if self._smtp_user and smtp_pass:
+                    smtp.login(self._smtp_user, smtp_pass)
+                smtp.sendmail(self._from, [self._email], msg.as_string())
+            finally:
+                try:
+                    smtp.quit()
+                except Exception:
+                    pass
+
+            self._dedup_mark(alarm_key)
+            LOG.warning(f"Sofort-Alarm gesendet: {alarm_key} → {self._email}")
+            return True
+        except Exception as exc:
+            LOG.error(f"Sofort-Alarm FEHLGESCHLAGEN: {alarm_key}: {exc}")
+            return False
+
     def _sende_integrity_alarm(self, alarm_key: str, text: str, attachment: dict) -> bool:
         """Sende Integrity-Warn-Mail (dedupliziert 1× pro Tag pro Alarm-Key)."""
-        heute = date.today().isoformat()
-        if self._gesendet.get(alarm_key) == heute:
+        if self._dedup_already_sent(alarm_key):
             return False
 
         now_str = datetime.now().strftime('%d.%m.%Y %H:%M')
@@ -504,15 +791,24 @@ class EventNotifier:
                 except Exception:
                     pass
 
-            self._gesendet[alarm_key] = heute
+            self._dedup_mark(alarm_key)
             LOG.warning(f"Integrity-Alarm gesendet: {alarm_key} → {self._email}")
             return True
         except Exception as e:
             LOG.error(f"Integrity-Alarm FEHLGESCHLAGEN: {alarm_key}: {e}")
             return False
 
-    def _format_diagnos_summary(self, health_data: Optional[dict]) -> list[str]:
-        """Formatiere Diagnos-Daten kompakt für den Tagesbericht."""
+    def _format_diagnos_summary(
+        self,
+        health_data: Optional[dict],
+        reportable_names: Optional[set] = None,
+    ) -> list[str]:
+        """Formatiere Diagnos-Daten kompakt für den Tagesbericht.
+
+        ``reportable_names`` enthält die Check-Namen, die diesmal gemeldet
+        werden sollen (Diff gegen Alert-State). Stabil-wiederholte Befunde
+        sind nicht enthalten und werden in der Mail unterdrückt.
+        """
         if not health_data:
             return [
                 '',
@@ -524,6 +820,12 @@ class EventNotifier:
         checks = health_data.get('checks', [])
         by_name = {c.get('check'): c for c in checks}
         bad_checks = [c for c in checks if c.get('severity') in ('warn', 'crit', 'fail')]
+        if reportable_names is not None:
+            shown_bad = [c for c in bad_checks if c.get('check') in reportable_names]
+            stale_bad_count = len(bad_checks) - len(shown_bad)
+        else:
+            shown_bad = bad_checks
+            stale_bad_count = 0
 
         def _fmt_sev(value: Optional[str]) -> str:
             return severity_map.get(value or '', value or '—')
@@ -562,10 +864,10 @@ class EventNotifier:
                 f'({_fmt_sev(mirror_check.get("severity"))})'
             )
 
-        if bad_checks:
+        if shown_bad:
             lines.append('')
-            lines.append('Auffaelligkeiten')
-            for check in bad_checks[:6]:
+            lines.append('Auffaelligkeiten (neu/eskaliert)')
+            for check in shown_bad[:6]:
                 detail = check.get('error')
                 if detail is None and 'age_s' in check:
                     detail = f'age={check.get("age_s")}s'
@@ -575,12 +877,29 @@ class EventNotifier:
                     detail = f'state={check.get("state")}'
                 elif detail is None:
                     detail = 'siehe Diagnos-Report'
-                lines.append(f'  [{_fmt_sev(check.get("severity"))}] {check.get("check")}: {detail}')
+                reason = check.get('_alert_reason')
+                tag = f' [{reason}]' if reason and reason != 'new' else ''
+                lines.append(
+                    f'  [{_fmt_sev(check.get("severity"))}] {check.get("check")}: {detail}{tag}'
+                )
+        if stale_bad_count > 0:
+            lines.append(
+                f'  ({stale_bad_count} stabile Befund(e) unterdrueckt — siehe diagnos.health)'
+            )
 
         return lines
 
-    def _format_integrity_summary(self, integrity_data: Optional[dict]) -> list[str]:
-        """Formatiere Diagnos-Integritätsdaten kompakt für den Tagesbericht."""
+    def _format_integrity_summary(
+        self,
+        integrity_data: Optional[dict],
+        reportable_names: Optional[set] = None,
+    ) -> list[str]:
+        """Formatiere Diagnos-Integritätsdaten kompakt für den Tagesbericht.
+
+        ``reportable_names`` selektiert, welche Befunde diesmal als neu/
+        geändert/heartbeat gemeldet werden. Stabil-wiederholte werden
+        unterdrückt — Fehler bleiben in den Logs erhalten.
+        """
         if not integrity_data:
             return [
                 '',
@@ -592,6 +911,12 @@ class EventNotifier:
         checks = integrity_data.get('checks', [])
         by_name = {c.get('check'): c for c in checks}
         bad_checks = [c for c in checks if c.get('severity') in ('warn', 'crit', 'fail')]
+        if reportable_names is not None:
+            stale_bad_count = sum(
+                1 for c in bad_checks if c.get('check') not in reportable_names
+            )
+        else:
+            stale_bad_count = 0
 
         def _fmt_sev(value: Optional[str]) -> str:
             return severity_map.get(value or '', value or '—')
@@ -638,9 +963,14 @@ class EventNotifier:
             by_name.get('integrity:gaps:data_15min'),
             by_name.get('integrity:gaps:hourly_data'),
         ]
+        gap_shown = 0
         for gap_check in [c for c in gap_checks if c]:
             if gap_check.get('gap_count', 0) <= 0:
                 continue
+            # Diff-Filter: stabile Lückenberichte unterdrücken.
+            if reportable_names is not None and gap_check.get('check') not in reportable_names:
+                continue
+            gap_shown += 1
             lines.append('')
             lines.append(
                 f'  [{_fmt_sev(gap_check.get("severity"))}] {gap_check.get("check")}: '
@@ -655,6 +985,11 @@ class EventNotifier:
         if not bad_checks:
             lines.append('')
             lines.append('  Keine Integritätsabweichungen im aktuellen Prüffenster.')
+        elif stale_bad_count > 0 and gap_shown == 0:
+            lines.append('')
+            lines.append(
+                f'  Keine NEUEN Integritätsabweichungen ({stale_bad_count} stabile unterdrueckt).'
+            )
 
         lines += [
             '',
@@ -669,6 +1004,8 @@ class EventNotifier:
         obs: ObsState,
         health_data: Optional[dict] = None,
         integrity_data: Optional[dict] = None,
+        reportable_names: Optional[set] = None,
+        alert_summary: Optional[dict] = None,
     ) -> str:
         """Formatiere den Sunset-Bericht als E-Mail-Text."""
         start_str = datetime.fromtimestamp(d['start_ts']).strftime('%d.%m. %H:%M')
@@ -715,8 +1052,21 @@ class EventNotifier:
                 f'  Wattpilot (EV):       {_fmt(d["wattpilot_kwh"])}'
             )
 
-        zeilen += self._format_diagnos_summary(health_data)
-        zeilen += self._format_integrity_summary(integrity_data)
+        zeilen += self._format_diagnos_summary(health_data, reportable_names)
+        zeilen += self._format_integrity_summary(integrity_data, reportable_names)
+
+        if alert_summary:
+            zeilen += [
+                '',
+                'Diagnos-Filter (Diff zur letzten Mail)',
+                f'  neu={alert_summary.get("new", 0)}  '
+                f'changed={alert_summary.get("changed", 0)}  '
+                f'reminder={alert_summary.get("reminder", 0)}  '
+                f'unterdrueckt={alert_summary.get("suppressed", 0)}  '
+                f'geheilt={alert_summary.get("healed", 0)}',
+                '  (stabile Wiederholungen werden unterdrueckt; Reminder nach 7 Tagen,',
+                '   Heilung beim Rueckfall auf OK; Voll-Status: python3 -m diagnos.integrity)',
+            ]
 
         zeilen += [
             '',
@@ -726,10 +1076,26 @@ class EventNotifier:
 
         return '\n'.join(zeilen)
 
-    def _sende_sunset_mail(self, koerper: str):
-        """Sunset-Bericht per E-Mail senden."""
+    def _sende_sunset_mail(self, koerper: str, severity_counts: Optional[dict] = None):
+        """Sunset-Bericht per E-Mail senden.
+
+        ``severity_counts`` zählt die Severities der diesmal frisch zu
+        meldenden Diagnos-Befunde (nicht aller). Sind alle Counts 0,
+        bleibt der Betreff sauber — sonst wird ein Suffix wie
+        ``— FAIL(1) KRIT(2) WARN(1)`` angehängt.
+        """
         datum_str = datetime.now().strftime('%d.%m.%Y')
         betreff = f'[PV-System] Tagesbericht {datum_str}'
+        if severity_counts:
+            parts = []
+            # Reihenfolge: schwerste Stufe zuerst → beim Sortieren der
+            # Inbox bleibt der Suffix gut lesbar.
+            for label_key, label in (('fail', 'FAIL'), ('crit', 'KRIT'), ('warn', 'WARN')):
+                n = severity_counts.get(label_key, 0)
+                if n:
+                    parts.append(f'{label}({n})')
+            if parts:
+                betreff = f'{betreff} \u2014 {" ".join(parts)}'
 
         msg = MIMEText(koerper, 'plain', 'utf-8')
         msg['Subject'] = betreff

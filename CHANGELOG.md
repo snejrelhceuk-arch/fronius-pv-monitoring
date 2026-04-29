@@ -5,6 +5,118 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## v1.3.4 — 2026-04-29
+
+### Mail-Pfad — Sofortalarme komplettiert + NQ-Skelett
+
+**(a) Health-Sofortpfad** ([automation/engine/event_notifier.py](automation/engine/event_notifier.py))
+- Neu: `EventNotifier.pruefe_health_alarme()` — analoger 10-min-Slot zu
+  `pruefe_integrity_alarme()`. Reagiert auf severity ∈ {crit, fail} bei:
+  - `cpu_temp` (Hardware-Überhitzung)
+  - `throttle` (Pi-Unterspannung aktiv)
+  - `disk_root` (kein Plattenplatz)
+  - `service:*` (wichtige systemd-Units down)
+- WARN-Stufen bleiben bewusst beim Sunset-Diff-Filter — sie sind nicht
+  zeitkritisch genug für einen Sofortalarm.
+- Eingebunden in `automation_daemon._zyklus_aktoren` direkt nach dem
+  Integrity-Alarm-Check, gleicher 10-min-Throttle.
+
+**(b) Persistenter Dedup für Sofortalarme**
+- Neu: `_dedup_load()` / `_dedup_save()` mit JSON-File
+  `config/event_notifier_dedup.json`. EventNotifier lädt beim Start, räumt
+  Tagesalt-Einträge auf und schreibt nach jedem Versand atomar zurück.
+- Helper `_dedup_already_sent(key)` / `_dedup_mark(key)` ersetzen alle
+  bisherigen In-Memory-Zugriffe auf `self._gesendet`. Folge:
+  Daemon-Restart → keine Doppelmails mehr.
+- Live-Schwellwerte (`prüfe_und_melde`), Sunset-Tagesbericht und
+  Integrity-Sofortalarme sind alle umgestellt.
+- Generischer Versand-Helper `_sende_diagnos_alarm(alarm_key, text,
+  details, kategorie)` für künftige Sofortpfade.
+
+**(c) NQ-Mail-Skelett** ([automation/engine/nq_notifier.py](automation/engine/nq_notifier.py))
+- Vorbereitung für Mai-Inbetriebnahme PAC4200: `NQNotifier`-Klasse mit
+  - `diff_nq_befunde()` — eigener State-File `config/nq_alert_state.json`,
+    nutzt `diagnos_alert_state.filter_reportable()` (gleiche Diff-/
+    Reminder-/Heilungslogik wie Diagnos).
+  - `format_nq_summary()` — Sektion für Sunset-Mail-Anteil.
+  - `pruefe_nq_sofortalarme()` — Trade-Switch / THDu-Hard / Asymmetrie-
+    Hard via gemeinsamem Versand-Helper im EventNotifier.
+- Aktivierungsschalter `ENABLED = False` (default). Wird gesetzt, sobald
+  PAC4200 + Messwandler montiert sind und das `netzqualitaet`-Subsystem
+  Check-Listen liefert. Bis dahin ruft `automation_daemon` den Notifier
+  nicht auf.
+
+**Mail-Pfad-Status (Stand 29.04.2026)**
+
+| Pfad | Dedup | Filter | Aktivierung |
+|---|---|---|---|
+| Sunset-Tagesbericht | persistent 1×/Tag | Diff (Diagnos) | aktiv |
+| Live-Schwellwerte (Batt-Temp/SOC, Netz/SLS) | persistent 1×/Tag/Key | sofort | aktiv |
+| Integrity-Sofortalarme (Collector-Liveness) | persistent 1×/Tag/Key | 10 min | aktiv |
+| Health-Sofortalarme (CPU/Disk/Service/Throttle) | persistent 1×/Tag/Key | 10 min | aktiv |
+| NQ-Sunset-Anteil | persistent 1×/Tag, Diff | Diff (NQ) | Skelett (Mai) |
+| NQ-Sofortalarme (Trade-Switch/THDu-Hard) | persistent 1×/Tag/Key | sofort | Skelett (Mai) |
+
+Smoke-Tests (a/b/c) grün — neu/changed/reminder/heilung der NQ-Diff-
+Logik verifiziert, Whitelist-Filter im Health-Pfad korrekt (mirror_sync,
+RAM-WARN bewusst NICHT im Sofortpfad).
+
+---
+
+## v1.3.3 — 2026-04-27
+
+### Diagnos — Mail-Diff-Filter & Subject-Severity-Suffix
+
+**Problem:** Sunset-Mail wiederholte täglich identische WARN/KRIT-Listings,
+auch wenn der Befund stabil war (z. B. alte raw_data-Lücken, die nicht
+refilled werden). Folge: Mail-Inbox wurde laut, echte Verschlechterungen
+gingen optisch unter.
+
+**Lösung:**
+- Neues Modul `automation/engine/diagnos_alert_state.py`:
+  - Pro Diagnos-Check (health + integrity) wird ein **Fingerprint** aus
+    severity + checkspezifischen Hauptfeldern gebildet (z. B. bei
+    `integrity:gaps:*` zählen `gap_count` + `max_gap_s`; bei
+    `cpu_temp` der gerundete °C-Wert; bei `daily_energy_balance` das
+    100-Wh-gerundete `max_diff_wh`).
+  - Persistenter State in `config/diagnos_alert_state.json`.
+  - Befund wird in die Mail aufgenommen bei: **neu** | **changed**
+    (Fingerprint anders) | **reminder** (≥ 7 Tage stumm).
+  - **Heilung:** severity zurück auf `ok` löscht den State-Eintrag →
+    der nächste erneute Befund wird wieder gemeldet.
+- `event_notifier.sende_sunset_bericht()`:
+  - filtert `bad_checks` beider Snapshots (Health + Integrity) gegen den
+    persistenten State.
+  - Sektion „Auffaelligkeiten" → „Auffaelligkeiten (neu/eskaliert)"
+    inkl. Reason-Tag (`changed` / `reminder`).
+  - Stabile Befunde werden mit Hinweis „N stabile Befund(e) unterdrueckt"
+    ausgeblendet, nicht stillschweigend verschluckt.
+  - Diff-Zusammenfassung am Mail-Ende:
+    `neu= changed= reminder= unterdrueckt= geheilt=`.
+- **Subject-Suffix:** `[PV-System] Tagesbericht 27.04.2026 — FAIL(n) KRIT(n) WARN(n)`
+  — nur wenn diesmal frische Befunde existieren. Tag ohne neue Probleme
+  → sauberer Betreff (Inbox-Sortierung erleichtert Nacharbeit).
+
+**Architektur-Hinweis:** Filter-Modul ist generisch — `filter_reportable()`
+nimmt eine beliebige Check-Liste und kann später für NQ-Befunde
+(PAC4200-Bänder, THDu, Asymmetrie) wiederverwendet werden, mit
+eigenem `path`-Argument für `config/nq_alert_state.json`.
+
+**Mail-Pfad-Status (Stand 27.04.2026):**
+- Sunset-Tagesbericht: 1×/Tag, jetzt mit Diff-Filter ✅
+- Live-Schwellwerte (Batt-Temp, SOC, Netz/SLS-Überlast): sofort, 1×/Tag/Key ✅
+- Integrity-Sofortalarme (Collector inaktiv, Fehlerstrang, Reconnect-Fail):
+  alle 10 min, 1×/Tag/Key ✅
+- **Offene Lücke:** Health-Befunde (CPU-Crit, Disk-Crit, Service-Down,
+  Mirror-Stale) haben keinen Sofortpfad → warten bis Sunset.
+- **Offene Schwachstelle:** In-Memory-Dedup bei Sofortalarmen
+  (`self._gesendet`) verfällt bei Daemon-Restart.
+
+Siehe [/memories/repo/diagnos-mail-diff-filter-2026-04-27.md](memories/repo/diagnos-mail-diff-filter-2026-04-27.md)
+für Folge-ToDos (3. lauschende Instanz Pi5, Health-Sofortpfad, NQ-Adapter).
+
+---
+
 ## v1.3.2 — 2026-04-26
 
 ### Automation — Tiefenprüfung & Härtung (A+B+E)

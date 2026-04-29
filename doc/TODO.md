@@ -68,10 +68,17 @@
 
 ## Diagnos (Schicht D)
 
-- [ ] Phase 1: Read-only Health-Checks (Freshness, CPU, Unterspannung, Disk)
-- [ ] Phase 2: Datenintegritaet, Aggregations-Invarianten, Parity-Checks
-- [ ] Phase 3: Infrastruktur-/IO-Pruefungen (LAN, SSH, API, MEGA-BAS, RS485)
+- [x] Phase 1: Read-only Health-Checks (Freshness, CPU, Unterspannung, Disk) — `diagnos/health.py`, deployed Commit 4168e53 (2026-04-04)
+- [x] Phase 2: Datenintegritaet, Aggregations-Invarianten, Parity-Checks — `diagnos/integrity.py`, 9 Checks aktiv
+- [x] Mail-Diff-Filter & Subject-Severity-Suffix (2026-04-27) — `automation/engine/diagnos_alert_state.py`
+- [x] Health-Sofortpfad (2026-04-29) — CPU-Crit / Disk-Crit / Service-Down / Throttle, 10-min-Takt, persistent dedupliziert
+- [x] Sofortalarm-Dedup persistent (2026-04-29) — `config/event_notifier_dedup.json`
+- [x] NQ-Mail-Skelett (2026-04-29) — `automation/engine/nq_notifier.py`, ENABLED-Flag, eigener State `config/nq_alert_state.json`
+- [ ] Phase 3: Infrastruktur-/IO-Pruefungen (LAN, SSH, API, MEGA-BAS, RS485) — sinnvoll **parallel** zur PAC4200-Inbetriebnahme im Mai
 - [ ] Phase 4: Begrenzte Schutzaktionen mit Cooldown (nur falls noetig)
+- [ ] Phase 5: Langzeitspeicher Diagnos-Berichte auf Pi5-SSD
+- [ ] 3. lauschende Instanz: `failover_health_check.sh` analog auf Pi5-Backup deployen
+- [ ] NQ-Aktivierung: `nq_notifier.ENABLED = True` setzen + `automation_daemon` einklinken, sobald PAC4200 produktiv
 
 ---
 

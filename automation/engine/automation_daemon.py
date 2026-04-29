@@ -380,6 +380,15 @@ class AutomationDaemon:
                         LOG.warning(f"Integrity-Alarm: {', '.join(alarme)}")
                 except Exception as e:
                     LOG.error(f"Integrity-Alarm Fehler: {e}")
+                # Health-Sofortalarme (CPU-CRIT, Disk-CRIT, Service-Down,
+                # Pi-Throttle aktiv) — analoge 10-min-Taktung, persistent
+                # dedupliziert. WARN-Stufen bleiben bei der Sunset-Mail.
+                try:
+                    health_alarme = self._notifier.pruefe_health_alarme()
+                    if health_alarme:
+                        LOG.warning(f"Health-Alarm: {', '.join(health_alarme)}")
+                except Exception as e:
+                    LOG.error(f"Health-Alarm Fehler: {e}")
 
         # 5. Matrix-Reload bei SIGHUP oder Dateiänderung
         reload_needed = self._reload_requested
