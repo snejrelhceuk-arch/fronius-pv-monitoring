@@ -14,8 +14,8 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
             background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-            min-height: 100vh;
-            overflow-y: auto;
+            height: 100dvh;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
         }
@@ -101,7 +101,8 @@
         /* ══════ Main Content ══════ */
         .container {
             flex: 1; display: flex; justify-content: center;
-            align-items: flex-start; padding: 0 20px 20px 20px; min-height: 0;
+            align-items: stretch; padding: 0 20px 20px 20px; min-height: 0;
+            overflow-y: auto;
         }
 
         .flow-chart {
@@ -113,6 +114,8 @@
             padding: 20px;
             max-width: 1200px;
             width: 100%;
+            display: flex;
+            flex-direction: column;
             position: relative;
             --monitor-overlay-w: 0px;
             --monitor-overlay-gap: 0px;
@@ -191,19 +194,19 @@
         /* Timestamp now rendered as SVG text inside the chart */
 
         #flow-svg {
+            flex: 1;
+            min-height: 0;
+            height: 0;
             width: 100%;
             max-width: 960px;
             display: block;
             margin: 0 auto;
-            aspect-ratio: 590 / 400;
-            height: auto;
         }
 
         .flow-chart.has-monitor-overlay #flow-svg {
             width: calc(100% - var(--monitor-overlay-w) - var(--monitor-overlay-gap));
             max-width: none;
             margin: 0 auto 0 0;
-            transform: translateX(calc(var(--monitor-overlay-w) * -0.1));
         }
 
         .flow-chart.has-monitor-overlay.overlay-hidden {
@@ -213,8 +216,8 @@
         }
 
         .flow-chart.has-monitor-overlay.overlay-hidden #flow-svg {
-            width: min(70%, 900px);
-            max-width: 900px;
+            width: 100%;
+            max-width: 960px;
             margin: 0 auto;
             transform: none;
         }
@@ -566,6 +569,18 @@
         @keyframes fadeInOut {
             0% { opacity: 0; } 10% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; display: none; }
         }
+        /* ══════ Maschinenraum Info-Toggle ══════ */
+        #maschinen-info-wrap {
+            overflow: hidden;
+            max-height: 0;
+            opacity: 0;
+            transition: max-height 0.5s ease, opacity 0.35s ease;
+        }
+        #maschinen-info-wrap.visible {
+            max-height: 600px;
+            opacity: 1;
+        }
+        #btn-maschinenraum { cursor: pointer; }
     </style>
 </head>
 <body>
@@ -577,10 +592,7 @@
                 <a href="/monitoring">Monitoring</a>
                 <a href="/analyse">Analyse</a>
             </div>
-            <div class="nav-separator"></div>
-            <div class="nav-sub">
-                <a href="/maschinenraum">Maschinenraum</a>
-            </div>
+
         </div>
     </div>
 
@@ -623,7 +635,7 @@
                 <a id="monitorOverlayLink" class="monitor-overlay-cover" href="/monitoring?period=tag" aria-label="Monitoring in Tagesansicht öffnen"></a>
             </div>
 
-            <svg id="flow-svg" viewBox="130 -24 590 402" preserveAspectRatio="xMinYMin meet">
+            <svg id="flow-svg" viewBox="130 -40 590 420" preserveAspectRatio="xMidYMin meet">
                 <defs>
                     <filter id="glow">
                         <feGaussianBlur stdDeviation="2.5" result="blur"/>
@@ -736,6 +748,15 @@
                         </g>
                     </g>
 
+                    <!-- Maschinenraum-Button (unterhalb Netz-Bubble) -->
+                    <g id="btn-maschinenraum" transform="translate(200, 328)">
+                        <rect id="btn-mr-bg" x="-45" y="-13" width="90" height="26" rx="7"
+                              fill="rgba(71,85,105,0.25)" stroke="rgba(148,163,184,0.45)" stroke-width="1"/>
+                        <text id="btn-mr-text" x="0" y="5" text-anchor="middle"
+                              fill="rgba(203,213,225,0.85)" font-size="10" font-weight="600"
+                              letter-spacing="0.2">Maschinenraum</text>
+                    </g>
+
                     <!-- PV Gesamt -->
                     <circle cx="350" cy="135" r="58" fill="none"
                         stroke="#fbbf24" stroke-width="3" id="node-pv"/>
@@ -759,17 +780,17 @@
                       fill="#10b981" font-size="13" font-weight="700" id="sub-battery-soc">SOC: 0%</text>
 
                     <!-- Datum + Uhrzeit (zwischen Bubbles) -->
-                        <text x="505" y="117" text-anchor="middle"
+                        <text x="475" y="117" text-anchor="middle"
                         fill="rgba(200,200,215,0.80)" font-size="14" font-weight="600"
                         font-family="Georgia, 'Book Antiqua', Palatino, serif"
                       id="datestamp">--</text>
-                        <text x="505" y="138" text-anchor="middle"
+                        <text x="475" y="138" text-anchor="middle"
                         fill="rgba(220,220,230,0.85)" font-size="18" font-weight="700"
                         font-family="Georgia, 'Book Antiqua', Palatino, serif"
                       id="timestamp">--:--</text>
 
                 <!-- Verbrauch -->
-                <circle cx="500" cy="225" r="62" fill="none"
+                <circle cx="500" cy="225" r="58" fill="none"
                         stroke="#60a5fa" stroke-width="3" id="node-consumption"/>
                 <text x="500" y="207" text-anchor="middle"
                       fill="#60a5fa" font-size="15" font-weight="600">Verbrauch</text>
@@ -781,7 +802,7 @@
                 <!-- ═══ KLICKBARE OVERLAY-KREISE (Navigation) ═══ -->
                 <circle cx="350" cy="135" r="58" fill="transparent"
                         class="flow-clickable" id="click-pv"/>
-                <circle cx="500" cy="225" r="62" fill="transparent"
+                <circle cx="500" cy="225" r="58" fill="transparent"
                         class="flow-clickable" id="click-consumption"/>
 
                 <!-- ═══ SUB-ERZEUGER (kurze Linien, Fluss immer → PV) ═══ -->
@@ -813,57 +834,52 @@
 
                 <!-- ═══ SUB-VERBRAUCHER (kurze Linien, Fluss immer → Verbraucher) ═══ -->
                 <g class="sub-consumers">
-                                        <circle cx="640" cy="130" r="39" fill="none"
+                                        <circle cx="665" cy="190" r="39" fill="none"
                         stroke="#dbeafe" stroke-width="2" id="circle-household"/>
-                                        <text x="640" y="123" text-anchor="middle"
+                                        <text x="665" y="183" text-anchor="middle"
                       fill="#dbeafe" font-size="13" font-weight="600">Haushalt</text>
-                                        <text x="640" y="142" text-anchor="middle"
+                                        <text x="665" y="202" text-anchor="middle"
                       fill="rgba(255,255,255,0.7)" font-size="15"
                       font-weight="600" id="value-household">0W</text>
 
-                                        <circle cx="680" cy="225" r="39" fill="none"
+                                        <circle cx="660" cy="315" r="55" fill="none"
                         stroke="#93c5fd" stroke-width="2" id="circle-wattpilot"/>
-                                        <text x="680" y="218" text-anchor="middle"
-                      fill="#93c5fd" font-size="13" font-weight="600">Wattpilot</text>
-                                        <text x="680" y="237" text-anchor="middle"
-                      fill="rgba(255,255,255,0.7)" font-size="15"
-                      font-weight="600" id="value-wattpilot">0W</text>
+                                        <text x="660" y="297" text-anchor="middle"
+                      fill="#93c5fd" font-size="15" font-weight="600">Wattpilot</text>
+                                        <text x="660" y="318" text-anchor="middle"
+                      fill="white" font-size="18"
+                      font-weight="700" id="value-wattpilot">0W</text>
 
-                                        <circle cx="640" cy="320" r="39" fill="none"
+                                        <circle cx="500" cy="340" r="39" fill="none"
                         stroke="#60a5fa" stroke-width="2" id="circle-heatpump"/>
-                                        <text x="640" y="313" text-anchor="middle"
+                                        <text x="500" y="333" text-anchor="middle"
                       fill="#60a5fa" font-size="14" font-weight="600">WP</text>
-                                        <text x="640" y="332" text-anchor="middle"
+                                        <text x="500" y="352" text-anchor="middle"
                       fill="rgba(255,255,255,0.7)" font-size="15"
                       font-weight="600" id="value-heatpump">0W</text>
 
-                                <!-- Heizpatrone (Fritz!DECT) oberhalb Haushalt -->
-                                        <circle cx="560" cy="40" r="32" fill="none"
+                                <!-- Heizpatrone (Fritz!DECT) oben links, Abzweig von Verbrauch -->
+                                        <circle cx="565" cy="50" r="32" fill="none"
                         stroke="#ea580c" stroke-width="2" id="circle-heizpatrone"/>
-                                        <text x="560" y="36" text-anchor="middle"
+                                        <text x="565" y="46" text-anchor="middle"
                       fill="#ea580c" font-size="11" font-weight="600">HP</text>
-                                        <text x="560" y="51" text-anchor="middle"
+                                        <text x="565" y="61" text-anchor="middle"
                       fill="rgba(255,255,255,0.7)" font-size="13"
                       font-weight="600" id="value-heizpatrone">0W</text>
 
-                                <!-- Klimaanlage (Fritz!DECT) oberhalb Haushalt -->
-                                        <circle cx="660" cy="40" r="32" fill="none"
+                                <!-- Klimaanlage (Fritz!DECT) oben rechts, Abzweig von Verbrauch -->
+                                        <circle cx="660" cy="80" r="32" fill="none"
                         stroke="#00bcd4" stroke-width="2" id="circle-klima"/>
-                                        <text x="660" y="36" text-anchor="middle"
+                                        <text x="660" y="76" text-anchor="middle"
                       fill="#00bcd4" font-size="11" font-weight="600">Klima</text>
-                                        <text x="660" y="51" text-anchor="middle"
+                                        <text x="660" y="91" text-anchor="middle"
                       fill="rgba(255,255,255,0.7)" font-size="13"
                       font-weight="600" id="value-klima">0W</text>
 
-                <!-- Reserve (placeholder) -->
-                                        <circle cx="670" cy="360" r="18" fill="none"
-                        stroke="rgba(255,255,255,0.12)" stroke-width="1"
-                        stroke-dasharray="4,4"/>
-                                        <text x="670" y="363" text-anchor="middle"
-                      fill="rgba(255,255,255,0.12)" font-size="9">Reserve</text>
                 </g>
             </svg>
 
+            <div id="maschinen-info-wrap">
             <!-- Zeile 1: Batterie-Infos (einzeilig, kompakt) -->
             <div class="battery-detail" id="batteryDetail">
                 <span>Lad/Entlad: <span class="bd-val" id="bd-charge">--</span>/<span class="bd-val" id="bd-discharge">--</span> kWh</span>
@@ -916,6 +932,7 @@
                 <span class="it-label" style="color:#10b981">Batt:</span>
                 <span><span class="it-val" id="bd-temp" style="color:#10b981">--</span>°C</span>
             </div>
+            </div><!-- /#maschinen-info-wrap -->
         </div>
     </div>
 
@@ -931,7 +948,7 @@
 
     const API_BASE = {{ api_base_url | tojson }};
     const apiUrl = (path) => API_BASE ? `${API_BASE}${path}` : path;
-    const DEFAULT_VIEWBOX = '130 -24 590 402';
+    const DEFAULT_VIEWBOX = '130 -40 590 420';
 
     const flowChartEl = document.querySelector('.flow-chart');
     const overlayToggleEl = document.getElementById('overlayToggle');
@@ -970,6 +987,17 @@
         flowChartEl.classList.toggle('overlay-hidden', !useOverlay);
         overlayToggleEl.classList.toggle('is-visible', eligible && hidden);
         lastOverlayEligible = eligible;
+        adjustSvgViewBox(useOverlay);
+    }
+
+    function adjustSvgViewBox(overlayActive) {
+        const svg = document.getElementById('flow-svg');
+        const isPortraitMobile = window.innerWidth < 600 && window.innerHeight > window.innerWidth;
+        if (isPortraitMobile) {
+            svg.setAttribute('viewBox', '80 80 500 300');
+        } else {
+            svg.setAttribute('viewBox', DEFAULT_VIEWBOX);
+        }
     }
 
     overlayCloseEl.addEventListener('click', function() {
@@ -1005,14 +1033,14 @@
         netz:       {x:200, y:225, r:58},
         pv:         {x:350, y:135, r:58},
         battery:    {x:350, y:322, r:55},
-        consumption:{x:500, y:225, r:62},
+        consumption:{x:500, y:225, r:58},
         hub:        {x:350, y:225, r:5},
         f1: {x:250,y:30, r:39}, f2: {x:350,y:15, r:39}, f3: {x:450,y:30, r:39},
-        household:  {x:640,y:130, r:39},
-        wattpilot:  {x:680,y:225, r:39},
-        heatpump:   {x:640,y:320, r:39},
-        heizpatrone: {x:560,y:40, r:32},
-        klima:      {x:660,y:40, r:32},
+        household:  {x:665,y:190, r:39},
+        wattpilot:  {x:660,y:315, r:55},
+        heatpump:   {x:500,y:340, r:39},
+        heizpatrone: {x:565,y:50, r:32},
+        klima:      {x:660,y:80, r:32},
     };
 
     const C = {  // Farben
@@ -1050,9 +1078,9 @@
           get: d => Math.max(0, d.consumption.wattpilot||0) },
         { id:'c_hp', path:[N.consumption, N.heatpump],   color:C.heatpump,
           get: d => Math.max(0, d.consumption.heatpump||0) },
-                { id:'c_heizpatrone', path:[N.household, N.heizpatrone],  color:C.heizpatrone,
+                { id:'c_heizpatrone', path:[N.consumption, N.heizpatrone],  color:C.heizpatrone,
           get: d => Math.max(0, d.consumption.heizpatrone||0) },
-                { id:'c_klima', path:[N.household, N.klima],    color:C.klima,
+                { id:'c_klima', path:[N.consumption, N.klima],    color:C.klima,
           get: d => Math.max(0, d.consumption.klima||0) },
     ];
 
@@ -1831,13 +1859,11 @@
 
     // Mobile Portrait: SVG viewBox auf Hauptknoten beschränken (ohne Sub-Kreise)
     function adjustSvgForMobile() {
+        // Wird jetzt von adjustSvgViewBox (via syncOverlayLayout) erledigt
         const svg = document.getElementById('flow-svg');
         const isPortraitMobile = window.innerWidth < 600 && window.innerHeight > window.innerWidth;
         if (isPortraitMobile) {
-            // Nur Netz(200,225), PV(350,135), Hub(350,225), Batterie(350,315), Verbrauch(500,225)
             svg.setAttribute('viewBox', '80 80 500 300');
-        } else {
-            svg.setAttribute('viewBox', DEFAULT_VIEWBOX);
         }
     }
     adjustSvgForMobile();
@@ -1847,6 +1873,49 @@
         syncOverlayLayout();
         if (lastFlowStatusData) renderFlowStatusDetail(lastFlowStatusData);
     });
+
+    // ── Maschinenraum-Button: Info 60s einblenden ──
+    (function() {
+        const btnEl   = document.getElementById('btn-maschinenraum');
+        const btnBg   = document.getElementById('btn-mr-bg');
+        const btnTxt  = document.getElementById('btn-mr-text');
+        const infoWrap = document.getElementById('maschinen-info-wrap');
+        let timerInterval = null;
+
+        function resetBtn() {
+            btnTxt.textContent = 'Maschinenraum';
+            btnBg.setAttribute('fill', 'rgba(71,85,105,0.25)');
+            btnBg.setAttribute('stroke', 'rgba(148,163,184,0.45)');
+        }
+
+        function hideInfo() {
+            if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+            infoWrap.classList.remove('visible');
+            resetBtn();
+        }
+
+        btnEl.addEventListener('click', function() {
+            // zweiter Klick: sofort ausblenden
+            if (timerInterval) { hideInfo(); return; }
+            infoWrap.classList.add('visible');
+            btnBg.setAttribute('fill', 'rgba(99,102,241,0.28)');
+            btnBg.setAttribute('stroke', 'rgba(129,140,248,0.75)');
+            // Nach Transition: scroll in Sicht falls nötig
+            setTimeout(function() {
+                infoWrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 520);
+            let remaining = 60;
+            btnTxt.textContent = `\u25cf ${remaining}s`;
+            timerInterval = setInterval(function() {
+                remaining--;
+                if (remaining <= 0) {
+                    hideInfo();
+                } else {
+                    btnTxt.textContent = `\u25cf ${remaining}s`;
+                }
+            }, 1000);
+        });
+    })();
     </script>
 
     {% include 'info_overlay.html' %}
