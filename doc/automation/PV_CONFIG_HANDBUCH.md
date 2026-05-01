@@ -17,7 +17,7 @@ Version 1.7 — Stand: 9. April 2026
    - [4.2 morgen_soc_min — Morgenöffnung](#42-morgen_soc_min--morgenöffnung-priorität-2)
    - [4.3 nachmittag_soc_max — Nachmittagsanhebung](#43-nachmittag_soc_max--nachmittagsanhebung-priorität-2)
   - [4.4 komfort_reset — Abend-Reset auf Komfortwerte](#44-komfort_reset--abend-reset-auf-komfortwerte-priorität-2)
-   - [4.5 zellausgleich — Monatlicher Vollzyklus](#45-zellausgleich--monatlicher-vollzyklus-priorität-3)
+   - [4.5 zellausgleich — Quartalszellausgleich](#45-zellausgleich--quartalszellausgleich-priorität-3)
    - [4.7 forecast_plausibilisierung — Prognosekorrektur](#47-forecast_plausibilisierung--prognosekorrektur-priorität-2)
    - [4.9 wattpilot_battschutz — EV-Ladeschutz](#49-wattpilot_battschutz--ev-ladeschutz-priorität-1)
    - [4.10 heizpatrone — HP-Burst-Steuerung](#410-heizpatrone--hp-burst-steuerung-priorität-2)
@@ -315,26 +315,30 @@ Wenn nachmittags (ab `frueh_reset_ab_h`) die PV-Restprognose unter `erholung_sch
 
 ---
 
-### 4.5 zellausgleich — Monatlicher Vollzyklus (Priorität 3)
+### 4.5 zellausgleich — Quartalszellausgleich (Priorität 3)
 
-**Zweck:** Einmal im Monat die BYD-Batterie komplett laden (100%), damit das BMS einen Zellausgleich (Cell-Balancing) durchführen kann. LFP-Zellen brauchen das regelmäßig für korrekte SOC-Anzeige.
+**Zweck:** Einmal pro Quartal (Q1–Q4) die BYD-Batterie über den Fronius Auto-Modus auf 100 % laden, damit das BMS einen Zellausgleich (Cell-Balancing) durchführen kann. LFP-Zellen brauchen das regelmäßig für korrekte SOC-Anzeige.
 
-**Score:** 30 (niedrigster — wird von allen anderen Regeln überstimmt)
-**Zyklus:** strategic
+**Modus:** Die Regel schaltet die Batterie in den Fronius-`auto`-Modus. Der Wechselrichter verwaltet die SOC-Grenzen selbst (Firmware-intern 5–100 %). Die Batterie lädt bei PV-Überschuss natürlich auf 100 % und balanciert die Zellen. **Kein manuelles 5/100 %-Setzen mehr** — damit entfällt das frühere Ping-Pong mit KomfortReset. KomfortReset stellt abends wieder auf `manual 25–75 %` zurück.
+
+**Score:** 30 (niedrigster — wird von allen anderen Regeln überstimmt)  
+**Zyklus:** strategic  
+**Auslösung:** frühestens ab `frueheste_stunde_h` (Standard 10:00) — verhindert Nacht-Trigger durch morgendliche Prognose-Daten.
+
+**Flow-Anzeige:** Wenn der Quartalszellausgleich noch aussteht, erscheint in der Batterie-Infozeile (Flow-Ansicht) der Indikator **`ZAusgl.`** (gelb).
 
 | Parameter | Standard | Bereich | Wirkung |
 |-----------|----------|---------|---------|
-| soc_min_waehrend | 5% | 0–10% | **SOC_MIN während des Zellausgleichs.** Bleibt niedrig, damit die Batterie den vollen Bereich nutzt. |
-| soc_max_waehrend | 100% | 95–100% | **SOC_MAX während des Zellausgleichs.** Muss 100% sein, damit ein echtes Voll-Laden stattfindet. |
-| min_prognose | 50 kWh | 20–80 kWh | **Mindest-PV-Prognose für den Tag.** 50 kWh = sehr sonniger Tag. Nur dann wird ein Vollzyklus ausgelöst, damit genug PV vorhanden ist. |
-| notfall_min_prognose | 25 kWh | 10–50 kWh | **Gesenkte Schwelle nach Überschreitung von max_tage.** Wenn seit 45+ Tagen kein Ausgleich stattfand, wird die Schwelle gesenkt. |
-| max_tage_ohne_ausgleich | 45 Tage | 20–90 Tage | **Notfall-Frist.** Nach X Tagen wird die Prognoseschwelle gesenkt, auch an mittelmäßigen Tagen wird dann ein Ausgleich versucht. |
-| fruehester_tag | 1 | 1–10 | **Frühester Monatstag** für den Zellausgleich. |
-| spaetester_tag | 28 | 20–31 | **Spätester regulärer Monatstag.** Danach wird auf nächsten Monat verschoben (es sei denn, max_tage ist überschritten). |
+| min_prognose | 50 kWh | 20–80 kWh | **Mindest-PV-Prognose für den Tag.** 50 kWh = sehr sonniger Tag. Nur dann wird ein Vollzyklus ausgelöst. |
+| notfall_min_prognose | 25 kWh | 10–50 kWh | **Gesenkte Schwelle nach Überschreitung von max_tage.** Wenn seit 92+ Tagen kein Ausgleich stattfand, wird die Schwelle gesenkt. |
+| max_tage_ohne_ausgleich | 92 Tage | 30–180 Tage | **Notfall-Frist (ca. 1 Quartal).** Nach X Tagen wird die Prognoseschwelle gesenkt. |
+| frueheste_stunde_h | 10.0 h | 8–14 h | **Früheste Tageszeit** für den Trigger. Verhindert Auslösung nachts oder früh morgens. |
+| fruehester_tag | 1 | 1–10 | **Frühester Monatstag** innerhalb des neuen Quartals. |
+| spaetester_tag | 28 | 20–31 | **Spätester regulärer Monatstag.** Danach wird auf das nächste Quartal verschoben (es sei denn, max_tage ist überschritten). |
 
-**Hinweis:** An Wintertagen mit nur 5–10 kWh Erzeugung wird die 50-kWh-Schwelle nie erreicht. Dann greift nach 45 Tagen die Notfall-Schwelle (25 kWh).
+**Hinweis:** An Wintertagen mit nur 5–10 kWh Erzeugung wird die 50-kWh-Schwelle nie erreicht. Dann greift nach 92 Tagen die Notfall-Schwelle (25 kWh).
 
-**Zyklus-Erkennung (seit 2026-03-26):** Der Marker `last_balancing`/`letzter_ausgleich` wird automatisch gesetzt, wenn ein konservativ erkannter Vollzyklus vorliegt. Kriterien: Tages-`SOC_MIN` nahe `soc_min_waehrend`, Tages-`SOC_MAX` nahe `soc_max_waehrend`, ausreichende Spannweite und genug Messpunkte. Damit verhindern wir Fehltrigger durch kurze Peaks oder lückenhafte Daten.
+**Zyklus-Erkennung (seit 2026-03-26):** Der Marker `last_balancing`/`letzter_ausgleich` wird automatisch gesetzt, wenn ein konservativ erkannter Vollzyklus vorliegt. Kriterien: Tages-SOC_MAX nahe 100 %, ausreichende Spannweite und genug Messpunkte. Damit verhindern wir Fehltrigger durch kurze Peaks oder lückenhafte Daten.
 
 ---
 
@@ -516,6 +520,7 @@ SOC_MAX auf 100% geht (Nachmittag) wird die Batterie-Entladung strenger bewertet
 | drain_min_prognose | 4.0 kW | 2–10 kW | **Mindest-Prognoseleistung.** Forecast muss in den kommenden Stunden ≥ diesen Wert in kW zeigen. Stellt sicher, dass PV die Batterie später wieder füllt. |
 | drain_fenster_ende | 10.0 h | 8–12 h | **Drain nur vor dieser Uhrzeit.** Standard 10:00 — danach produziert PV und Phase 1–3 übernehmen. |
 | drain_burst_dauer | 2700 s | 900–5400 s | **Drain-Burst Maximaldauer (45 Min).** Sicherheits-Backstop — Drain-Notaus (SOC, Verbraucher) beendet den Drain meist früher. |
+| drain_abschalt_verzoegerung_min | 5 min | 1–10 min | **Verzögerung beim Drain-Abschalten durch Verbrauchsspitzen.** Haushaltsgeräte (Wasserkocher, Backofen, Hauswasserwerk) unterbrechen den Drain erst nach anhaltender Überschreitung des jeweiligen Schwellwerts. **Nicht verzögert (sofort): SOC-Schutz, WW-Übertemperatur und Netzbezug.** Standard 5 Min. |
 | abend_soc_ein_unter_max_pct | 2% | 1–5% | **Abend-Zyklus EIN-Schwelle.** HP darf an wenn SOC ≥ SOC_MAX − diesen Wert. |
 | abend_soc_aus_unter_max_pct | 10% | 5–20% | **Abend-Zyklus AUS-Schwelle.** HP muss aus wenn SOC < SOC_MAX − diesen Wert. |
 | abend_max_entladung_w | 1000 W | 0–3000 W | **Max Entladeleistung im Abend-Zyklus.** HP aus wenn Batterie stärker entlädt. |

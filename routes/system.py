@@ -424,6 +424,21 @@ def _fetch_automation_state(now, result):
                 'last_date': sched_state.get('last_date'),
             }
 
+            # Zellausgleich aktiv? → True wenn letzter Ausgleich NICHT im laufenden Quartal
+            try:
+                from datetime import date as _date_type
+                _last_bal = sched_state.get('last_balancing') or ''
+                _heute = _date_type.today()
+                _zausgl_aktiv = True  # Default: noch nicht erledigt
+                if _last_bal:
+                    _lb = _date_type.fromisoformat(_last_bal)
+                    if ((_lb.year == _heute.year)
+                            and ((_lb.month - 1) // 3 == (_heute.month - 1) // 3)):
+                        _zausgl_aktiv = False
+                result['zellausgleich_aktiv'] = _zausgl_aktiv
+            except Exception:
+                result['zellausgleich_aktiv'] = False
+
         # Automation-Phasen für Tagesübersicht
         _build_automation_phasen(now, result)
 

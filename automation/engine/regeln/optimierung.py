@@ -65,7 +65,7 @@ class RegelZellausgleich(Regel):
             return 0
 
         # Zyklus-Erkennung vor Trigger-Logik: reale Vollzyklen markieren,
-        # damit im laufenden Monat keine unnötigen Neu-Trigger entstehen.
+        # damit im laufenden Quartal keine unnötigen Neu-Trigger entstehen.
         self._erkenne_und_markiere_zyklus(matrix)
 
         if obs.forecast_kwh is None:
@@ -80,15 +80,22 @@ class RegelZellausgleich(Regel):
                       f'→ toleriert ({verbleibend}s verbleibend)')
             return 0
 
+        # ── Quartal-Check: nur einmal pro Quartal auslösen ──
         letzter = self._letzter_ausgleich()
         if letzter:
             try:
                 last_date = datetime.strptime(letzter, '%Y-%m-%d').date()
                 heute = date.today()
-                if last_date.year == heute.year and last_date.month == heute.month:
-                    return 0
+                if (last_date.year == heute.year
+                        and (last_date.month - 1) // 3 == (heute.month - 1) // 3):
+                    return 0  # bereits dieses Quartal erledigt
             except (ValueError, TypeError):
                 pass
+
+        # ── Frühestes Auslöse-Zeitfenster: nur tagsüber (nach PV-Anlauf) ──
+        frueheste_h = float(get_param(matrix, self.regelkreis, 'frueheste_stunde_h', 10.0))
+        if (datetime.now().hour + datetime.now().minute / 60.0) < frueheste_h:
+            return 0
 
         min_pv = get_param(matrix, self.regelkreis, 'min_prognose_kwh', 50.0)
         frueh = get_param(matrix, self.regelkreis, 'fruehester_tag', 1)
@@ -267,18 +274,15 @@ class RegelZellausgleich(Regel):
         os.replace(tmp_path, path)
 
     def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
-        soc_min = get_param(matrix, self.regelkreis, 'soc_min_waehrend_pct', 5)
-        soc_max = get_param(matrix, self.regelkreis, 'soc_max_waehrend_pct', 100)
+        # Zellausgleich via Auto-Modus: Fronius-Firmware verwaltet SOC-Grenzen
+        # selbst (5–100 % hardwired). Kein manuelles 5/100 %-Setzen nötig —
+        # der WR lädt bei Überschuss auf 100 % und balanciert die Zellen.
+        # KomfortReset stellt abends wieder auf manual 25–75 % zurück.
         aktionen = [
             {
                 'tier': 2, 'aktor': 'batterie',
-                'kommando': 'set_soc_min', 'wert': soc_min,
-                'grund': f'Zellausgleich: SOC_MIN → {soc_min}%',
-            },
-            {
-                'tier': 2, 'aktor': 'batterie',
-                'kommando': 'set_soc_max', 'wert': soc_max,
-                'grund': f'Zellausgleich: SOC_MAX → {soc_max}% (Vollladung)',
+                'kommando': 'set_soc_mode', 'wert': 'auto',
+                'grund': 'Zellausgleich: SOC-Modus → auto (Firmware-gesteuert, Vollladung möglich)',
             },
         ]
         # Hinweis: registriere_aktion() erfolgt NACH Actuator-Erfolg in engine.py (K2)

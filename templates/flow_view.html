@@ -758,10 +758,15 @@
                     <text x="350" y="342" text-anchor="middle"
                       fill="#10b981" font-size="13" font-weight="700" id="sub-battery-soc">SOC: 0%</text>
 
-                    <!-- Timestamp (rechts neben PV, über Verbrauch) -->
-                        <text x="505" y="125" text-anchor="middle"
-                        fill="rgba(255,255,255,0.45)" font-size="13" font-weight="600"
-                      id="timestamp">Lade Daten...</text>
+                    <!-- Datum + Uhrzeit (zwischen Bubbles) -->
+                        <text x="505" y="117" text-anchor="middle"
+                        fill="rgba(200,200,215,0.80)" font-size="14" font-weight="600"
+                        font-family="Georgia, 'Book Antiqua', Palatino, serif"
+                      id="datestamp">--</text>
+                        <text x="505" y="138" text-anchor="middle"
+                        fill="rgba(220,220,230,0.85)" font-size="18" font-weight="700"
+                        font-family="Georgia, 'Book Antiqua', Palatino, serif"
+                      id="timestamp">--:--</text>
 
                 <!-- Verbrauch -->
                 <circle cx="500" cy="225" r="62" fill="none"
@@ -868,6 +873,7 @@
                 <span>SOC: <span class="bd-val" id="bd-soc-range">--</span></span>
                 <span class="bd-sep">|</span>
                 <span>Status: <span class="bd-val" id="bd-chast">--</span></span>
+                <span id="bd-zausgl-wrap" style="display:none"><span class="bd-sep">|</span><span style="color:#fbbf24;font-weight:600" title="Quartalszellausgleich läuft — Batterie lädt im Auto-Modus auf 100%">ZAusgl.</span></span>
             </div>
             <!-- Zeile 2: Batt-Automation (einzeilig) -->
             <div class="auto-section" id="battAutoSection">
@@ -1376,13 +1382,18 @@
         };
     }
 
+    const WOCHENTAGE = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
+
     function updateLabels(d) {
-        const age = Math.round(d.age_seconds);
         const tsDate = new Date(d.timestamp * 1000);
         const hh = String(tsDate.getHours()).padStart(2,'0');
         const mm = String(tsDate.getMinutes()).padStart(2,'0');
-        const ss = String(tsDate.getSeconds()).padStart(2,'0');
-        document.getElementById('timestamp').textContent = `${hh}:${mm}:${ss} (${age}s)`;
+        document.getElementById('timestamp').textContent = `${hh}:${mm}`;
+        const wt = WOCHENTAGE[tsDate.getDay()];
+        const day = tsDate.getDate();
+        const mon = tsDate.getMonth() + 1;
+        const yr = String(tsDate.getFullYear()).slice(-2);
+        document.getElementById('datestamp').textContent = `${wt}, ${day}.${mon}.${yr}`;
 
         document.getElementById('value-f1').textContent = fmt(d.producers.f1);
         document.getElementById('value-f2').textContent = fmt(d.producers.f2);
@@ -1667,6 +1678,9 @@
                 socRangeText = `${sMin}\u2013${sMax}% (${socModeRaw || '?'})`;
             }
             document.getElementById('bd-soc-range').textContent = socRangeText;
+            // Zellausgleich-Indikator
+            const bdZausgl = document.getElementById('bd-zausgl-wrap');
+            if (bdZausgl) bdZausgl.style.display = d.zellausgleich_aktiv ? '' : 'none';
             // StorCtl + ChaSt → nur ChaSt (Status) in Zeile 1
             const chaEl = document.getElementById('bd-chast');
             if (chaEl) {

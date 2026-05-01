@@ -233,6 +233,10 @@ class RegelHeizpatrone(Regel):
         self._kurz_burst_sperre_bis: float = 0    # Epoch: EIN-Sperre aktiv bis
         # Watchdog: Notaus wenn WW-Temperatur länger als Schwelle unbekannt
         self._ww_temp_letzte_gueltig: float = 0   # Epoch: letzte gültige ww_temp
+        # Drain-Abschalt-Verzögerung: Soft-Verbraucher-Bedingung (Haus/WP/EV) muss
+        # drain_abschalt_verzoegerung_min anhalten bevor HP abgeschaltet wird.
+        # SOC, Temperatur und Netzbezug sind ausgenommen (immer sofort).
+        self._drain_lastbedingung_ts: float = 0   # Epoch: erste Erkennung der Soft-Bedingung
 
     def _geraet_label(self) -> str:
         """Kurzlabel für menschenlesbare Extern-Logs."""
@@ -753,14 +757,41 @@ class RegelHeizpatrone(Regel):
                         haus_netto = max(0, haus_netto - self.HP_NENN_W)
                     # WP-Leistung auch herausrechnen (eigene Prüfung unten)
                     haus_netto = max(0, haus_netto - (obs.wp_power_w or 0))
+                    # Soft-Bedingungen: Haushalt/WP/EV — mit Verzögerung damit
+                    # kurze Verbrauchsspitzen (Wasserkocher, Backofen, Hauswasserwerk)
+                    # den Drain nicht sofort unterbrechen.
+                    # SOC, Temperatur, Netzbezug sind NICHT verzögert (oben bereits geprüft).
+                    soft_bedingung = False
                     if haus_netto >= d_haus * 1.2:
                         veto, _ = self._drain_haushalt_prognose_veto(
                             obs, matrix, haus_netto, now_h
                         )
                         if not veto:
+                            soft_bedingung = True
+                    if not soft_bedingung and (
+                            (obs.wp_power_w or 0) >= d_wp
+                            or (obs.ev_power_w or 0) >= d_ev):
+                        soft_bedingung = True
+                    if soft_bedingung:
+                        verz_s = int(get_param(
+                            matrix, self.regelkreis,
+                            'drain_abschalt_verzoegerung_min', 5
+                        )) * 60
+                        now_ts = time.time()
+                        if self._drain_lastbedingung_ts == 0:
+                            self._drain_lastbedingung_ts = now_ts
+                            LOG.info(
+                                'HP Drain-Verbrauchersperre: Verzögerung gestartet '
+                                '(%.0f Min) — Haus=%.0fW, WP=%.0fW, EV=%.0fW',
+                                verz_s / 60, haus_netto,
+                                obs.wp_power_w or 0, obs.ev_power_w or 0,
+                            )
+                        elif (now_ts - self._drain_lastbedingung_ts) >= verz_s:
                             return int(score * 1.5)
-                    if (obs.wp_power_w or 0) >= d_wp or (obs.ev_power_w or 0) >= d_ev:
-                        return int(score * 1.5)
+                    else:
+                        if self._drain_lastbedingung_ts > 0:
+                            LOG.debug('HP Drain-Verbrauchersperre: Bedingung weggefallen → Timer reset')
+                        self._drain_lastbedingung_ts = 0
                 else:
                     # Batterie entlädt: potenzial- und kontextabhängig
                     if p_batt is not None and p_batt < 0:
@@ -1094,7 +1125,7 @@ class RegelHeizpatrone(Regel):
                             )
                             if notaus_ausloesen:
                                 notaus_grund = f'Drain-Ende: {netz_grund}'
-                        # Verbraucher-Checks
+                        # Verbraucher-Checks (Soft-Bedingungen, mit Verzögerung)
                         if not notaus_grund:
                             d_haus = get_param(matrix, self.regelkreis, 'drain_max_haushalt_w', 700)
                             d_wp = get_param(matrix, self.regelkreis, 'drain_max_wp_w', 500)
@@ -1107,6 +1138,16 @@ class RegelHeizpatrone(Regel):
                             house_w = max(0, house_w - (obs.wp_power_w or 0))
                             wp_w = obs.wp_power_w or 0
                             ev_w = obs.ev_power_w or 0
+                            # Delay-Auswertung: Timer wurde in bewerte() gesetzt;
+                            # Abschalten erst wenn Verzögerung abgelaufen.
+                            verz_s = int(get_param(
+                                matrix, self.regelkreis,
+                                'drain_abschalt_verzoegerung_min', 5
+                            )) * 60
+                            verz_abgelaufen = (
+                                self._drain_lastbedingung_ts > 0
+                                and (time.time() - self._drain_lastbedingung_ts) >= verz_s
+                            )
                             if house_w >= d_haus * 1.2:
                                 veto, veto_grund = self._drain_haushalt_prognose_veto(
                                     obs, matrix, house_w, now_h
@@ -1116,13 +1157,22 @@ class RegelHeizpatrone(Regel):
                                         f'Drain-Haushalt VETO: {veto_grund} '
                                         f'(Haus={house_w:.0f}W, Schwelle={d_haus}×1.2)'
                                     )
-                                else:
-                                    notaus_grund = (f'Drain-Ende: Haushalt {house_w:.0f}W '
-                                                    f'≥ {d_haus}×1.2')
-                            if not notaus_grund and wp_w >= d_wp:
-                                notaus_grund = f'Drain-Ende: WP {wp_w:.0f}W ≥ {d_wp}W'
-                            elif not notaus_grund and ev_w >= d_ev:
-                                notaus_grund = f'Drain-Ende: EV {ev_w:.0f}W ≥ {d_ev}W'
+                                elif verz_abgelaufen:
+                                    notaus_grund = (
+                                        f'Drain-Ende (nach {verz_s // 60:.0f} Min '
+                                        f'Verzögerung): Haushalt {house_w:.0f}W '
+                                        f'≥ {d_haus}×1.2'
+                                    )
+                            if not notaus_grund and wp_w >= d_wp and verz_abgelaufen:
+                                notaus_grund = (
+                                    f'Drain-Ende (nach {verz_s // 60:.0f} Min '
+                                    f'Verzögerung): WP {wp_w:.0f}W ≥ {d_wp}W'
+                                )
+                            elif not notaus_grund and ev_w >= d_ev and verz_abgelaufen:
+                                notaus_grund = (
+                                    f'Drain-Ende (nach {verz_s // 60:.0f} Min '
+                                    f'Verzögerung): EV {ev_w:.0f}W ≥ {d_ev}W'
+                                )
                 else:
                     # Batterie entlädt: potenzial- und kontextabhängig
                     if p_batt < 0:
@@ -1264,6 +1314,7 @@ class RegelHeizpatrone(Regel):
                 self._burst_ende = 0
                 self._drain_modus = False
                 self._probe_modus = False
+                self._drain_lastbedingung_ts = 0   # Verzögerungstimer zurücksetzen
                 return [{
                     'tier': 2, 'aktor': 'fritzdect',
                     'kommando': 'hp_aus',

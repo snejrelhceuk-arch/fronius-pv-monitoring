@@ -469,13 +469,13 @@
           "beschreibung": "Gesenkte Schwelle wenn max_tage überschritten"
         },
         "max_tage_ohne_ausgleich": {
-          "wert": 45,
+          "wert": 92,
           "bereich": [
-            20,
-            90
+            30,
+            180
           ],
           "einheit": "Tage",
-          "beschreibung": "Nach x Tagen: Notfall-Schwelle verwenden"
+          "beschreibung": "Nach x Tagen ohne Ausgleich: Notfall-Schwelle verwenden (Quartal = ~92 Tage)"
         },
         "fruehester_tag": {
           "wert": 1,
@@ -493,7 +493,16 @@
             31
           ],
           "einheit": "Tag",
-          "beschreibung": "Spätester regulärer Tag im Monat"
+          "beschreibung": "Spätester regulärer Tag im Monat (ab dem die Notfall-Schwelle greift)"
+        },
+        "frueheste_stunde_h": {
+          "wert": 10.0,
+          "bereich": [
+            8,
+            14
+          ],
+          "einheit": "h",
+          "beschreibung": "Früheste Tageszeit für Zellausgleich-Auslösung (PV-Anlauf abwarten, kein Nacht-Trigger)"
         }
       },
       "score_gewicht": 30,
@@ -973,6 +982,15 @@
           ],
           "einheit": "s",
           "beschreibung": "Drain-Burst Maximaldauer (45 Min) — Sicherheits-Backstop"
+        },
+        "drain_abschalt_verzoegerung_min": {
+          "wert": 5,
+          "bereich": [
+            1,
+            10
+          ],
+          "einheit": "min",
+          "beschreibung": "Verzögerung beim Drain-Abschalten durch Verbrauchsspitzen (Haushalt/WP/EV). Kurze Lasten (Wasserkocher, Backofen, Hauswasserwerk) lösen erst nach anhaltender Überschreitung einen Notaus aus. SOC, Temperatur und Netzbezug sind davon ausgenommen (immer sofort). 1–10 Min, Standard 5 Min."
         },
         "extern_respekt_s": {
           "wert": 1800,
