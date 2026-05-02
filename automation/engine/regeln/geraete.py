@@ -1557,6 +1557,100 @@ class RegelKlimaanlage(RegelHeizpatrone):
         self._klima_extern_aus_ts: float = 0
         self._engine_klima_ein_ts: float = 0
         self._engine_klima_aus_ts: float = 0
+        # Schaltfrequenz-Schutz (Kompressor-Kurzzyklen)
+        self._klima_schalt_aus_zeiten: list[float] = []  # AUS-Zeitstempel (Sliding Window)
+        self._klima_schalt_cooldown_bis: float = 0.0     # epoch: EIN-Sperre bis
+
+    # ── Schaltfrequenz-Schutz ────────────────────────────────
+
+    def _verarbeite_schaltfrequenz_aus(self, now: float, matrix: dict) -> None:
+        """Jedes AUS-Ereignis zählen (alle Quellen). Bei 2× AUS im Fenster → Cooldown.
+
+        Sliding-Window: Einträge außerhalb `schaltintervall_s` werden verworfen.
+        Cooldown startet ab dem letzten AUS und läuft `cooldown_s`.
+        Nach Cooldown-Aktivierung wird die History geleert.
+        Cooldown-Zeitpunkt wird in RAM-DB (engine_flags) persistiert, damit
+        die Web-API (B-Rolle) ihn lesen kann ohne C-Modul-Import.
+        """
+        schaltintervall_s = float(get_param(
+            matrix, self.regelkreis, 'schaltintervall_s', 1800
+        ))
+        cooldown_s = float(get_param(
+            matrix, self.regelkreis, 'cooldown_s', 3600
+        ))
+
+        self._klima_schalt_aus_zeiten.append(now)
+        # Einträge außerhalb des Fensters entfernen
+        self._klima_schalt_aus_zeiten = [
+            t for t in self._klima_schalt_aus_zeiten
+            if now - t <= schaltintervall_s
+        ]
+
+        if len(self._klima_schalt_aus_zeiten) >= 2:
+            self._klima_schalt_cooldown_bis = now + cooldown_s
+            self._schreibe_cooldown_in_db(self._klima_schalt_cooldown_bis)
+            LOG.warning(
+                'Klima Schaltfrequenz-Cooldown: %d×AUS in %.0f Min → '
+                'EIN-Sperre %.0f Min (bis %s)',
+                len(self._klima_schalt_aus_zeiten),
+                schaltintervall_s / 60,
+                cooldown_s / 60,
+                datetime.fromtimestamp(self._klima_schalt_cooldown_bis).strftime('%H:%M'),
+            )
+            self._klima_schalt_aus_zeiten = []  # Reset nach Aktivierung
+
+    @staticmethod
+    def _schreibe_cooldown_in_db(cooldown_bis: float) -> None:
+        """Schreibt klima_cooldown_bis in RAM-DB engine_flags (für B-Lesezugriff)."""
+        try:
+            conn = sqlite3.connect(RAM_DB_PATH, timeout=2.0)
+            conn.execute('PRAGMA journal_mode=WAL')
+            now_iso = datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'
+            conn.execute(
+                "INSERT INTO engine_flags (key, value, ts) VALUES (?, ?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value, ts=excluded.ts",
+                ('klima_cooldown_bis', str(cooldown_bis), now_iso),
+            )
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            LOG.debug('engine_flags write failed: %s', e)
+
+    def _schaltfrequenz_cooldown_verbleibend(self) -> int:
+        """Verbleibende EIN-Sperrdauer in Sekunden. 0 = kein aktiver Cooldown.
+
+        Nutzt Instance-State (schnell). DB-Wert wird beim Daemon-Start durch
+        `_lade_cooldown_aus_db()` in den Instance-State übertragen.
+        """
+        if self._klima_schalt_cooldown_bis <= 0:
+            return 0
+        rem = int(self._klima_schalt_cooldown_bis - time.time())
+        if rem <= 0:
+            self._klima_schalt_cooldown_bis = 0.0
+            self._schreibe_cooldown_in_db(0.0)
+        return max(0, rem)
+
+    def lade_cooldown_aus_db(self) -> None:
+        """Stellt Cooldown-State nach Daemon-Neustart aus RAM-DB wieder her.
+
+        Muss vom Daemon beim Start aufgerufen werden (analog HP min_pause-Schutz).
+        """
+        try:
+            conn = sqlite3.connect(RAM_DB_PATH, timeout=2.0)
+            row = conn.execute(
+                "SELECT value FROM engine_flags WHERE key='klima_cooldown_bis'"
+            ).fetchone()
+            conn.close()
+            if row:
+                val = float(row[0])
+                if val > time.time():
+                    self._klima_schalt_cooldown_bis = val
+                    LOG.info(
+                        'Klima Cooldown aus DB wiederhergestellt: noch %.0f Min',
+                        (val - time.time()) / 60,
+                    )
+        except Exception as e:
+            LOG.debug('lade_cooldown_aus_db: %s', e)
 
     # ── Extern-Erkennung ─────────────────────────────────────
 
@@ -1594,6 +1688,8 @@ class RegelKlimaanlage(RegelHeizpatrone):
         if (not obs.klima_aktiv
                 and self._klima_letzter_zustand is not None
                 and self._klima_letzter_zustand):
+            # Schaltfrequenz-Tracking (alle Quellen zählen, unabhängig von Engine/Extern)
+            self._verarbeite_schaltfrequenz_aus(time.time(), matrix)
             if (time.time() - self._engine_klima_aus_ts) < 180:
                 self._engine_klima_aus_ts = 0
                 LOG.debug('Klima AUS: Engine-initiiert (erkannt)')
@@ -1778,6 +1874,13 @@ class RegelKlimaanlage(RegelHeizpatrone):
                 LOG.debug('Klima extern-Hold OFF aktiv (%ds verbleibend)', ext_rem)
                 return 0
 
+        # Schaltfrequenz-Cooldown: EIN-Sperre (Steuerbox/Extern haben bereits Vorrang oben).
+        if not obs.klima_aktiv:
+            cd_rem = self._schaltfrequenz_cooldown_verbleibend()
+            if cd_rem > 0:
+                LOG.debug('Klima EIN blockiert: Schaltfrequenz-Cooldown noch %d Min', cd_rem // 60)
+                return 0
+
         soll_laufen = self._soll_klima_laufen(obs, matrix)
         ist_an = bool(obs.klima_aktiv)
 
@@ -1805,7 +1908,7 @@ class RegelKlimaanlage(RegelHeizpatrone):
 
         # Steuerbox-Hold (ON/OFF) erzwingen.
         sb_state, sb_rem = self._aktiver_steuerbox_klima_hold()
-        if sb_state == 'on':
+        if sb_state == 'on':  # Steuerbox hat Vorrang — Cooldown wird ignoriert
             if not obs.klima_aktiv:
                 self._engine_klima_ein_ts = time.time()
                 registriere_klima_engine_ein()
@@ -1855,6 +1958,14 @@ class RegelKlimaanlage(RegelHeizpatrone):
         ist_an = bool(obs.klima_aktiv)
 
         if soll_laufen and not ist_an:
+            # Schaltfrequenz-Cooldown: EIN-Sperre (Steuerbox/Extern haben Vorrang, oben behandelt)
+            cd_rem = self._schaltfrequenz_cooldown_verbleibend()
+            if cd_rem > 0:
+                LOG.info(
+                    'Klima EIN blockiert: Schaltfrequenz-Cooldown aktiv noch %d Min',
+                    cd_rem // 60,
+                )
+                return []
             # Engine-Einschaltung markieren (für Extern-Erkennung im nächsten Zyklus)
             self._engine_klima_ein_ts = time.time()
             registriere_klima_engine_ein()

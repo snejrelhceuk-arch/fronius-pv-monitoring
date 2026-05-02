@@ -178,6 +178,12 @@ CREATE TABLE IF NOT EXISTS heartbeat (
     component   TEXT PRIMARY KEY,
     ts          TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS engine_flags (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL,
+    ts          TEXT NOT NULL
+);
 """
 
 

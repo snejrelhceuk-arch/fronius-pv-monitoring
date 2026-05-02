@@ -580,7 +580,40 @@
             max-height: 600px;
             opacity: 1;
         }
+        
+        #ticker-wrap {
+            overflow: hidden;
+            position: relative;
+            height: 38px;
+            background: rgba(15,23,42,0.8);
+            border-top: 1px solid rgba(51,65,85, 0.5);
+            border-radius: 0 0 12px 12px;
+            display: flex;
+            align-items: center;
+            color: #94a3b8;
+            font-size: 20px;
+            font-weight: 500;
+            max-height: 0;
+            opacity: 0;
+            transition: max-height 0.5s ease, opacity 0.35s ease;
+        }
+        #ticker-wrap.visible {
+            max-height: 38px;
+            opacity: 1;
+        }
+        .ticker-content {
+            display: inline-block;
+            white-space: nowrap;
+            padding-left: 100%;
+            animation: tickerScroll 240s linear infinite;
+            will-change: transform;
+        }
+        @keyframes tickerScroll {
+            0% { transform: translate3d(0, 0, 0); }
+            100% { transform: translate3d(-100%, 0, 0); }
+        }
         #btn-maschinenraum { cursor: pointer; }
+
     </style>
 </head>
 <body>
@@ -933,6 +966,10 @@
                 <span><span class="it-val" id="bd-temp" style="color:#10b981">--</span>°C</span>
             </div>
             </div><!-- /#maschinen-info-wrap -->
+            <div id="ticker-wrap" class="visible">
+                <div class="ticker-content" id="ticker-text">+++ Initialisiere Tickerverbindung ... +++</div>
+            </div>
+
         </div>
     </div>
 
@@ -1796,6 +1833,16 @@
             const kPowText = (kZustand === 'EIN' && kPow != null) ? ` ${kPow}W` : '';
             const kStateColor = kZustand === 'EIN' ? '#06b6d4' : (kZustand === 'AUS' ? '#475569' : '#9ca3af');
             const kPrefix = `<span style="color:${kStateColor};font-weight:600" title="Live (klima_w)">${kZustand}${kPowText}</span>`;
+            // Schaltfrequenz-Cooldown anzeigen
+            const kCooldown = klimaStatus.cooldown_aktiv;
+            const kCooldownMin = kCooldown ? Math.ceil((klimaStatus.cooldown_verbleibt_s || 0) / 60) : 0;
+            const kCooldownBis = klimaStatus.cooldown_bis || '';
+            const kCooldownHint = kCooldown
+                ? `Schaltfrequenz-Schutz aktiv — EIN gesperrt noch ${kCooldownMin} Min (bis ${kCooldownBis})`
+                : '';
+            const kCooldownBadge = kCooldown
+                ? ` <span style="color:#f59e0b;font-weight:600;cursor:default" title="${kCooldownHint}">⏸ ${kCooldownMin}min</span>`
+                : '';
             if (klimaAktionen.length > 0) {
                 const klimaItems = klimaAktionen.slice().reverse().map(a => {
                     const zeit = a.ts ? a.ts.substring(11, 16) : '?';
@@ -1812,9 +1859,9 @@
                     return `<span style="color:${color}" title="${titleAttr}">${zeit}${symbol}${suffix}</span>`;
                 });
                 const klimaTimeline = buildTimelineSnippet(klimaItems);
-                klimaBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#06b6d4">Klima 24h:</span> ${kPrefix} <span class="ap-sep">·</span> ${klimaTimeline}`;
+                klimaBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#06b6d4">Klima 24h:</span> ${kPrefix}${kCooldownBadge} <span class="ap-sep">·</span> ${klimaTimeline}`;
             } else {
-                klimaBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#06b6d4">Klima 24h:</span> ${kPrefix} <span class="ap-sep">·</span> <span class="ap-text">keine Schaltungen</span>`;
+                klimaBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#06b6d4">Klima 24h:</span> ${kPrefix}${kCooldownBadge} <span class="ap-sep">·</span> <span class="ap-text">keine Schaltungen</span>`;
             }
 
             // ── Zeile 5: WP Wärmepumpe (zweizeilig) ─────────────────
@@ -1880,7 +1927,29 @@
         const btnBg   = document.getElementById('btn-mr-bg');
         const btnTxt  = document.getElementById('btn-mr-text');
         const infoWrap = document.getElementById('maschinen-info-wrap');
+        const tickerWrap = document.getElementById('ticker-wrap');
+        const tickerText = document.getElementById('ticker-text');
         let timerInterval = null;
+
+                // Ticker Fetcher
+        function updateTicker() {
+            fetch('/api/ticker')
+                .then(res => res.json())
+                .then(data => {
+                    let newText = "+++ Ticker temporär offline +++";
+                    if(data.status === 'ok' && data.text) {
+                        newText = data.text;
+                    } else if (data.status === 'error') {
+                        newText = "+++ " + data.text + " +++";
+                    }
+                    tickerText.textContent = newText;
+                })
+                .catch(err => {
+                    tickerText.textContent = "+++ Ticker temporär offline +++";
+                });
+        }
+        updateTicker();
+        setInterval(updateTicker, 60000); // alle 60 Sekunden
 
         function resetBtn() {
             btnTxt.textContent = 'Maschinenraum';

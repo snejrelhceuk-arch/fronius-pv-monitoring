@@ -1202,6 +1202,24 @@
           ],
           "einheit": "s",
           "beschreibung": "Dauer in Sekunden, wie lange ein extern erkanntes Einschalten respektiert wird. Während dieser Zeit greift die Temperatur-Abschaltlogik nicht; nur harte Sicherheitskriterien (Sunset+SOC) bleiben aktiv."
+        },
+        "schaltintervall_s": {
+          "wert": 1800,
+          "bereich": [
+            900,
+            2700
+          ],
+          "einheit": "s",
+          "beschreibung": "Schaltfrequenz-Schutz: Zeitfenster für 2×AUS-Erkennung (Kompressor-Kurzzyklen). Standard: 30 Min. Bereich: 15–45 Min."
+        },
+        "cooldown_s": {
+          "wert": 3600,
+          "bereich": [
+            1800,
+            5400
+          ],
+          "einheit": "s",
+          "beschreibung": "Schaltfrequenz-Schutz: EIN-Sperre ab dem letzten AUS nach 2×AUS im Fenster. Standard: 60 Min. Bereich: 30–90 Min."
         }
       },
       "score_gewicht": 52,

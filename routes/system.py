@@ -1260,6 +1260,25 @@ def _fetch_hp_status(now, result):
             _zustand = 'AUS'
         else:
             _zustand = '?'
+        # Schaltfrequenz-Cooldown aus RAM-DB engine_flags lesen (ABCD-konform: B liest RAM-DB)
+        _cd_aktiv = False
+        _cd_verbleibt_s = 0
+        _cd_bis_iso = None
+        try:
+            _ram_db = '/dev/shm/automation_obs.db'
+            with sqlite3.connect(_ram_db, timeout=2.0) as _edb:
+                _erow = _edb.execute(
+                    "SELECT value FROM engine_flags WHERE key='klima_cooldown_bis'"
+                ).fetchone()
+            if _erow:
+                _cd_bis_epoch = float(_erow[0])
+                if _cd_bis_epoch > time.time():
+                    _cd_aktiv = True
+                    _cd_verbleibt_s = int(_cd_bis_epoch - time.time())
+                    from datetime import datetime as _dt
+                    _cd_bis_iso = _dt.fromtimestamp(_cd_bis_epoch).strftime('%H:%M')
+        except Exception:
+            pass
         result['klima_status'] = {
             'zustand': _zustand,
             'live': True,
@@ -1268,16 +1287,25 @@ def _fetch_hp_status(now, result):
             'grund': _last_klima.get('grund', ''),
             'kommando': _last_klima.get('kommando'),
             'quelle_letzte': _last_klima.get('quelle'),
+            'cooldown_aktiv': _cd_aktiv,
+            'cooldown_verbleibt_s': _cd_verbleibt_s,
+            'cooldown_bis': _cd_bis_iso,
         }
     except Exception as _kle:
         logging.debug(f"Klima-Status: {_kle}")
         result['klima_status'] = {
             'zustand': '?', 'live': False, 'seit': None,
             'grund': '', 'kommando': None, 'quelle_letzte': None,
+            'cooldown_aktiv': False, 'cooldown_verbleibt_s': 0, 'cooldown_bis': None,
         }
 
 
 def _fetch_wp_status(result):
+    """Wärmepumpe Dimplex – Temperaturen aus ObsState (ABCD: kein direkter Modbus in B).
+
+    Daten werden vom DataCollector (C-Rolle) via wp_modbus.py gesammelt
+    und in /dev/shm/automation_obs.db → obs_state abgelegt.
+    """
     """Wärmepumpe Dimplex – Temperaturen aus ObsState (ABCD: kein direkter Modbus in B).
 
     Daten werden vom DataCollector (C-Rolle) via wp_modbus.py gesammelt
@@ -1764,3 +1792,22 @@ def api_backup_status():
 
     _backup_cache.update(ts=now, result=result)
     return jsonify(result)
+
+@bp.route('/api/ticker', methods=['GET'])
+def get_ticker():
+    """Holt die Ticker-Nachrichten vom Microservice (mit Fallback)"""
+    import requests
+    from config import load_local_setting
+    
+    ticker_url = load_local_setting('PV_TICKER_API_ENDPOINT', 'http://127.0.0.1:8050/ticker')
+    try:
+        # Aggressiver Timeout, um pv-system nicht zu blockieren, falls Pi5 offline
+        resp = requests.get(ticker_url, timeout=1.0)
+        resp.raise_for_status()
+        return jsonify(resp.json())
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "text": "Ticker derzeit nicht erreichbar.",
+            "detail": str(e)
+        })
