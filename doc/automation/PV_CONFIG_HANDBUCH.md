@@ -605,8 +605,12 @@ temperaturgeführter Betrieb.
 | temp_hysterese_k | 1.0 K | 0.2–3.0 K | Temperatur-Hysterese gegen die jeweilige Einschalt-Schwelle. |
 | sunset_soc_stop_pct | 90% | 30–100% | Abschaltschwelle nach Sonnenuntergang: Klima AUS bei `SOC < Wert`. |
 | extern_respekt_s | 1800 s | 300–7200 s | **Autoritätszeit (30 Min, 5 Min–2 h).** Bei manuellem Einschalten: Engine respektiert Nutzer-Entscheidung, nur Sunset+SOC-Schutz (`sunset_soc_stop_pct`) überstimmt. Bei manuellem Ausschalten: `klima_ein` für dieselbe Dauer gesperrt. |
+| schaltintervall_s | 1800 s | 900–2700 s | **Schaltfrequenz-Fenster (15–45 Min).** Beobachtungszeitraum für AUS-Ereignis-Zählung. Treten innerhalb dieses Fensters 2× AUS auf (alle Quellen: Engine + Extern), wird der Cooldown aktiviert. |
+| cooldown_s | 3600 s | 1800–5400 s | **Kompressor-Schutzpause (30–90 Min).** EIN-Sperre ab dem zweiten AUS-Ereignis. Schützt den Kompressor vor zu kurzen Zyklen. Steuerbox-Override überstimmt den Cooldown; nach Ablauf der Respektzeit greift die Frequenzprüfung wieder. Im Flow sichtbar als ⏸ Nmin (amber). |
 
 **Extern-Erkennung (Autoritätsschaltung):** Identisch zum HP-Muster (§4.10). Die Engine erkennt automatisch, wenn die Klimaanlage außerhalb der Engine eingeschaltet wird (Steuerbox, Fritz!Box-App, physischer Schalter): Klima ist EIN, aber kein Engine-Kommando liegt vor (180 s Grace-Window). In diesem Fall gilt für `extern_respekt_s` die Nutzer-Autorität: Temperaturlogik pausiert. Nur die harte Sicherheit (nach Sonnenuntergang bei `SOC < sunset_soc_stop_pct`) überstimmt sofort.
+
+**Schaltfrequenz-Schutz:** Zählt alle AUS-Ereignisse (Engine und Extern) im Fenster `schaltintervall_s`. Bei 2× AUS innerhalb des Fensters wird `klima_ein` für `cooldown_s` gesperrt. Steuerbox-Hold (aktiver Override) überstimmt den Cooldown; nach Ablauf der Steuerbox-Respektzeit greift die Frequenzprüfung wieder normal. Der Cooldown-Zustand überlebt einen Daemon-Neustart (Persistenz in RAM-DB `engine_flags`).
 
 ---
 
