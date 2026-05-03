@@ -32,3 +32,6 @@ Geänderte Quellen: fronius_api.py, automation/engine/automation_daemon.py
 
 ## 2026-05-03 14:02 (Hash: 0e13cae362c16339)
 Geänderte Quellen: README.md
+
+## 2026-05-03 20:52 (Hash: 58f8258ba4cd2b83)
+Geänderte Quellen: requirements.txt, config.py
