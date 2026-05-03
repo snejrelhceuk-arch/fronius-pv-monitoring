@@ -26,3 +26,6 @@ Geänderte Quellen: automation/engine/automation_daemon.py, README.md, config.py
 
 ## 2026-04-26 12:22 (Hash: 3648e4cb32260d19)
 Geänderte Quellen: solar_forecast.py, automation/engine/engine.py, README.md, web_api.py, automation/engine/automation_daemon.py
+
+## 2026-05-01 11:35 (Hash: 5f27215705d8ea75)
+Geänderte Quellen: fronius_api.py, automation/engine/automation_daemon.py

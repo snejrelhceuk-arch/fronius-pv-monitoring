@@ -584,22 +584,36 @@
         #ticker-wrap {
             overflow: hidden;
             position: relative;
-            height: 38px;
+            height: 62px;
             background: rgba(15,23,42,0.8);
             border-top: 1px solid rgba(51,65,85, 0.5);
             border-radius: 0 0 12px 12px;
-            display: flex;
-            align-items: center;
-            color: #94a3b8;
-            font-size: 20px;
-            font-weight: 500;
+            display: block;
             max-height: 0;
             opacity: 0;
             transition: max-height 0.5s ease, opacity 0.35s ease;
         }
         #ticker-wrap.visible {
-            max-height: 38px;
+            max-height: 62px;
             opacity: 1;
+        }
+        .ticker-line {
+            position: relative;
+            overflow: hidden;
+            height: 31px;
+            display: flex;
+            align-items: center;
+        }
+        .ticker-line-main {
+            color: #e2e8f0;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        .ticker-line-sub {
+            color: #cbd5e1;
+            font-size: 13px;
+            font-weight: 500;
+            border-top: 1px solid rgba(51,65,85,0.25);
         }
         .ticker-content {
             display: inline-block;
@@ -967,7 +981,12 @@
             </div>
             </div><!-- /#maschinen-info-wrap -->
             <div id="ticker-wrap" class="visible">
-                <div class="ticker-content" id="ticker-text">+++ Initialisiere Tickerverbindung ... +++</div>
+                <div class="ticker-line ticker-line-main">
+                    <div class="ticker-content" id="ticker-text">+++ Initialisiere Tickerverbindung ... +++</div>
+                </div>
+                <div class="ticker-line ticker-line-sub">
+                    <div class="ticker-content" id="ticker-subtext"></div>
+                </div>
             </div>
 
         </div>
@@ -1929,6 +1948,7 @@
         const infoWrap = document.getElementById('maschinen-info-wrap');
         const tickerWrap = document.getElementById('ticker-wrap');
         const tickerText = document.getElementById('ticker-text');
+        const tickerSubText = document.getElementById('ticker-subtext');
         let timerInterval = null;
 
                 // Ticker Fetcher
@@ -1937,15 +1957,19 @@
                 .then(res => res.json())
                 .then(data => {
                     let newText = "+++ Ticker temporär offline +++";
+                    let newExplainText = "";
                     if(data.status === 'ok' && data.text) {
                         newText = data.text;
+                        newExplainText = data.explain_text || "";
                     } else if (data.status === 'error') {
                         newText = "+++ " + data.text + " +++";
                     }
                     tickerText.textContent = newText;
+                    tickerSubText.textContent = newExplainText;
                 })
                 .catch(err => {
                     tickerText.textContent = "+++ Ticker temporär offline +++";
+                    tickerSubText.textContent = "";
                 });
         }
         updateTicker();
