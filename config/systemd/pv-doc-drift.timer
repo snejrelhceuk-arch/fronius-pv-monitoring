@@ -1,0 +1,10 @@
+[Unit]
+Description=PV Doku-Drift-Engine taeglicher Trigger
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+Persistent=true
+Unit=pv-doc-drift.service
+
+[Install]
+WantedBy=timers.target

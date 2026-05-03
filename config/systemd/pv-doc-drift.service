@@ -1,0 +1,11 @@
+[Unit]
+Description=PV Doku-Drift-Engine (taegliche Drift-Erkennung)
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/pv-system
+ExecStart=/usr/bin/python3 tools/doc_drift_engine.py --write --cleanup
+StandardOutput=journal
+StandardError=journal
+Nice=10

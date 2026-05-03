@@ -61,7 +61,10 @@ Vier Schichten, die zusammen verhindern, dass die Doku vom Code abdriftet:
 1. **Pre-commit-Hook** (`tools/pre_commit_doc_check.py`)
    Code-Änderung in einer Domain → Card-Update in derselben Commit erforderlich. Frontmatter und Code-Anchors werden validiert.
 2. **Drift-Engine** (`tools/doc_drift_engine.py`, systemd-Timer auf Pi5)
-   Vergleicht täglich Cards gegen Code-Realität (Anchors, Signaturen, `git log`-Datum). Schreibt Drift-Report.
+   Vergleicht täglich Cards gegen Code-Realität (Anchors, `git log`-Datum, INDEX). Schreibt Drift-Report.
+   - Dry-Run lokal: `python3 tools/doc_drift_engine.py`
+   - Tasks schreiben: `python3 tools/doc_drift_engine.py --write`
+   - Veraltete Tasks aufräumen: `python3 tools/doc_drift_engine.py --write --cleanup`
 3. **Task-Generator + optionaler Ollama-Vorschlag**
    Pro Drift ein Task-Paket in `_drift/tasks/`. Wenn lokales Ollama erreichbar und Modelfile-Hash stimmt: zusätzlicher Diff-Vorschlag in `_drift/proposed/`. Engine ist auch ohne Ollama voll funktional.
 4. **Doc-Maintainer-Chatmode** (`.github/chatmodes/doc-maintainer.chatmode.md`)
