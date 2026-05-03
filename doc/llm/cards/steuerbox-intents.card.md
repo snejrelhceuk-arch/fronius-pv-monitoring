@@ -45,7 +45,6 @@ Schicht E nimmt Operator-Intents entgegen, validiert sie und schreibt sie als Ov
 
 ## Bekannte Fallstricke
 - Sicherheitsdoku beschreibt teils Bearer-Token; Ist-Stand im Code: Auth via mTLS-Reverse-Proxy, Validator prueft nur Allowlist.
-- `steuerbox/intent_handler.py:get_status` nutzt `time.time()`, importiert aber aktuell kein `time` (NameError-Risiko bei Status-Endpunkt).
 - Override-Holds wirken nur, wenn `OperatorOverrideProcessor` im Automation-Zyklus regelmaessig laeuft.
 
 ## Verwandte Cards
