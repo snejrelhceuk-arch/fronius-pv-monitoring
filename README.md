@@ -4,6 +4,8 @@ Production-ready Monitoring für Fronius Gen24 Hybrid PV-Anlage (37,59 kWp) mit 
 
 > Interne Betriebs- und Infrastrukturdokumentation wird lokal gehalten und ist im öffentlichen Repo bewusst nicht enthalten.
 
+> **Doku-Tracks:** Menschen lesen `doc/<bereich>/` (ausführliche Manuals) und `doc/SYSTEM_BRIEFING.md`. **Agenten/LLMs starten bei [`AGENTS.md`](AGENTS.md)** und folgen der dort beschriebenen Lade-Hierarchie zu `doc/SYSTEM_BRIEFING.md` → `doc/llm/INDEX.md` → konkrete Card.
+
 ## Produktionsstart
 Produktivbetrieb seit **01.01.2026 00:00 Uhr**
 
