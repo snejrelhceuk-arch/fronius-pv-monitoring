@@ -1,6 +1,6 @@
 [project]
 name = "pv-system"
-version = "1.3.1"
+version = "1.3.5"
 description = "PV-Monitoring & Automation für Fronius GEN24 + BYD HVS"
 requires-python = ">=3.9"
 

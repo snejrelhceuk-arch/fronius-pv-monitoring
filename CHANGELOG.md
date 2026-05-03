@@ -185,25 +185,35 @@ für Folge-ToDos (3. lauschende Instanz Pi5, Health-Sofortpfad, NQ-Adapter).
 
 ## [Unreleased]
 
+- Derzeit keine zusätzlichen Änderungen dokumentiert.
+
+---
+
+## v1.3.5 — 2026-05-03
+
 ### Features
 - **Klima Extern-Erkennung:** Manuelles Einschalten der Klimaanlage wird für `extern_respekt_s` (Standard 30 Min) respektiert. Zustandsbasierte Erkennung (OFF→ON ohne Engine-Beteiligung), analog zum HP-Muster. Während Respekt-Zeit greift nur die harte Sicherheit (Sunset+SOC).
 - **Batterie-Zelltemperaturen:** BYD-Zelltemperaturen (min/max/avg) via HTTP in DataCollector integriert (30 s Rate-Limit).
-- **Steuerbox Tages-Intent `afternoon_charge_request`:** Einmal-Trigger (z. B. aus HA) setzt einen Nachmittags-Ladewunsch bis Sunset. `respekt_s` wird serverseitig aus Sunset abgeleitet (Fallback 17:00) und als Policy-Hold geführt.
+- **Steuerbox Tages-Intent `afternoon_charge_request`:** Einmal-Trigger setzt einen Nachmittags-Ladewunsch bis Sunset. `respekt_s` wird serverseitig aus Sunset abgeleitet (Fallback 17:00) und als Policy-Hold geführt.
 - **SOC/HP-Kooperation für Ladewunsch:** `RegelNachmittagSocMax` priorisiert bei aktivem Tages-Intent das Ziel `SOC_MAX=100` im adaptiven Startfenster 12–15 Uhr; `RegelHeizpatrone` pausiert HP bis Ziel-SOC erreicht ist.
-- **Optionale HA MQTT Bridge:** Neuer Adapter `steuerbox/ha_mqtt_bridge.py` publiziert read-only MQTT Discovery/State aus `/api/ha/*` für HA-Entitäten ohne Steuerpfad.
-
-### System
-- **Steuerbox-Monitoring:** `pv-steuerbox.service` in zentrale Überwachung integriert (diagnos, Cron-Keepalive via `monitor_steuerbox.sh`).
-- **Failover-Sync gehärtet:** `.state`-Verzeichnis-Initialisierung über Boot-Service (`pv-failover-init.service`), Error-Logging in `failover_sync_db.sh`.
-- **HA-Read/Discovery ausgebaut:** Neue Endpunkte `/api/ha/automation`, `/api/ha/device`, `/api/ha/entities` ergänzen den bestehenden HA-Export (`/api/ha/flow`, `/api/ha/wattpilot`) für einfachere Entitäts- und Geräteabbildung.
+- **HA-Read/Discovery ausgebaut:** Endpunkte `/api/ha/automation`, `/api/ha/device`, `/api/ha/entities` ergänzen `/api/ha/flow` und `/api/ha/wattpilot` für konsistente Geräte-/Entitätsabbildung.
+- **HA MQTT Telemetrie-Bridge (read-only):** Adapter publiziert MQTT Discovery/State aus `/api/ha/*` (inkl. Wattpilot-Status, Session-/Gesamtenergie, Online/Alter/FRC), ohne Schreibpfad zur Steuerbox.
 
 ### Fixes
-- **Klima Rapid-Shutdown behoben:** Klimaanlage wurde nach manuellem Einschalten sofort wieder abgeschaltet, weil `RegelKlimaanlage` keine Extern-Erkennung hatte. `_uses_respekt_hold()` gibt für Klima `False` zurück → DB-basierter Ansatz war wirkungslos. Lösung: Zustandsübergangs-Erkennung (wie HP).
-- **Verbrauchsformel Tageskopf (counter_totals):** `routes/visualization.py` — Formel von `ertrag + bezug - einspeis` (reiner PV-DC-Ertrag) auf `ac_gesamt + bezug - einspeis` (mit `ac_gesamt = W_AC_Inv + F2 + F3`) umgestellt. `W_AC_Inv` bildet den gesamten AC-Ausgang des Wechselrichters ab (PV + Batterieentladung − Batterieladung), sodass die Batterieentladung korrekt im Tagesverbrauch erscheint.
+- **Klima Rapid-Shutdown behoben:** `RegelKlimaanlage` berücksichtigt Extern-Erkennung korrekt; sofortiges Zurückschalten nach manuellem EIN entfällt.
+- **Verbrauchsformel Tageskopf (counter_totals):** Formel auf `ac_gesamt + bezug - einspeis` umgestellt; Batterieentladung wird im Tagesverbrauch korrekt berücksichtigt.
+- **Steuerbox-Audit Stabilität:** Fehlender `time`-Import für Audit-Timestamp korrigiert.
 
-### Projektankündigungen
-- MEGA-BAS Rollout: I2C-HAT-Inbetriebnahme mit zusätzlicher Temperatur-Sensorik und vorbereiteter Aktorik für kommende Hardware-Phasen.
-- 3-Phasen-Heizpatrone (Zukunftsphase): Konzept für stufenweise Zuschaltung und Schützstrategie als nächster Ausbauschritt.
+### Operations / Infra
+- **Steuerbox-Monitoring:** `pv-steuerbox.service` in zentrale Überwachung integriert (inkl. Keepalive-Checks).
+- **Failover-Sync gehärtet:** `.state`-Initialisierung via Boot-Service und robusteres Error-Logging.
+- **Safe Terminal Workflow:** `scripts/terminal_safe_run.sh` als zentraler Guard für Prompt-/Interaktiv-/Timeout-Sicherheit.
+- **Pi5-Workspace-Backup:** `scripts/backup_workspace_pi5.sh` für datierte Snapshot-Archive ergänzt.
+
+### Docs / Internal
+- **LLM-Dokumentationssystem eingeführt:** `AGENTS.md`, `doc/llm/INDEX.md`, Domain-Cards, Drift-Engine und Pre-Commit-Doc-Check.
+- **HA-Integrationsdokumentation ergänzt:** `doc/web/HA_INTEGRATION.md` mit Read-only-Migrationspfad für HA.
+- **Audit-Altlasten bereinigt:** veraltete Deep-Audit-Dokumente entfernt/archiviert, Doku-Struktur konsolidiert.
 
 ---
 
