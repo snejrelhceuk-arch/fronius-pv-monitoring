@@ -37,7 +37,7 @@ Zentrale Steuerschleife (Rolle C). Sammelt Beobachtungen, ruft Schutz-Checks, da
 - Keine Regeländerung ohne Score-/Aktor-Cascade-Berücksichtigung (sonst Doppelschaltungen).
 
 ## Häufige Aufgaben
-- Neue Regel hinzufügen → `automation/engine/engine.py:_register_default_regeln` + `automation/engine/regeln/<datei>.py` (Subklasse `Regel`, `bewerte()` und ggf. `erzeuge_aktionen()`).
+- Neue Regel hinzufügen → `automation/engine/engine.py:_register_default_regeln` + passendes Modul unter `automation/engine/regeln/` (z. B. `automation/engine/regeln/schutz.py`; Subklasse `Regel`, `bewerte()` und ggf. `erzeuge_aktionen()`).
 - Tick-Intervall ändern → `automation/engine/automation_daemon.py:AutomationDaemon.run` (Konstanten OBS_COLLECT/FAST/STRATEGIC).
 - Score-Logik einer Regel debuggen → `automation/engine/engine.py:Engine.zyklus` (Logging) + Regel-Klasse `bewerte()`.
 - Operator-Override verarbeiten → `automation/engine/operator_overrides.py:OperatorOverrideProcessor.process_pending`.

@@ -2,6 +2,7 @@
 title: Steuerungsphilosophie (Prioritäten, ExternalRespect, Matrix)
 domain: automation
 role: C
+applyTo: "automation/engine/engine.py"
 tags: [philosophie, prioritaet, matrix, external-respect]
 status: stable
 last_review: 2026-05-03
@@ -18,7 +19,7 @@ last_review: 2026-05-03
 - **Parameter-Matrix:** `automation/engine/param_matrix.py:lade_matrix`
 - **Matrix-Quelle:** `config/soc_param_matrix.json` (Single Source of Truth)
 - **ExternalRespect (HP):** `automation/engine/regeln/geraete.py:RegelHeizpatrone._cancel_conflicting_overrides`
-- **ExternalRespect (WP):** `automation/engine/regeln/waermepumpe.py:_pruefe_extern_respekt`
+- **ExternalRespect (WP):** `automation/engine/regeln/waermepumpe.py:_prüfe_extern_respekt`
 
 ## Inputs / Outputs
 - **Inputs:** Beobachtungen (ObsState), Matrix-Parameter, Operator-Overrides, Tier-1-Flags.
@@ -57,7 +58,7 @@ last_review: 2026-05-03
 - [`automation-engine.card.md`](./automation-engine.card.md)
 - [`automation-schutzregeln.card.md`](./automation-schutzregeln.card.md)
 - [`automation-state.card.md`](./automation-state.card.md)
-- [`steuerbox-intents.card.md`](./steuerbox-intents.card.md) — _(folgt Phase 5)_
+- [`steuerbox-intents.card.md`](./steuerbox-intents.card.md)
 
 ## Human-Doku
 - `doc/automation/AUTOMATION_ARCHITEKTUR.md`

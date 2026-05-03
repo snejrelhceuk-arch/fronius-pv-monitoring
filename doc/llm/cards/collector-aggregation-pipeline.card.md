@@ -59,7 +59,7 @@ yearly_statistics (permanent)
 
 ## Bekannte Fallstricke
 - **Statistics-Corrections** (`statistics_corrections.py`): Quellen sind `daily_data` (WP/Heizpatrone) und `wattpilot_daily` (Wallbox); falsche Schreibweise/Spaltennamen führen stillschweigend zu fehlenden Korrekturen (`statistics-corrections-note`).
-- Backfill nur über die letzten 10 min — größere Lücken brauchen `scripts/backfill_*.py`.
+- Backfill nur über die letzten 10 min — größere Lücken brauchen dedizierte Skripte (z. B. `scripts/backfill_forecast_15min.py`, `scripts/backfill_sunshine_hours.py`).
 - Sunrise/Sunset-Forecast saisonal: ForecastCollector nutzt einen festen Bezug, der saisonal driften kann (offene Tech-Debt, `doc/TODO.md`).
 
 ## Verwandte Cards

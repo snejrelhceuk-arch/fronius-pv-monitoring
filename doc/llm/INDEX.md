@@ -1,6 +1,6 @@
 # LLM-Card-Index — Trigger → Card
 
-**Stand:** 2026-05-03 (Phase 3 — Pilot automation + collector live)
+**Stand:** 2026-05-03 (Phase 4 — Domains D/E/NQ/System/Web ergaenzt)
 
 Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet konkrete Aufgabenstellungen / Stichworte auf die zuständige Card ab.
 
@@ -23,6 +23,12 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 | **collector: Fronius-Modbus, Solar-API, raw_data-Schreiber** | [`collector-fronius-collector.card.md`](./cards/collector-fronius-collector.card.md) | stable |
 | **collector: Wattpilot-Polling, `eto`, `wattpilot_daily`** | [`collector-wattpilot-collector.card.md`](./cards/collector-wattpilot-collector.card.md) | stable |
 | **collector: FritzDECT, AIN-Mapping, Steckdosen-Polling** | [`collector-fritzdect-collector.card.md`](./cards/collector-fritzdect-collector.card.md) | stable |
+| **diagnos: Host-Health, Services, Freshness, Mirror/Backup-Alter** | [`diagnos-health.card.md`](./cards/diagnos-health.card.md) | stable |
+| **diagnos: Energiebilanz, Rollups, Gap-Scan, Config-Parse** | [`diagnos-integrity.card.md`](./cards/diagnos-integrity.card.md) | stable |
+| **steuerbox: Operator-Intents, Guards, respekt_s, Override-Status** | [`steuerbox-intents.card.md`](./cards/steuerbox-intents.card.md) | stable |
+| **netzqualitaet: Export, DFD-Analyse, Tages-/Boundary-API** | [`netzqualitaet-analysis.card.md`](./cards/netzqualitaet-analysis.card.md) | stable |
+| **system: .role-Guards, Failover, Publish-Audit, Backup-GFS** | [`system-ops-guards.card.md`](./cards/system-ops-guards.card.md) | stable |
+| **web: Blueprints, FroniusReadOnly, Display-Formatierung** | [`web-display-api.card.md`](./cards/web-display-api.card.md) | stable |
 
 ## Cards nach Domäne
 
@@ -44,19 +50,20 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 - [`collector-fritzdect-collector.card.md`](./cards/collector-fritzdect-collector.card.md) — AHA-API, AIN-Mapping
 
 ### diagnos (Schicht D)
-_(folgt in Phase 5)_
+- [`diagnos-health.card.md`](./cards/diagnos-health.card.md) — Host, Services, Freshness
+- [`diagnos-integrity.card.md`](./cards/diagnos-integrity.card.md) — Bilanz, Rollups, Gap-Scan
 
 ### steuerbox (Schicht E)
-_(folgt in Phase 5; `doc/steuerbox/LLM_AUSFUEHRUNG.md` ist Vorlage)_
+- [`steuerbox-intents.card.md`](./cards/steuerbox-intents.card.md) — Intents, Guards, Override-Lebenszyklus
 
 ### netzqualitaet
-_(folgt in Phase 5)_
+- [`netzqualitaet-analysis.card.md`](./cards/netzqualitaet-analysis.card.md) — Export, Analyse, API
 
 ### system
-_(folgt in Phase 5)_
+- [`system-ops-guards.card.md`](./cards/system-ops-guards.card.md) — Rollen, Sync, Backup, Publish
 
 ### web
-_(folgt in Phase 5)_
+- [`web-display-api.card.md`](./cards/web-display-api.card.md) — Blueprints, Read-only API, Formatierung
 
 ## Konventionen
 

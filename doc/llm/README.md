@@ -84,7 +84,7 @@ Cards sind für **„Mach X jetzt"**. Manuals sind für **„Verstehe, warum"**.
 
 ## Aktueller Stand
 
-- **2026-05-03:** Phase 1 (Cleanup) abgeschlossen. Phase 2 (Skelett) abgeschlossen. Phase 3 (Pilot automation + collector) folgt.
+- **2026-05-03:** Phase 1 (Cleanup) abgeschlossen. Phase 2 (Skelett) abgeschlossen. Phase 3 (Pilot automation + collector) live. Phase 4 (Domain-Cards fuer diagnos/steuerbox/netzqualitaet/system/web) eingepflegt.
 
 ## Plan-Quelle
 

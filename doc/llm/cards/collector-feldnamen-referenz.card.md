@@ -2,6 +2,7 @@
 title: Feldnamen-Referenz (Konventionen, Dupletten, Stolperfallen)
 domain: collector
 role: A
+applyTo: "aggregate_1min.py"
 tags: [feldnamen, semantik, dupletten]
 status: stable
 last_review: 2026-05-03
@@ -16,6 +17,10 @@ Die wichtigsten Feldnamen mit ihrer Bedeutung, ihren Einheiten und ihren häufig
 - **Aggregations-Producer:** `aggregate_1min.py` (Hauptliste der berechneten Felder, ~L60–90)
 - **Collector-Producer:** `modbus_v3.py`, `collector.py`
 - **Quell-Doku:** `doc/collector/FELDNAMEN_REFERENZ.md`
+
+## Inputs / Outputs
+- **Inputs:** Rohfelder aus `raw_data` (Modbus + Solar-API), Zählerstände und Momentanleistungen.
+- **Outputs:** Konsistente Feldsemantik in Aggregaten (`data_1min`, `data_15min`, `daily_data`) und Web-JSONs.
 
 ## Konventionen
 - DB-Spalten: `snake_case`, oft Anteils-Großbuchstaben aus Modbus-Quellen (`W_AC_Inv`, `P_Netz`).

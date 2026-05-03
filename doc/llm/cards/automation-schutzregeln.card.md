@@ -51,7 +51,7 @@ Hartstop-Schutzschicht oberhalb der normalen Regel-Engine. Tier-1-Alarme bypasse
 - [`automation-engine.card.md`](./automation-engine.card.md)
 - [`automation-battery-algorithm.card.md`](./automation-battery-algorithm.card.md) — `_NoOpResult`
 - [`automation-regel-wattpilot.card.md`](./automation-regel-wattpilot.card.md)
-- [`diagnos-health.card.md`](./diagnos-health.card.md) — _(folgt Phase 5)_
+- [`diagnos-health.card.md`](./diagnos-health.card.md)
 
 ## Human-Doku
 - `doc/automation/AUTOMATION_ARCHITEKTUR.md`

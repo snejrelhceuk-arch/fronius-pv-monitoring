@@ -2,6 +2,7 @@
 title: Automation-State (RAM-DB, Configs, Persist-Log)
 domain: automation
 role: C
+applyTo: "automation/engine/obs_state.py"
 tags: [state, obs-state, persist, ram-db, configs]
 status: stable
 last_review: 2026-05-03
