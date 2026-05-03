@@ -1560,12 +1560,57 @@ class RegelKlimaanlage(RegelHeizpatrone):
         # Schaltfrequenz-Schutz (Kompressor-Kurzzyklen)
         self._klima_schalt_aus_zeiten: list[float] = []  # AUS-Zeitstempel (Sliding Window)
         self._klima_schalt_cooldown_bis: float = 0.0     # epoch: EIN-Sperre bis
+        # Lastflanken-Detektion (Hysterese auf klima_power_w)
+        self._klima_kompressor_aktiv: Optional[bool] = None  # True=HIGH, False=LOW, None=unbekannt
+        self._klima_letztes_aus_event_ts: float = 0.0        # Dedup-Guard (min. 60 s zwischen Events)
 
     # ── Schaltfrequenz-Schutz ────────────────────────────────
 
-    def _verarbeite_schaltfrequenz_aus(self, now: float, matrix: dict) -> None:
-        """Jedes AUS-Ereignis zählen (alle Quellen). Bei 2× AUS im Fenster → Cooldown.
+    # Hysterese-Schwellen für Kompressor-Lasterkennung (Klima ~1 kW Inverter-Sprung,
+    # Standby ~30 W). Werte robust auch bei minimalem Lüfter-Betrieb.
+    _KOMP_ON_THR_W: float = 600.0
+    _KOMP_OFF_THR_W: float = 200.0
+    _AUS_EVENT_DEDUP_S: float = 60.0  # min. Abstand zwischen gezählten AUS-Events
 
+    def _erkenne_kompressor_aus(self, obs: ObsState, matrix: dict) -> None:
+        """Erkennt Kompressor-AUS via Lastflanke an klima_power_w.
+
+        Hintergrund: Das Klimagerät taktet intern (eigener Thermostat) — die
+        Fritz!DECT-Steckdose bleibt EIN, nur die Last springt ~1 kW ↔ ~30 W.
+        Eine Erkennung über SD-Schaltflanken (klima_aktiv) verpasst diese
+        Kompressor-Kurzzyklen vollständig.
+
+        Trigger: HIGH→LOW-Übergang mit Hysterese (≥600 W → ≤200 W). Erfasst
+        sowohl interne Kompressor-Pausen (SD bleibt EIN, Last fällt auf ~30 W)
+        als auch echte SD-Schaltvorgänge (Last fällt auf 0 W).
+
+        Dedup: minimum `_AUS_EVENT_DEDUP_S` zwischen gezählten Events, damit
+        kurze Last-Wackler nicht mehrfach zählen.
+        """
+        pw = obs.klima_power_w
+        if pw is None:
+            return
+        new_state = self._klima_kompressor_aktiv
+        if pw >= self._KOMP_ON_THR_W:
+            new_state = True
+        elif pw <= self._KOMP_OFF_THR_W:
+            new_state = False
+        # else: in Hysterese-Band → State unverändert (carry-over)
+
+        if self._klima_kompressor_aktiv is True and new_state is False:
+            now = time.time()
+            if (now - self._klima_letztes_aus_event_ts) >= self._AUS_EVENT_DEDUP_S:
+                self._klima_letztes_aus_event_ts = now
+                LOG.info(
+                    'Klima Kompressor-AUS erkannt (Last %.0f W → Lastflanke HIGH→LOW)', pw
+                )
+                self._verarbeite_schaltfrequenz_aus(now, matrix)
+        self._klima_kompressor_aktiv = new_state
+
+    def _verarbeite_schaltfrequenz_aus(self, now: float, matrix: dict) -> None:
+        """Jedes AUS-Ereignis zählen. Bei 2× AUS im Fenster → Cooldown.
+
+        Wird ausschließlich von `_erkenne_kompressor_aus` aufgerufen (Lastflanke).
         Sliding-Window: Einträge außerhalb `schaltintervall_s` werden verworfen.
         Cooldown startet ab dem letzten AUS und läuft `cooldown_s`.
         Nach Cooldown-Aktivierung wird die History geleert.
@@ -1664,6 +1709,10 @@ class RegelKlimaanlage(RegelHeizpatrone):
             matrix, self.regelkreis, 'extern_respekt_s', 1800
         ))
 
+        # Lastflanken-basierter Schaltfrequenz-Schutz: erfasst auch Kompressor-
+        # interne Kurzzyklen (SD bleibt EIN, nur Last springt).
+        self._erkenne_kompressor_aus(obs, matrix)
+
         # ── OFF→ON Transition ──
         if (obs.klima_aktiv
                 and self._klima_letzter_zustand is not None
@@ -1688,8 +1737,9 @@ class RegelKlimaanlage(RegelHeizpatrone):
         if (not obs.klima_aktiv
                 and self._klima_letzter_zustand is not None
                 and self._klima_letzter_zustand):
-            # Schaltfrequenz-Tracking (alle Quellen zählen, unabhängig von Engine/Extern)
-            self._verarbeite_schaltfrequenz_aus(time.time(), matrix)
+            # Schaltfrequenz-Tracking erfolgt jetzt lastflanken-basiert in
+            # _erkenne_kompressor_aus() — die SD-OFF wird dort als HIGH→LOW
+            # auf klima_power_w erfasst (power=0 nach SD-AUS).
             if (time.time() - self._engine_klima_aus_ts) < 180:
                 self._engine_klima_aus_ts = 0
                 LOG.debug('Klima AUS: Engine-initiiert (erkannt)')

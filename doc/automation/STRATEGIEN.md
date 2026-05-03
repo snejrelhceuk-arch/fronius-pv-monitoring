@@ -152,10 +152,13 @@ TAGSÜBER (PV-Überschuss > 3 kW):
       nach Sunrise sicher ab Temp >= 20°C
       Manuelles Einschalten wird für extern_respekt_s respektiert
       (analog HP-Autoritätsschaltung, §2.6)
-      Schaltfrequenz-Schutz: 2×AUS in schaltintervall_s (30 Min) →
-        EIN-Sperre cooldown_s (60 Min). Steuerbox-Override überstimmt.
-        Cooldown sichtbar in Flow (⏸ Nmin). Persistiert in engine_flags
-        (RAM-DB), ABCD-konform lesbar durch B-Schicht.
+      Schaltfrequenz-Schutz: 2× Lastflanke (HIGH→LOW an klima_power_w,
+        Hysterese 600/200 W) in schaltintervall_s (30 Min) →
+        EIN-Sperre cooldown_s (60 Min). Erfasst auch geräte-interne
+        Kompressor-Kurzzyklen (SD bleibt EIN, Last springt). Steuerbox-
+        Override überstimmt. Cooldown sichtbar in Flow (⏸ Nmin).
+        Persistiert in engine_flags (RAM-DB), ABCD-konform lesbar durch
+        B-Schicht.
     → Bei massivem Überschuss: WP auf Smart Grid "dunkelgrün" setzen
       (Coil 3=1, Coil 4=1 → WP Maximalleistung, E9 nicht relevant)
     → Heizpatrone separat steuern (Fritz!DECT API oder MEGA-BAS TRIAC→24V-Relais)
