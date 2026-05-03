@@ -15,20 +15,20 @@ Verdichtet `raw_data` (3-s-Polling) in mehrere Aggregat-Stufen mit unterschiedli
 
 ## Code-Anchor
 - **1-Min-Aggregat:** `aggregate_1min.py` (jede Minute)
-- **15-Min + Hourly:** `aggregate.py` (cron 0/15/30/45)
-- **Daily:** `aggregate_daily.py` (cron 2/17/32/47)
-- **Monthly (technisch):** `aggregate_monthly.py` (cron 6/21/36/51)
-- **Statistik (kWh+Kosten):** `aggregate_statistics.py` (cron 8/23/38/53)
+- **15-Min + Hourly:** `aggregate.py` (cron, 15-min-Tick)
+- **Daily:** `aggregate_daily.py` (cron, gestaffelt nach `aggregate.py`)
+- **Monthly (technisch):** `aggregate_monthly.py` (cron, gestaffelt nach `aggregate_daily.py`)
+- **Statistik (kWh+Kosten):** `aggregate_statistics.py` (cron, gestaffelt nach `aggregate_monthly.py`)
 - **Korrekturen:** `statistics_corrections.py` + `config/statistics_corrections.json`
 
 ## Pipeline-Reihenfolge
 ```
 raw_data (3 s, RAM-Buffer)
-   ↓ aggregate_1min.py (every minute)
+   ↓ aggregate_1min.py (jede Minute)
 data_1min  (Retention 90 d)
    ↓ aggregate.py (15-min-Tick)
 data_15min  →  hourly_data
-   ↓ aggregate_daily.py (15-min-versetzt)
+   ↓ aggregate_daily.py
 daily_data (96 Spalten + *_start/*_end)
    ↓ aggregate_monthly.py
 data_monthly (technisch, 76 Spalten min/max/avg)
@@ -38,12 +38,14 @@ monthly_statistics (permanent, kWh+Kosten)
 yearly_statistics (permanent)
 ```
 
+_Konkrete Cron-Minuten liegen in der User-Crontab (nicht im Repo)._
+
 ## Inputs / Outputs
 - **Inputs:** `raw_data`, vorhergehende Aggregat-Stufe.
 - **Outputs:** jeweils nächste Stufe + Statistik-Korrekturen.
 
 ## Invarianten
-- **Cron-Versatz:** Skripte sind zeitlich gestaffelt, damit jede Stufe auf konsistenten Vorgängerdaten arbeitet.
+- **Cron-Staffelung:** Skripte laufen zeitlich versetzt (Reihenfolge `aggregate_1min` → `aggregate` → `aggregate_daily` → `aggregate_monthly` → `aggregate_statistics`), damit jede Stufe auf konsistenten Vorgängerdaten arbeitet.
 - **Backfill:** `aggregate_1min.py` prüft die letzten 10 min auf Lücken (`aggregate_1min.py:30–40`).
 - **Counter-Fixpunkte:** `daily_data.*_start`/`*_end` für Drift-Korrektur (Vergleich mit Counter-Differenzen).
 - **Permanenz:** `monthly_statistics`, `yearly_statistics` werden nicht überschrieben (Korrekturen nur additiv).

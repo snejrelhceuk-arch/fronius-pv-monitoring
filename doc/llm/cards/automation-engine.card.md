@@ -43,7 +43,7 @@ Zentrale Steuerschleife (Rolle C). Sammelt Beobachtungen, ruft Schutz-Checks, da
 - Operator-Override verarbeiten → `automation/engine/operator_overrides.py:OperatorOverrideProcessor.process_pending`.
 
 ## Bekannte Fallstricke
-- 17 Regeln registriert (Stand 2026-05). Reihenfolge im Code = Auswertungsreihenfolge bei Score-Gleichstand.
+- 16 Regeln registriert (Stand 2026-05). Reihenfolge im Code = Auswertungsreihenfolge bei Score-Gleichstand.
 - ExternalRespect-Hold (HP/WP, 30 min) wird per `extern_respekt_s` in der Matrix gesteuert — siehe `automation-regel-heizpatrone.card.md` und `automation-regel-wattpilot.card.md`.
 - `automation_log` ist die einzige aktive Persistenz-Tabelle für Aktor-Resultate. **`battery_control_log` wird vom Code mehrheitlich noch gelesen, aber nicht mehr geschrieben** — Reader-Pfad in `pv-config.py`/`routes/system.py` ist offene Tech-Debt (s. `doc/TODO.md`).
 - Tier-1-Bypass: Schutz-Aktoren laufen weiter, auch wenn Engine pausiert. Wer einen neuen Schutz-Pfad einbaut, muss Tier-1-kompatibel sein.

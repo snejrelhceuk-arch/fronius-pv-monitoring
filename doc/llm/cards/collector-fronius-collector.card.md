@@ -15,7 +15,8 @@ Liest Fronius GEN24 zyklisch (3 s) via Modbus + ergänzt Solar-API-Werte (HTTP).
 
 ## Code-Anchor
 - **Hauptdatei:** `modbus_v3.py` (Daemon-Loop, RAM-Buffer, Batch-Write)
-- **API-Helper:** `fronius_api.py` (HTTP-Read; Read-only-Variante = `FroniusReadOnly` für Web-API)
+- **API-Helper:** `fronius_api.py` (HTTP-Read + `BatteryConfig`-Schreibpfad)
+- **Read-only-Variante für Web-API (Rolle B):** `routes/helpers.py:FroniusReadOnly`
 - **Quellen-Map:** `modbus_quellen.py`
 - **Init/Schema:** `db_init.py`
 - **Config:** `config.py` (`POLL_INTERVAL`, …)
@@ -28,7 +29,7 @@ Liest Fronius GEN24 zyklisch (3 s) via Modbus + ergänzt Solar-API-Werte (HTTP).
 - **Polling-Intervall:** typisch 3 s (`POLL_INTERVAL`).
 - **RAM-Buffer:** `deque maxlen=400` (~20 min @ 3 s), Batch-Write alle 60 s (`modbus_v3.py:110–120`).
 - **PID-Lock:** `collector.pid` verhindert Doppelstart.
-- **Read-only-Trennung:** Web-API nutzt `FroniusReadOnly` — keine Schreibwege Richtung GEN24 (Rolle B = read-only).
+- **Read-only-Trennung:** Web-API nutzt `routes/helpers.py:FroniusReadOnly` — keine Schreibwege Richtung GEN24 (Rolle B = read-only). Bewusste Code-Duplette zur Absicherung der ABCDE-Rollentrennung.
 - **Persist-Sicherheit:** Bei DB-Fehler bleibt der RAM-Buffer erhalten und wird beim nächsten Tick erneut geschrieben.
 
 ## No-Gos
