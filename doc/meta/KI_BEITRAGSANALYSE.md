@@ -9,10 +9,9 @@ Status: aktiv gepflegt
 ## 1) Zweck
 
 Dieses Dokument ist die aktuelle Referenz fuer die Einschaetzung der
-Mensch/KI-Anteile am Entwicklungs-Content. Historische Herleitung und
-langere Interpretation bleiben im Archivdokument:
-
-- `doc/archive/LEISTUNGSANTEILE_KI_BEDIENER.md`
+Mensch/KI-Anteile am Entwicklungs-Content. Historische Herleitung
+liegt in der Git-History (frueheres `doc/archive/LEISTUNGSANTEILE_KI_BEDIENER.md`,
+2026-05 entfernt im Zuge der Doku-Bereinigung).
 
 ---
 
@@ -48,8 +47,7 @@ Die historische Phasenfolge bleibt unveraendert:
 2. Claude 3.5/4 Sonnet (Jan-Feb 2026)
 3. Claude Opus 4 (ab Feb 2026)
 
-Quelle und Detailbegruendung:
-- `doc/archive/LEISTUNGSANTEILE_KI_BEDIENER.md`
+Quelle und Detailbegruendung: Git-History (s. Hinweis in Abschnitt 1).
 
 ---
 
@@ -126,6 +124,6 @@ git ls-files | grep -E '\.(md|rst|txt)$' | xargs -r wc -l | tail -n 1
 
 ## 7) Quellen
 
-- `doc/archive/LEISTUNGSANTEILE_KI_BEDIENER.md`
+- Git-History (frueheres `doc/archive/LEISTUNGSANTEILE_KI_BEDIENER.md`)
 - `README.md`
 - Live-Mengenscan vom 19.04.2026

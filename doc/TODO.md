@@ -1,6 +1,6 @@
 # Zentrale TODO-Liste — PV-System
 
-**Stand:** 2026-04-19  
+**Stand:** 2026-05-03  
 **Regel:** Alle offenen Aufgaben gehoeren in DIESE Datei. Keine verteilten TODOs in Subdirectories.
 
 ---
@@ -26,6 +26,36 @@
 - [ ] Dashboard-Erweiterung: Automation-Tab in Web-UI
 - [ ] HP-Status in tag_view integrieren (flow_view zeigt bereits HP EIN/AUS)
 - [ ] RegelHeizpatrone Refactoring: 903 LOC → Phase-Objekte (Wunsch, nicht dringend)
+
+### Architektur (aus Audits 2026-04 / 2026-06 konsolidiert)
+
+- [ ] **ExternalRespectManager** als Singleton-Modul (`automation/engine/external_respect.py`) einfuehren — vereinigt Regel-Veto, SOC-Tracker und Operator-Overrides in einer API (Audit AUT-2026-04, HOCH)
+- [ ] HP-, Klima- und Batterie-Respekt-Detection auf `ExternalRespectManager` migrieren (Asymmetrie-Heilung; abhaengig von obigem)
+- [ ] Wattpilot externe Pause-Erkennung in `AktorWattpilot.verifiziere()`
+- [ ] Batterie-Aktor: Modus-Wechsel-Erkennung (`auto`/`manual`/`hold`) in `verifiziere()`
+- [ ] Plugin-faehige Engine: Regel-/Aktor-Registrierung von Hardcode zu JSON-Registry (`engine.py` A1/A2; grosse Investition)
+- [ ] Zentrale Modbus-Register-Map extrahieren (aktuell auf collectors/aktoren verteilt)
+- [ ] State-Machine fuer HP-Phasen statt If-Kette (6 Phasen, ~1600 LOC)
+- [ ] `engine_vorausschau()` Web-API: 9 fehlende Regeln nachtragen (WP-Absenkung, Klimaanlage, WP-Regeln, Heiz-Bedarf) oder Code-Duplikation eliminieren (Audit DEEP-2026-06 K-02)
+- [ ] Klimaanlage-Startup-Pruefung: `_hp_startup_check()` auf Fritz!DECT-Geraete erweitern oder `_fritzdect_startup_check()` (K-03)
+- [ ] Matrix-Reload klaeren: SIGHUP-Auto-Trigger in pv-config.py ODER Engine pruft mtime periodisch ODER pv-config-Text korrigieren (K-04 — "Wirksam ≤1 Min" stimmt aktuell nicht)
+- [ ] pv-config Whiptail-UI: ~40 versteckte Parameter freilegen (Drain-, WP-Soll-, Absenkung-, Klima-Parameter)
+
+### Tech-Debt (Audit-Befunde, niedrige Prio)
+
+- [ ] Phantom-Regelkreis-Referenz `soc_schutz` in `geraete.py` RegelHeizpatrone durch Konstante ersetzen (Matrix-Eintrag existiert nicht mehr seit 2026-03-07)
+- [ ] ForecastCollector Sunrise/Sunset-Fallback: saisonale Tabelle statt festem 7/17
+- [ ] `data_collector.py`: `_modbus_fail_count` von Class- auf Instance-Attribut
+- [ ] `schaltlog.py`: Truncation nicht bei jedem Eintrag (Dateigroessencheck oder N-Eintraege-Intervall)
+- [ ] `tier1_checker._check_netz_ueberlast()`: `reduce_power`-Kommando mit explizitem Reduktionswert (proportional)
+- [ ] `HP_NENN_W=2000` aus Code in `soc_param_matrix.json` als `hp_nenn_w` (statt Hardcode)
+- [ ] `battery_control_log`-Reader in `pv-config.py` und `routes/system.py` entfernen \u2014 Tabelle wird seit 2026-03 nicht mehr beschrieben (keine `INSERT INTO battery_control_log` im Code), Lese-Fallback ist obsolet
+
+### Doku-Konsistenz (Audit-Restposten)
+
+- [ ] `PV_CONFIG_HANDBUCH.md`: alle 31 Regelkreise aufnehmen (aktuell nur 18)
+- [ ] `SCHUTZREGELN.md`: SR-EV-01 (NMC-Ueberladeschutz) als "GEPLANT — E-Auto-SOC nicht verfuegbar" kennzeichnen
+- [ ] `CHANGELOG.md` v1.3.1 K-04 (Matrix-Auto-Reload): Feature implementieren ODER Eintrag korrigieren
 
 ### Mittel: Warnungen & Benachrichtigungen
 

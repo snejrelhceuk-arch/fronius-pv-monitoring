@@ -116,10 +116,11 @@ routes/netzqualitaet.py          — API Blueprint (Tagesprofil)
 templates/netzqualitaet_view.html — Chart-Seite (ECharts)
 doc/netzqualitaet/               — Projektdokumentation
   README.md                      — dieses Dokument
-  PHASE_1_PLAN.md                — detaillierter Phase-1-Plan
   METHODEN.md                    — Methodenwahl fuer RMS-/Zeitreihenanalyse
   TOOLS.md                       — Python-Werkzeuge, Sinn vs. Aufwand
   MESSTECHNIK.md                 — Hardware-Matrix, Geraeteklassen, Trennlinie
+  TRADE_SWITCH_DETECTION.md      — Erkennung Handels-/Schaltvorgaenge
+  PAC4200_PI5_ENTSCHEIDUNGSVORLAGE.md — Hardware-Entscheidung
 ```
 
 ## Cron-Einrichtung

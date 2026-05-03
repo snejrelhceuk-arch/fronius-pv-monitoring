@@ -198,7 +198,6 @@ läuft über SOC_MIN/SOC_MAX der Regelkreise.
 | fenster_ende_nach_sunrise | 3 h | 1–5 h | **Ende des Morgen-Fensters.** Nach X Stunden nach Sonnenaufgang übernimmt der Nachmittag-Regelkreis. Längeres Fenster = mehr Zeit für die Morgenöffnung. |
 | morgen_vorlauf | 15 min | 0–60 min | **Morgen-Vorlauf.** Die gesamte Morgen-Mechanik (Forecast-Fetch, SOC_MIN-Zeitfenster, Verzögerungsberechnung) wird um X Minuten vor Sunrise vorgezogen. Sorgt dafür, dass die Prognose und SOC-Entscheidung früher verfügbar sind. 0 = kein Vorlauf. |
 | drain_rate_fallback | 1.5 kW | 0.5–4.0 kW | **Angenommene Entladerate wenn keine Verbrauchshistorie verfügbar.** Wird nur am ersten Tag nach Reset benötigt. |
-| uebernahme_schwelle | 0.8 | 0.5–1.0 | **(Legacy, nicht mehr verwendet.)** PV muss x% des Verbrauchs decken. |
 
 **Typisches Szenario (morgen_vorlauf = 15 min):**
 1. 06:45 Sunrise in 15 Min. → Forecast-Fetch wird getriggert (Vorlauf)
@@ -237,7 +236,7 @@ läuft über SOC_MIN/SOC_MAX der Regelkreise.
 | stress_max | 100% | 85–100% | **SOC_MAX bei Anhebung.** Vor dem Abend wird SOC_MAX auf diesen Wert erhöht, damit die Batterie möglichst voll in die Nacht geht. 100% = maximale Nachtreserve. |
 | start_stunde | 11 h | 10–15 h | **Absolut frühester Start (Minimum).** SOC_MAX wird nie vor dieser Stunde geöffnet, auch bei schwachem Tag. Die tatsächliche Öffnung erfolgt meist deutlich später (dynamisch berechnet aus Clear-Sky-Peak). |
 | oeffnungsschwelle_kw | 7 kW | 3–15 kW | **Leistungsschwelle für die Öffnungszeitberechnung.** Ab dem Clear-Sky-Peak sucht der Algorithmus vorwärts die erste Stunde, in der die Prognoseleistung unter diesen Wert sinkt. An dieser Stelle wird SOC_MAX geöffnet. Niedrigerer Wert = spätere Öffnung (mehr Einspeisung), höherer = frühere Öffnung (mehr Batterieladung). Wird automatisch um aktive Verbraucher erhöht (EV, WP). |
-| surplus_sicherheitsfaktor | 1.3 | 1.0–2.0 | **(Legacy, noch in Matrix, nicht mehr primär verwendet.)** Der Clear-Sky-Peak-Algorithmus ersetzt die Surplus-Berechnung. |
+| surplus_sicherheitsfaktor | 1.3 | 1.0–2.0 | **(Deprecated, noch in Matrix.)** Vom Clear-Sky-Peak-Algorithmus abgelöst. |
 | wolken_schwer | 85% | 60–100% | **Bewölkungsschwelle.** Ab dieser Bewölkung wird SOC_MAX **sofort** angehoben (ohne auf Surplus zu warten). Verhindert, dass an trüben Tagen die Batterie halbleer in die Nacht geht. |
 | max_stunden_vor_sunset | 1.5 h | 0.5–3.0 h | **Deadline.** Spätestens X Stunden vor Sonnenuntergang wird SOC_MAX **in jedem Fall** angehoben. Sicherheitsnetz: Sorgt dafür, dass die Öffnung auch bei fehlenden Prognosedaten stattfindet. |
 

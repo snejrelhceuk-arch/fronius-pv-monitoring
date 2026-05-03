@@ -124,4 +124,3 @@ Genutzt von `pv-automation.service` für flüchtigen Zustand:
 - `db_init.py` — tmpfs-DB Initialisierung, Persist-Thread
 - `db_utils.py` — `get_db_connection()` mit WAL-Modus
 - `config.py` — Pfade, Retention Policies
-- Alter Stand: [doc/archive/DB_CLEANUP_ANALYSIS.md](archive/DB_CLEANUP_ANALYSIS.md), [doc/archive/DB_MIGRATION_31DEC2025.md](archive/DB_MIGRATION_31DEC2025.md)

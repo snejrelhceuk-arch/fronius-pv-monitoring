@@ -169,4 +169,4 @@ SOC aktuell:      23.6 %
 - [Fronius SunSpec Implementation Guide Model 124](https://www.fronius.com/~/downloads/Solar%20Energy/Modbus/42,0410,2049.pdf)
 - `fronius_api.py` — `set_soc_mode()`, `set_soc_min()`, `set_soc_max()`
 - `battery_control.py` — SOC-Steuerung (Nachfolger von battery_scheduler.py)
-- `automation/engine/` — Regelkreise `RegelSocSchutz`, `RegelZellausgleich` etc.
+- `automation/engine/` — Regelkreise `RegelKomfortReset`, `RegelMorgenSocMin`, `RegelNachmittagSocMax`, `RegelZellausgleich` etc. (Liste in `AUTOMATION_ARCHITEKTUR.md` §10)
