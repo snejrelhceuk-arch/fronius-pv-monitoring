@@ -13,6 +13,8 @@ last_review: 2026-05-03
 ## Zweck
 Schaltet die Heizpatrone (im WW-Speicher, FritzDECT-Steckdose) abhängig von PV-Prognose, SOC, WW-Temperatur und Tageszeit. 6 Phasen (0, 1, 1b, 2, 3, 4) decken Tagesverlauf ab.
 
+Zusätzlich pausiert die Regel bei aktivem `afternoon_charge_request` den HP-Betrieb bis das Ziel-SOC erreicht ist (oder Hold endet), damit die Batterie priorisiert aufgeladen werden kann.
+
 ## Code-Anchor
 - **Regel:** `automation/engine/regeln/geraete.py:RegelHeizpatrone.bewerte` (~L280)
 - **Override-Annullation:** `automation/engine/regeln/geraete.py:RegelHeizpatrone._cancel_conflicting_overrides`
@@ -30,6 +32,7 @@ Schaltet die Heizpatrone (im WW-Speicher, FritzDECT-Steckdose) abhängig von PV-
 - Notaus-Schwellen (immer aktiv): `WW_Temp ≥ 78 °C`, `SOC ≤ 7 %`, Netzbezug erkennbar (`grid_avg`), `PV<1500 W` in PV-only-Phasen.
 - Externe Schaltung erkannt → `_cancel_conflicting_overrides()` annulliert offene Operator-Overrides + setzt 30-min-Respekt-Hold (`extern_respekt_s`).
 - Schreibbestätigung: Aktor muss Engine-Wert registrieren, sonst falsch-positive Extern-Erkennung.
+- Bei aktivem Nachmittags-Ladewunsch (`afternoon_charge_request` + `pause_hp_until_target=true`) bleibt HP AUS solange `SOC < target_soc_pct`.
 
 ## No-Gos
 - Keine HP-Einschaltung bei Tier-1-Alarm.
@@ -41,6 +44,7 @@ Schaltet die Heizpatrone (im WW-Speicher, FritzDECT-Steckdose) abhängig von PV-
 - ExternalRespect-Dauer ändern → Matrix `heizpatrone.extern_respekt_s` (Default 1800).
 - Neue Phase einbauen → `RegelHeizpatrone.bewerte` + Score-Logik + Matrix-Schema dokumentieren.
 - HP-Startup-Check (Daemon-Restart schaltet HP AUS) → `automation/engine/automation_daemon.py:_hp_startup_check`.
+- Ladewunsch-Pause anpassen → `RegelHeizpatrone.bewerte` und `RegelHeizpatrone.erzeuge_aktionen` (Intent-Lesepfad: `automation/engine/operator_intents.py`).
 
 ## Bekannte Fallstricke
 - ExternalRespect: Wenn der Aktor erfolgreich schreibt, aber die Engine den Zielwert nicht registriert, erkennt der nächste Tick eine "fremde" Änderung → Endlos-Hold (`hp-extern-respekt-hold-note`).

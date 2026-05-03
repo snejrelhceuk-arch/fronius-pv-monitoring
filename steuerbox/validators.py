@@ -43,6 +43,18 @@ def _expect_in(value: Any, field: str, allowed: set[str]) -> str:
     return normalized
 
 
+def _expect_bool(value: Any, field: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        norm = value.strip().lower()
+        if norm in {'1', 'true', 'yes', 'on'}:
+            return True
+        if norm in {'0', 'false', 'no', 'off'}:
+            return False
+    raise ValueError(f'{field} must be bool')
+
+
 def validate_action(action: str, params: dict[str, Any], respekt_s: int) -> dict[str, Any]:
     """Validiert Aktion + Parameter inkl. Hard Guards.
 
@@ -51,7 +63,11 @@ def validate_action(action: str, params: dict[str, Any], respekt_s: int) -> dict
     if action not in config.STEUERBOX_ALLOWED_ACTIONS:
         abort(403, description=f'action not allowed: {action}')
 
-    if respekt_s < config.STEUERBOX_MIN_RESPEKT_S or respekt_s > config.STEUERBOX_MAX_RESPEKT_S:
+    max_respekt_s = config.STEUERBOX_MAX_RESPEKT_S
+    if action == 'afternoon_charge_request':
+        max_respekt_s = config.STEUERBOX_AFTERNOON_MAX_RESPEKT_S
+
+    if respekt_s < config.STEUERBOX_MIN_RESPEKT_S or respekt_s > max_respekt_s:
         abort(422, description='respekt_s out of range')
 
     normalized: dict[str, Any] = {}
@@ -61,6 +77,53 @@ def validate_action(action: str, params: dict[str, Any], respekt_s: int) -> dict
 
     elif action == 'battery_mode':
         normalized['mode'] = _expect_in(params.get('mode'), 'mode', {'komfort', 'auto'})
+
+    elif action == 'afternoon_charge_request':
+        target_soc_pct = params.get('target_soc_pct', 100)
+        if not isinstance(target_soc_pct, (int, float)):
+            abort(422, description='target_soc_pct invalid')
+
+        target_soc = int(target_soc_pct)
+        if target_soc < config.STEUERBOX_AFTERNOON_MIN_TARGET_SOC_PCT:
+            abort(422, description='target_soc_pct below afternoon minimum')
+        if target_soc > config.STEUERBOX_SOC_MAX_PCT:
+            abort(422, description='target_soc_pct above hard guard')
+
+        pause_hp = params.get('pause_hp_until_target', True)
+        try:
+            pause_hp_norm = _expect_bool(pause_hp, 'pause_hp_until_target')
+        except ValueError as exc:
+            abort(422, description=str(exc))
+
+        start_earliest_h = params.get('start_earliest_h', 12.0)
+        start_latest_h = params.get('start_latest_h', 15.0)
+        if not isinstance(start_earliest_h, (int, float)):
+            abort(422, description='start_earliest_h invalid')
+        if not isinstance(start_latest_h, (int, float)):
+            abort(422, description='start_latest_h invalid')
+
+        start_earliest = float(start_earliest_h)
+        start_latest = float(start_latest_h)
+        if not (0.0 <= start_earliest <= 24.0):
+            abort(422, description='start_earliest_h out of range')
+        if not (0.0 <= start_latest <= 24.0):
+            abort(422, description='start_latest_h out of range')
+        if start_earliest > start_latest:
+            abort(422, description='start_earliest_h must be <= start_latest_h')
+
+        normalized['target_soc_pct'] = target_soc
+        normalized['pause_hp_until_target'] = pause_hp_norm
+        normalized['start_earliest_h'] = round(start_earliest, 2)
+        normalized['start_latest_h'] = round(start_latest, 2)
+
+        until_hour = params.get('until_hour')
+        if until_hour is not None:
+            if not isinstance(until_hour, (int, float)):
+                abort(422, description='until_hour invalid')
+            until_hour_f = float(until_hour)
+            if not (0.0 <= until_hour_f <= 24.0):
+                abort(422, description='until_hour out of range')
+            normalized['until_hour'] = round(until_hour_f, 2)
 
     elif action in {'hp_toggle', 'klima_toggle', 'lueftung_toggle'}:
         state = _expect_in(params.get('state'), 'state', {'on', 'off', 'neutral'})

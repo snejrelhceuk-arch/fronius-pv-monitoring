@@ -40,6 +40,17 @@ def load_local_setting(env_key, default=''):
     return _LOCAL_INFRA.get(env_key, default)
 
 
+def _as_bool(value, default=False):
+    if value is None:
+        return default
+    norm = str(value).strip().lower()
+    if norm in {'1', 'true', 'yes', 'on'}:
+        return True
+    if norm in {'0', 'false', 'no', 'off'}:
+        return False
+    return default
+
+
 def load_secret(env_key, secrets_file=None):
     """Lade ein Secret aus Umgebungsvariable oder .secrets-Datei.
 
@@ -95,6 +106,7 @@ STEUERBOX_MAX_RESPEKT_S = int(load_local_setting('PV_STEUERBOX_MAX_RESPEKT_S', '
 STEUERBOX_ALLOWED_ACTIONS = {
     'wp_mode',
     'battery_mode',
+    'afternoon_charge_request',
     'hp_toggle',
     'klima_toggle',
     'lueftung_toggle',
@@ -106,9 +118,31 @@ STEUERBOX_ALLOWED_ACTIONS = {
 # Hard Guards (physikalisch/sicherheitsrelevant)
 STEUERBOX_SOC_MIN_PCT = 5
 STEUERBOX_SOC_MAX_PCT = 100
+STEUERBOX_AFTERNOON_MIN_TARGET_SOC_PCT = 75
+STEUERBOX_AFTERNOON_MAX_RESPEKT_S = 43200
 STEUERBOX_WP_OFFSET_MIN_K = -15
 STEUERBOX_HP_NOTAUS_SOC_PCT = 15
 STEUERBOX_HP_UEBERTEMP_C = 78
+
+# --- Optionale HA MQTT Bridge (Adapter zwischen B und E) ---
+HA_BRIDGE_ENABLED = _as_bool(load_local_setting('PV_HA_BRIDGE_ENABLED', '0'))
+HA_BRIDGE_WEB_BASE = load_local_setting('PV_HA_BRIDGE_WEB_BASE', f'http://127.0.0.1:{WEB_API_PORT}')
+HA_BRIDGE_STEUERBOX_BASE = load_local_setting('PV_HA_BRIDGE_STEUERBOX_BASE', f'http://127.0.0.1:{STEUERBOX_PORT}')
+HA_BRIDGE_POLL_S = int(load_local_setting('PV_HA_BRIDGE_POLL_S', '10'))
+HA_BRIDGE_HTTP_TIMEOUT_S = int(load_local_setting('PV_HA_BRIDGE_HTTP_TIMEOUT_S', '6'))
+
+HA_BRIDGE_NODE_ID = load_local_setting('PV_HA_BRIDGE_NODE_ID', 'pv_system_erlau')
+HA_BRIDGE_DISCOVERY_PREFIX = load_local_setting('PV_HA_BRIDGE_DISCOVERY_PREFIX', 'homeassistant')
+HA_BRIDGE_STATE_PREFIX = load_local_setting('PV_HA_BRIDGE_STATE_PREFIX', 'pv_system')
+
+HA_BRIDGE_MQTT_HOST = load_local_setting('PV_HA_BRIDGE_MQTT_HOST', '127.0.0.1')
+HA_BRIDGE_MQTT_PORT = int(load_local_setting('PV_HA_BRIDGE_MQTT_PORT', '1883'))
+HA_BRIDGE_MQTT_USERNAME = load_local_setting('PV_HA_BRIDGE_MQTT_USERNAME', '')
+HA_BRIDGE_MQTT_PASSWORD = (
+    load_secret('PV_HA_BRIDGE_MQTT_PASSWORD')
+    or load_local_setting('PV_HA_BRIDGE_MQTT_PASSWORD', '')
+)
+HA_BRIDGE_MQTT_KEEPALIVE_S = int(load_local_setting('PV_HA_BRIDGE_MQTT_KEEPALIVE_S', '60'))
 
 # --- Failover-Host ---
 FAILOVER_IP = load_local_setting('PV_FAILOVER_IP', '192.0.2.105')

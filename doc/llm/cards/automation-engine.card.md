@@ -25,6 +25,9 @@ Zentrale Steuerschleife (Rolle C). Sammelt Beobachtungen, ruft Schutz-Checks, da
 - **Inputs:** ObsState (Sensorwerte alle 10 s), Tier-1-Flags, `soc_param_matrix.json`, Operator-Overrides aus Steuerbox.
 - **Outputs:** Hardware-Calls über Aktoren (`aktor_batterie`, `aktor_fritzdect`, `aktor_wattpilot`), `automation_log`-Inserts, Engine-Werte für ExternalRespect-Tracker.
 
+### Override-Hinweis (neu)
+- `afternoon_charge_request` ist ein Policy-Hold ohne direkte Aktoraktion in `OperatorOverrideProcessor`: Status bleibt `active` und wird von `RegelNachmittagSocMax`/`RegelHeizpatrone` ausgewertet.
+
 ## Invarianten
 - **Tick-Schichten:** OBS_COLLECT=10 s, FAST=60 s, STRATEGIC=900 s. Reihenfolge pro Zyklus: DataCollector → Tier1Checker → Engine.fast → Engine.strategic → OperatorOverrideProcessor.
 - **Tier-1 hält Engine an:** Bei aktivem Tier-1-Alarm (z. B. `batt_temp>45 °C`, `SOC<5 %`) pausiert die Regel-Auswertung, Schutz-Aktoren bleiben frei.
@@ -41,6 +44,7 @@ Zentrale Steuerschleife (Rolle C). Sammelt Beobachtungen, ruft Schutz-Checks, da
 - Tick-Intervall ändern → `automation/engine/automation_daemon.py:AutomationDaemon.run` (Konstanten OBS_COLLECT/FAST/STRATEGIC).
 - Score-Logik einer Regel debuggen → `automation/engine/engine.py:Engine.zyklus` (Logging) + Regel-Klasse `bewerte()`.
 - Operator-Override verarbeiten → `automation/engine/operator_overrides.py:OperatorOverrideProcessor.process_pending`.
+- Aktiven Tages-Intent lesen → `automation/engine/operator_intents.py:read_active_afternoon_charge_intent`.
 
 ## Bekannte Fallstricke
 - 16 Regeln registriert (Stand 2026-05). Reihenfolge im Code = Auswertungsreihenfolge bei Score-Gleichstand.

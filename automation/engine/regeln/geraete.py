@@ -20,6 +20,7 @@ from typing import Optional
 import config
 
 from automation.engine.obs_state import ObsState
+from automation.engine.operator_intents import read_active_afternoon_charge_intent
 from automation.engine.regeln.basis import Regel
 from automation.engine.param_matrix import (
     ist_aktiv, get_param, get_score_gewicht,
@@ -670,6 +671,15 @@ class RegelHeizpatrone(Regel):
         ist_extern = (self._extern_ein_ts > 0
                       and (time.time() - self._extern_ein_ts) < extern_respekt)
 
+        intent = read_active_afternoon_charge_intent()
+        if intent and bool(intent.get('pause_hp_until_target', True)):
+            target_soc = int(intent.get('target_soc_pct', 100))
+            soc_now = float(obs.batt_soc_pct if obs.batt_soc_pct is not None else 0.0)
+            if soc_now < max(0, target_soc - 1):
+                if obs.heizpatrone_aktiv:
+                    return int(score * 1.6)
+                return 0
+
         # ── Notaus-Pfad: IMMER aktiv ──
         if obs.heizpatrone_aktiv:
             min_rest_h = get_param(matrix, self.regelkreis, 'min_rest_h', 2.0)
@@ -1047,6 +1057,29 @@ class RegelHeizpatrone(Regel):
         p_batt = obs.batt_power_w or 0
         soc = obs.batt_soc_pct if obs.batt_soc_pct is not None else 50
         soc_max_eff = obs.soc_max if obs.soc_max is not None else 75
+
+        intent = read_active_afternoon_charge_intent()
+        if intent and bool(intent.get('pause_hp_until_target', True)):
+            target_soc = int(intent.get('target_soc_pct', 100))
+            if soc < max(0, target_soc - 1):
+                if obs.heizpatrone_aktiv:
+                    remaining_min = int(intent.get('respekt_remaining_s', 0)) // 60
+                    self._letzte_aus = time.time()
+                    self._warte_auf_engine_aus = True
+                    self._warte_auf_engine_aus_ts = self._letzte_aus
+                    self._burst_start = 0
+                    self._burst_ende = 0
+                    self._drain_modus = False
+                    self._probe_modus = False
+                    self._drain_lastbedingung_ts = 0
+                    return [{
+                        'tier': 2, 'aktor': 'fritzdect',
+                        'kommando': 'hp_aus',
+                        'grund': (f'HP AUS: Nachmittag-Ladewunsch aktiv '
+                                  f'(SOC {soc:.0f}% < Ziel {target_soc}%, '
+                                  f'Rest ~{remaining_min} min)'),
+                    }]
+                return []
 
         # ── Extern-Erkennung läuft jetzt in bewerte() ──
 

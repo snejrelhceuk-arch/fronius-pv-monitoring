@@ -188,10 +188,14 @@ für Folge-ToDos (3. lauschende Instanz Pi5, Health-Sofortpfad, NQ-Adapter).
 ### Features
 - **Klima Extern-Erkennung:** Manuelles Einschalten der Klimaanlage wird für `extern_respekt_s` (Standard 30 Min) respektiert. Zustandsbasierte Erkennung (OFF→ON ohne Engine-Beteiligung), analog zum HP-Muster. Während Respekt-Zeit greift nur die harte Sicherheit (Sunset+SOC).
 - **Batterie-Zelltemperaturen:** BYD-Zelltemperaturen (min/max/avg) via HTTP in DataCollector integriert (30 s Rate-Limit).
+- **Steuerbox Tages-Intent `afternoon_charge_request`:** Einmal-Trigger (z. B. aus HA) setzt einen Nachmittags-Ladewunsch bis Sunset. `respekt_s` wird serverseitig aus Sunset abgeleitet (Fallback 17:00) und als Policy-Hold geführt.
+- **SOC/HP-Kooperation für Ladewunsch:** `RegelNachmittagSocMax` priorisiert bei aktivem Tages-Intent das Ziel `SOC_MAX=100` im adaptiven Startfenster 12–15 Uhr; `RegelHeizpatrone` pausiert HP bis Ziel-SOC erreicht ist.
+- **Optionale HA MQTT Bridge:** Neuer Adapter `steuerbox/ha_mqtt_bridge.py` publiziert read-only MQTT Discovery/State aus `/api/ha/*` für HA-Entitäten ohne Steuerpfad.
 
 ### System
 - **Steuerbox-Monitoring:** `pv-steuerbox.service` in zentrale Überwachung integriert (diagnos, Cron-Keepalive via `monitor_steuerbox.sh`).
 - **Failover-Sync gehärtet:** `.state`-Verzeichnis-Initialisierung über Boot-Service (`pv-failover-init.service`), Error-Logging in `failover_sync_db.sh`.
+- **HA-Read/Discovery ausgebaut:** Neue Endpunkte `/api/ha/automation`, `/api/ha/device`, `/api/ha/entities` ergänzen den bestehenden HA-Export (`/api/ha/flow`, `/api/ha/wattpilot`) für einfachere Entitäts- und Geräteabbildung.
 
 ### Fixes
 - **Klima Rapid-Shutdown behoben:** Klimaanlage wurde nach manuellem Einschalten sofort wieder abgeschaltet, weil `RegelKlimaanlage` keine Extern-Erkennung hatte. `_uses_respekt_hold()` gibt für Klima `False` zurück → DB-basierter Ansatz war wirkungslos. Lösung: Zustandsübergangs-Erkennung (wie HP).

@@ -14,6 +14,7 @@
 flask==1.1.2
 gunicorn==23.0.0
 requests==2.25.1
+paho-mqtt==1.6.1
 numpy==1.19.5
 websockets==15.0.1
 # pvlib und pandas: derzeit NICHT installiert (nur für solar_forecast.py geplant)

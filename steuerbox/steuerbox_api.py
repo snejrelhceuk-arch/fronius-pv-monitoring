@@ -80,6 +80,23 @@ def _build_wp_mode_meta() -> dict:
     }
 
 
+def _build_afternoon_charge_meta() -> dict:
+    return {
+        'action': 'afternoon_charge_request',
+        'defaults': {
+            'target_soc_pct': 100,
+            'pause_hp_until_target': True,
+            'start_earliest_h': 12.0,
+            'start_latest_h': 15.0,
+        },
+        'notes': [
+            'Wirkung bis Sunset desselben Tages (respekt_s wird serverseitig abgeleitet).',
+            'SOC_MAX-Ziel wird in der Nachmittagsregel priorisiert; Komfort-Reset pausiert.',
+            'Optional kann until_hour explizit gesetzt werden (Dezimalstunde 0..24).',
+        ],
+    }
+
+
 def _resolve_effective_params(action: str, normalized_params: dict) -> dict:
     if action != 'wp_mode':
         return dict(normalized_params)
@@ -177,6 +194,7 @@ def api_control_meta():
             'ok': True,
             'controls': {
                 'wp_mode': _build_wp_mode_meta(),
+                'afternoon_charge_request': _build_afternoon_charge_meta(),
             },
         }
     )

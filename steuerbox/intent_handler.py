@@ -62,6 +62,66 @@ def _get_conn() -> sqlite3.Connection:
     return conn
 
 
+def _read_obs_sunset_hour(conn: sqlite3.Connection) -> float | None:
+    """Liest Sunset-Dezimalstunde aus obs_state (falls vorhanden)."""
+    try:
+        row = conn.execute("SELECT state_json FROM obs_state WHERE id=1").fetchone()
+        if not row or not row[0]:
+            return None
+        state = json.loads(row[0])
+        val = state.get('sunset')
+        if isinstance(val, (int, float)) and 0.0 <= float(val) <= 24.0:
+            return float(val)
+    except Exception:
+        return None
+    return None
+
+
+def _seconds_until_hour_local(until_hour: float) -> int:
+    now = datetime.now()
+    now_h = now.hour + now.minute / 60.0 + now.second / 3600.0
+    delta_h = float(until_hour) - now_h
+    if delta_h <= 0:
+        return 0
+    return int(delta_h * 3600)
+
+
+def _resolve_afternoon_until_hour(
+    params: dict[str, Any],
+    conn: sqlite3.Connection,
+) -> float:
+    val = params.get('until_hour')
+    if isinstance(val, (int, float)) and 0.0 <= float(val) <= 24.0:
+        return float(val)
+    sunset = _read_obs_sunset_hour(conn)
+    if sunset is not None:
+        return sunset
+    return 17.0
+
+
+def _resolve_effective_respekt_s(
+    action: str,
+    params: dict[str, Any],
+    respekt_s: int | None,
+    conn: sqlite3.Connection,
+) -> int:
+    """Berechnet die effektive Respektzeit, inkl. Tages-Intent bis Sunset."""
+    if action != 'afternoon_charge_request':
+        return int(respekt_s or config.STEUERBOX_DEFAULT_RESPEKT_S)
+
+    if respekt_s is not None:
+        return int(respekt_s)
+
+    until_hour = _resolve_afternoon_until_hour(params, conn)
+    remaining = _seconds_until_hour_local(until_hour)
+    if remaining <= 0:
+        return int(config.STEUERBOX_MIN_RESPEKT_S)
+    return int(min(
+        config.STEUERBOX_AFTERNOON_MAX_RESPEKT_S,
+        max(config.STEUERBOX_MIN_RESPEKT_S, remaining),
+    ))
+
+
 def _write_audit(
     conn: sqlite3.Connection,
     *,
@@ -112,11 +172,14 @@ def _close_live_overrides_for_action(conn: sqlite3.Connection, action: str, keep
 
 def handle_intent(action: str, params: dict[str, Any], client_ip: str, respekt_s: int | None = None) -> IntentResult:
     """Validieren, in operator_overrides schreiben und Audit erfassen."""
-    effektive_respekt_s = int(respekt_s or config.STEUERBOX_DEFAULT_RESPEKT_S)
-    normalized = validate_action(action, params, effektive_respekt_s)
-
     conn = _get_conn()
     try:
+        effektive_respekt_s = _resolve_effective_respekt_s(action, params, respekt_s, conn)
+        normalized = validate_action(action, params, effektive_respekt_s)
+
+        if action == 'afternoon_charge_request' and 'until_hour' not in normalized:
+            normalized['until_hour'] = round(_resolve_afternoon_until_hour(normalized, conn), 2)
+
         created_at = _utc_now_iso()
 
         cur = conn.execute(

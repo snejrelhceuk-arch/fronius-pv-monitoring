@@ -9,10 +9,12 @@ import sqlite3
 import logging
 import os
 import time
+import json
 from pathlib import Path
 from datetime import datetime
 from flask import Blueprint, jsonify, request
 import config
+from host_role import is_failover
 from routes.helpers import get_db_connection, get_fronius_api, battery_cache, wattpilot_cache, api_error_response, validate_year_month
 
 bp = Blueprint('system', __name__)
@@ -25,6 +27,7 @@ _BACKUP_CACHE_TTL = 600  # Sekunden (10 Minuten)
 _ha_cache = {
     'wattpilot': {'ts': 0, 'data': None},
     'flow': {'ts': 0, 'data': None},
+    'automation': {'ts': 0, 'data': None},
 }
 
 # Fritz!DECT Live-Status Cache (eigener, längerer TTL als battery_cache)
@@ -201,6 +204,72 @@ def _read_ha_flow_payload(now: float) -> dict:
         'heizpatrone_w': heizpatrone_power,
         'klima_w': klima_power,
     }
+
+
+def _read_obs_state_compact() -> dict:
+    """Liest kompakten ObsState-Snapshot aus der RAM-DB."""
+    try:
+        conn = sqlite3.connect('/dev/shm/automation_obs.db', timeout=2.0)
+        row = conn.execute("SELECT state_json FROM obs_state WHERE id=1").fetchone()
+        conn.close()
+    except Exception:
+        return {}
+
+    if not row or not row[0]:
+        return {}
+    try:
+        return json.loads(row[0])
+    except Exception:
+        return {}
+
+
+def _build_ha_device_info() -> dict:
+    role = 'failover' if is_failover() else 'primary'
+    return {
+        'identifier': f'pv_system_{role}',
+        'name': 'PV-System Erlau',
+        'manufacturer': 'PV-System',
+        'model': 'GEN24 Orchestrator',
+        'sw_version': 'unreleased',
+        'role': role,
+    }
+
+
+def _read_ha_automation_payload(now: float) -> dict:
+    """HA-freundlicher Status für SOC-/Intent-Kooperation."""
+    try:
+        from automation.engine.operator_intents import read_active_afternoon_charge_intent
+
+        intent = read_active_afternoon_charge_intent(force_refresh=True)
+    except Exception:
+        intent = None
+
+    obs = _read_obs_state_compact()
+    payload = {
+        'source': 'automation_obs',
+        'timestamp': datetime.now().isoformat(),
+        'device': _build_ha_device_info(),
+        'battery_soc_pct': obs.get('batt_soc_pct'),
+        'soc_min_pct': obs.get('soc_min'),
+        'soc_max_pct': obs.get('soc_max'),
+        'soc_mode': obs.get('soc_mode'),
+        'forecast_rest_kwh': obs.get('forecast_rest_kwh'),
+        'sunset_h': obs.get('sunset'),
+        'heizpatrone_aktiv': bool(obs.get('heizpatrone_aktiv', False)),
+        'afternoon_charge_active': bool(intent),
+        'afternoon_charge_target_soc_pct': None,
+        'afternoon_charge_pause_hp': None,
+        'afternoon_charge_remaining_s': 0,
+        'afternoon_charge_until_h': None,
+    }
+
+    if intent:
+        payload['afternoon_charge_target_soc_pct'] = int(intent.get('target_soc_pct', 100))
+        payload['afternoon_charge_pause_hp'] = bool(intent.get('pause_hp_until_target', True))
+        payload['afternoon_charge_remaining_s'] = int(intent.get('respekt_remaining_s', 0))
+        payload['afternoon_charge_until_h'] = intent.get('until_hour')
+
+    return payload
 
 
 def _build_battery_status_result(now, api):
@@ -1507,8 +1576,96 @@ def ha_index():
                 'source': 'db',
                 'description': 'Kompakte Flow-/Verbrauchsdaten für HA',
             },
+            {
+                'path': '/api/ha/automation',
+                'poll_seconds': 10,
+                'source': 'automation_obs',
+                'description': 'SOC-/Intent-Status für HA-Automation',
+            },
+            {
+                'path': '/api/ha/device',
+                'poll_seconds': 300,
+                'source': 'static',
+                'description': 'Geräte-Metadaten für HA Device-Mapping',
+            },
+            {
+                'path': '/api/ha/entities',
+                'poll_seconds': 300,
+                'source': 'static',
+                'description': 'Entitätskatalog inkl. JSON-Keys und Schreibaktionen',
+            },
         ],
     })
+
+
+@bp.route('/api/ha/device')
+def ha_device_info():
+    """Geräte-Metadaten für die Zuordnung von Entitäten in HA."""
+    return jsonify({
+        'device': _build_ha_device_info(),
+        'timestamp': datetime.now().isoformat(),
+    })
+
+
+@bp.route('/api/ha/automation')
+def ha_automation_status():
+    """HA-freundlicher Status für Intent-/SOC-Kooperation."""
+    now = time.time()
+    cache = _ha_cache['automation']
+    if cache['data'] and (now - cache['ts']) < 10:
+        return jsonify(cache['data'])
+
+    payload = _read_ha_automation_payload(now)
+    cache['data'] = payload
+    cache['ts'] = now
+    return jsonify(payload)
+
+
+@bp.route('/api/ha/entities')
+def ha_entities_catalog():
+    """Maschinenlesbarer Entitätskatalog für eine einfache HA-Anbindung."""
+    base_url = request.host_url.rstrip('/')
+    steuerbox_url = f'http://{request.host.split(":")[0]}:{config.STEUERBOX_PORT}'
+    payload = {
+        'name': 'pv-system ha entities',
+        'version': 1,
+        'timestamp': datetime.now().isoformat(),
+        'device': _build_ha_device_info(),
+        'endpoints': {
+            'flow': f'{base_url}/api/ha/flow',
+            'wattpilot': f'{base_url}/api/ha/wattpilot',
+            'automation': f'{base_url}/api/ha/automation',
+        },
+        'entities': [
+            {'key': 'pv_total_w', 'source': '/api/ha/flow', 'unit': 'W', 'suggested_entity': 'sensor.pv_system_pv_total_w'},
+            {'key': 'grid_power_w', 'source': '/api/ha/flow', 'unit': 'W', 'suggested_entity': 'sensor.pv_system_grid_power_w'},
+            {'key': 'battery_soc_pct', 'source': '/api/ha/flow', 'unit': '%', 'suggested_entity': 'sensor.pv_system_battery_soc_pct'},
+            {'key': 'household_w', 'source': '/api/ha/flow', 'unit': 'W', 'suggested_entity': 'sensor.pv_system_household_w'},
+            {'key': 'wattpilot_w', 'source': '/api/ha/flow', 'unit': 'W', 'suggested_entity': 'sensor.pv_system_wattpilot_w'},
+            {'key': 'charging', 'source': '/api/ha/wattpilot', 'unit': 'bool', 'suggested_entity': 'binary_sensor.pv_system_wattpilot_charging'},
+            {'key': 'power_w', 'source': '/api/ha/wattpilot', 'unit': 'W', 'suggested_entity': 'sensor.pv_system_wattpilot_power_w'},
+            {'key': 'soc_max_pct', 'source': '/api/ha/automation', 'unit': '%', 'suggested_entity': 'sensor.pv_system_soc_max_pct'},
+            {'key': 'afternoon_charge_active', 'source': '/api/ha/automation', 'unit': 'bool', 'suggested_entity': 'binary_sensor.pv_system_afternoon_charge_active'},
+            {'key': 'afternoon_charge_remaining_s', 'source': '/api/ha/automation', 'unit': 's', 'suggested_entity': 'sensor.pv_system_afternoon_charge_remaining_s'},
+        ],
+        'write_actions': [
+            {
+                'name': 'afternoon_charge_request',
+                'method': 'POST',
+                'url': f'{steuerbox_url}/api/ops/intent',
+                'json': {
+                    'action': 'afternoon_charge_request',
+                    'params': {
+                        'target_soc_pct': 100,
+                        'pause_hp_until_target': True,
+                        'start_earliest_h': 12.0,
+                        'start_latest_h': 15.0,
+                    },
+                },
+            },
+        ],
+    }
+    return jsonify(payload)
 
 
 @bp.route('/api/ha/wattpilot')

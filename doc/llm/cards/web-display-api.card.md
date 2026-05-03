@@ -25,6 +25,10 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 - **Inputs:** Aggregat-/Rohdaten aus SQLite ueber `routes/helpers.py`, Forecastdaten, Query-Parameter der API-Endpunkte.
 - **Outputs:** HTML-Views (`templates/*.html`) und JSON-Endpunkte unter `/api/*`.
 
+### HA-Export (neu)
+- Lesepfade für Home Assistant: `/api/ha/flow`, `/api/ha/wattpilot`, `/api/ha/automation`, plus Discovery über `/api/ha`, `/api/ha/device`, `/api/ha/entities`.
+- Optionaler MQTT-Adapter konsumiert diese Lesepfade (`steuerbox/ha_mqtt_bridge.py`) und bleibt damit read-only in Rolle B.
+
 ## Invarianten
 - Keine Hardware-Schreibzugriffe in Schicht B; Fronius nur ueber `FroniusReadOnly`.
 - API-CORS bleibt auf GET/OPTIONS ausgelegt (`web_api.py:add_cors_headers`).
@@ -40,6 +44,7 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 - Neue API-Route -> passendes Blueprint-Modul in `routes/` erweitern und in `web_api.py` registrieren.
 - Einheitendarstellung korrigieren -> Formatter in `templates/tag_view.html` und Konventionen in `doc/web/DISPLAY_CONVENTIONS.md` synchron halten.
 - Forecast-Fehler analysieren -> `routes/forecast.py` und `routes/helpers.py:store_forecast_daily` gemeinsam debuggen.
+- HA-Entitäten erweitern -> `routes/system.py` im Abschnitt `/api/ha/*` anpassen und den Katalog in `/api/ha/entities` aktualisieren.
 
 ## Bekannte Fallstricke
 - Display-Formatter sind template-lokal; parallele Formatter in anderen Views koennen driften.
@@ -53,4 +58,5 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 
 ## Human-Doku
 - `doc/web/DISPLAY_CONVENTIONS.md`
+- `doc/web/HA_INTEGRATION.md`
 - `doc/SYSTEM_BRIEFING.md`

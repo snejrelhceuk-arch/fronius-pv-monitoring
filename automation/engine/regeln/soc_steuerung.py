@@ -19,6 +19,7 @@ from typing import Optional, Tuple
 
 import config as app_config
 from automation.engine.obs_state import ObsState
+from automation.engine.operator_intents import read_active_afternoon_charge_intent
 from automation.engine.regeln.basis import Regel
 from automation.engine.regeln.soc_extern import soc_extern_tracker
 from automation.engine.param_matrix import (
@@ -477,13 +478,40 @@ class RegelNachmittagSocMax(Regel):
                  f"Deadline-Start {start:.1f}h")
         return start
 
+    @staticmethod
+    def _berechne_intent_startzeit(
+        obs: ObsState,
+        dyn_start: float,
+        intent: dict,
+    ) -> float:
+        """Ladewunsch-Startzeit im Bereich 12-15h, abhängig von SOC/Restprognose."""
+        earliest = float(intent.get('start_earliest_h', 12.0))
+        latest = float(intent.get('start_latest_h', 15.0))
+        earliest = max(0.0, min(24.0, earliest))
+        latest = max(earliest, min(24.0, latest))
+
+        soc = float(obs.batt_soc_pct if obs.batt_soc_pct is not None else 50.0)
+        rest_kwh = obs.forecast_rest_kwh if obs.forecast_rest_kwh is not None else obs.forecast_kwh
+        rest_kwh = float(rest_kwh if rest_kwh is not None else 0.0)
+
+        if soc <= 45.0 or rest_kwh < 12.0:
+            start = earliest
+        elif soc <= 65.0 or rest_kwh < 22.0:
+            start = max(earliest, min(latest, dyn_start - 1.0))
+        else:
+            start = max(earliest, min(latest, dyn_start))
+
+        return round(start, 2)
+
     def bewerte(self, obs: ObsState, matrix: dict) -> int:
         if not ist_aktiv(matrix, self.regelkreis):
             return 0
 
+        intent = read_active_afternoon_charge_intent()
+
         # ── SOC-Extern-Toleranz ──
         soc_extern_tracker.aktualisiere(obs, matrix)
-        if soc_extern_tracker.ist_toleriert(matrix):
+        if not intent and soc_extern_tracker.ist_toleriert(matrix):
             verbleibend = soc_extern_tracker.verbleibend_s(matrix)
             LOG.debug(f'{self.name}: SOC extern geändert '
                       f'({soc_extern_tracker.extern_grund}) '
@@ -496,6 +524,8 @@ class RegelNachmittagSocMax(Regel):
         # Dynamisches Ziel für "bereits erledigt"-Check
         dyn = _dynamische_soc_ziele(obs, matrix)
         ziel_max = dyn[1] if dyn else int(get_param(matrix, self.regelkreis, 'stress_max_pct', 100))
+        if intent:
+            ziel_max = max(ziel_max, int(intent.get('target_soc_pct', 100)))
         if obs.soc_max is not None and obs.soc_max >= ziel_max:
             return 0
 
@@ -512,6 +542,13 @@ class RegelNachmittagSocMax(Regel):
             return score_max
 
         dyn_start = self._berechne_dynamische_startzeit(obs, matrix)
+
+        if intent:
+            intent_start = self._berechne_intent_startzeit(obs, dyn_start, intent)
+            if hr < intent_start:
+                return 0
+            return score_max
+
         if hr < dyn_start:
             return 0
 
@@ -530,6 +567,7 @@ class RegelNachmittagSocMax(Regel):
         komfort = get_param(matrix, self.regelkreis, 'komfort_max_pct', 75)
         stress = get_param(matrix, self.regelkreis, 'stress_max_pct', 100)
         aktionen = []
+        intent = read_active_afternoon_charge_intent()
 
         if obs.soc_mode != 'manual':
             aktionen.append({
@@ -544,6 +582,9 @@ class RegelNachmittagSocMax(Regel):
 
         peak_str = f"Peak {peak_h:.1f}h" if peak_h else "Peak ?"
         dyn_start = self._berechne_dynamische_startzeit(obs, matrix)
+        intent_start = None
+        if intent:
+            intent_start = self._berechne_intent_startzeit(obs, dyn_start, intent)
 
         soc_max_ziel = stress  # Fallback: 100%
         dyn = _dynamische_soc_ziele(obs, matrix)
@@ -557,8 +598,22 @@ class RegelNachmittagSocMax(Regel):
                 prog['samples'], soc_max_ziel,
             )
 
+        if intent:
+            soc_max_ziel = max(soc_max_ziel, int(intent.get('target_soc_pct', 100)))
+
         if obs.soc_max is None or obs.soc_max != soc_max_ziel:
-            if dyn is not None:
+            if intent:
+                remaining_min = int(intent.get('respekt_remaining_s', 0)) // 60
+                until_hour = intent.get('until_hour')
+                until_hint = f", bis {until_hour:.2f}h" if isinstance(until_hour, (int, float)) else ''
+                aktionen.append({
+                    'tier': 2, 'aktor': 'batterie',
+                    'kommando': 'set_soc_max', 'wert': soc_max_ziel,
+                    'grund': (f'Nachmittag-Ladewunsch: SOC_MAX {obs.soc_max or "?"}%→{soc_max_ziel}% '
+                              f'(Start {intent_start:.1f}h{until_hint}, '
+                              f'Restlaufzeit ~{remaining_min} min)'),
+                })
+            elif dyn is not None:
                 aktionen.append({
                     'tier': 2, 'aktor': 'batterie',
                     'kommando': 'set_soc_max', 'wert': soc_max_ziel,
@@ -802,6 +857,9 @@ class RegelKomfortReset(Regel):
         if not ist_aktiv(matrix, self.regelkreis):
             return 0
 
+        if read_active_afternoon_charge_intent():
+            return 0
+
         # ── Drain-Entscheidung zurücksetzen wenn Morgen-Phase SOC_MIN angehoben hat ──
         if self._nacht_drain_entschieden:
             komfort_min = get_param(matrix, self.regelkreis, 'komfort_min_pct', 25)
@@ -834,6 +892,9 @@ class RegelKomfortReset(Regel):
         return score
 
     def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
+        if read_active_afternoon_charge_intent():
+            return []
+
         komfort_min = get_param(matrix, self.regelkreis, 'komfort_min_pct', 25)
         komfort_max = get_param(matrix, self.regelkreis, 'komfort_max_pct', 75)
         aktionen = []

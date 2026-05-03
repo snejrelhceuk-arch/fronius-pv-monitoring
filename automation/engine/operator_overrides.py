@@ -77,6 +77,9 @@ class OperatorOverrideProcessor:
                 elapsed_s = respekt_s - self._remaining_respekt_s(created_at, respekt_s)
                 action_plan = self._map_override_to_actions(action, params, matrix, elapsed_s=elapsed_s)
                 if not action_plan:
+                    if self._is_policy_hold_action(action):
+                        skipped += 1
+                        continue
                     self._set_status(conn, override_id, 'done')
                     self._audit(
                         conn,
@@ -128,6 +131,18 @@ class OperatorOverrideProcessor:
                     continue
 
                 if not action_plan:
+                    if self._is_policy_hold_action(action) and respekt_s > 0:
+                        self._set_status(conn, override_id, 'active')
+                        self._audit(
+                            conn,
+                            action,
+                            params,
+                            {'ok': True, 'results': [], 'hold_active': True, 'respekt_s': respekt_s},
+                            override_id,
+                            'override accepted, policy hold active',
+                        )
+                        held += 1
+                        continue
                     self._set_status(conn, override_id, 'done')
                     self._audit(conn, action, params, {'ok': True, 'info': 'neutral/no-op'}, override_id, 'override consumed (neutral)')
                     skipped += 1
@@ -262,6 +277,10 @@ class OperatorOverrideProcessor:
                 if ist_mode == 'manual' and ist_min == 5 and ist_max == 100:
                     return False
                 return True
+        if action == 'afternoon_charge_request':
+            # Tages-Intent wirkt als Policy-Hold für Regelpfade (SOC/HP),
+            # nicht als dedizierte Aktor-Reapply-Aktion.
+            return False
         # Für andere Actions konservativ: Reapply erlaubt.
         return True
 
@@ -337,7 +356,13 @@ class OperatorOverrideProcessor:
             return params.get('state') in {'on', 'off'}
         if action == 'battery_mode':
             return params.get('mode') in {'komfort', 'auto'}
+        if action == 'afternoon_charge_request':
+            return True
         return False
+
+    @staticmethod
+    def _is_policy_hold_action(action: str) -> bool:
+        return action in {'afternoon_charge_request'}
 
     def _set_status(self, conn: sqlite3.Connection, override_id: int, status: str) -> None:
         conn.execute(
@@ -488,6 +513,10 @@ class OperatorOverrideProcessor:
                     self._mk('batterie', 'set_soc_max', 100, 'Steuerbox Override: Batterie Auto Phase 1 (SOC_MAX 100%)'),
                 ]
             return None
+
+        if action == 'afternoon_charge_request':
+            # Reiner Policy-Hold: wird von RegelNachmittagSocMax/RegelHeizpatrone ausgewertet.
+            return []
 
         return None
 

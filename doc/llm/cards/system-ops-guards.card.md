@@ -21,6 +21,7 @@ Systemweite Betriebsleitplanken fuer Multi-Host-Betrieb: `.role`-basiertes Verha
 - **GFS-Backup:** `scripts/backup_db_gfs.sh`
 - **Publish-Audit:** `scripts/publish_audit.sh`
 - **Service-Definitionen:** `config/systemd/pv-automation.service`, `config/systemd/pv-observer.service`, `config/systemd/pv-wattpilot.service`, `config/systemd/pv-steuerbox.service`
+- **Optionaler HA-Adapter-Service:** `config/systemd/pv-ha-bridge.service`
 
 ## Inputs / Outputs
 - **Inputs:** `.role`, `.infra.local`/ENV, `.publish-guard`, `/dev/shm/fronius_data.db`, Backup-Verzeichnisse unter `backup/db/*`.
