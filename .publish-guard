@@ -13,27 +13,31 @@
 192\.168\.2\.[0-9]+
 
 # --- Benutzernamen ---
-backup-user
+\bzmithy\b
 \bjk@
 
 # --- Hostnamen ---
-\bfailover-host\b
-\bbackup-host\b
-\bprimary-host\b
+\bfronipi\b
+\bPI5-5\b
+\braspberrypi\b
+\bollama-server\b
 
 # --- E-Mail / Domain ---
-example
-notify@
+\bhekabe\b
 
 # --- SMTP-Provider ---
-smtp\.example\.de
 \bStrato\b
 \bstrato\b
 
+# --- Repo-Name / Projekt-ID ---
+pv-system-hekabe-2026
+
 # --- Dateisystem-Pfade ---
-/home/user/Dokumente/PVAnlage
-/home/user/Documents/PVAnlage
-/home/user/Dokumente/PVAnlage
+/home/admin/
+/home/jk/
 
 # --- Geräte-Seriennummern (Fritz!DECT AIN) ---
-00000.0000000
+11657 0535198
+11657 0676698
+11657 0600249
+11657\.0535198
