@@ -13,6 +13,7 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 | **automation: Tick-Loop, Regel-Reihenfolge, Engine-Zyklus** | [`automation-engine.card.md`](./cards/automation-engine.card.md) | stable |
 | **automation: SOC-Min/Max setzen, Fronius-BatteryConfig schreiben** | [`automation-battery-algorithm.card.md`](./cards/automation-battery-algorithm.card.md) | stable |
 | **automation: Heizpatrone, WW-Speicher, FritzDECT-Schaltung** | [`automation-regel-heizpatrone.card.md`](./cards/automation-regel-heizpatrone.card.md) | stable |
+| **automation: Klimaanlage, Schaltfrequenz-Cooldown, Extern-Erkennung** | [`automation-regel-klimaanlage.card.md`](./cards/automation-regel-klimaanlage.card.md) | stable |
 | **automation: Wattpilot/EV-Lader, Ladestrom, SOC-Schutz bei Ladung** | [`automation-regel-wattpilot.card.md`](./cards/automation-regel-wattpilot.card.md) | stable |
 | **automation: Prioritäten, ExternalRespect, Matrix-Konzept** | [`automation-steuerungsphilosophie.card.md`](./cards/automation-steuerungsphilosophie.card.md) | stable |
 | **automation: Tier-1, SLS, No-Op-Schutz, Watchdog** | [`automation-schutzregeln.card.md`](./cards/automation-schutzregeln.card.md) | stable |
@@ -36,6 +37,7 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 - [`automation-engine.card.md`](./cards/automation-engine.card.md) — Tick-Loop, Regel-Registry
 - [`automation-battery-algorithm.card.md`](./cards/automation-battery-algorithm.card.md) — Fronius-BatteryConfig-Schreibpfad
 - [`automation-regel-heizpatrone.card.md`](./cards/automation-regel-heizpatrone.card.md) — HP, 6 Phasen, ExternalRespect
+- [`automation-regel-klimaanlage.card.md`](./cards/automation-regel-klimaanlage.card.md) — Klima, Schaltfrequenz-Cooldown, Extern
 - [`automation-regel-wattpilot.card.md`](./cards/automation-regel-wattpilot.card.md) — Wallbox, SOC-Schutz, WS
 - [`automation-steuerungsphilosophie.card.md`](./cards/automation-steuerungsphilosophie.card.md) — Prioritäten + Matrix
 - [`automation-schutzregeln.card.md`](./cards/automation-schutzregeln.card.md) — Tier-1, SLS, No-Op

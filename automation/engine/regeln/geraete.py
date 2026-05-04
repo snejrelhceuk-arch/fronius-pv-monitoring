@@ -676,9 +676,14 @@ class RegelHeizpatrone(Regel):
             target_soc = int(intent.get('target_soc_pct', 100))
             soc_now = float(obs.batt_soc_pct if obs.batt_soc_pct is not None else 0.0)
             if soc_now < max(0, target_soc - 1):
-                if obs.heizpatrone_aktiv:
-                    return int(score * 1.6)
-                return 0
+                # HP nur sperren wenn Batterie aktiv laedt UND Ladeleistung < 8 kW.
+                # Bei starker Ladung (>=8 kW) reicht PV fuer beide; bei fehlender
+                # Ladung (Batterie entlaedt oder idle) ist kein Konflik vorhanden.
+                batt_w = obs.batt_power_w
+                if batt_w is not None and 0 < batt_w < 8000:
+                    if obs.heizpatrone_aktiv:
+                        return int(score * 1.6)
+                    return 0
 
         # ── Notaus-Pfad: IMMER aktiv ──
         if obs.heizpatrone_aktiv:
@@ -1062,24 +1067,26 @@ class RegelHeizpatrone(Regel):
         if intent and bool(intent.get('pause_hp_until_target', True)):
             target_soc = int(intent.get('target_soc_pct', 100))
             if soc < max(0, target_soc - 1):
-                if obs.heizpatrone_aktiv:
-                    remaining_min = int(intent.get('respekt_remaining_s', 0)) // 60
-                    self._letzte_aus = time.time()
-                    self._warte_auf_engine_aus = True
-                    self._warte_auf_engine_aus_ts = self._letzte_aus
-                    self._burst_start = 0
-                    self._burst_ende = 0
-                    self._drain_modus = False
-                    self._probe_modus = False
-                    self._drain_lastbedingung_ts = 0
-                    return [{
-                        'tier': 2, 'aktor': 'fritzdect',
-                        'kommando': 'hp_aus',
-                        'grund': (f'HP AUS: Nachmittag-Ladewunsch aktiv '
-                                  f'(SOC {soc:.0f}% < Ziel {target_soc}%, '
-                                  f'Rest ~{remaining_min} min)'),
-                    }]
-                return []
+                # HP nur abschalten wenn Batterie aktiv laedt UND Ladeleistung < 8 kW.
+                if 0 < p_batt < 8000:
+                    if obs.heizpatrone_aktiv:
+                        remaining_min = int(intent.get('respekt_remaining_s', 0)) // 60
+                        self._letzte_aus = time.time()
+                        self._warte_auf_engine_aus = True
+                        self._warte_auf_engine_aus_ts = self._letzte_aus
+                        self._burst_start = 0
+                        self._burst_ende = 0
+                        self._drain_modus = False
+                        self._probe_modus = False
+                        self._drain_lastbedingung_ts = 0
+                        return [{
+                            'tier': 2, 'aktor': 'fritzdect',
+                            'kommando': 'hp_aus',
+                            'grund': (f'HP AUS: Nachmittag-Ladewunsch aktiv, Ladung {p_batt:.0f}W < 8 kW '
+                                      f'(SOC {soc:.0f}% < Ziel {target_soc}%, '
+                                      f'Rest ~{remaining_min} min)'),
+                        }]
+                    return []
 
         # ── Extern-Erkennung läuft jetzt in bewerte() ──
 
@@ -2036,6 +2043,22 @@ class RegelKlimaanlage(RegelHeizpatrone):
                     'grund': f'Klima AUS: Extern-Respekt-Hold aktiv ({ext_rem}s verbleibend)',
                 }]
             return []
+
+        # Schaltfrequenz-Cooldown: AUS erzwingen, wenn Klima läuft
+        # (blockiert nur Neustarts in `bewerte()`, nicht aktives Fahren → EIN-Sperre hier nötig)
+        cd_rem = self._schaltfrequenz_cooldown_verbleibend()
+        if cd_rem > 0 and obs.klima_aktiv:
+            self._engine_klima_aus_ts = time.time()
+            LOG.warning(
+                'Klima AUS erzwungen: Schaltfrequenz-Cooldown aktiv noch %d Min',
+                cd_rem // 60,
+            )
+            return [{
+                'tier': 2,
+                'aktor': 'fritzdect',
+                'kommando': 'klima_aus',
+                'grund': f'Klima AUS: Schaltfrequenz-Cooldown aktiv (noch {cd_rem // 60} Min)',
+            }]
 
         soll_laufen = self._soll_klima_laufen(obs, matrix)
         ist_an = bool(obs.klima_aktiv)

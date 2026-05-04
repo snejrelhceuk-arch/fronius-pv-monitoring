@@ -127,6 +127,7 @@ class Engine:
         self._ram_db_conn = None
         self._lade_matrix()
         self._register_default_regeln()
+        self._restore_persistent_state()
 
     def _lade_matrix(self):
         """Lade Parametermatrix von Disk."""
@@ -171,6 +172,19 @@ class Engine:
             RegelHeizAbsenkung(),
         ]
         LOG.info(f"Regeln registriert: {[r.name for r in self._regeln]}")
+
+    def _restore_persistent_state(self):
+        """Stellt persistent gespeicherte Rule-States nach Daemon-Neustart wieder her.
+
+        Ruft optionale Restore-Hooks auf (z.B. lade_cooldown_aus_db) für Regeln,
+        die persistent gespeicherte Zustände (Cooldown, Pausenstatus etc.) haben.
+        """
+        for regel in self._regeln:
+            if hasattr(regel, 'lade_cooldown_aus_db') and callable(getattr(regel, 'lade_cooldown_aus_db')):
+                try:
+                    regel.lade_cooldown_aus_db()
+                except Exception as e:
+                    LOG.warning(f"Restore-Hook {regel.name}.lade_cooldown_aus_db() fehlgeschlagen: {e}")
 
     def registriere_regel(self, regel: Regel):
         """Zusätzliche Regel registrieren."""
