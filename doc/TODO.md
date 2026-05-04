@@ -7,6 +7,13 @@
 
 ## Sicherheit & Haertung
 
+### ~~Kritisch: Git-History hart bereinigen~~ ✅ erledigt 2026-05-04
+
+- [x] `git filter-repo --replace-text scripts/filter-expressions.txt --force` auf gesamter History ausgefuehrt
+- [x] Verifikation: `./scripts/publish_audit.sh --history` → 0 Treffer (alle 3 Phasen gruen)
+- [x] `git push --force origin main` + alle Tags aktualisiert
+- [ ] Team-Remediation: frische Klone bzw. `git fetch --all` + `git reset --hard origin/main` auf Pi4-Failover und Pi5-Backup ausfuehren
+
 - [ ] UFW auf Primary (.181) aktivieren — `scripts/safe_ufw_apply.sh`
 - [ ] SSH `StrictHostKeyChecking=no` → `accept-new` in sync_code_to_peer.sh, backup_db_gfs.sh, routes/system.py
 - [ ] API-Authentifizierung evaluieren (bei Remote-Zugriff)
