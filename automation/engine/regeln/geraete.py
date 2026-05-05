@@ -1652,6 +1652,11 @@ class RegelKlimaanlage(RegelHeizpatrone):
 
         Wird ausschließlich von `_erkenne_kompressor_aus` aufgerufen (Lastflanke).
         Sliding-Window: Einträge außerhalb `schaltintervall_s` werden verworfen.
+        
+        **WICHTIG:** Wenn Cooldown bereits aktiv ist, wird die neue AUS-Flanke
+        NICHT gezählt und der bestehende Cooldown wird NICHT zurückgesetzt!
+        Das verhindert, dass schnelle Kompressor-Takten den Timer verlängern.
+        
         Cooldown startet ab dem letzten AUS und läuft `cooldown_s`.
         Nach Cooldown-Aktivierung wird die History geleert.
         Cooldown-Zeitpunkt wird in RAM-DB (engine_flags) persistiert, damit
@@ -1663,6 +1668,14 @@ class RegelKlimaanlage(RegelHeizpatrone):
         cooldown_s = float(get_param(
             matrix, self.regelkreis, 'cooldown_s', 3600
         ))
+
+        # Wenn Cooldown bereits aktiv: ignoriere neue AUS-Flanke (Timer nicht verlängern!)
+        if self._klima_schalt_cooldown_bis > now:
+            LOG.debug(
+                'Klima AUS-Flanke erkannt während Cooldown aktiv (noch %.0f Min) → ignoriert',
+                (self._klima_schalt_cooldown_bis - now) / 60,
+            )
+            return
 
         self._klima_schalt_aus_zeiten.append(now)
         # Einträge außerhalb des Fensters entfernen
@@ -1937,6 +1950,14 @@ class RegelKlimaanlage(RegelHeizpatrone):
                 return int(basis_score * 2)
             return 0
 
+        # ═ Hardware-Schutz vor User-Overrides ═
+        # Schaltfrequenz-Cooldown: HÖHERE Priorität als Extern/Steuerbox
+        # (blockiert neue EINs, aber läuft parallel zu Hold-Logik)
+        cd_rem = self._schaltfrequenz_cooldown_verbleibend()
+        if cd_rem > 0 and not obs.klima_aktiv:
+            LOG.debug('Klima EIN blockiert: Schaltfrequenz-Cooldown noch %d Min', cd_rem // 60)
+            return 0
+
         # Steuerbox-Hold (ON/OFF) hat Vorrang vor normaler Regelautomatik.
         sb_state, sb_rem = self._aktiver_steuerbox_klima_hold()
         if sb_state == 'on':
@@ -1964,13 +1985,6 @@ class RegelKlimaanlage(RegelHeizpatrone):
                 LOG.debug('Klima extern-Hold OFF aktiv (%ds verbleibend)', ext_rem)
                 return 0
 
-        # Schaltfrequenz-Cooldown: EIN-Sperre (Steuerbox/Extern haben bereits Vorrang oben).
-        if not obs.klima_aktiv:
-            cd_rem = self._schaltfrequenz_cooldown_verbleibend()
-            if cd_rem > 0:
-                LOG.debug('Klima EIN blockiert: Schaltfrequenz-Cooldown noch %d Min', cd_rem // 60)
-                return 0
-
         soll_laufen = self._soll_klima_laufen(obs, matrix)
         ist_an = bool(obs.klima_aktiv)
 
@@ -1995,6 +2009,22 @@ class RegelKlimaanlage(RegelHeizpatrone):
                     'grund': f'Klima AUS: nach Sonnenuntergang und SOC < {soc_stop:.0f}%',
                 }]
             return []
+
+        # ═ Hardware-Schutz vor User-Overrides ═
+        # Schaltfrequenz-Cooldown: AUS erzwingen, wenn Klima läuft
+        cd_rem = self._schaltfrequenz_cooldown_verbleibend()
+        if cd_rem > 0 and obs.klima_aktiv:
+            self._engine_klima_aus_ts = time.time()
+            LOG.warning(
+                'Klima AUS erzwungen: Schaltfrequenz-Cooldown aktiv noch %d Min',
+                cd_rem // 60,
+            )
+            return [{
+                'tier': 2,
+                'aktor': 'fritzdect',
+                'kommando': 'klima_aus',
+                'grund': f'Klima AUS: Schaltfrequenz-Cooldown aktiv (noch {cd_rem // 60} Min)',
+            }]
 
         # Steuerbox-Hold (ON/OFF) erzwingen.
         sb_state, sb_rem = self._aktiver_steuerbox_klima_hold()
@@ -2043,22 +2073,6 @@ class RegelKlimaanlage(RegelHeizpatrone):
                     'grund': f'Klima AUS: Extern-Respekt-Hold aktiv ({ext_rem}s verbleibend)',
                 }]
             return []
-
-        # Schaltfrequenz-Cooldown: AUS erzwingen, wenn Klima läuft
-        # (blockiert nur Neustarts in `bewerte()`, nicht aktives Fahren → EIN-Sperre hier nötig)
-        cd_rem = self._schaltfrequenz_cooldown_verbleibend()
-        if cd_rem > 0 and obs.klima_aktiv:
-            self._engine_klima_aus_ts = time.time()
-            LOG.warning(
-                'Klima AUS erzwungen: Schaltfrequenz-Cooldown aktiv noch %d Min',
-                cd_rem // 60,
-            )
-            return [{
-                'tier': 2,
-                'aktor': 'fritzdect',
-                'kommando': 'klima_aus',
-                'grund': f'Klima AUS: Schaltfrequenz-Cooldown aktiv (noch {cd_rem // 60} Min)',
-            }]
 
         soll_laufen = self._soll_klima_laufen(obs, matrix)
         ist_an = bool(obs.klima_aktiv)
