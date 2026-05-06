@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 
 # Konfiguration
 PORT = int(os.environ.get("TICKER_PORT", 8050))
-UPDATE_INTERVAL_SEC = 15 * 60  # 15 Minuten
+UPDATE_INTERVAL_SEC = int(os.environ.get("TICKER_UPDATE_INTERVAL_SEC", 5 * 60))
 DETAIL_MAX_CHARS = int(os.environ.get("TICKER_DETAIL_MAX_CHARS", 256))
 # Optionale zweite Zeile: Erlaeuterungen vom externen Ubuntu-Ollama.
 EXPLAIN_REMOTE_ENABLE = os.environ.get("TICKER_EXPLAIN_ENABLE", "1").lower() in ("1", "true", "yes", "on")
@@ -30,12 +30,17 @@ EXPLAIN_MAX_WORDS = int(os.environ.get("TICKER_EXPLAIN_MAX_WORDS", 35))
 _CURRENT_TICKER_TEXT = "Ticker lädt Neuigkeiten..."
 _CURRENT_TICKER_EXPLAIN_TEXT = ""
 _LAST_UPDATE = 0
+_CURRENT_TICKER_ITEMS = []
+_SEEN_TOPICS = set()
+_SEEN_TOPIC_ORDER = []
 
 # RSS-Feeds (Öffentlich, frei, stabil) - Format: (URL, Max_Anzahl)
 FEEDS = [
     ("https://www.tagesschau.de/xml/rss2/", 12),
     ("https://www.heise.de/rss/heise-atom.xml", 3)
 ]
+MAX_STORED_ITEMS = int(os.environ.get("TICKER_MAX_ITEMS", sum(limit for _, limit in FEEDS)))
+SEEN_TOPIC_HISTORY = int(os.environ.get("TICKER_SEEN_TOPIC_HISTORY", 200))
 
 
 def _clean_desc(text):
@@ -87,6 +92,75 @@ def fetch_rss_items():
     return items
 
 
+def _dedup_items(items):
+    seen = set()
+    dedup_items = []
+    for item in items:
+        topic = (item.get("topic") or "").strip()
+        if topic and topic not in seen:
+            seen.add(topic)
+            dedup_items.append(item)
+    return dedup_items
+
+
+def _remember_topics(items):
+    for item in items:
+        topic = (item.get("topic") or "").strip()
+        if not topic or topic in _SEEN_TOPICS:
+            continue
+        _SEEN_TOPICS.add(topic)
+        _SEEN_TOPIC_ORDER.append(topic)
+
+    while len(_SEEN_TOPIC_ORDER) > SEEN_TOPIC_HISTORY:
+        expired_topic = _SEEN_TOPIC_ORDER.pop(0)
+        _SEEN_TOPICS.discard(expired_topic)
+
+
+def _refresh_ticker_strings():
+    global _CURRENT_TICKER_TEXT, _CURRENT_TICKER_EXPLAIN_TEXT
+
+    topics = []
+    explain_parts = []
+    for item in _CURRENT_TICKER_ITEMS:
+        topic = (item.get("topic") or "").strip()
+        explain = (item.get("explain") or "").strip()
+        if topic:
+            topics.append(topic)
+        if explain:
+            explain_parts.append(explain)
+
+    _CURRENT_TICKER_TEXT = (" +++ ".join(topics) + " +++") if topics else "Ticker lädt Neuigkeiten..."
+    _CURRENT_TICKER_EXPLAIN_TEXT = (" +++ ".join(explain_parts) + " +++") if explain_parts else ""
+
+
+def _backfill_missing_explanations():
+    missing_items = []
+    missing_indexes = []
+
+    for idx, item in enumerate(_CURRENT_TICKER_ITEMS):
+        if (item.get("topic") or "").strip() and not (item.get("explain") or "").strip():
+            missing_items.append(item)
+            missing_indexes.append(idx)
+
+    if not missing_items:
+        return 0
+
+    explain_parts = explain_topics_with_remote_ollama(missing_items)
+    if not explain_parts:
+        return 0
+
+    updated = 0
+    for idx, explain in zip(missing_indexes, explain_parts):
+        if explain:
+            _CURRENT_TICKER_ITEMS[idx]["explain"] = explain
+            updated += 1
+
+    if updated:
+        _refresh_ticker_strings()
+
+    return updated
+
+
 def format_raw_topics(items):
     """Liefert direkte Themenzeilen ohne KI-Umformulierung."""
     topics = []
@@ -100,7 +174,7 @@ def format_raw_topics(items):
 def explain_topics_with_remote_ollama(items):
     """Erzeugt eine zweite, optionale Erklaerungszeile via externem Ollama."""
     if not EXPLAIN_REMOTE_ENABLE or not EXPLAIN_REMOTE_URL:
-        return ""
+        return []
 
     def _word_count(text):
         return len([w for w in re.split(r"\s+", (text or "").strip()) if w])
@@ -199,38 +273,50 @@ def explain_topics_with_remote_ollama(items):
                 line = _enforce_word_window(line, details)
                 explain_parts.append(line)
 
-        return " +++ ".join(explain_parts)
+        return explain_parts
     except Exception as e:
         # Gewuenschtes Verhalten fuer Experiment: Zeile bleibt leer, wenn Ubuntu/Ollama aus ist.
         logging.warning(f"Erklaerungszeile deaktiviert (Ubuntu-Ollama nicht erreichbar): {e}")
-        return ""
+        return []
 
 def background_updater():
     """Hintergrund-Thread, der zyklisch neue Meldungen holt."""
-    global _CURRENT_TICKER_TEXT, _CURRENT_TICKER_EXPLAIN_TEXT, _LAST_UPDATE
+    global _CURRENT_TICKER_ITEMS, _LAST_UPDATE
     
     while True:
         try:
             items = fetch_rss_items()
             if items:
-                # Deduplizieren
-                seen = set()
-                dedup_items = []
-                for item in items:
-                    topic = (item.get("topic") or "").strip()
-                    if topic and topic not in seen:
-                        seen.add(topic)
-                        dedup_items.append(item)
+                dedup_items = _dedup_items(items)
+                backfilled = _backfill_missing_explanations()
+                if backfilled:
+                    _LAST_UPDATE = time.time()
+                    logging.info(f"Ticker-Erklaerungen nachgezogen ({backfilled} bestehende Meldungen).")
 
-                new_text = format_raw_topics(dedup_items)
-                explain_text = explain_topics_with_remote_ollama(dedup_items)
-                
-                if new_text:
-                    _CURRENT_TICKER_TEXT = new_text + " +++"
-                    _CURRENT_TICKER_EXPLAIN_TEXT = (explain_text + " +++") if explain_text else ""
+                new_items = []
+                for item in dedup_items:
+                    topic = (item.get("topic") or "").strip()
+                    if topic and topic not in _SEEN_TOPICS:
+                        new_items.append(item)
+
+                if new_items:
+                    explain_parts = explain_topics_with_remote_ollama(new_items)
+                    new_entries = []
+                    for idx, item in enumerate(new_items):
+                        new_entries.append({
+                            "topic": (item.get("topic") or "").strip(),
+                            "details": (item.get("details") or "").strip(),
+                            "explain": explain_parts[idx] if idx < len(explain_parts) else "",
+                        })
+
+                    _CURRENT_TICKER_ITEMS = (new_entries + _CURRENT_TICKER_ITEMS)[:MAX_STORED_ITEMS]
+                    _remember_topics(new_items)
+                    _refresh_ticker_strings()
                     _LAST_UPDATE = time.time()
                     mode = "RAW+EXPLAIN" if _CURRENT_TICKER_EXPLAIN_TEXT else "RAW"
-                    logging.info(f"Ticker erfolgreich aktualisiert ({len(dedup_items)} Quellen, Modus={mode})")
+                    logging.info(f"Ticker erweitert ({len(new_items)} neue Meldungen, gesamt {len(_CURRENT_TICKER_ITEMS)}, Modus={mode})")
+                else:
+                    logging.info("Keine neuen Ticker-Meldungen gefunden; bestehender Lauftext bleibt unveraendert.")
         except Exception as e:
             logging.error(f"Hintergrund-Updater Fehler: {e}")
             
