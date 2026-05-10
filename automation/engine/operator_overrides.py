@@ -61,6 +61,16 @@ class OperatorOverrideProcessor:
                 except Exception:
                     params = {}
 
+                if self._is_klima_on(action, params):
+                    cooldown_rem = self._klima_cooldown_remaining_s(conn)
+                    if cooldown_rem > 0:
+                        LOG.info(
+                            'Klima Override-Hold ON blockiert: Schaltfrequenz-Cooldown noch %d Min',
+                            cooldown_rem // 60,
+                        )
+                        skipped += 1
+                        continue
+
                 if self._remaining_respekt_s(created_at, respekt_s) <= 0:
                     self._set_status(conn, override_id, 'done')
                     self._audit(
@@ -122,6 +132,25 @@ class OperatorOverrideProcessor:
                     params = json.loads(row[2])
                 except Exception:
                     params = {}
+
+                if self._is_klima_on(action, params):
+                    cooldown_rem = self._klima_cooldown_remaining_s(conn)
+                    if cooldown_rem > 0:
+                        self._set_status(conn, override_id, 'failed')
+                        self._audit(
+                            conn,
+                            action,
+                            params,
+                            {
+                                'ok': False,
+                                'error': 'klima cooldown active',
+                                'remaining_s': cooldown_rem,
+                            },
+                            override_id,
+                            'override blocked by klima cooldown',
+                        )
+                        failed += 1
+                        continue
 
                 action_plan = self._map_override_to_actions(action, params, matrix)
                 if action_plan is None:
@@ -349,6 +378,22 @@ class OperatorOverrideProcessor:
             return max(0, int(respekt_s - elapsed))
         except Exception:
             return 0
+
+    @staticmethod
+    def _klima_cooldown_remaining_s(conn: sqlite3.Connection) -> int:
+        try:
+            row = conn.execute(
+                "SELECT value FROM engine_flags WHERE key='klima_cooldown_bis'"
+            ).fetchone()
+            if not row:
+                return 0
+            return max(0, int(float(row[0]) - datetime.now().timestamp()))
+        except Exception:
+            return 0
+
+    @staticmethod
+    def _is_klima_on(action: str, params: dict[str, Any]) -> bool:
+        return action == 'klima_toggle' and params.get('state') == 'on'
 
     @staticmethod
     def _uses_respekt_hold(action: str, params: dict[str, Any]) -> bool:

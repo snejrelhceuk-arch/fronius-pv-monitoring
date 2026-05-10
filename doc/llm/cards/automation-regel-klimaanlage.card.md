@@ -2,14 +2,14 @@
 title: "Automation: RegelKlimaanlage (Klima-Thermoschutz)"
 domain: automation
 role: C
-last_review: 2026-05-04
+last_review: 2026-05-10
 status: stable
 code_anchor: automation/engine/regeln/geraete.py#L1577
 invariants:
   - "Tier-2 Aktor: Fritz!DECT-Steckdose (nur Klima-SD via AHA-API)"
   - "Schaltfrequenz-Cooldown: Bei 2×AUS im 30-Min-Fenster → 60 Min EIN-Sperre + sofortiges AUS"
   - "Extern-Erkennung: Lastflanke (Kompressor ON/OFF) + SD-Schaltflanke (ON/OFF)"
-  - "Hold-Hierarchie: Sunset+SOC > Steuerbox-Override > Extern-Respekt > Cooldown > Normallogik"
+  - "Hold-Hierarchie: Sunset+SOC > Cooldown > Steuerbox-Override > Extern-Respekt > Normallogik"
   - "Daemon-Restart-Sicherung: lade_cooldown_aus_db() wird Engine.__init__ aufgerufen"
 ---
 
@@ -49,7 +49,8 @@ _AUS_EVENT_DEDUP_S = 60.0  # min. Abstand zwischen gezählten Events
 - 2× AUS im `schaltintervall_s`-Fenster (default: 30 Min) → Cooldown startet
 - Cooldown-Dauer: `cooldown_s` (default: 60 Min)
 - **Aktion: `klima_aus` sofort + RAM-DB persistiert (für Web-API + Post-Restart)**
-- Neue EIN-Anforderungen blockiert während Cooldown aktiv
+- Neue EIN-Anforderungen aus Regel, Extern-Hold und Steuerbox-Override werden während Cooldown blockiert
+- Nach Ablauf startet das 30-Min-Fenster mit der nächsten AUS-Flanke neu
 
 ## Extern-Erkennung (Hold-Respekt)
 
@@ -67,9 +68,9 @@ Während Respekt-Phase: Tempatur-Abschaltlogik unterdrückt, nur Sunset+SOC akti
 
 ```
 1. Sunset+SOC-Stop        (IMMER — auch bei Extern/Override) → AUS
-2. Steuerbox-Hold (ON/OFF) (respekt_s von Steuerbox)          → ON/AUS
-3. Extern-Hold (ON/OFF)    (respekt_s = extern_respekt_s)     → ON/AUS
-4. Cooldown-AUS-Sperre    (nach 2×AUS erkannt)               → AUS
+2. Cooldown-AUS-Sperre    (nach 2×AUS erkannt)               → AUS / EIN blockiert
+3. Steuerbox-Hold (ON/OFF) (respekt_s von Steuerbox)          → ON/AUS
+4. Extern-Hold (ON/OFF)    (respekt_s = extern_respekt_s)     → ON/AUS
 5. Temperatur-Hysterese    (normale Regelung)                 → ON/AUS
 ```
 
