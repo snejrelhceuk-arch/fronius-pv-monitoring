@@ -11,6 +11,8 @@ Erkannte Drift-Klassen:
                         applyTo-Dateien wurden danach geaendert (git mtime)
   D3  INDEX_ORPHAN      INDEX referenziert Card, die nicht existiert
   D4  INDEX_MISSING     Card existiert, ist aber nicht im INDEX gelistet
+  D5  VERSION_DRIFT     Firmware-Snapshot (config/fronius_attachment_state.json)
+                        weicht von der Tabelle in SYSTEM_ARCHITECTURE.md ab
 
 Aufruf:
   python3 tools/doc_drift_engine.py [--write] [--cleanup]
@@ -27,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import json
 import re
 import subprocess
 import sys
@@ -36,6 +39,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 CARDS_DIR = REPO_ROOT / "doc" / "llm" / "cards"
 INDEX_FILE = REPO_ROOT / "doc" / "llm" / "INDEX.md"
 TASKS_DIR = REPO_ROOT / "doc" / "llm" / "_drift" / "tasks"
+VERSION_SNAPSHOT_FILE = REPO_ROOT / "config" / "fronius_attachment_state.json"
+VERSION_TABLE_FILE = REPO_ROOT / "doc" / "system" / "SYSTEM_ARCHITECTURE.md"
 
 REVIEW_MAX_DAYS = 30
 
@@ -149,6 +154,76 @@ def check_index_consistency() -> list[tuple[str, str, str]]:
     return findings
 
 
+# Mapping JSON-Key -> Tabellen-Zeilen-Label in SYSTEM_ARCHITECTURE.md
+_VERSION_LABELS = {
+    "inverter": "Inverter F1 (GEN24)",
+    "prim_sm": "SmartMeter Primary",
+    "sec_sm_f2": "SmartMeter F2",
+    "sec_sm_f3": "SmartMeter F3",
+    "sec_sm_wp": "SmartMeter Wattpilot",
+}
+
+
+def _parse_version_table(text: str) -> dict[str, tuple[str, str]]:
+    """Parst die Tabelle zwischen <!-- VERSION_TABLE_BEGIN ... --> und _END.
+
+    Liefert {label: (sn, vr)}.
+    """
+    m = re.search(
+        r"<!--\s*VERSION_TABLE_BEGIN[^>]*-->(.*?)<!--\s*VERSION_TABLE_END\s*-->",
+        text, re.DOTALL,
+    )
+    if not m:
+        return {}
+    block = m.group(1)
+    out: dict[str, tuple[str, str]] = {}
+    for row in block.splitlines():
+        cells = [c.strip() for c in row.strip().strip("|").split("|")]
+        if len(cells) != 3:
+            continue
+        label, sn, vr = cells
+        if label.lower().startswith(("gerät", "ger\xc3\xa4t", "---")):
+            continue
+        sn = sn.strip("`")
+        vr = vr.strip("`")
+        if label and sn and vr:
+            out[label] = (sn, vr)
+    return out
+
+
+def check_version_drift() -> list[tuple[str, str, str]]:
+    """D5: Vergleich Firmware-Snapshot (JSON) gegen Versionstabelle (MD)."""
+    if not VERSION_SNAPSHOT_FILE.exists() or not VERSION_TABLE_FILE.exists():
+        return []
+    try:
+        state = json.loads(VERSION_SNAPSHOT_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    snap = state.get("version_snapshot") or {}
+    if not snap:
+        return []
+    table = _parse_version_table(VERSION_TABLE_FILE.read_text(encoding="utf-8"))
+    if not table:
+        return [("D5", "doc/system/SYSTEM_ARCHITECTURE.md",
+                 "VERSION_TABLE_BEGIN/END-Marker fehlen oder Tabelle leer")]
+    findings: list[tuple[str, str, str]] = []
+    for key, label in _VERSION_LABELS.items():
+        sn = snap.get(f"{key}_sn")
+        vr = snap.get(f"{key}_vr")
+        if not sn or not vr:
+            continue
+        row = table.get(label)
+        if row is None:
+            findings.append(("D5", "doc/system/SYSTEM_ARCHITECTURE.md",
+                             f"Tabelle hat keine Zeile fuer '{label}' (Snapshot: SN={sn}, Vr={vr})"))
+            continue
+        t_sn, t_vr = row
+        if t_sn != sn or t_vr != vr:
+            findings.append(("D5", "doc/system/SYSTEM_ARCHITECTURE.md",
+                             f"{label}: Tabelle SN={t_sn}/Vr={t_vr} — Snapshot SN={sn}/Vr={vr}"))
+    return findings
+
+
 # ----------------------- Task-Output ----------------------- #
 
 def _task_filename(klasse: str, scope: str, sig: str) -> str:
@@ -200,6 +275,7 @@ def main() -> int:
             findings.append((klasse, rel, msg))
 
     findings.extend(check_index_consistency())
+    findings.extend(check_version_drift())
 
     for klasse, scope, msg in findings:
         sig = _signature(msg)
