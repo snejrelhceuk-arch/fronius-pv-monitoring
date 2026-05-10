@@ -1,0 +1,20 @@
+#!/bin/bash
+# =============================================================
+# Git Pre-Push Hook — Publish-Audit vor Push
+# =============================================================
+# Fuehrt den Publish-Audit (Phase 1+2) aus und blockiert den Push
+# bei sensiblen Treffern.
+#
+# Notfall-Bypass:
+#   GIT_ALLOW_PUSH=1 git push
+# =============================================================
+
+set -euo pipefail
+
+if [ "${GIT_ALLOW_PUSH:-0}" = "1" ]; then
+    echo "⚠️  GIT_ALLOW_PUSH=1 gesetzt -> Pre-Push-Audit umgangen."
+    exit 0
+fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+"$REPO_ROOT/scripts/publish_audit.sh"
