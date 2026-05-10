@@ -548,9 +548,10 @@ def _build_automation_phasen(now, result):
                     'grund': _grund, 'manuell': False,
                 }
             elif _cmd == 'set_soc_max' and 'Nachmittag' in _grund:
+                _aktion_label = 'Ladewunsch' if 'Ladewunsch' in _grund else 'SOC_MAX'
                 _phase_log['nachmittag'] = {
                     'zeit': _zeit, 'status': 'done',
-                    'aktion': f'SOC_MAX → {_wert}%' if _wert else 'SOC_MAX erhöht',
+                    'aktion': f'{_aktion_label} → {_wert}%' if _wert else f'{_aktion_label} (erhöht)',
                     'grund': _grund, 'manuell': False,
                 }
             elif _cmd in ('auto',) and 'TAG-Phase' in _grund:

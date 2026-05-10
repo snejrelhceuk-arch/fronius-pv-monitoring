@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/regeln/geraete.py"
 tags: [heizpatrone, fritzdect, ww-speicher, prognose]
 status: stable
-last_review: 2026-05-03
+last_review: 2026-05-10
 ---
 
 # Regel Heizpatrone
@@ -32,7 +32,7 @@ Zusätzlich pausiert die Regel bei aktivem `afternoon_charge_request` den HP-Bet
 - Notaus-Schwellen (immer aktiv): `WW_Temp ≥ 78 °C`, `SOC ≤ 7 %`, Netzbezug erkennbar (`grid_avg`), `PV<1500 W` in PV-only-Phasen.
 - Externe Schaltung erkannt → `_cancel_conflicting_overrides()` annulliert offene Operator-Overrides + setzt 30-min-Respekt-Hold (`extern_respekt_s`).
 - Schreibbestätigung: Aktor muss Engine-Wert registrieren, sonst falsch-positive Extern-Erkennung.
-- Bei aktivem Nachmittags-Ladewunsch (`afternoon_charge_request` + `pause_hp_until_target=true`) bleibt HP AUS solange `SOC < target_soc_pct`.
+- Bei aktivem Nachmittags-Ladewunsch (`afternoon_charge_request` + `pause_hp_until_target=true`) schaltet die Engine HP AUS **nur wenn** `0 < batt_power_w < 8000 W` (Batterie laedt mit schwacher Leistung). Bei fehlender Ladung (Batterie idle/entlaedt) oder starker Ladung (>=8 kW) bleibt HP freigegeben.
 
 ## No-Gos
 - Keine HP-Einschaltung bei Tier-1-Alarm.

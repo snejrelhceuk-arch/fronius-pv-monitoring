@@ -2,10 +2,11 @@
 """Home-Assistant MQTT Bridge fuer pv-system.
 
 Adapter zwischen:
-- B (Read): /api/ha/* auf Port 8000
+- B (Read):  /api/ha/* auf Port 8000  (Telemetrie-Publish)
+- E (Write): /api/ops/intent Port 11933 (Intent-Subscribe, loopback)
 
-Die Bridge ist strikt read-only: Sie erzeugt MQTT Discovery-Entitaeten
-und publiziert Zustandswerte, ohne Schreibzugriffe auf Steuerbox/Aktoren.
+Schreibpfad: Nur `afternoon_charge_request` via MQTT-Button-Entitaet.
+Kein Direktzugriff auf Hardware/Aktoren aus dieser Bridge.
 """
 
 from __future__ import annotations
@@ -43,11 +44,13 @@ class HaMqttBridge:
         self.node_id = config.HA_BRIDGE_NODE_ID.strip()
 
         self.availability_topic = f'{self.state_prefix}/{self.node_id}/bridge/availability'
+        self.steuerbox_base = config.HA_BRIDGE_STEUERBOX_BASE.rstrip('/')
 
         self._session = requests.Session()
         self._client = mqtt.Client(client_id=f'pv-bridge-{self.node_id}', clean_session=True)
         self._client.enable_logger(LOG)
         self._client.on_connect = self._on_connect
+        self._client.on_message = self._on_message
 
         if config.HA_BRIDGE_MQTT_USERNAME:
             self._client.username_pw_set(
@@ -141,7 +144,6 @@ class HaMqttBridge:
     def _clear_legacy_command_discovery(self) -> None:
         """Entfernt fruehere Command-Entitaeten per retained-empty config payload."""
         legacy = [
-            ('button', 'afternoon_charge_request'),
             ('button', 'wattpilot_start'),
             ('button', 'wattpilot_stop'),
             ('number', 'wattpilot_amp_set'),
@@ -299,6 +301,13 @@ class HaMqttBridge:
                 'unit_of_measurement': 's',
                 'state_class': 'measurement',
             },
+            {
+                'component': 'button',
+                'object_id': 'afternoon_charge_request',
+                'name': 'Nachmittag Ladewunsch',
+                'command_topic': self._intent_command_topic('afternoon_charge_request'),
+                'payload_press': 'PRESS',
+            },
         ]
 
         for ent in entities:
@@ -355,16 +364,46 @@ class HaMqttBridge:
         self._publish_json(self._entity_state_topic('wattpilot_json'), wattpilot, retain=True)
         self._publish_json(self._entity_state_topic('automation_json'), automation, retain=True)
 
+    def _intent_command_topic(self, action: str) -> str:
+        return f'{self.state_prefix}/{self.node_id}/cmd/{action}'
+
+    def _post_intent(self, action: str, params: dict[str, Any]) -> None:
+        url = f'{self.steuerbox_base}/api/ops/intent'
+        try:
+            resp = self._session.post(
+                url,
+                json={'action': action, 'params': params},
+                timeout=self.http_timeout_s,
+            )
+            resp.raise_for_status()
+            LOG.info('Intent %s accepted: %s', action, resp.json().get('status'))
+        except Exception as exc:
+            LOG.warning('Intent %s failed: %s', action, exc)
+
+    def _on_message(self, client: mqtt.Client, _userdata: Any, msg: mqtt.MQTTMessage) -> None:
+        topic = msg.topic
+        payload = (msg.payload or b'').decode('utf-8', errors='replace').strip()
+        LOG.debug('MQTT message: topic=%s payload=%r', topic, payload)
+        if topic == self._intent_command_topic('afternoon_charge_request'):
+            if payload.upper() in ('PRESS', 'ON', '1', 'TRUE'):
+                LOG.info('afternoon_charge_request command received via MQTT')
+                self._post_intent('afternoon_charge_request', {})
+            else:
+                LOG.debug('afternoon_charge_request: ignoring payload %r', payload)
+
     def _on_connect(self, client: mqtt.Client, _userdata: Any, flags: dict, rc: int) -> None:
         if rc != 0:
             LOG.error('MQTT connect failed rc=%s', rc)
             return
         LOG.info('MQTT connected: flags=%s', flags)
         self._publish(self.availability_topic, 'online', retain=True)
+        client.subscribe(self._intent_command_topic('afternoon_charge_request'), qos=1)
+        LOG.info('Subscribed to afternoon_charge_request command topic')
 
     def run(self) -> None:
-        LOG.info('HA MQTT bridge start (read-only): web=%s mqtt=%s:%s poll=%ss',
+        LOG.info('HA MQTT bridge start: web=%s steuerbox=%s mqtt=%s:%s poll=%ss',
                  self.web_base,
+                 self.steuerbox_base,
                  config.HA_BRIDGE_MQTT_HOST, config.HA_BRIDGE_MQTT_PORT,
                  self.poll_s)
 

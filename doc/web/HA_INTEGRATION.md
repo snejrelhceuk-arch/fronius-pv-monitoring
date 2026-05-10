@@ -53,11 +53,12 @@ rest:
           - heizpatrone_w
 ```
 
-## 3) Schreibvorgaenge in HA belassen
+## 3) Schreibvorgaenge
 
-Die MQTT-Bridge ist read-only. Schaltvorgaenge (z. B. Wattpilot Start/Stop/Modus/Strom) bleiben in der bestehenden HA-Wattpilot-Integration.
-
-Damit bleibt die Steuerstrecke unveraendert in HA, waehrend die Lesedaten konsolidiert aus pv-system kommen.
+Die MQTT-Bridge ist fuer Telemetrie read-only — **eine Ausnahme:** der MQTT-Button
+`afternoon_charge_request` schreibt via loopback-POST zur Steuerbox (Schicht E).
+Wattpilot-Schaltvorgaenge (Start/Stop/Modus/Strom) bleiben in der bestehenden
+HA-Wattpilot-Integration.
 
 ## 4) Sichtbarkeit als "Gerät" in HA
 
@@ -73,8 +74,7 @@ Die Bridge ist bewusst als separater Adapter umgesetzt:
 - Bridge-Code: `steuerbox/ha_mqtt_bridge.py`
 - Service-Unit: `config/systemd/pv-ha-bridge.service`
 - Read-Quelle: Web-API `/api/ha/*` (Schicht B)
-
-Die Bridge hat kein Write-Ziel und publiziert nur Discovery + State (MQTT read-only).
+- Write-Ziel (nur `afternoon_charge_request`): Steuerbox `/api/ops/intent` via loopback
 
 Die Automation-Engine (Schicht C) bleibt unveraendert und HA-unabhaengig.
 

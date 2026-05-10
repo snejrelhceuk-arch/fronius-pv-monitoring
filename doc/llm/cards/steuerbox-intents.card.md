@@ -5,7 +5,7 @@ role: E
 applyTo: "steuerbox/**"
 tags: [intent, overrides, respekt, hard-guards, audit]
 status: stable
-last_review: 2026-05-03
+last_review: 2026-05-10
 ---
 
 # Steuerbox Intents
@@ -31,12 +31,13 @@ Schicht E nimmt Operator-Intents entgegen, validiert sie und schreibt sie als Ov
 
 ## Invarianten
 - Steuerbox macht keine direkten Hardware-Schreibzugriffe (kein Modbus/FritzDECT/Wattpilot aus E).
-- Die optionale HA-MQTT-Bridge liest nur `/api/ha/*` (B) und publiziert read-only MQTT-Telemetrie; kein direkter Aktor- oder Ops-Schreibpfad.
+- Die optionale HA-MQTT-Bridge liest `/api/ha/*` (B) für Telemetrie-Publish und schreibt **ausschliesslich** `afternoon_charge_request` via loopback-POST zu `/api/ops/intent` (Schicht E). Kein direkter Aktor-/Modbus-Schreibpfad.
 - IP-Allowlist wird vor der Intent-Verarbeitung geprueft.
 - Auf Failover sind nicht-GET Ops-Endpunkte blockiert (`403`, read-only Verhalten).
 - Pro Aktion bleibt genau ein Live-Override (`open/active`), aeltere werden auf `released` gesetzt.
 - `respekt_s` muss im konfigurierten Bereich liegen (`STEUERBOX_MIN_RESPEKT_S`..`STEUERBOX_MAX_RESPEKT_S`).
 - Für `afternoon_charge_request` gilt ein eigener Maximalwert (`STEUERBOX_AFTERNOON_MAX_RESPEKT_S`), damit Tages-Holds bis Sunset möglich sind.
+- `klima_toggle(state=on)` wird in Schicht C blockiert, solange `klima_cooldown_bis` aktiv ist; Cooldown ueberstimmt Steuerbox-Hold.
 
 ## No-Gos
 - Keine Imports aus `automation/engine/aktoren/*` in Steuerbox-Modulen.
@@ -49,6 +50,7 @@ Schicht E nimmt Operator-Intents entgegen, validiert sie und schreibt sie als Ov
 - UI-Meta fuer neue Buttons -> `steuerbox/steuerbox_api.py:api_control_meta` erweitern.
 - Override-Lebenszyklus debuggen -> `GET /api/ops/status` und `GET /api/ops/audit` vergleichen.
 - HA-Ladewunsch anbinden -> `action='afternoon_charge_request'` mit optionalen Parametern (`target_soc_pct`, `pause_hp_until_target`, Startfenster 12-15h).
+- MQTT-Button in HA: Bridge subscribt `{state_prefix}/{node_id}/cmd/afternoon_charge_request` (payload `PRESS`/`ON`) und POSTet Intent lokal zu `HA_BRIDGE_STEUERBOX_BASE/api/ops/intent`.
 - HA-Wattpilot anbinden -> MQTT-Topics der Bridge read-only für Telemetrie nutzen; Schaltvorgänge bleiben in HA auf der bestehenden Wattpilot-Integration.
 - Für Energy-Dashboards liefert die Bridge Wattpilot-Gesamtenergie und Session-Energie als dedizierte MQTT-Sensoren.
 
