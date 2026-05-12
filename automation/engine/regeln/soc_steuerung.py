@@ -527,7 +527,14 @@ class RegelNachmittagSocMax(Regel):
         if intent:
             ziel_max = max(ziel_max, int(intent.get('target_soc_pct', 100)))
         if obs.soc_max is not None and obs.soc_max >= ziel_max:
-            return 0
+            # Phase 2: Ziel=100%, noch im manual-Modus, Batterie voll → Auto-Umschaltung
+            if ziel_max == 100 and obs.soc_mode == 'manual':
+                soc_voll = int(get_param(matrix, self.regelkreis, 'auto_switch_soc_pct', 95))
+                if obs.batt_soc_pct is None or obs.batt_soc_pct < soc_voll:
+                    return 0  # Phase 1 aktiv, Batterie noch nicht voll – warten
+                # Batterie voll: weiter → erzeuge_aktionen setzt auto-Modus
+            else:
+                return 0
 
         score_max = get_score_gewicht(matrix, self.regelkreis)
         sunset = obs.sunset or 17.0
@@ -600,6 +607,23 @@ class RegelNachmittagSocMax(Regel):
 
         if intent:
             soc_max_ziel = max(soc_max_ziel, int(intent.get('target_soc_pct', 100)))
+
+        # Phase 2: Ziel=100%, manual-Modus, Batterie voll → Fronius-Auto (LFP-Schonung)
+        soc_voll = int(get_param(matrix, self.regelkreis, 'auto_switch_soc_pct', 95))
+        if (soc_max_ziel == 100 and obs.soc_mode == 'manual'
+                and obs.soc_max == 100
+                and obs.batt_soc_pct is not None and obs.batt_soc_pct >= soc_voll):
+            LOG.info(
+                "nachmittag_soc_max: SOC %.1f%% ≥ %d%% → Fronius Auto-Modus"
+                " (Phase 2, LFP-Schonung)",
+                obs.batt_soc_pct, soc_voll,
+            )
+            return [{
+                'tier': 2, 'aktor': 'batterie',
+                'kommando': 'set_soc_mode', 'wert': 'auto',
+                'grund': (f'Nachmittag-Auto: SOC {obs.batt_soc_pct:.0f}% ≥ {soc_voll}% '
+                          f'→ Fronius-Auto-Modus (LFP-Schonung)'),
+            }]
 
         if obs.soc_max is None or obs.soc_max != soc_max_ziel:
             if intent:
