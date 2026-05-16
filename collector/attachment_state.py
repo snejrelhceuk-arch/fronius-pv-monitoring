@@ -18,7 +18,7 @@ import time
 import requests
 
 import config
-import modbus_quellen
+from collector import quellen as modbus_quellen
 
 from .modbus_client import read_registers_safe
 from .sunspec import extract_device_data, read_device_data

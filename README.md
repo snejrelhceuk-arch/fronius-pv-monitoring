@@ -28,11 +28,12 @@ tail -f /tmp/aggregate_1min.log
 ## Komponenten
 
 - **collector/** — Modbus-Collector als Package (3s Polling, RAM-Buffer, Persist-Thread)
+- **collector/aggregate/** — 5-stufige Aggregations-Pipeline (`min1`, `fifteen`, `daily`, `monthly`, `statistics`)
+- **collector/quellen.py** — SunSpec Register-Definitionen
+- **collector/wattpilot.py** — Wattpilot-Collector (WebSocket)
+- **collector/fritzdect.py** — FritzDECT-Collector (AHA-HTTP)
 - **collector.py** — Thin Wrapper, startet `poller_loop()` aus dem Package
-- **modbus_v3.py** — Compat-Shim (re-exportiert aus `collector/`)
 - **web_api.py** — Flask/Gunicorn Web-API (Port 8000)
-- **aggregate_*.py** — 5-stufige Aggregation (via Cron)
-- **modbus_quellen.py** — SunSpec Register-Definitionen
 - **config.py** — Alle Konfiguration
 
 ## Architektur
@@ -90,10 +91,10 @@ Die Trennung ist im Code und in der öffentlichen API strikt beibehalten.
 
 ```bash
 # Prozess-Status
-ps aux | grep modbus_v3
+ps aux | grep collector
 
-# Logs prüfen
-tail -f /tmp/modbus_v3.log
+# Logs pruefen
+tail -f /tmp/collector.log
 tail -f /tmp/aggregate.log
 
 # Datenbank-Größe
@@ -119,11 +120,11 @@ cp data.db data_backup_$(date +%Y%m%d_%H%M).db
 
 ```cron
 # === PV-System Aggregation (Pi4 Produktion) ===
-* * * * *        aggregate_1min.py      # raw → 1min
-0,15,30,45 * * * aggregate.py           # raw → 15min → hourly
-2,17,32,47 * * * aggregate_daily.py     # hourly → daily
-6,21,36,51 * * * aggregate_monthly.py   # 15min → monthly
-8,23,38,53 * * * aggregate_statistics.py # daily → monthly_stats → yearly
+* * * * *        python3 -m collector.aggregate.min1       # raw → 1min
+0,15,30,45 * * * python3 -m collector.aggregate.fifteen    # raw → 15min → hourly
+2,17,32,47 * * * python3 -m collector.aggregate.daily      # hourly → daily
+6,21,36,51 * * * python3 -m collector.aggregate.monthly    # 15min → monthly
+8,23,38,53 * * * python3 -m collector.aggregate.statistics # daily → monthly_stats → yearly
 # Optional/Legacy statt systemd-Timer:
 # 0 3 * * * /srv/pv-system/scripts/backup_db_gfs.sh
 ```
@@ -202,8 +203,8 @@ curl -s http://<inverter-host>/solar_api/v1/GetInverterRealtimeData.cgi
 ```bash
 # Cron-Job prüfen
 crontab -l
-# Manuell ausführen
-python3 aggregate.py
+# Manuell ausfuehren
+python3 -m collector.aggregate.fifteen
 ```
 
 ## Version

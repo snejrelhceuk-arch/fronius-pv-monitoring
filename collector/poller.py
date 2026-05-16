@@ -16,7 +16,7 @@ import requests
 
 import config
 import db_init
-import modbus_quellen
+from collector import quellen as modbus_quellen
 
 from db_utils import get_db_connection
 

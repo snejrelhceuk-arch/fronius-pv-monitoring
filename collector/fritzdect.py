@@ -31,8 +31,8 @@ logging.basicConfig(
 )
 LOG = logging.getLogger('fritzdect_collector')
 
-# Projekt-Root hinzufügen
-_project_root = Path(__file__).parent
+# Projekt-Root hinzufügen (Refactor 2026-05-16: jetzt in collector/fritzdect.py)
+_project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_project_root))
 
 import config

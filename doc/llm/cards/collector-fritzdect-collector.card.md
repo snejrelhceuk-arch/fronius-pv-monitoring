@@ -2,10 +2,10 @@
 title: FritzDECT-Collector (AHA-API, AIN-Mapping)
 domain: collector
 role: A
-applyTo: "fritzdect_collector.py"
+applyTo: "collector/fritzdect.py"
 tags: [fritzdect, collector, aha-api, ain]
 status: stable
-last_review: 2026-05-03
+last_review: 2026-05-16
 ---
 
 # FritzDECT-Collector
@@ -14,7 +14,7 @@ last_review: 2026-05-03
 Liest Fritz!DECT-Steckdosen (z. B. Heizpatrone, Klimaanlage, WP-Schaltdose) via AHA-HTTP-Interface der Fritz!Box. Persistiert in `fritzdect_readings`.
 
 ## Code-Anchor
-- **Hauptdatei:** `fritzdect_collector.py` (~L30–80)
+- **Hauptdatei:** `collector/fritzdect.py`
 - **Config:** `config/fritz_config.json` (Fritz!Box-IP, Geräteliste mit `device_id`, `ain`, `name`, `active`-Flag, `polling_interval_s`)
 - **Schema:** `db_init.py` Tabelle `fritzdect_readings`
 
@@ -26,7 +26,7 @@ Liest Fritz!DECT-Steckdosen (z. B. Heizpatrone, Klimaanlage, WP-Schaltdose) via 
 - **Polling-Intervall** typisch 10 s (`polling_interval_s` in `fritz_config.json`).
 - **Session-Cache:** 15 min, danach Reauth.
 - **AIN-Mapping** ist aus `fritz_config.json` zu lesen — Single Source.
-- Bei <10 aufeinanderfolgenden Fehlern: Log; danach quiet (`fritzdect_collector.py:52–100`).
+- Bei <10 aufeinanderfolgenden Fehlern: Log; danach quiet (`collector/fritzdect.py`).
 
 ## No-Gos
 - Keine Schaltbefehle aus dem Collector — Schalten ist Rolle C (`automation/engine/aktoren/aktor_fritzdect.py`).

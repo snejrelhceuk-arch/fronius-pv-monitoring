@@ -8,7 +8,7 @@ Register-Dump-Fixtures.
 import logging
 import struct
 
-import modbus_quellen
+from collector import quellen as modbus_quellen
 
 from .modbus_client import read_registers_safe
 

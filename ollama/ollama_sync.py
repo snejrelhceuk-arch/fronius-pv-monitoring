@@ -60,14 +60,15 @@ DOC_FILES = [
 CODE_FILES_DOCSTRINGS = [
     'config.py',
     'web_api.py',
-    'modbus_v3.py',
+    'collector/poller.py',
+    'collector/buffer.py',
     'fronius_api.py',
     'battery_control.py',
     'battery_scheduler.py',
     'solar_forecast.py',
-    'wattpilot_collector.py',
+    'collector/wattpilot.py',
     'host_role.py',
-    'aggregate.py',
+    'collector/aggregate/fifteen.py',
     'automation/engine/engine.py',
     'automation/engine/automation_daemon.py',
 ]

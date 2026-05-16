@@ -2,10 +2,10 @@
 title: Wattpilot-Collector (WS-Polling, eto, Sessions)
 domain: collector
 role: A
-applyTo: "wattpilot_collector.py"
+applyTo: "collector/wattpilot.py"
 tags: [wattpilot, collector, websocket, eto]
 status: stable
-last_review: 2026-05-03
+last_review: 2026-05-16
 ---
 
 # Wattpilot-Collector
@@ -14,7 +14,7 @@ last_review: 2026-05-03
 Liest die Fronius-Wattpilot (go-e basiert) zyklisch via WebSocket-API und persistiert Status, Energie-Counter (`eto`) und Session-Werte. Schreibt `wattpilot_readings` und Tagesaggregat `wattpilot_daily`.
 
 ## Code-Anchor
-- **Hauptdatei:** `wattpilot_collector.py` (Daemon-Loop, ~L15–75)
+- **Hauptdatei:** `collector/wattpilot.py` (Daemon-Loop)
 - **API-Client:** `wattpilot_api.py`
 - **Schema:** `doc/collector/schema/db_schema_wattpilot.sql`, `db_init.py`
 
@@ -27,8 +27,8 @@ Liest die Fronius-Wattpilot (go-e basiert) zyklisch via WebSocket-API und persis
 ## Invarianten
 - **Polling-Intervall** ca. 30 s (`WATTPILOT_POLL_INTERVAL` in `config.py`).
 - **`eto` ist Gesamt-Counter** — Tageswert nur über Differenz.
-- **WS-Konflikt-Tolerance:** Bei Verdrängung durch Fronius-/go-e-App bis zu 3 Retries (`wattpilot_collector.py:150–180`).
-- **PID-Lock:** `wattpilot_collector.pid`.
+- **WS-Konflikt-Tolerance:** Bei Verdraengung durch Fronius-/go-e-App bis zu 3 Retries (`collector/wattpilot.py`).
+- **PID-Lock:** `wattpilot_collector.pid` im Repo-Root.
 
 ## No-Gos
 - Keine Schreibwege Richtung Wattpilot in der A-Rolle (Steuern = Rolle C über `automation/engine/aktoren/aktor_wattpilot.py`).
@@ -36,7 +36,7 @@ Liest die Fronius-Wattpilot (go-e basiert) zyklisch via WebSocket-API und persis
 - Solarweb-Statistik nicht als Wallbox-Quelle nutzen (zeigt nur PV-Anteil).
 
 ## Häufige Aufgaben
-- Neues WS-Feld persistieren → `wattpilot_collector.py` + Schema-Spalte in `wattpilot_readings` (`db_init.py`).
+- Neues WS-Feld persistieren → `collector/wattpilot.py` + Schema-Spalte in `wattpilot_readings` (`db_init.py`).
 - Tagesdelta debuggen → `wattpilot_daily.energy_wh` aus `eto`-Diff Tagesanfang/-ende; bei Hardware-Reset entstehen Sprünge.
 
 ## Bekannte Fallstricke

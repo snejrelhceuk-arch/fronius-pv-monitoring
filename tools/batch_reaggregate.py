@@ -16,8 +16,8 @@ else:
 original_time = time_module.time
 time_module.time = lambda: target_ts + 60  # +60 weil aggregate_1min -60 macht
 
-# Import aggregate_1min NACH dem Patch
-from aggregate_1min import aggregate_1min
+# Import nach Patch (Refactor 2026-05-16: aggregate_1min.py -> collector/aggregate/min1.py)
+from collector.aggregate.min1 import aggregate_1min
 
 # Führe Aggregation aus
 aggregate_1min()

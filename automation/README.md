@@ -156,7 +156,7 @@ MEGA-BAS RS485 [B] ──► LWPM 410 RS485 [B]
 → **Kein TRIAC nötig für WP-Steuerung!** Alles via Modbus RTU.
 → Heizpatrone läuft separat (Fritz!DECT + 24V-Relais), NICHT über WPM E9.
 → Smart Grid "dunkelgrün" aktiviert E9-Ausgang, aber dort ist nichts angeschlossen.
-→ Python-Bibliothek: `pymodbus` (bereits Modbus-Erfahrung im Workspace via `modbus_v3.py`)
+→ Python-Bibliothek: `pymodbus` (bereits Modbus-Erfahrung im Workspace via `collector/`)
 
 **Compliance-Hinweis:**
 - Diese Doku dient der Interoperabilität im Eigenbetrieb.

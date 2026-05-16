@@ -2,7 +2,7 @@
 title: Fronius-Collector (Modbus + Solar-API)
 domain: collector
 role: A
-applyTo: "collector/**,modbus_v3.py,collector.py"
+applyTo: "collector/**,collector.py"
 tags: [collector, fronius, modbus, solar-api]
 status: stable
 last_review: 2026-05-16
@@ -24,10 +24,9 @@ Liest Fronius GEN24 zyklisch (3 s) via Modbus + ergänzt Solar-API-Werte (HTTP).
   - `collector/attachment_state.py` — Versions-Snapshot + Anknuepfungs-Vollpruefung bei Versionswechsel
   - `collector/pid_lock.py` — Single-Instance-Schutz
 - **Entry-Script:** `collector.py` → `from collector import poller_loop, flush_buffer_to_db`
-- **Compat-Shim:** `modbus_v3.py` (19 Zeilen, nur Re-Exports)
 - **API-Helper:** `fronius_api.py` (HTTP-Read + `BatteryConfig`-Schreibpfad)
 - **Read-only-Variante für Web-API (Rolle B):** `routes/helpers.py:FroniusReadOnly`
-- **Quellen-Map:** `modbus_quellen.py`
+- **Quellen-Map:** `collector/quellen.py`
 - **Init/Schema:** `db_init.py`
 - **Config:** `config.py` (`POLL_INTERVAL`, …)
 
@@ -48,7 +47,7 @@ Liest Fronius GEN24 zyklisch (3 s) via Modbus + ergänzt Solar-API-Werte (HTTP).
 - Keine Polling-Frequenz-Änderung ohne Modbus-Last-Test (GEN24-WR wird bei <1 s instabil).
 
 ## Häufige Aufgaben
-- Neues Modbus-Register lesen → `modbus_quellen.py` + Schema-Spalte (`db_init.py`) + Producer-Block in `collector/buffer.py` (record-Tuple + INSERT-Spaltenliste) und ggf. `collector/poller.py` (Wertaufnahme in `poll_once`).
+- Neues Modbus-Register lesen → `collector/quellen.py` + Schema-Spalte (`db_init.py`) + Producer-Block in `collector/buffer.py` (record-Tuple + INSERT-Spaltenliste) und ggf. `collector/poller.py` (Wertaufnahme in `poll_once`).
 - Solar-API-Endpunkt ergänzen → `fronius_api.py` + Aufruf in `collector/poller.py` (selten, da meiste Werte über Modbus).
 - Retry-/Reconnect-Verhalten ändern → `collector/poller.py` (`_read_poll_devices` / `poller_loop`), Persist-Sicherheit in `collector/buffer.py` prüfen.
 

@@ -2,7 +2,7 @@
 title: Feldnamen-Referenz (Konventionen, Dupletten, Stolperfallen)
 domain: collector
 role: A
-applyTo: "aggregate_1min.py"
+applyTo: "collector/aggregate/**"
 tags: [feldnamen, semantik, dupletten]
 status: stable
 last_review: 2026-05-16
@@ -14,8 +14,8 @@ last_review: 2026-05-16
 Die wichtigsten Feldnamen mit ihrer Bedeutung, ihren Einheiten und ihren häufigsten Verwechslungen. Wer Daten liest, muss diese Referenz kennen, sonst entstehen schnell falsche Bilanzen (z. B. "PV = `W_AC_Inv`" — falsch).
 
 ## Code-Anchor
-- **Aggregations-Producer:** `aggregate_1min.py` (Hauptliste der berechneten Felder, ~L60–90)
-- **Collector-Producer:** `collector/` (Package, vormals `modbus_v3.py`), `collector.py` (Entry-Script)
+- **Aggregations-Producer:** `collector/aggregate/min1.py` (Hauptliste der berechneten Felder)
+- **Collector-Producer:** `collector/` (Package), `collector.py` (Entry-Script)
 - **Quell-Doku:** `doc/collector/FELDNAMEN_REFERENZ.md`
 
 ## Inputs / Outputs
@@ -28,7 +28,7 @@ Die wichtigsten Feldnamen mit ihrer Bedeutung, ihren Einheiten und ihren häufig
 - Einheiten: `P_*` = Watt (Momentanleistung), `W_*` = Watt-Stunden (Energie über Periode), `U_*` = Volt, `I_*` = Ampere.
 
 ## Kritische Dupletten / Verwechslungen
-- **`W_AC_Inv` ≠ PV-Erzeugung.** Inkludiert Batterie-Durchfluss. **Echte PV** = `W_DC1 + W_DC2 + W_Exp_F2 + W_Exp_F3` (siehe `aggregate_1min.py`).
+- **`W_AC_Inv` ≠ PV-Erzeugung.** Inkludiert Batterie-Durchfluss. **Echte PV** = `W_DC1 + W_DC2 + W_Exp_F2 + W_Exp_F3` (siehe `collector/aggregate/min1.py`).
 - **`W_WP` (Wärmepumpe) ≠ Wattpilot.** WP=Stiebel-Eltron, Wattpilot=Fronius/go-e Wallbox.
 - **`P_Netz`:** positiv = Bezug, negativ = Einspeisung.
 - **`W_Exp_Netz`:** negativ → mit `abs()` zu Einspeisung machen.
@@ -60,7 +60,7 @@ Die wichtigsten Feldnamen mit ihrer Bedeutung, ihren Einheiten und ihren häufig
 - Keine Vorzeichen-Inversionen ohne Tests.
 
 ## Häufige Aufgaben
-- Neue Bilanzgröße einführen → Berechnung in `aggregate_1min.py` + Schema-Spalte (`db_init.py`) + Doku-Eintrag in `doc/collector/FELDNAMEN_REFERENZ.md` und ggf. hier ergänzen.
+- Neue Bilanzgroesse einfuehren → Berechnung in `collector/aggregate/min1.py` + Schema-Spalte (`db_init.py`) + Doku-Eintrag in `doc/collector/FELDNAMEN_REFERENZ.md` und ggf. hier ergaenzen.
 - Vorzeichen-Bug debuggen → `P_Netz` und `W_Exp_Netz` separat prüfen.
 
 ## Bekannte Fallstricke

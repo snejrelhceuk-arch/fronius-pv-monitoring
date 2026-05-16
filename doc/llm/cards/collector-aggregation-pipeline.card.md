@@ -2,10 +2,10 @@
 title: Aggregation-Pipeline (raw → 1min → 15min → daily → monthly)
 domain: collector
 role: A
-applyTo: "aggregate*.py"
+applyTo: "collector/aggregate/**"
 tags: [aggregation, pipeline, cron, retention]
 status: stable
-last_review: 2026-05-03
+last_review: 2026-05-16
 ---
 
 # Aggregation-Pipeline
@@ -14,25 +14,26 @@ last_review: 2026-05-03
 Verdichtet `raw_data` (3-s-Polling) in mehrere Aggregat-Stufen mit unterschiedlichen Retention-Strategien. Quelle für Web-API, Reports und Statistik-Korrekturen.
 
 ## Code-Anchor
-- **1-Min-Aggregat:** `aggregate_1min.py` (jede Minute)
-- **15-Min + Hourly:** `aggregate.py` (cron, 15-min-Tick)
-- **Daily:** `aggregate_daily.py` (cron, gestaffelt nach `aggregate.py`)
-- **Monthly (technisch):** `aggregate_monthly.py` (cron, gestaffelt nach `aggregate_daily.py`)
-- **Statistik (kWh+Kosten):** `aggregate_statistics.py` (cron, gestaffelt nach `aggregate_monthly.py`)
+Alle Aggregate liegen seit Refactor 2026-05-16 im Paket `collector/aggregate/` und werden via `python3 -m collector.aggregate.<modul>` aufgerufen.
+- **1-Min-Aggregat:** `collector/aggregate/min1.py` (jede Minute, inkl. 10-min-Backfill)
+- **15-Min + Hourly:** `collector/aggregate/fifteen.py` (cron, 15-min-Tick)
+- **Daily:** `collector/aggregate/daily.py`
+- **Monthly (technisch):** `collector/aggregate/monthly.py`
+- **Statistik (kWh+Kosten):** `collector/aggregate/statistics.py`
 - **Korrekturen:** `statistics_corrections.py` + `config/statistics_corrections.json`
 
 ## Pipeline-Reihenfolge
 ```
 raw_data (3 s, RAM-Buffer)
-   ↓ aggregate_1min.py (jede Minute)
+   ↓ collector.aggregate.min1 (jede Minute)
 data_1min  (Retention 90 d)
-   ↓ aggregate.py (15-min-Tick)
+   ↓ collector.aggregate.fifteen (15-min-Tick)
 data_15min  →  hourly_data
-   ↓ aggregate_daily.py
+   ↓ collector.aggregate.daily
 daily_data (96 Spalten + *_start/*_end)
-   ↓ aggregate_monthly.py
+   ↓ collector.aggregate.monthly
 data_monthly (technisch, 76 Spalten min/max/avg)
-   ↓ aggregate_statistics.py
+   ↓ collector.aggregate.statistics
 monthly_statistics (permanent, kWh+Kosten)
    ↓
 yearly_statistics (permanent)
@@ -45,8 +46,8 @@ _Konkrete Cron-Minuten liegen in der User-Crontab (nicht im Repo)._
 - **Outputs:** jeweils nächste Stufe + Statistik-Korrekturen.
 
 ## Invarianten
-- **Cron-Staffelung:** Skripte laufen zeitlich versetzt (Reihenfolge `aggregate_1min` → `aggregate` → `aggregate_daily` → `aggregate_monthly` → `aggregate_statistics`), damit jede Stufe auf konsistenten Vorgängerdaten arbeitet.
-- **Backfill:** `aggregate_1min.py` prüft die letzten 10 min auf Lücken (`aggregate_1min.py:30–40`).
+- **Cron-Staffelung:** Skripte laufen zeitlich versetzt (Reihenfolge `collector.aggregate.min1` → `fifteen` → `daily` → `monthly` → `statistics`), damit jede Stufe auf konsistenten Vorgaengerdaten arbeitet.
+- **Backfill:** `collector/aggregate/min1.py` prueft die letzten 10 min auf Luecken.
 - **Counter-Fixpunkte:** `daily_data.*_start`/`*_end` für Drift-Korrektur (Vergleich mit Counter-Differenzen).
 - **Permanenz:** `monthly_statistics`, `yearly_statistics` werden nicht überschrieben (Korrekturen nur additiv).
 
@@ -55,8 +56,8 @@ _Konkrete Cron-Minuten liegen in der User-Crontab (nicht im Repo)._
 - Keine Vorzeichen-Inversionen in den Aggregat-Skripten ohne Test.
 
 ## Häufige Aufgaben
-- Neue Bilanzgröße in 1-min-Aggregat aufnehmen → `aggregate_1min.py:Bilanz-Block` + Schema-Spalte.
-- Daily-Spalte hinzufügen → `aggregate_daily.py` + `daily_data`-Schema in `db_init.py`.
+- Neue Bilanzgroesse in 1-min-Aggregat aufnehmen → `collector/aggregate/min1.py` (Bilanz-Block) + Schema-Spalte.
+- Daily-Spalte hinzufuegen → `collector/aggregate/daily.py` + `daily_data`-Schema in `db_init.py`.
 - Statistik-Korrektur einrichten → `config/statistics_corrections.json` (Modi `fixed` für abgeschlossene Monate, `offset` für laufende).
 
 ## Bekannte Fallstricke

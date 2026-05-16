@@ -41,7 +41,7 @@ DB_PATH = config.DB_PATH
 POLL_INTERVAL = config.WATTPILOT_POLL_INTERVAL
 RETRY_INTERVAL = getattr(config, 'WATTPILOT_RETRY_INTERVAL', 5)
 MAX_RETRIES = getattr(config, 'WATTPILOT_MAX_RETRIES', 2)
-PID_FILE = Path(__file__).parent / 'wattpilot_collector.pid'
+PID_FILE = Path(__file__).resolve().parent.parent / 'wattpilot_collector.pid'
 
 
 # ─── Single Instance Protection ───
@@ -50,7 +50,7 @@ def _is_wattpilot_process(pid):
     try:
         with open(f'/proc/{pid}/cmdline', 'r') as f:
             cmdline = f.read()
-        return 'wattpilot_collector' in cmdline
+        return 'wattpilot_collector' in cmdline or 'collector/wattpilot' in cmdline or 'collector.wattpilot' in cmdline
     except (FileNotFoundError, PermissionError):
         return False
 
@@ -101,9 +101,11 @@ def remove_pid_file():
 def init_db():
     """Erstelle Wattpilot-Tabellen falls nicht vorhanden."""
     conn = sqlite3.connect(DB_PATH)
+    # Schema-Pfad relativ zum Repo-Root (Refactor 2026-05-16: jetzt in collector/wattpilot.py)
+    _repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     schema_candidates = [
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), 'doc', 'collector', 'schema', 'db_schema_wattpilot.sql'),
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), 'doc', 'schema', 'db_schema_wattpilot.sql'),
+        os.path.join(_repo_root, 'doc', 'collector', 'schema', 'db_schema_wattpilot.sql'),
+        os.path.join(_repo_root, 'doc', 'schema', 'db_schema_wattpilot.sql'),
     ]
     for schema_file in schema_candidates:
         if os.path.exists(schema_file):
