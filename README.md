@@ -4,7 +4,7 @@ Production-ready Monitoring für Fronius Gen24 Hybrid PV-Anlage (37,59 kWp) mit 
 
 > Interne Betriebs- und Infrastrukturdokumentation wird lokal gehalten und ist im öffentlichen Repo bewusst nicht enthalten.
 
-> **Doku-Tracks:** Menschen lesen `doc/<bereich>/` (ausführliche Manuals) und `doc/SYSTEM_BRIEFING.md`. **Agenten/LLMs starten bei [`AGENTS.md`](AGENTS.md)** und folgen der dort beschriebenen Lade-Hierarchie zu `doc/SYSTEM_BRIEFING.md` → `doc/llm/INDEX.md` → konkrete Card.
+> **Doku-Tracks:** Menschen lesen `doc/<bereich>/` (ausführliche Manuals) und `doc/TODO.md`. **Agenten/LLMs starten bei [`AGENTS.md`](AGENTS.md)** und folgen der dort beschriebenen Lade-Hierarchie zu `doc/llm/INDEX.md` → konkrete Card.
 
 ## Produktionsstart
 Produktivbetrieb seit **01.01.2026 00:00 Uhr**
@@ -27,8 +27,9 @@ tail -f /tmp/aggregate_1min.log
 
 ## Komponenten
 
-- **modbus_v3.py** — Modbus-Collector (3s Polling, Persist-Thread)
-- **collector.py** — Thin Wrapper, startet poller_loop()
+- **collector/** — Modbus-Collector als Package (3s Polling, RAM-Buffer, Persist-Thread)
+- **collector.py** — Thin Wrapper, startet `poller_loop()` aus dem Package
+- **modbus_v3.py** — Compat-Shim (re-exportiert aus `collector/`)
 - **web_api.py** — Flask/Gunicorn Web-API (Port 8000)
 - **aggregate_*.py** — 5-stufige Aggregation (via Cron)
 - **modbus_quellen.py** — SunSpec Register-Definitionen
@@ -39,7 +40,7 @@ tail -f /tmp/aggregate_1min.log
 ```
  Fronius Gen24 (Modbus TCP)            Monitoring-Host
  ┌─────────────────────────┐           ┌──────────────────────────┐
- │ Unit 1: Inverter F1     │  Modbus   │ modbus_v3.py (Collector) │
+ │ Unit 1: Inverter F1     │  Modbus   │ collector/ (Package)     │
  │ Unit 2: SM Netz         │◄────────► │   → RAM-Buffer           │
  │ Unit 3: SM F2           │   TCP     │   → /dev/shm/data.db     │
  │ Unit 4: SM WP (Wärmepumpe)│           │   → Persist → SD-Card    │

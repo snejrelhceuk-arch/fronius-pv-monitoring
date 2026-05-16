@@ -929,7 +929,7 @@ class RegelWpPflichtlauf(Regel):
     aktor = 'waermepumpe'
     engine_zyklus = 'fast'
 
-    def _tageswechsel_prüfen(self):
+    def _tageswechsel_pruefen(self):
         """Reset bei Tageswechsel."""
         heute = datetime.now().date()
         if _pflichtlauf['letzter_tag'] != heute:
@@ -943,7 +943,7 @@ class RegelWpPflichtlauf(Regel):
         if not ist_aktiv(matrix, self.regelkreis):
             return 0
 
-        self._tageswechsel_prüfen()
+        self._tageswechsel_pruefen()
 
         # Bereits geprüft heute (egal ob Boost lief oder nicht) → fertig
         if _pflichtlauf['pruefung_erledigt'] and not _pflichtlauf['boost_aktiv']:

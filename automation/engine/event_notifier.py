@@ -138,7 +138,7 @@ class EventNotifier:
         """True, wenn der Key heute bereits markiert ist."""
         return self._gesendet.get(event_key) == date.today().isoformat()
 
-    def prüfe_und_melde(self, obs: ObsState) -> list[str]:
+    def pruefe_und_melde(self, obs: ObsState) -> list[str]:
         """Prüfe alle konfigurierten Events gegen ObsState.
 
         Returns:

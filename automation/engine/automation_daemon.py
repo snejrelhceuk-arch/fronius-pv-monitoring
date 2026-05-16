@@ -363,7 +363,7 @@ class AutomationDaemon:
         if self._notifier:
             try:
                 with self._obs_lock:
-                    ausgeloest = self._notifier.prüfe_und_melde(self._obs)
+                    ausgeloest = self._notifier.pruefe_und_melde(self._obs)
                 if ausgeloest:
                     LOG.info(f"Event-Benachrichtigung: {', '.join(ausgeloest)}")
             except Exception as e:

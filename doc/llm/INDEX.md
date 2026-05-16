@@ -4,7 +4,7 @@
 
 Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet konkrete Aufgabenstellungen / Stichworte auf die zuständige Card ab.
 
-> **Agenten-Workflow:** Aufgabe lesen → in der Trigger-Tabelle suchen → genannte Card öffnen → dort weitermachen. Wenn nichts passt: `doc/SYSTEM_BRIEFING.md` (Stufe 2).
+> **Agenten-Workflow:** Aufgabe lesen → in der Trigger-Tabelle suchen → genannte Card öffnen → dort weitermachen. Wenn nichts passt: `AGENTS.md` (Stufe 1).
 
 ## Trigger-Tabelle
 

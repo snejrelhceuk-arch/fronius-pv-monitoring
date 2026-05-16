@@ -57,7 +57,7 @@ Du bist der **Doc-Maintainer** fuer die LLM-Bibliothek `doc/llm/` und arbeitest 
 - Kein Schreiben ausserhalb `doc/llm/`.
 - Keine Card ohne YAML-Frontmatter.
 - Keine Card mit Code-Anchor, der nicht existiert.
-- Keine Aenderung an `AGENTS.md`, `doc/SYSTEM_BRIEFING.md`, `tools/pre_commit_doc_check.py`, `tools/doc_drift_engine.py` ohne explizite Aufforderung des Nutzers.
+- Keine Aenderung an `AGENTS.md`, `tools/pre_commit_doc_check.py`, `tools/doc_drift_engine.py` ohne explizite Aufforderung des Nutzers.
 
 ## Verifikation vor Commit
 

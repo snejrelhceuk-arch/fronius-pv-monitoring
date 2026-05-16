@@ -137,7 +137,6 @@ Folgende Dateien existieren lokal, werden aber **nie** getrackt:
 | `scripts/filter-expressions.txt` | Enthält reale IP-Mappings |
 | `pv-automation.service` / `pv-observer.service` / `pv-wattpilot.service` | Host-spezifische Pfade |
 | `config/fritz_config.json` | Fritz!Box-Credentials und AINs |
-| `doc/SYSTEM_BRIEFING.md` | Vollständiges System-Briefing (internes Wissen) |
 | `doc/system/SYSTEM_ARCHITECTURE.md` | Netzwerk-Topologie mit echten IPs |
 | `doc/system/DUAL_HOST_ARCHITECTURE.md` | Host-Details |
 | `doc/automation/HARDWARE_SETUP.md` | Hardware-Verdrahtung |

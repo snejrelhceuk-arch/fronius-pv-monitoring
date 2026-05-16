@@ -28,8 +28,6 @@ MAX_PV_DELTA_15MIN_WH = 6625
 # Ein höherer Wert deutet auf Zähler-Reset nach Firmware-Update hin
 MAX_NETZ_DELTA_15MIN_WH = 5000
 
-def get_db():
-    return get_db_connection()
 
 def aggregate_15min():
     """Aggregiere 5s-Daten zu 15min-Blöcken.
@@ -40,7 +38,7 @@ def aggregate_15min():
     Damit werden Lücken in data_15min auch nach raw_data-Cleanup
     automatisch aus data_1min gefüllt.
     """
-    conn = get_db()
+    conn = get_db_connection()
     c = conn.cursor()
     
     try:
@@ -295,7 +293,7 @@ def _fill_15min_gaps_from_1min(conn, start_ts, end_ts):
 
 def aggregate_hourly():
     """Aggregiere 15min-Daten zu stündlichen Blöcken"""
-    conn = get_db()
+    conn = get_db_connection()
     c = conn.cursor()
     
     try:
@@ -399,7 +397,7 @@ def cleanup_old_data():
     """Lösche raw_data älter als Retention-Policy (redundant zu modbus_v3.py cleanup_db)"""
     # Cleanup wird zentral über modbus_v3.py cleanup_db() gesteuert
     # Hier nur raw_data als Fallback, falls Collector nicht läuft
-    conn = get_db()
+    conn = get_db_connection()
     try:
         c = conn.cursor()
         cutoff = time.time() - (config.RAW_DATA_RETENTION_DAYS * 86400)

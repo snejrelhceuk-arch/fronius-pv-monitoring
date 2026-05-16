@@ -106,7 +106,7 @@ Bei jeder neuen Funktion zuerst pruefen:
 
 | Dokument | Zweck |
 |---|---|
-| `doc/SYSTEM_BRIEFING.md` | Kurzuebersicht des Gesamtsystems |
+| `AGENTS.md` | Kurzuebersicht des Gesamtsystems (ABCDE, No-Gos, Hosts) |
 | `doc/system/SYSTEM_ARCHITECTURE.md` | Gesamtarchitektur, Datenfluesse, Modulrollen |
 | `doc/automation/AUTOMATION_ARCHITEKTUR.md` | Schicht C im Detail |
 | `doc/diagnos/DIAGNOS_KONZEPT.md` | Zielbild fuer D Diagnos |

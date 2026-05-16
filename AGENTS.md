@@ -33,10 +33,9 @@
 
 ## Lade-Hierarchie für deine Aufgabe
 
-1. **Diese Datei** (jetzt gelesen) — No-Gos & Rollen.
-2. **`doc/SYSTEM_BRIEFING.md`** — Architektur-Skelett, Hardware, aktive Regeln, Quick-Reference. Nach dem ersten Lesen reicht meist der Quick-Reference-Block.
-3. **`doc/llm/INDEX.md`** — Trigger→Card-Mapping. Such hier deine Aufgabe und folge dem Verweis.
-4. **`doc/llm/cards/<domäne>-<modul>.card.md`** — kompakte, einheitliche Module-Card (≤150 Zeilen) mit Code-Anchor, Invarianten, No-Gos, häufigen Aufgaben, verwandten Cards, Human-Doku-Link.
+1. **Diese Datei** (jetzt gelesen) — No-Gos, Rollen, Architektur-Skelett. Ersetzt das frühere `doc/SYSTEM_BRIEFING.md` (nie committet, Inhalt hier konsolidiert).
+2. **`doc/llm/INDEX.md`** — Trigger→Card-Mapping. Such hier deine Aufgabe und folge dem Verweis.
+3. **`doc/llm/cards/<domäne>-<modul>.card.md`** — kompakte, einheitliche Module-Card (≤150 Zeilen) mit Code-Anchor, Invarianten, No-Gos, häufigen Aufgaben, verwandten Cards, Human-Doku-Link.
 
 **Wenn du zur richtigen Card gefunden hast und deine Aufgabe innerhalb der Card-Invarianten liegt, brauchst du nichts weiter zu lesen.** Tiefere Hintergründe stehen im verlinkten Human-Doku-Manual (`doc/<bereich>/<datei>.md`) — nur lesen, wenn nötig.
 

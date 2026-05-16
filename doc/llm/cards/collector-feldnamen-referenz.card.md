@@ -5,7 +5,7 @@ role: A
 applyTo: "aggregate_1min.py"
 tags: [feldnamen, semantik, dupletten]
 status: stable
-last_review: 2026-05-03
+last_review: 2026-05-16
 ---
 
 # Feldnamen-Referenz
@@ -15,7 +15,7 @@ Die wichtigsten Feldnamen mit ihrer Bedeutung, ihren Einheiten und ihren häufig
 
 ## Code-Anchor
 - **Aggregations-Producer:** `aggregate_1min.py` (Hauptliste der berechneten Felder, ~L60–90)
-- **Collector-Producer:** `modbus_v3.py`, `collector.py`
+- **Collector-Producer:** `collector/` (Package, vormals `modbus_v3.py`), `collector.py` (Entry-Script)
 - **Quell-Doku:** `doc/collector/FELDNAMEN_REFERENZ.md`
 
 ## Inputs / Outputs

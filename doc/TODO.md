@@ -1,20 +1,13 @@
 # Zentrale TODO-Liste — PV-System
 
-**Stand:** 2026-05-03  
-**Regel:** Alle offenen Aufgaben gehoeren in DIESE Datei. Keine verteilten TODOs in Subdirectories.
+**Stand:** 2026-05-16  
+**Regel:** Alle offenen Aufgaben gehoeren in DIESE Datei. Keine verteilten TODOs in Subdirectories. Nur offene `- [ ]` Items + bewusst verworfene Strategien (`~~..~~ verworfen`) bleiben hier.
 
 ---
 
 ## Sicherheit & Haertung
 
-### ~~Kritisch: Git-History hart bereinigen~~ ✅ erledigt 2026-05-04
-
-- [x] `git filter-repo --replace-text scripts/filter-expressions.txt --force` auf gesamter History ausgefuehrt
-- [x] Verifikation: `./scripts/publish_audit.sh --history` → 0 Treffer (alle 3 Phasen gruen)
-- [x] `git push --force origin main` + alle Tags aktualisiert
-- [ ] Team-Remediation: frische Klone bzw. `git fetch --all` + `git reset --hard origin/main` auf Pi4-Failover und Pi5-Backup ausfuehren
-
-- [ ] UFW auf Primary (.181) aktivieren — `scripts/safe_ufw_apply.sh`
+- [ ] Team-Remediation: frische Klone bzw. `git fetch --all` + `git reset --hard origin/main` auf Pi4-Failover und Pi5-Backup ausfuehren (Nachgang zur Git-History-Bereinigung 2026-05-04)
 - [ ] SSH `StrictHostKeyChecking=no` → `accept-new` in sync_code_to_peer.sh, backup_db_gfs.sh, routes/system.py
 - [ ] API-Authentifizierung evaluieren (bei Remote-Zugriff)
 - [ ] Rate Limiting (`flask-limiter`, 60 req/min/IP)
@@ -36,8 +29,7 @@
 
 ### Architektur (aus Audits 2026-04 / 2026-06 konsolidiert)
 
-- [ ] **ExternalRespectManager** als Singleton-Modul (`automation/engine/external_respect.py`) einfuehren — vereinigt Regel-Veto, SOC-Tracker und Operator-Overrides in einer API (Audit AUT-2026-04, HOCH)
-- [ ] HP-, Klima- und Batterie-Respekt-Detection auf `ExternalRespectManager` migrieren (Asymmetrie-Heilung; abhaengig von obigem)
+- ~~ExternalRespectManager als Singleton-Modul~~ **verworfen 2026-05-16** — externe Schaltungen (inkl. Steuerbox-Overrides) werden bereits in jedem Aktor protokolliert und respektiert; zusaetzliche Vereinheitlichungs-Schicht bringt keinen praktischen Nutzen.
 - [ ] Wattpilot externe Pause-Erkennung in `AktorWattpilot.verifiziere()`
 - [ ] Batterie-Aktor: Modus-Wechsel-Erkennung (`auto`/`manual`/`hold`) in `verifiziere()`
 - [ ] Plugin-faehige Engine: Regel-/Aktor-Registrierung von Hardcode zu JSON-Registry (`engine.py` A1/A2; grosse Investition)
@@ -48,6 +40,15 @@
 - [ ] Matrix-Reload klaeren: SIGHUP-Auto-Trigger in pv-config.py ODER Engine pruft mtime periodisch ODER pv-config-Text korrigieren (K-04 — "Wirksam ≤1 Min" stimmt aktuell nicht)
 - [ ] pv-config Whiptail-UI: ~40 versteckte Parameter freilegen (Drain-, WP-Soll-, Absenkung-, Klima-Parameter)
 
+### Architektur-Refactor (Audit 2026-05-16)
+
+- [ ] **`routes/system.py` (1971 Z.) aufteilen**: 1 Blueprint, 8 Endpoints + 20 Helper. Vorschlag: `routes/system_battery.py` (`_fetch_battery_*`, `_fetch_bms_*`, `api_battery_status`), `routes/system_ha.py` (`ha_*`, `_build_ha_*`), `routes/system_wattpilot.py` (`_fetch_wp_*`, `wattpilot_*`), `routes/system_failover.py` (`api_failover_status`, `api_backup_status`), `routes/system_automation.py` (`_fetch_automation_state`, `_build_automation_phasen`). Restdatei behaelt nur `api_system_info`, `get_ticker`. Alle Endpoints muessen am selben `bp = Blueprint('system', __name__)` registriert bleiben — entweder Sub-Imports im `routes/system/__init__.py` oder Blueprint-Sharing per Modul-Import. Branch + Pytest + Endpoint-Curl-Smoke-Test vor Restart.
+- [ ] **`pv-config.py` (2145 Z.) sektionieren**: Whiptail-UI-Skript. Kandidaten fuer Auslagerung: Matrix-Editor (~500 Z.) → `tools/pv_config/matrix_editor.py`, Diagnose-Reader (~300 Z.) → `tools/pv_config/diagnose.py`, Service-Steuerung (~200 Z.) → `tools/pv_config/service.py`. Kein Service-Impact (manuell aufgerufen), aber Aufruf-Pfade in OLLI/-Scripts pruefen.
+- [ ] **Weitere A-only-Module ins `collector/`-Paket ziehen** (Workspace-Uebersichtlichkeit): `collector.py` → `collector/__main__.py`, `modbus_quellen.py` → `collector/quellen.py`, `fritzdect_collector.py` → `collector/fritzdect.py`, `wattpilot_collector.py` → `collector/wattpilot.py`, `aggregate*.py` (5) → `collector/aggregate/`. Cross-Cutting (`db_init.py`, `db_utils.py`, `config.py`, `fronius_api.py`, `wattpilot_api.py`, `wp_modbus.py`, `solar_*.py`) bleibt im Root. **systemd-Units anpassen** (`pv-collector.service`, `pv-wattpilot.service` haben absolute Pfade!) und `pv-collector.service` zusaetzlich in `config/systemd/` einchecken (fehlt aktuell). Branch + dry-run-Import-Tests + Pre-commit-Hook-Update + Card-Updates erforderlich.
+- [ ] `solar_geometry.py` (1979 Z.) und `solar_forecast.py` (1368 Z.) auf logische Sub-Module pruefen (Sonnengeometrie vs. Forecast-Cache vs. OpenMeteo-Client).
+- [ ] `automation/engine/event_notifier.py` (1126 Z.) in Schwellen-/Dedup-/Mail-Module zerlegen.
+- [ ] Dead Code: `_prüfe_extern_respekt()` in [automation/engine/regeln/waermepumpe.py](../automation/engine/regeln/waermepumpe.py#L66) ist definiert aber nie aufgerufen — entfernen oder anbinden.
+
 ### Tech-Debt (Audit-Befunde, niedrige Prio)
 
 - [ ] Phantom-Regelkreis-Referenz `soc_schutz` in `geraete.py` RegelHeizpatrone durch Konstante ersetzen (Matrix-Eintrag existiert nicht mehr seit 2026-03-07)
@@ -56,7 +57,7 @@
 - [ ] `schaltlog.py`: Truncation nicht bei jedem Eintrag (Dateigroessencheck oder N-Eintraege-Intervall)
 - [ ] `tier1_checker._check_netz_ueberlast()`: `reduce_power`-Kommando mit explizitem Reduktionswert (proportional)
 - [ ] `HP_NENN_W=2000` aus Code in `soc_param_matrix.json` als `hp_nenn_w` (statt Hardcode)
-- [ ] `battery_control_log`-Reader in `pv-config.py` und `routes/system.py` entfernen \u2014 Tabelle wird seit 2026-03 nicht mehr beschrieben (keine `INSERT INTO battery_control_log` im Code), Lese-Fallback ist obsolet
+- [ ] `battery_control_log`-Reader in `pv-config.py` (5 Treffer: L259, L262, L667, L670, L674) und `routes/system.py` entfernen — Tabelle wird seit 2026-03 nicht mehr beschrieben (kein `INSERT INTO battery_control_log` im Code), Lese-Fallback ist obsolet
 
 ### Doku-Konsistenz (Audit-Restposten)
 
@@ -78,7 +79,7 @@
 - [ ] Phase 2b: Klimaanlage-Steuerung klaeren (Schuetz vs. IR-Sender)
 - [ ] Phase 3: Bypass-Ventil (Stellantrieb 24VAC?)
 - [ ] Phase 4: Lueftungsanlage & Brandschutzklappen
-- [ ] Phase 5: WP SG-Ready via Modbus, WW-Solltemp schreiben, Betriebsmodus umschalten
+- ~~Phase 5: WP SG-Ready via Modbus~~ **verworfen 2026-05-16** — WP-Steuerung erfolgt bewaehrt ueber Soll-Temperaturen WW + Heizung; SG-Ready nicht erforderlich.
 - [ ] Phase 7: 3-Phasen-Heizpatrone (Zukunft)
 
 ### Offene Hardware-Fragen
@@ -92,25 +93,8 @@
 
 ---
 
-## Steuerbox (Schicht E)
-
-- [ ] Phase 1: API-Grundgeruest (steuerbox_api.py, validators.py, intent_handler.py)
-- [ ] Phase 2: Release-1 Schalter (HP, WP, Batterie, Wattpilot, Regelkreis EIN/AUS)
-- [ ] Phase 3: Safety Enforcer + D/E-Integration (Respekt-Zeitueberwachung, Heartbeat, 6h-Reset)
-- [ ] Phase 4: pv-config Integration (Respekt-Verfahren, Override-Status)
-- [ ] Phase 5: Cockpit-UI (optional, spaeter)
-- [ ] Querschnitt: Audit-Logging, Rate-Limiting, Failover-Verhalten, Testmatrix
-
----
-
 ## Diagnos (Schicht D)
 
-- [x] Phase 1: Read-only Health-Checks (Freshness, CPU, Unterspannung, Disk) — `diagnos/health.py`, deployed Commit 4168e53 (2026-04-04)
-- [x] Phase 2: Datenintegritaet, Aggregations-Invarianten, Parity-Checks — `diagnos/integrity.py`, 9 Checks aktiv
-- [x] Mail-Diff-Filter & Subject-Severity-Suffix (2026-04-27) — `automation/engine/diagnos_alert_state.py`
-- [x] Health-Sofortpfad (2026-04-29) — CPU-Crit / Disk-Crit / Service-Down / Throttle, 10-min-Takt, persistent dedupliziert
-- [x] Sofortalarm-Dedup persistent (2026-04-29) — `config/event_notifier_dedup.json`
-- [x] NQ-Mail-Skelett (2026-04-29) — `automation/engine/nq_notifier.py`, ENABLED-Flag, eigener State `config/nq_alert_state.json`
 - [ ] Phase 3: Infrastruktur-/IO-Pruefungen (LAN, SSH, API, MEGA-BAS, RS485) — sinnvoll **parallel** zur PAC4200-Inbetriebnahme im Mai
 - [ ] Phase 4: Begrenzte Schutzaktionen mit Cooldown (nur falls noetig)
 - [ ] Phase 5: Langzeitspeicher Diagnos-Berichte auf Pi5-SSD

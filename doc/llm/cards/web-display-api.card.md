@@ -5,7 +5,7 @@ role: B
 applyTo: "routes/**"
 tags: [web-api, blueprints, templates, formatting, read-only]
 status: stable
-last_review: 2026-05-03
+last_review: 2026-05-16
 ---
 
 # Web Display/API
@@ -59,4 +59,4 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 ## Human-Doku
 - `doc/web/DISPLAY_CONVENTIONS.md`
 - `doc/web/HA_INTEGRATION.md`
-- `doc/SYSTEM_BRIEFING.md`
+- `AGENTS.md` (Architektur-Skelett)

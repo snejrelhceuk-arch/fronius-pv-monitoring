@@ -2,7 +2,7 @@
 
 **Erstes Pflichtdokument:** [`AGENTS.md`](../AGENTS.md) im Repository-Root. Lies das vollständig, bevor du irgendetwas anderes tust. Es enthält ABCDE-Rollenmodell, No-Gos, Hosts und die Lade-Hierarchie.
 
-**Danach:** je nach Aufgabe weiterladen wie in `AGENTS.md` beschrieben — `doc/SYSTEM_BRIEFING.md` → `doc/llm/INDEX.md` → konkrete Card.
+**Danach:** je nach Aufgabe weiterladen wie in `AGENTS.md` beschrieben — `doc/llm/INDEX.md` → konkrete Card.
 
 ## VS-Code-spezifisch
 

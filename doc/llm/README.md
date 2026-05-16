@@ -6,7 +6,7 @@
 
 Trennung der Doku in zwei klar adressierte Tracks:
 
-- **Human-Track** (`doc/<bereich>/…`, `doc/SYSTEM_BRIEFING.md`, `doc/TODO.md`): ausführliche Manuals, Architektur-Entscheidungen, Begründungen, Diagramme. Für dich (heute / in zwei Jahren) und neue Mitleser.
+- **Human-Track** (`doc/<bereich>/…`, `doc/TODO.md`): ausführliche Manuals, Architektur-Entscheidungen, Begründungen, Diagramme. Für dich (heute / in zwei Jahren) und neue Mitleser.
 - **LLM-Track** (`doc/llm/` + `AGENTS.md` + `.github/copilot-instructions.md`): kompakte Module-Cards (≤150 Zeilen, einheitliches Schema, YAML-Frontmatter). Für Agenten, die Code schreiben sollen — schnell scannbar, hohe Lenkungsdichte, zuverlässig auffindbar.
 
 Beide Tracks laufen parallel, keiner ersetzt den anderen.
@@ -16,9 +16,8 @@ Beide Tracks laufen parallel, keiner ersetzt den anderen.
 | Stufe | Datei | Wann geladen |
 |---|---|---|
 | 1 | `AGENTS.md` (Repo-Root), `.github/copilot-instructions.md` | Tool-Auto-Load (Copilot, Claude, Cursor, …) |
-| 2 | `doc/SYSTEM_BRIEFING.md` | bei jeder fachlichen Aufgabe |
-| 3 | `doc/llm/INDEX.md` | wenn Aufgabe konkret wird |
-| 4 | `doc/llm/cards/<…>.card.md` | gezielt, on demand |
+| 2 | `doc/llm/INDEX.md` | wenn Aufgabe konkret wird |
+| 3 | `doc/llm/cards/<…>.card.md` | gezielt, on demand |
 
 ## Card-Schema
 
@@ -72,7 +71,7 @@ Vier Schichten, die zusammen verhindern, dass die Doku vom Code abdriftet:
 
 ## Wann neue Card schreiben?
 
-Faustregel: jede Domäne, die in `AGENTS.md`/`SYSTEM_BRIEFING` als ABCDE-Rolle oder Submodul namentlich erscheint, bekommt mindestens eine Card. Cards bleiben ≤150 Zeilen — wenn länger, splitten.
+Faustregel: jede Domäne, die in `AGENTS.md` als ABCDE-Rolle oder Submodul namentlich erscheint, bekommt mindestens eine Card. Cards bleiben ≤150 Zeilen — wenn länger, splitten.
 
 ## Wann ins Manual statt in Card?
 

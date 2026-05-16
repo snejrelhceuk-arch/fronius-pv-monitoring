@@ -79,6 +79,8 @@ ollama/.sync_state.json
 
 # Lokale Infrastruktur- und Betriebsartefakte (nicht öffentlich versionieren)
 logs/schaltlog.txt
+logs/wp_netzbetreiber_leistung.csv
+logs/ww_restore.log
 ollama/Modelfile
 ollama/server_README.md
 scripts/windows/

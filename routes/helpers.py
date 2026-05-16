@@ -13,7 +13,7 @@ ABCD-Rollentrennung:
   B (Web/API) darf NUR lesen — keine Schreiboperationen auf Hardware.
   Die Klasse FroniusReadOnly ist eine BEWUSSTE Code-Duplette aus
   fronius_api.py, reduziert auf reine Lesefähigkeit (kein POST/PUT).
-  Siehe: doc/SYSTEM_BRIEFING.md §ABCD
+  Siehe: AGENTS.md §ABCDE
 """
 import sqlite3
 import hashlib

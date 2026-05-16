@@ -243,6 +243,6 @@ im Read-only-Modus gestartet (nur GET /status und /audit).
 | [SICHERHEIT.md](SICHERHEIT.md) | Auth, Allowlist, UFW, Haertung |
 | [TODO.md](TODO.md) | Umsetzungsschritte mit Akzeptanzkriterien |
 | [LLM_AUSFUEHRUNG.md](LLM_AUSFUEHRUNG.md) | Kompakte Implementierungsanweisung fuer ausfuehrendes LLM |
-| [doc/SYSTEM_BRIEFING.md](../SYSTEM_BRIEFING.md) | Gesamtsystem-Kontext |
+| [AGENTS.md](../../AGENTS.md) | Gesamtsystem-Kontext (ABCDE, No-Gos, Hosts) |
 | [doc/system/ABCD_ROLLENMODELL.md](../system/ABCD_ROLLENMODELL.md) | Rollenmodell (jetzt ABCDE) |
 | [doc/automation/STEUERUNGSPHILOSOPHIE.md](../automation/STEUERUNGSPHILOSOPHIE.md) | Schutzgrenzen und Prioritaeten |
