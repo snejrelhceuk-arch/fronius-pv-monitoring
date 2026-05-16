@@ -90,7 +90,7 @@ Kein stilles Clamping — der Operator soll wissen, dass sein Wunsch
 unzulaessig war.
 
 **Laufzeit-Guards (immer aktiv, auch bei Override):**
-- HP bei SOC <= `extern_notaus_soc_pct` (15%): SOFORT AUS
+- HP bei SOC <= `extern_aus_soc_pct` (15%): SOFORT AUS
 - HP bei Uebertemperatur >= 78°C: SOFORT AUS
 - Diese werden nicht vom Validator, sondern von der Automation (Engine fast-cycle)
   durchgesetzt — auch waehrend einer Respekt-Periode.

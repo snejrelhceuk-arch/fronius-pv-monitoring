@@ -190,10 +190,10 @@ class RegelHeizpatrone(Regel):
                               AUS wenn SOC zu weit unter MAX sinkt, Batt lädt nach,
                               neuer Burst wenn SOC wieder ≈MAX. Adaptiv zu SOC_MAX.
 
-    Notaus HART (immer sofort):
+    AUS HART (immer sofort):
       - WW-Temp ≥ 78°C, SOC ≤ 7%
 
-    Notaus Phase 4 (rest_h < 2h, differenziert):
+    AUS Phase 4 (rest_h < 2h, differenziert):
       - SOC < SOC_MAX - 10%: AUS (Batterie-Vorrang)
       - PV < 1500W: AUS (nicht genug Rest-PV)
       - Entladung > 1000W: AUS (zu viel Batterie-Bezug)
@@ -222,8 +222,10 @@ class RegelHeizpatrone(Regel):
         self._extern_ein_ts: float = 0       # Zeitpunkt der Extern-EIN-Erkennung
         self._extern_aus_ts: float = 0       # Zeitpunkt der Extern-AUS-Erkennung
         self._letzter_hp_zustand: Optional[bool] = None  # None = erster Zyklus (kein EXTERN)
-        # Glättung: Netzbezug-Historie für 7-Min-Durchschnitt (Engine-Zyklus ~60s)
-        self._grid_history: deque = deque(maxlen=7)
+        # Glättung: Netzbezug-Historie für Energie-Integral (Engine-Tick ≈60s)
+        # MaxLen=10 erlaubt Fenster-Tuning bis 10 Min via Matrix; ausgewertet werden
+        # die letzten `aus_netzbezug_fenster_min` Einträge.
+        self._grid_history: deque = deque(maxlen=10)
         # Probe-Logik: Nulleinspeiser-Erkennung durch Testpuls
         self._probe_modus: bool = False       # Probe-Burst aktiv (kurzer Testpuls)
         self._probe_start_pv_w: float = 0     # PV-Leistung bei Probe-Start
@@ -232,7 +234,7 @@ class RegelHeizpatrone(Regel):
         # Kurz-Burst-Schutz: nach 2x Burst < 5 min → 1h Sperre
         self._kurze_burst_zaehler: int = 0        # aufeinanderfolgende Kurz-Bursts
         self._kurz_burst_sperre_bis: float = 0    # Epoch: EIN-Sperre aktiv bis
-        # Watchdog: Notaus wenn WW-Temperatur länger als Schwelle unbekannt
+        # Watchdog: AUS wenn WW-Temperatur länger als Schwelle unbekannt
         self._ww_temp_letzte_gueltig: float = 0   # Epoch: letzte gültige ww_temp
         # Drain-Abschalt-Verzögerung: Soft-Verbraucher-Bedingung (Haus/WP/EV) muss
         # drain_abschalt_verzoegerung_min anhalten bevor HP abgeschaltet wird.
@@ -383,7 +385,7 @@ class RegelHeizpatrone(Regel):
         """Potenzialabhängige Mindest-Ladeleistung für Burst-Start.
 
         Bei gutem Potenzial reicht weniger Batterie-Ladung als Trigger,
-        weil der Burst-Timer und die Potenzial-Notaus die HP schützen.
+        weil der Burst-Timer und die Potenzial-AUS die HP schützen.
         Grundlage: p_batt - HP_Last (~2kW) sollte positiv bleiben.
 
         Returns: Schwellwert in Watt
@@ -397,11 +399,12 @@ class RegelHeizpatrone(Regel):
         return basis
 
     def _grid_avg(self, obs: ObsState) -> float:
-        """Geglätteter Netzbezug (7-Zyklen-Durchschnitt ≈ 7 Min).
+        """Pflegt die Netzbezug-Historie und gibt den positiven Mittelwert zurück.
 
-        Verhindert Notaus durch kurzzeitige Leistungssprünge (±10kW)
-        und Haushaltslast-Schaltspitzen (Waschmaschine, Trockner etc.).
-        Nur positive Werte (Bezug) werden gemittelt; Einspeisung = 0.
+        Nur positive Werte (Bezug) werden gespeichert; Einspeisung = 0.
+        Side-Effect: append in `_grid_history` — Aufruf MUSS einmal pro Tick
+        passieren, damit die Energie-Integral-Auswertung in
+        `_netzbezug_aus_ausloesen()` aktuelle Samples hat.
         """
         gw = obs.grid_power_w
         if gw is not None:
@@ -410,87 +413,56 @@ class RegelHeizpatrone(Regel):
             return 0.0
         return sum(self._grid_history) / len(self._grid_history)
 
-    def _restbedarf_fuer_hp_kwh(self, obs: ObsState, matrix: dict, rest_h: float) -> float:
-        """Dynamischer Rest-Prognosebedarf für HP-Freigabe im Notaus-Kontext.
-
-        Bestandteile:
-          1) Batteriebedarf bis Ziel-SOC (bei hohem SOC optional ignorieren)
-          2) Haushalt bis Sonnenuntergang (mit Mindest-Grundlast)
-          3) Sicherheitsreserve
-          4) Optionaler Klima-Bedarf (wenn Klima aktuell läuft)
-        """
-        sicherheit_kwh = float(get_param(
-            matrix, self.regelkreis, 'notaus_forecast_sicherheit_kwh', 5.0
-        ))
-        haushalt_min_w = float(get_param(
-            matrix, self.regelkreis, 'notaus_forecast_haushalt_min_w', 500
-        ))
-
-        haus_netto_w = float(obs.house_load_w or 0)
-        if obs.heizpatrone_aktiv:
-            haus_netto_w = max(0.0, haus_netto_w - self.HP_NENN_W)
-        haus_plan_w = max(haushalt_min_w, haus_netto_w)
-        plan_h = max(0.0, rest_h)
-        haushalt_kwh = haus_plan_w * plan_h / 1000.0
-
-        soc_now = float(obs.batt_soc_pct if obs.batt_soc_pct is not None else 50.0)
-        batt_ignore_ab_soc = float(get_param(
-            matrix, self.regelkreis, 'notaus_forecast_batt_ignore_ab_soc_pct', 95
-        ))
-        batt_ziel_soc = float(get_param(
-            matrix, self.regelkreis, 'notaus_forecast_batt_ziel_soc_pct', 100
-        ))
-        if soc_now >= batt_ignore_ab_soc:
-            batt_bedarf_kwh = 0.0
-        else:
-            ziel_soc = max(soc_now, min(100.0, batt_ziel_soc))
-            batt_bedarf_kwh = max(0.0, (ziel_soc - soc_now) * config.PV_BATTERY_KWH / 100.0)
-
-        klima_kwh = 0.0
-        if bool(obs.klima_aktiv):
-            klima_last_w = float(get_param(
-                matrix, self.regelkreis, 'notaus_forecast_klima_last_w', 1300
-            ))
-            klima_plan_h = float(get_param(
-                matrix, self.regelkreis, 'notaus_forecast_klima_plan_h', 4.0
-            ))
-            klima_h = min(plan_h, max(0.0, klima_plan_h))
-            klima_kwh = klima_last_w * klima_h / 1000.0
-
-        return batt_bedarf_kwh + haushalt_kwh + sicherheit_kwh + klima_kwh
-
-    def _netzbezug_notaus_ausloesen(
+    def _netzbezug_aus_ausloesen(
         self,
         obs: ObsState,
         matrix: dict,
-        rest_h: float,
-        grid_avg: float,
-        notaus_netz: float,
     ) -> tuple[bool, str]:
-        """Entscheidet HP-Notaus wegen Netzbezug inkl. Forecast-/Ist-Vetos."""
+        """Entscheidet HP-AUS wegen Netzbezug.
+
+        Grundprinzip (seit 2026-05-16):
+          Die Heizpatrone ist Verbraucher für PV-Überschuss. Sie darf keinen
+          Netzbezug verursachen. Toleriert sind nur Schaltverluste durch
+          Lastwechsel und Erzeugungsschwankungen, bis die Wechselrichter
+          sich angepasst haben (Wattpilot-Start, Backofen, Wolkenfront ...).
+
+        Messung:
+          Energie-Integral des positiven Netzbezugs über
+          `aus_netzbezug_fenster_min` Min (Default 5 Min). Engine-Tick ≈ 60 s,
+          d.h. 5 Samples. Energie [kWh] = Σ(W) · 60 s / 3600 s / 1000 W/kW.
+          Überschreitet die integrierte Energie
+          `aus_netzbezug_energie_kwh` (Default 0.02 kWh ≡ Ø 240 W über 5 Min),
+          gilt der Bezug als »sustained« → HP AUS.
+
+        Veto:
+          Aktueller Bezug `< aus_netzbezug_aktuell_veto_w` (200 W) → keine
+          Auswertung (Historie evtl. veraltet, kein akuter Bezug).
+        """
         grid_current = float(obs.grid_power_w or 0)
         current_veto_w = float(get_param(
-            matrix, self.regelkreis, 'notaus_netzbezug_aktuell_veto_w', 200
+            matrix, self.regelkreis, 'aus_netzbezug_aktuell_veto_w', 200
         ))
-
-        # Veto 1: aktueller Netzbezug ist klein → Durchschnitt kann veraltet sein
         if grid_current < current_veto_w:
             return False, ''
 
-        rest_kwh = obs.forecast_rest_kwh
-        if rest_kwh is None:
-            rest_kwh = obs.forecast_kwh or 0
-        forecast_quality = get_effective_forecast_quality(obs, matrix) or ''
-
-        # Veto 2: gute Prognose + ausreichend Rest für Batt+Haushalt+Reserve (+Klima)
-        if forecast_quality == 'gut':
-            mindest_rest_kwh = self._restbedarf_fuer_hp_kwh(obs, matrix, rest_h)
-            if rest_kwh >= mindest_rest_kwh:
-                return False, ''
-
-        if grid_avg > notaus_netz:
-            return True, (f'Netzbezug Ø{grid_avg:.0f}W > {notaus_netz:.0f}W '
-                          f'(aktuell {grid_current:.0f}W)')
+        fenster_min = int(get_param(
+            matrix, self.regelkreis, 'aus_netzbezug_fenster_min', 5
+        ))
+        schwelle_kwh = float(get_param(
+            matrix, self.regelkreis, 'aus_netzbezug_energie_kwh', 0.02
+        ))
+        # Letzte `fenster_min` Samples (entspricht `fenster_min` Min bei 60-s-Tick)
+        recent = list(self._grid_history)[-fenster_min:]
+        if len(recent) < fenster_min:
+            # Noch kein volles Fenster → keine Auswertung
+            return False, ''
+        # Energie in kWh: Σ(W) · 60s / 3600 / 1000  =  Σ(W) / 60000
+        energie_kwh = sum(recent) / 60000.0
+        if energie_kwh >= schwelle_kwh:
+            avg_w = sum(recent) / len(recent)
+            return True, (f'Netzbezug-Integral {energie_kwh:.3f} kWh / '
+                          f'{fenster_min} Min ≥ {schwelle_kwh:.3f} kWh '
+                          f'(Ø {avg_w:.0f} W, aktuell {grid_current:.0f} W)')
         return False, ''
 
     def _batt_entladung_toleriert(self, potenzial: str, soc_max_eff: int,
@@ -604,7 +576,7 @@ class RegelHeizpatrone(Regel):
         """Score für HP-Steuerung.
 
         Drei Pfade:
-          1. Notaus (HP AUS) — IMMER aktiv, auch bei aktiv=False
+          1. AUS — IMMER aktiv, auch bei aktiv=False
           2. Drain-EIN (Phase 0) — wenn aktiv, Batterie morgens leeren
           3. Burst-EIN (Phase 1-3) — nur bei aktiv=True (Strategie).
         """
@@ -685,7 +657,7 @@ class RegelHeizpatrone(Regel):
                         return int(score * 1.6)
                     return 0
 
-        # ── Notaus-Pfad: IMMER aktiv ──
+        # ── AUS-Pfad: IMMER aktiv ──
         if obs.heizpatrone_aktiv:
             min_rest_h = get_param(matrix, self.regelkreis, 'min_rest_h', 2.0)
             temp_max = get_param(matrix, self.regelkreis, 'speicher_temp_max_c', 78)
@@ -697,21 +669,21 @@ class RegelHeizpatrone(Regel):
                 if obs.ww_temp_c >= temp_max:
                     return int(score * 1.5)
             else:
-                # Watchdog: WW-Temp unbekannt (Modbus-Ausfall) → Notaus nach Timeout
+                # Watchdog: WW-Temp unbekannt (Modbus-Ausfall) → AUS nach Timeout
                 ww_watchdog_s = get_param(
                     matrix, self.regelkreis, 'ww_temp_watchdog_s', 300
                 )
                 if (self._ww_temp_letzte_gueltig > 0
                         and (time.time() - self._ww_temp_letzte_gueltig) > ww_watchdog_s):
-                    LOG.warning('HP-Notaus: WW-Temperatur seit %ds unbekannt (Modbus?)',
+                    LOG.warning('HP-AUS: WW-Temperatur seit %ds unbekannt (Modbus?)',
                                 int(time.time() - self._ww_temp_letzte_gueltig))
                     return int(score * 1.5)
             if (obs.batt_soc_pct or 0) <= soc_schutz_abs:
                 return int(score * 1.5)
             # Extern-Autoritäts-Override: manuelle Einschaltung bei niedrigem SOC überstimmen
             if ist_extern:
-                extern_notaus_soc = get_param(matrix, self.regelkreis, 'extern_notaus_soc_pct', 15)
-                if (obs.batt_soc_pct or 0) <= extern_notaus_soc:
+                extern_aus_soc = get_param(matrix, self.regelkreis, 'extern_aus_soc_pct', 15)
+                if (obs.batt_soc_pct or 0) <= extern_aus_soc:
                     return int(score * 1.5)
             # rest_h < min_rest_h: Phase-4-Differenzierung
             # HP darf weiterlaufen wenn SOC nahe SOC_MAX und PV noch produziert.
@@ -728,7 +700,7 @@ class RegelHeizpatrone(Regel):
                 pv_ok = (obs.pv_total_w or 0) >= abend_min_pv
                 if not (soc_ok and entl_ok and pv_ok):
                     return int(score * 1.5)
-                # Abend-Bedingungen erfüllt → kein Notaus, weiter prüfen
+                # Abend-Bedingungen erfüllt → kein AUS, weiter prüfen
 
             # ── KONTEXTABHÄNGIGE Kriterien ──
             # Bei Extern-Hysterese: nur HARTE greifen (oben), Rest pausiert
@@ -756,12 +728,9 @@ class RegelHeizpatrone(Regel):
                         if pv_w < self.HP_NENN_W * 0.25:  # < 500W PV → kein Solarertrag
                             return int(score * 1.5)
                     # Netzbezug während Drain → Energie kommt aus Netz, nicht PV
-                    notaus_netz = get_param(matrix, self.regelkreis, 'notaus_netzbezug_w', 200)
-                    grid_avg = self._grid_avg(obs)
-                    notaus_ausloesen, _ = self._netzbezug_notaus_ausloesen(
-                        obs, matrix, rest_h, grid_avg, float(notaus_netz)
-                    )
-                    if notaus_ausloesen:
+                    self._grid_avg(obs)  # Side-Effect: Historie pflegen
+                    aus_ausloesen, _ = self._netzbezug_aus_ausloesen(obs, matrix)
+                    if aus_ausloesen:
                         return int(score * 1.5)
                     d_haus = get_param(matrix, self.regelkreis, 'drain_max_haushalt_w', 700)
                     d_wp = get_param(matrix, self.regelkreis, 'drain_max_wp_w', 500)
@@ -817,13 +786,12 @@ class RegelHeizpatrone(Regel):
                     if not self._hp_parallel_erlaubt(potenzial, wp_aktiv, ev_aktiv):
                         return int(score * 1.2)
 
-                    # Netzbezug (5-Min-Durchschnitt)
-                    notaus_netz = get_param(matrix, self.regelkreis, 'notaus_netzbezug_w', 200)
-                    grid_avg = self._grid_avg(obs)
-                    notaus_ausloesen, _ = self._netzbezug_notaus_ausloesen(
-                        obs, matrix, rest_h, grid_avg, float(notaus_netz)
-                    )
-                    if notaus_ausloesen:
+                    # Netzbezug: HP ist Überschuss-Verbraucher → keine Toleranz
+                    # für sustained Bezug, nur Schaltverluste werden toleriert
+                    # (siehe _netzbezug_aus_ausloesen, Energie-Integral 5 Min).
+                    self._grid_avg(obs)  # Side-Effect: Historie pflegen
+                    aus_ausloesen, _ = self._netzbezug_aus_ausloesen(obs, matrix)
+                    if aus_ausloesen:
                         return int(score * 1.5)
 
                 # Burst-Timer abgelaufen
@@ -1054,7 +1022,7 @@ class RegelHeizpatrone(Regel):
         return 0
 
     def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
-        """HP ein-/ausschalten: Notaus + Burst-Strategie."""
+        """HP ein-/ausschalten: AUS + Burst-Strategie."""
         now_h = datetime.now().hour + datetime.now().minute / 60
         sunset = obs.sunset or 17.0
         rest_h = max(0, sunset - now_h)
@@ -1090,9 +1058,9 @@ class RegelHeizpatrone(Regel):
 
         # ── Extern-Erkennung läuft jetzt in bewerte() ──
 
-        # ── HP ist EIN → Notaus prüfen ──
+        # ── HP ist EIN → AUS prüfen ──
         if obs.heizpatrone_aktiv:
-            notaus_grund = None
+            aus_grund = None
             min_rest_h = get_param(matrix, self.regelkreis, 'min_rest_h', 2.0)
             temp_max = get_param(matrix, self.regelkreis, 'speicher_temp_max_c', 78)
 
@@ -1105,14 +1073,14 @@ class RegelHeizpatrone(Regel):
 
             # ── HARTE Kriterien: IMMER sofort ──
             if obs.ww_temp_c is not None and obs.ww_temp_c >= temp_max:
-                notaus_grund = f'HART: Übertemperatur ({obs.ww_temp_c:.0f}°C ≥ {temp_max}°C)'
+                aus_grund = f'HART: Übertemperatur ({obs.ww_temp_c:.0f}°C ≥ {temp_max}°C)'
             elif soc <= soc_schutz_abs:
-                notaus_grund = f'HART: SOC {soc:.0f}% ≤ Schutzgrenze {soc_schutz_abs}%'
+                aus_grund = f'HART: SOC {soc:.0f}% ≤ Schutzgrenze {soc_schutz_abs}%'
             # Extern-Autoritäts-Override + Hysterese
             elif ist_extern:
-                extern_notaus_soc = get_param(matrix, self.regelkreis, 'extern_notaus_soc_pct', 15)
-                if soc <= extern_notaus_soc:
-                    notaus_grund = (f'Extern-Override: SOC {soc:.0f}% ≤ {extern_notaus_soc}% '
+                extern_aus_soc = get_param(matrix, self.regelkreis, 'extern_aus_soc_pct', 15)
+                if soc <= extern_aus_soc:
+                    aus_grund = (f'Extern-Override: SOC {soc:.0f}% ≤ {extern_aus_soc}% '
                                     f'→ manuelle Einschaltung überstimmt')
                 else:
                     verbleibend = int(extern_respekt - (time.time() - self._extern_ein_ts))
@@ -1128,13 +1096,13 @@ class RegelHeizpatrone(Regel):
                 pv_ok = (obs.pv_total_w or 0) >= abend_min_pv
                 if not (soc_ok and entl_ok and pv_ok):
                     if not soc_ok:
-                        notaus_grund = (f'Phase 4: SOC {soc:.0f}% < SOC_MAX({soc_max_eff}%)-'
+                        aus_grund = (f'Phase 4: SOC {soc:.0f}% < SOC_MAX({soc_max_eff}%)-'
                                         f'{abend_aus}% → Batterie-Vorrang')
                     elif not pv_ok:
-                        notaus_grund = (f'Phase 4: PV {obs.pv_total_w or 0:.0f}W < '
+                        aus_grund = (f'Phase 4: PV {obs.pv_total_w or 0:.0f}W < '
                                         f'{abend_min_pv}W → nicht genug PV')
                     else:
-                        notaus_grund = (f'Phase 4: Entladung {p_batt:.0f}W > '
+                        aus_grund = (f'Phase 4: Entladung {p_batt:.0f}W > '
                                         f'-{abend_max_entl}W toleriert')
 
             # ── KONTEXTABHÄNGIGE Kriterien: bei normaler Engine-Steuerung ──
@@ -1146,7 +1114,7 @@ class RegelHeizpatrone(Regel):
                     # Drain: gewollte Entladung — Schutzgrenzen prüfen
                     drain_stop_soc = get_param(matrix, self.regelkreis, 'drain_stop_soc_pct', 15)
                     if soc <= drain_stop_soc:
-                        notaus_grund = (f'Drain-Ende: SOC {soc:.0f}% ≤ '
+                        aus_grund = (f'Drain-Ende: SOC {soc:.0f}% ≤ '
                                         f'drain_stop {drain_stop_soc}%')
                     else:
                         # Phase 0 (Morgen-Drain): Batterie wird VOR PV-Start
@@ -1154,19 +1122,16 @@ class RegelHeizpatrone(Regel):
                         if self._letzte_phase != 'phase0':
                             pv_w = obs.pv_total_w or 0
                             if pv_w < self.HP_NENN_W * 0.25:
-                                notaus_grund = (f'Drain-Ende: PV {pv_w:.0f}W — '
+                                aus_grund = (f'Drain-Ende: PV {pv_w:.0f}W — '
                                                 f'kein Solarertrag')
                         # Netzbezug → Energie aus Netz statt PV
-                        if not notaus_grund:
-                            notaus_netz = get_param(matrix, self.regelkreis, 'notaus_netzbezug_w', 200)
-                            grid_avg = self._grid_avg(obs)
-                            notaus_ausloesen, netz_grund = self._netzbezug_notaus_ausloesen(
-                                obs, matrix, rest_h, grid_avg, float(notaus_netz)
-                            )
-                            if notaus_ausloesen:
-                                notaus_grund = f'Drain-Ende: {netz_grund}'
+                        if not aus_grund:
+                            self._grid_avg(obs)  # Side-Effect: Historie pflegen
+                            aus_ausloesen, netz_grund = self._netzbezug_aus_ausloesen(obs, matrix)
+                            if aus_ausloesen:
+                                aus_grund = f'Drain-Ende: {netz_grund}'
                         # Verbraucher-Checks (Soft-Bedingungen, mit Verzögerung)
-                        if not notaus_grund:
+                        if not aus_grund:
                             d_haus = get_param(matrix, self.regelkreis, 'drain_max_haushalt_w', 700)
                             d_wp = get_param(matrix, self.regelkreis, 'drain_max_wp_w', 500)
                             d_ev = get_param(matrix, self.regelkreis, 'drain_max_ev_w', 1000)
@@ -1198,18 +1163,18 @@ class RegelHeizpatrone(Regel):
                                         f'(Haus={house_w:.0f}W, Schwelle={d_haus}×1.2)'
                                     )
                                 elif verz_abgelaufen:
-                                    notaus_grund = (
+                                    aus_grund = (
                                         f'Drain-Ende (nach {verz_s // 60:.0f} Min '
                                         f'Verzögerung): Haushalt {house_w:.0f}W '
                                         f'≥ {d_haus}×1.2'
                                     )
-                            if not notaus_grund and wp_w >= d_wp and verz_abgelaufen:
-                                notaus_grund = (
+                            if not aus_grund and wp_w >= d_wp and verz_abgelaufen:
+                                aus_grund = (
                                     f'Drain-Ende (nach {verz_s // 60:.0f} Min '
                                     f'Verzögerung): WP {wp_w:.0f}W ≥ {d_wp}W'
                                 )
-                            elif not notaus_grund and ev_w >= d_ev and verz_abgelaufen:
-                                notaus_grund = (
+                            elif not aus_grund and ev_w >= d_ev and verz_abgelaufen:
+                                aus_grund = (
                                     f'Drain-Ende (nach {verz_s // 60:.0f} Min '
                                     f'Verzögerung): EV {ev_w:.0f}W ≥ {d_ev}W'
                                 )
@@ -1217,26 +1182,23 @@ class RegelHeizpatrone(Regel):
                     # Batterie entlädt: potenzial- und kontextabhängig
                     if p_batt < 0:
                         if not self._batt_entladung_toleriert(potenzial, soc_max_eff, obs):
-                            notaus_grund = (f'Batterie entlädt ({p_batt:.0f}W) '
+                            aus_grund = (f'Batterie entlädt ({p_batt:.0f}W) '
                                             f'bei Potenzial={potenzial}, SOC_MAX={soc_max_eff}%')
 
                     # Verbraucher-Konkurrenz
-                    if not notaus_grund and not self._hp_parallel_erlaubt(potenzial, wp_aktiv, ev_aktiv):
-                        notaus_grund = (f'Verbraucher-Konkurrenz: Potenzial={potenzial}, '
+                    if not aus_grund and not self._hp_parallel_erlaubt(potenzial, wp_aktiv, ev_aktiv):
+                        aus_grund = (f'Verbraucher-Konkurrenz: Potenzial={potenzial}, '
                                         f'WP={wp_aktiv}, EV={ev_aktiv}')
 
                     # Netzbezug (7-Min-Durchschnitt gegen Leistungssprünge/Haushaltslast)
-                    if not notaus_grund:
-                        notaus_netz = get_param(matrix, self.regelkreis, 'notaus_netzbezug_w', 200)
-                        grid_avg = self._grid_avg(obs)
-                        notaus_ausloesen, netz_grund = self._netzbezug_notaus_ausloesen(
-                            obs, matrix, rest_h, grid_avg, float(notaus_netz)
-                        )
-                        if notaus_ausloesen:
-                            notaus_grund = netz_grund
+                    if not aus_grund:
+                        self._grid_avg(obs)  # Side-Effect: Historie pflegen
+                        aus_ausloesen, netz_grund = self._netzbezug_aus_ausloesen(obs, matrix)
+                        if aus_ausloesen:
+                            aus_grund = netz_grund
 
                 # Burst-Timer abgelaufen
-                if not notaus_grund and self._burst_ende > 0 and time.time() >= self._burst_ende:
+                if not aus_grund and self._burst_ende > 0 and time.time() >= self._burst_ende:
                     if self._probe_modus:
                         # ── Probe auswerten: Hat PV auf die HP-Last reagiert? ──
                         pv_jetzt = obs.pv_total_w or 0
@@ -1257,14 +1219,14 @@ class RegelHeizpatrone(Regel):
                                 f'Probe erfolgreich: ΔPV={pv_delta:.0f}W (≥{probe_pv_min}W), '
                                 f'Grid={grid_jetzt:.0f}W (≤{probe_grid_max}W) '
                                 f'→ Burst verlängert um {verlaengern_s // 60} Min')
-                            # Kein notaus_grund → HP bleibt ein
+                            # Kein aus_grund → HP bleibt ein
                         else:
                             # Probe gescheitert → HP aus, Cooldown
                             probe_cd = get_param(matrix, self.regelkreis,
                                                  'probe_cooldown_s', 600)
                             self._probe_cooldown_bis = time.time() + probe_cd
                             self._probe_modus = False
-                            notaus_grund = (
+                            aus_grund = (
                                 f'Probe gescheitert: ΔPV={pv_delta:.0f}W '
                                 f'(min {probe_pv_min}W), Grid={grid_jetzt:.0f}W '
                                 f'(max {probe_grid_max}W) → Cooldown {probe_cd}s')
@@ -1317,10 +1279,10 @@ class RegelHeizpatrone(Regel):
                                     f'→ +{verlaengern_s // 60} Min')
 
                         if not auto_verlaengert:
-                            notaus_grund = (f'Burst-Timer abgelaufen '
+                            aus_grund = (f'Burst-Timer abgelaufen '
                                             f'({int((time.time() - self._burst_start) / 60)} Min)')
 
-            if notaus_grund:
+            if aus_grund:
                 # Kurz-Burst-Erkennung: War die HP kürzer als kurz_burst_max_s an?
                 # Gilt nur für normale Bursts (nicht Drain), und nur wenn ein
                 # Burst-Start bekannt ist.
@@ -1337,7 +1299,7 @@ class RegelHeizpatrone(Regel):
                         LOG.info(
                             f'HP Kurz-Burst #{self._kurze_burst_zaehler}: '
                             f'{burst_dauer_ist:.0f}s < {kurz_max_s}s Minimum '
-                            f'({notaus_grund})')
+                            f'({aus_grund})')
                         if self._kurze_burst_zaehler >= kurz_limit:
                             self._kurz_burst_sperre_bis = time.time() + kurz_sperre_s
                             self._kurze_burst_zaehler = 0
@@ -1358,7 +1320,7 @@ class RegelHeizpatrone(Regel):
                 return [{
                     'tier': 2, 'aktor': 'fritzdect',
                     'kommando': 'hp_aus',
-                    'grund': f'HP AUS: {notaus_grund}',
+                    'grund': f'HP AUS: {aus_grund}',
                 }]
 
             return []

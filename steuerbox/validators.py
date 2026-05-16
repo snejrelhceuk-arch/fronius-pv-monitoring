@@ -133,7 +133,7 @@ def validate_action(action: str, params: dict[str, Any], respekt_s: int) -> dict
         if action == 'hp_toggle' and state == 'on':
             soc_pct = params.get('soc_pct')
             uebertemp_c = params.get('uebertemp_c')
-            if isinstance(soc_pct, (int, float)) and soc_pct <= config.STEUERBOX_HP_NOTAUS_SOC_PCT:
+            if isinstance(soc_pct, (int, float)) and soc_pct <= config.STEUERBOX_HP_AUS_SOC_PCT:
                 abort(422, description='hp blocked: soc too low')
             if isinstance(uebertemp_c, (int, float)) and uebertemp_c >= config.STEUERBOX_HP_UEBERTEMP_C:
                 abort(422, description='hp blocked: overtemperature')

@@ -7,7 +7,12 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-- Derzeit keine zusätzlichen Änderungen dokumentiert.
+### Fixes
+- **HP-AUS Energie-Integral statt Forecast/Winter-Vetos (2026-05-16):** Vorfall an diesem Tag — HP lief 04:16–08:03 (≈ 3 h) mit sustained Netzbezug (>3 kWh) im Drain-Modus, weil das alte `_netzbezug_notaus_ausloesen` ein Forecast-Rest-Veto („gute Prognose holt's nach") besaß, das Netzbezug tolerierte. Neue Logik: HP ist Überschuss-Verbraucher und darf grundsätzlich keinen Netzbezug verursachen; nur kurze Schaltverluste durch Lastwechsel/Erzeugungsschwankungen werden geduldet. Messung über Energie-Integral des positiven Netzbezugs über 5 Min (Engine-Tick 60 s, 5 Samples): ≥ 0.02 kWh ≡ Ø 240 W → HP AUS. Veto nur bei aktuellem Bezug < 200 W. Forecast-Vetos, Winter-Schutz-Veto, Transient-Fenster-Veto und Drain-spezifische Netzbezug-Schwelle entfernt. Winter-Tiefentladung ist weiterhin über dynamisches SOC_MIN-Sliding (5–25 %) und die HART-Schwellen `stop_entladung_unter`/`extern_aus_soc_pct` abgesichert.
+- **Terminologie Notaus → AUS (HP-Kontext):** „Notaus" ist reserviert für menschen-/spannungsbezogene Schutzkontexte (BYD-BMS, Tier-1-Alarm). Im HP-Kontext: `notaus_grund`→`aus_grund`, `notaus_ausloesen`→`aus_ausloesen`, `extern_notaus_soc_pct`→`extern_aus_soc_pct`, Drain-Notaus→Drain-AUS, Notaus-Pfad→AUS-Pfad, Notaus-Kriterien→AUS-Kriterien. Doku (PV_CONFIG_HANDBUCH, HP_TOGGLE_OVERRIDE_FLOW, Card automation-regel-heizpatrone) konsistent nachgezogen.
+
+### Removed
+- **Matrix-Parameter (Regelkreis `heizpatrone`):** `notaus_netzbezug_w`, `notaus_netzbezug_aktuell_veto_w`, `notaus_forecast_sicherheit_kwh`, `notaus_forecast_haushalt_min_w`, `notaus_forecast_batt_ziel_soc_pct`, `notaus_forecast_batt_ignore_ab_soc_pct`, `notaus_forecast_klima_last_w`, `notaus_forecast_klima_plan_h`, `notaus_drain_netzbezug_w`, `notaus_winter_schutz_soc_pct`, `notaus_transient_aktiv_ab_h`, `notaus_transient_einspeisung_w`, `notaus_transient_fenster_zyklen` ersatzlos entfernt; ersetzt durch `aus_netzbezug_energie_kwh` (0.02 kWh), `aus_netzbezug_fenster_min` (5 min), `aus_netzbezug_aktuell_veto_w` (200 W). Rename: `extern_notaus_soc_pct` → `extern_aus_soc_pct`.
 
 ---
 

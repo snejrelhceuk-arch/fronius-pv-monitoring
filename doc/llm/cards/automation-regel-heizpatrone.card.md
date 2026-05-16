@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/regeln/geraete.py"
 tags: [heizpatrone, fritzdect, ww-speicher, prognose]
 status: stable
-last_review: 2026-05-10
+last_review: 2026-05-16
 ---
 
 # Regel Heizpatrone
@@ -28,8 +28,15 @@ Zusätzlich pausiert die Regel bei aktivem `afternoon_charge_request` den HP-Bet
 - **Outputs:** FritzDECT-Schaltbefehl `hp_ein`/`hp_aus`, Engine-Zielwert für ExternalRespect-Tracker.
 
 ## Invarianten
+- **Grundprinzip:** Die Heizpatrone ist ein Verbraucher für PV-Überschuss. Sie darf grundsätzlich **keinen Netzbezug verursachen**. Toleriert sind ausschließlich kurze Schaltverluste durch Lastwechsel/Erzeugungsschwankungen (Wattpilot-Start, Wolkenfront, Backofen), bis die Wechselrichter sich angepasst haben.
 - Prognose-Klassifikation: `<40 kWh = schlecht`, `40–100 = mittel`, `≥100 = gut` → bestimmt Freigabegrad pro Phase.
-- Notaus-Schwellen (immer aktiv): `WW_Temp ≥ 78 °C`, `SOC ≤ 7 %`, Netzbezug erkennbar (`grid_avg`), `PV<1500 W` in PV-only-Phasen.
+- AUS-Schwellen (immer aktiv): `WW_Temp ≥ 78 °C`, `SOC ≤ stop_entladung_unter` (5 %), `SOC ≤ extern_aus_soc_pct` (15 %, nur bei Extern-EIN), Netzbezug-Energie-Integral, `PV<1500 W` in PV-only-Phasen.
+- **Netzbezug-AUS (`_netzbezug_aus_ausloesen`, seit 2026-05-16, Vorfall »3 h Netzbezug im Drain«):** Energie-Integral-Verfahren
+  1. **Veto:** Aktueller Bezug `< aus_netzbezug_aktuell_veto_w` (200 W) → keine Auswertung (Historie evtl. veraltet, kein akuter Bezug).
+  2. **Messung:** Σ der positiven `grid_power_w`-Samples der letzten `aus_netzbezug_fenster_min` (5) Engine-Ticks (≈ 60 s/Tick) als Energie (kWh = Σ_W / 60000).
+  3. **Auslöser:** Energie ≥ `aus_netzbezug_energie_kwh` (0.02 kWh ≡ Ø 240 W über 5 Min) → HP AUS. Schaltspitzen (z. B. einmal 3 kW für 30 s) bleiben darunter.
+  Es gibt **keine Vetos durch Forecast-Rest, Winter-Schutz oder Transient-Fenster mehr**. Winter-Tiefentladung wird über das **dynamische SOC_MIN-Sliding (5–25 %)** in `RegelSocSteuerung` und die HART-Schwellen `stop_entladung_unter`/`extern_aus_soc_pct` abgesichert, nicht durch toleriertes HP-Netzbezug.
+- Begriff **„Notaus"** ist reserviert für menschen-/spannungsbezogene Schutzkontexte (BYD-BMS, Tier-1-Alarm). Im HP-Kontext heißt es **„AUS"** (`aus_grund`, `_netzbezug_aus_ausloesen`, `extern_aus_soc_pct`, AUS-Pfad, AUS-Kriterienwerk).
 - Externe Schaltung erkannt → `_cancel_conflicting_overrides()` annulliert offene Operator-Overrides + setzt 30-min-Respekt-Hold (`extern_respekt_s`).
 - Schreibbestätigung: Aktor muss Engine-Wert registrieren, sonst falsch-positive Extern-Erkennung.
 - Bei aktivem Nachmittags-Ladewunsch (`afternoon_charge_request` + `pause_hp_until_target=true`) schaltet die Engine HP AUS **nur wenn** `0 < batt_power_w < 8000 W` (Batterie laedt mit schwacher Leistung). Bei fehlender Ladung (Batterie idle/entlaedt) oder starker Ladung (>=8 kW) bleibt HP freigegeben.

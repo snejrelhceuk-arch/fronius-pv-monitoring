@@ -736,86 +736,6 @@
           "einheit": "kWh",
           "beschreibung": "Nachmittags spät: größere Reserve für sichere Batterie-Volladung"
         },
-        "notaus_netzbezug_w": {
-          "wert": 500,
-          "bereich": [
-            0,
-            500
-          ],
-          "einheit": "W",
-          "obs_feld": "grid_power_w",
-          "aktor_kommando": "hp_aus",
-          "beschreibung": "Netzbezug > dieser Wert (Ø7 Min Durchschnitt) → HP AUS"
-        },
-        "notaus_netzbezug_aktuell_veto_w": {
-          "wert": 200,
-          "bereich": [
-            0,
-            1000
-          ],
-          "einheit": "W",
-          "obs_feld": "grid_power_w",
-          "beschreibung": "Aktueller Netzbezug unter diesem Wert blockiert HP-Netz-Notaus (Veto gegen veralteten Ø7-Min-Wert)"
-        },
-        "notaus_forecast_sicherheit_kwh": {
-          "wert": 5.0,
-          "bereich": [
-            0.0,
-            12.0
-          ],
-          "einheit": "kWh",
-          "obs_feld": "forecast_rest_kwh",
-          "beschreibung": "Feste Sicherheitsreserve für HP-Freigabe bei guter Prognose"
-        },
-        "notaus_forecast_haushalt_min_w": {
-          "wert": 500,
-          "bereich": [
-            100,
-            3000
-          ],
-          "einheit": "W",
-          "obs_feld": "house_load_w",
-          "beschreibung": "Mindest-Haushaltslast bis Sunset zur Restbedarf-Berechnung bei guter Prognose"
-        },
-        "notaus_forecast_batt_ziel_soc_pct": {
-          "wert": 100,
-          "bereich": [
-            75,
-            100
-          ],
-          "einheit": "%",
-          "obs_feld": "batt_soc_pct",
-          "beschreibung": "Ziel-SOC für Batterie-Bedarfsanteil in der Restbedarf-Berechnung"
-        },
-        "notaus_forecast_batt_ignore_ab_soc_pct": {
-          "wert": 95,
-          "bereich": [
-            80,
-            100
-          ],
-          "einheit": "%",
-          "obs_feld": "batt_soc_pct",
-          "beschreibung": "Ab diesem SOC wird kein zusätzlicher Batterie-Ladebedarf mehr für HP-Notaus berücksichtigt"
-        },
-        "notaus_forecast_klima_last_w": {
-          "wert": 1300,
-          "bereich": [
-            0,
-            3000
-          ],
-          "einheit": "W",
-          "obs_feld": "klima_aktiv",
-          "beschreibung": "Zusätzliche Last der Klimaanlage für Restbedarf-Berechnung (nur wenn Klima aktiv)"
-        },
-        "notaus_forecast_klima_plan_h": {
-          "wert": 4.0,
-          "bereich": [
-            0.0,
-            12.0
-          ],
-          "einheit": "h",
-          "beschreibung": "Maximaler Stundenanteil der Klima-Last, der zur Restbedarf-Berechnung addiert wird"
-        },
         "speicher_temp_max_c": {
           "wert": 78,
           "bereich": [
@@ -999,16 +919,7 @@
             7200
           ],
           "einheit": "s",
-          "beschreibung": "Autoritätszeit bei manuellem Schalten (Default 30 Min, einstellbar 15 Min–2 h). Bei EIN: Engine respektiert manuelle Einschaltung, nur Übertemp und SOC ≤ extern_notaus_soc_pct überstimmen. Bei AUS: hp_ein für diese Dauer gesperrt."
-        },
-        "extern_notaus_soc_pct": {
-          "wert": 15,
-          "bereich": [
-            5,
-            30
-          ],
-          "einheit": "%",
-          "beschreibung": "SOC-Schwelle für Autoritäts-Override: Wird HP manuell eingeschaltet, überstimmt die Engine bei SOC ≤ diesem Wert und schaltet HP aus (Batterieschutz). Standard 15%."
+          "beschreibung": "Autoritätszeit bei manuellem Schalten (Default 30 Min, einstellbar 15 Min–2 h). Bei EIN: Engine respektiert manuelle Einschaltung, nur Übertemp und SOC ≤ extern_aus_soc_pct überstimmen. Bei AUS: hp_ein für diese Dauer gesperrt."
         },
         "_abend_doc": "Phase 4 — Abend-Nachladezyklus: HP nutzt Rest-PV wenn Batterie nahe SOC_MAX. Zyklus: EIN → SOC sinkt → AUS → Batt lädt → SOC≈MAX → EIN. Adaptiv zu SOC_MAX.",
         "abend_soc_ein_unter_max_pct": {
@@ -1138,6 +1049,45 @@
           ],
           "einheit": "s",
           "beschreibung": "Dauer der EIN-Sperre nach Kurz-Burst-Limit erreicht (Standard: 30 Min). Während dieser Sperre kann HP nicht automatisch eingeschaltet werden."
+        },
+        "extern_aus_soc_pct": {
+          "wert": 15,
+          "bereich": [
+            5,
+            30
+          ],
+          "einheit": "%",
+          "beschreibung": "SOC-Schwelle für Autoritäts-Override: Wird HP manuell eingeschaltet, überstimmt die Engine bei SOC ≤ diesem Wert und schaltet HP aus (Batterieschutz). Standard 15%."
+        },
+        "aus_netzbezug_aktuell_veto_w": {
+          "wert": 200,
+          "bereich": [
+            0,
+            1000
+          ],
+          "einheit": "W",
+          "obs_feld": "grid_power_w",
+          "beschreibung": "Aktueller Netzbezug unter diesem Wert blockiert die HP-AUS-Auswertung (Historie evtl. veraltet, kein akuter Bezug)."
+        },
+        "aus_netzbezug_fenster_min": {
+          "wert": 5,
+          "bereich": [
+            2,
+            10
+          ],
+          "einheit": "min",
+          "beschreibung": "Fensterlänge für das Netzbezug-Energie-Integral. Engine-Tick ≈ 60 s, d.h. 5 Samples = 5 Min."
+        },
+        "aus_netzbezug_energie_kwh": {
+          "wert": 0.02,
+          "bereich": [
+            0.005,
+            0.1
+          ],
+          "einheit": "kWh",
+          "obs_feld": "grid_power_w",
+          "aktor_kommando": "hp_aus",
+          "beschreibung": "Schwellwert für integrierten positiven Netzbezug über aus_netzbezug_fenster_min. Bei Überschreitung schaltet die HP AUS. Schaltverluste (Wattpilot-Start, Lastwechsel) bleiben unter dieser Schwelle."
         }
       },
       "score_gewicht": 40,

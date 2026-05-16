@@ -87,7 +87,7 @@ Zeigt alle Regelkreise als Checkliste. Ein Regelkreis ist entweder **aktiv** (�
 > **Warnung:** Die P1-Regeln `sls_schutz` und `wattpilot_battschutz` sollten **niemals** deaktiviert werden.
 > Tier-1-Alarmierung (Temperatur/SOC/Netz) bleibt aktiv und meldet bei Bedarf per Event-Mail.
 
-**Heizpatrone (P2) deaktivieren:** Wird der HP-Regelkreis deaktiviert, werden keine neuen Bursts/Drains mehr gestartet. Der **Notaus-Pfad bleibt immer aktiv** — eine manuell oder per Burst eingeschaltete HP wird beim nächsten Zyklus sicher abgeschaltet (Burst-Timer, Netzbezug, Entladung). Die HP bleibt also nicht "vergessen" eingeschaltet.
+**Heizpatrone (P2) deaktivieren:** Wird der HP-Regelkreis deaktiviert, werden keine neuen Bursts/Drains mehr gestartet. Der **AUS-Pfad bleibt immer aktiv** — eine manuell oder per Burst eingeschaltete HP wird beim nächsten Zyklus sicher abgeschaltet (Burst-Timer, Netzbezug, Entladung). Die HP bleibt also nicht "vergessen" eingeschaltet.
 
 ---
 
@@ -425,37 +425,36 @@ Wenn `morgen_soc_min` den SOC_MIN früh auf 5% öffnet, entlädt sich die Batter
 - `forecast_quality` ist „gut“ oder „mittel“
 - Forecast zeigt ≥ 4 kW in den kommenden Stunden (PV wird kommen)
 
-**Drain-Notaus:** Im Drain-Modus toleriert der Notaus die Batterie-Entladung (die ja gewollt ist). Er greift aber ein wenn:
+**Drain-AUS:** Im Drain-Modus toleriert das AUS-Kriterienwerk die Batterie-Entladung (die ja gewollt ist). Es greift aber ein wenn:
 - SOC ≤ `drain_min_soc_pct` (Batterie leer genug)
 - Haushalt/WP/EV-Verbrauch steigt über die Schwellen (mit 1.2× Hysterese bei Haushalt)
 - Netzbezug, WW-Übertemperatur oder Burst-Timer-Ablauf
 
-**Notaus-Kriterien (HART vs. KONTEXTABHÄNGIG):**
+**AUS-Kriterien (HART vs. KONTEXTABHÄNGIG):**
 
 | # | Kriterium | Typ | Autoritätsschaltung | Wirkung |
 |---|-----------|-----|---------------------|--------|
 | 1 | WW-Temperatur ≥ 78 °C | **HART** | Sofort | Verbrühungs-/Überdruckschutz |
 | 2 | SOC ≤ `stop_entladung_unter` (5%) | **HART** | Sofort | Absoluter Tiefentladeschutz (Tier-1) |
-| 3 | SOC ≤ `extern_notaus_soc_pct` (15%) | **HART** | Sofort | Autoritäts-Override: manuelle Einschaltung überstimmt bei niedrigem SOC |
+| 3 | SOC ≤ `extern_aus_soc_pct` (15%) | **HART** | Sofort | Autoritäts-Override: manuelle Einschaltung überstimmt bei niedrigem SOC |
 | 4 | `rest_h < min_rest_h` (2h vor Sunset) | **DIFFERENZIERT** | **Pausiert** | Phase 4 Abend-Zyklus: SOC ≈ MAX + PV ok → HP erlaubt; sonst AUS |
 | 5 | Batterie entlädt — potenzialabhängig | **KONTEXT** | **Pausiert** | Abhängig von Potenzial und SOC_MAX (s.u.) |
 | 6 | Verbraucher-Konkurrenz (WP/EV) | **KONTEXT** | **Pausiert** | Abhängig von Potenzial-Stufe (s.u.) |
-| 7 | Netzbezug Ø7 Min > `notaus_netzbezug_w` | **KONTEXT** | **Pausiert** | Nur wenn weder Istwert-Veto noch Forecast-Veto greifen |
+| 7 | Netzbezug-Energie-Integral ≥ `aus_netzbezug_energie_kwh` über `aus_netzbezug_fenster_min` | **KONTEXT** | **Pausiert** | HP ist Überschuss-Verbraucher — sustained Netzbezug verboten, nur Schaltverluste werden toleriert |
 | 8 | Burst-Timer abgelaufen | **KONTEXT** | **Pausiert** | Kein Timer bei manuellem Einschalten |
 
-**Netzbezug-Vetos (seit 2026-03-28):**
-- **Istwert-Veto:** Wenn aktueller Netzbezug `< notaus_netzbezug_aktuell_veto_w`, wird kein HP-Notaus ausgelöst.
-- **Forecast-Veto (nur bei `forecast_quality = gut`):** HP darf weiterlaufen, wenn `forecast_rest_kwh` den dynamischen Bedarf deckt:
-  `Batteriebedarf + Haushaltsbedarf bis Sunset + Sicherheitsreserve + optional Klima-Last`.
+**Netzbezug-AUS (seit 2026-05-16, Vorfall »3 h Netzbezug im Drain«):**
 
-Der Batteriebedarf ist SoC-abhängig: bei niedrigem SoC hoch (bis Volladung),
-ab `notaus_forecast_batt_ignore_ab_soc_pct` wird kein zusätzlicher
-Batterie-Ladebedarf mehr eingerechnet.
+Die Heizpatrone ist Verbraucher für PV-Überschuss und darf grundsätzlich keinen Netzbezug verursachen. Toleriert sind nur kurze Schaltverluste durch Lastwechsel und Erzeugungsschwankungen (Wattpilot-Start, Wolkenfront, Backofen), bis die Wechselrichter sich angepasst haben.
+
+Messung: Energie-Integral des positiven Netzbezugs über `aus_netzbezug_fenster_min` (Default 5 Min, Engine-Tick ≈ 60 s). Überschreitet die integrierte Energie `aus_netzbezug_energie_kwh` (Default 0.02 kWh ≡ Ø 240 W über 5 Min) → HP AUS. Schaltspitzen (z. B. einmal 3 kW für 30 s) bleiben darunter.
+
+Veto: Aktueller Bezug `< aus_netzbezug_aktuell_veto_w` (200 W) → keine Auswertung (Historie evtl. veraltet). Die früheren Forecast-Rest-Vetos (»gute Prognose holt's nach«) und Winter-Schutz-Vetos wurden entfernt: kein Forecast und keine SOC-Lage rechtfertigen sustained Netzbezug durch die HP.
 
 **Autoritätsschaltung (seit 2026-03-14):** Bei manueller Einschaltung (Fritz!DECT Taster
 oder App) respektiert die Engine die Nutzer-Entscheidung für `extern_respekt_s`
 (Standard 30 Min, einstellbar 15 Min–2 h). Nur **Übertemperatur**, **SOC ≤ 5%** und
-**SOC ≤ 15%** (`extern_notaus_soc_pct`) dürfen sofort überstimmen. Phase 4 und alle
+**SOC ≤ 15%** (`extern_aus_soc_pct`) dürfen sofort überstimmen. Phase 4 und alle
 weichen Kriterien pausieren. Bei manuellem Ausschalten gilt analog eine
 EIN-Sperre für die gleiche Dauer.
 
@@ -477,11 +476,11 @@ Verbraucher haben Vorrang). In dieser Phase toleriert die Engine Batterie-Entlad
 mittlerer/guter Prognose, weil PV die Batterie später wieder füllt. Erst wenn
 SOC_MAX auf 100% geht (Nachmittag) wird die Batterie-Entladung strenger bewertet.
 
-**Autoritätsschaltung (Extern-Erkennung):** Wenn die HP außerhalb der Engine eingeschaltet wird (pv-config Menü 6, Fritz!Box-App, physischer Schalter), erkennt die Engine dies automatisch: HP ist EIN, aber kein Burst/Drain läuft. In diesem Fall gilt für `extern_respekt_s` (Standard: 30 Min, einstellbar 15 Min–2 h) die **Nutzer-Autorität**: alle weichen Kriterien UND Phase 4 pausieren. Nur **Übertemperatur**, **SOC ≤ 5%** (Tier-1/Tiefentladeschutz) und **SOC ≤ 15%** (`extern_notaus_soc_pct`) überstimmen sofort. Bei manuellem Ausschalten sperrt die Engine hp_ein für die gleiche Dauer.
+**Autoritätsschaltung (Extern-Erkennung):** Wenn die HP außerhalb der Engine eingeschaltet wird (pv-config Menü 6, Fritz!Box-App, physischer Schalter), erkennt die Engine dies automatisch: HP ist EIN, aber kein Burst/Drain läuft. In diesem Fall gilt für `extern_respekt_s` (Standard: 30 Min, einstellbar 15 Min–2 h) die **Nutzer-Autorität**: alle weichen Kriterien UND Phase 4 pausieren. Nur **Übertemperatur**, **SOC ≤ 5%** (Tier-1/Tiefentladeschutz) und **SOC ≤ 15%** (`extern_aus_soc_pct`) überstimmen sofort. Bei manuellem Ausschalten sperrt die Engine hp_ein für die gleiche Dauer.
 
-> **Hinweis:** Der Notaus läuft im Engine fast-cycle (60 s) und ist
+> **Hinweis:** Das AUS-Kriterienwerk läuft im Engine fast-cycle (60 s) und ist
 > **immer aktiv**, auch wenn der Regelkreis auf `aktiv: false` steht.
-> HARTE Kriterien (Temperatur, SOC-Schutzgrenze, extern_notaus_soc)
+> HARTE Kriterien (Temperatur, SOC-Schutzgrenze, extern_aus_soc)
 > greifen auch während der Autoritätsschaltung.
 
 | Parameter | Standard | Bereich | Wirkung |
@@ -498,27 +497,22 @@ SOC_MAX auf 100% geht (Nachmittag) wird die Batterie-Entladung strenger bewertet
 | max_wattpilot | 500 W | 0–5000 W | **Obergrenze EV-Ladung.** (Legacy, durch Potenzial-Logik ersetzt.) HP darf mit EV parallel laufen wenn Potenzial ≥ `gut`. |
 | batt_reserve | 2.0 kWh | 0.5–5.0 kWh | **Prognose-Reserve.** Restprognose muss Batterie-Volladung + diese Reserve decken, damit HP erlaubt wird. |
 | batt_reserve_nachmittag | 3.0 kWh | 1–8 kWh | **Größere Reserve nachmittags.** Weniger Restzeit → mehr Puffer für sichere Volladung. |
-| notaus_netzbezug | 500 W | 0–500 W | **Netzbezug-Schwelle (Ø7 Min).** Basisgrenze für HP-Notaus durch Netzbezug. |
-| notaus_netzbezug_aktuell_veto_w | 200 W | 0–1000 W | **Istwert-Veto.** Wenn aktueller Netzbezug darunter liegt, blockiert das den HP-Netz-Notaus (Schutz gegen veralteten Durchschnitt). |
-| notaus_forecast_sicherheit_kwh | 5.0 kWh | 0–12 kWh | **Sicherheitsreserve.** Fester Zusatzpuffer im Forecast-Veto. |
-| notaus_forecast_haushalt_min_w | 500 W | 100–3000 W | **Haushalts-Mindestlast.** Untergrenze für den bis Sunset eingeplanten Haushaltsbedarf. |
-| notaus_forecast_batt_ziel_soc_pct | 100% | 75–100% | **Batterie-Ziel-SOC.** Bis zu diesem SOC wird Batteriebedarf in den Forecast-Bedarf einberechnet. |
-| notaus_forecast_batt_ignore_ab_soc_pct | 95% | 80–100% | **Batteriebedarf-Bypass.** Ab diesem SOC zählt kein zusätzlicher Batterie-Ladebedarf mehr. |
-| notaus_forecast_klima_last_w | 1300 W | 0–3000 W | **Klima-Zusatzlast.** Wird nur angerechnet, wenn die Klimaanlage aktuell läuft. |
-| notaus_forecast_klima_plan_h | 4.0 h | 0–12 h | **Klima-Planhorizont.** Maximaler Stundenanteil der Klima-Last in der Forecast-Bedarfsrechnung. |
+| aus_netzbezug_energie_kwh | 0.02 kWh | 0.005–0.1 kWh | **HP-AUS-Schwelle (Energie-Integral).** Sustained Netzbezug ≥ dieser Energie über `aus_netzbezug_fenster_min` → HP AUS. Default 0.02 kWh/5 min ≡ Ø 240 W. Kurze Schaltspitzen (Wattpilot, Backofen) bleiben darunter. Seit 2026-05-16. |
+| aus_netzbezug_fenster_min | 5 min | 2–10 min | **Fensterlänge** für das Netzbezug-Energie-Integral. Engine-Tick ≈ 60 s, d.h. 5 Samples = 5 Min. |
+| aus_netzbezug_aktuell_veto_w | 200 W | 0–1000 W | **Istwert-Veto.** Aktueller Netzbezug darunter → keine AUS-Auswertung (Historie evtl. veraltet, kein akuter Bezug). |
 | speicher_temp_max | 78 °C | 60–85 °C | **Warmwasser-Übertemperatur.** HP sofort AUS bei ≥78 °C. Schutz vor Verbrühung/Überdruck. |
 | schlecht_unter_kwh | 40.0 kWh | 5–150 kWh | **Zentrale Grenze für `schlecht`.** Unterhalb davon ist die Prognose schlecht. Wirkt auf SolarForecast, SOC-Regeln, HP und pv-config. |
 | mittel_unter_kwh | 100.0 kWh | 20–250 kWh | **Zentrale Grenze für `mittel`.** Ab diesem Wert gilt die Prognose als `gut`. Muss größer als `schlecht_unter_kwh` sein. |
 | drain_fruehstart_vor_sunrise_h | 1.0 h | 0–3 h | **Drain-Frühstart vor Sonnenaufgang.** Phase 0 startet ab `sunrise − dieser_Wert`. |
 | drain_min_sunshine_h | 5.0 h | 0–12 h | **Mindest-Sonnenstunden für Drain (NEU 2026-03-14).** Phase 0 wird blockiert wenn die prognostizierten Sonnenstunden unter diesem Wert liegen. An Regentagen braucht der Haushalt die Batterie-Energie. 0 = deaktiviert (kein Sonnenstunden-Guard). |
 | drain_start_soc_pct | 20% | 10–50% | **Drain-SOC-Startschwelle.** Phase 0 nur wenn SOC über diesem Wert. |
-| drain_stop_soc_pct | 15% | 5–30% | **Drain-SOC-Untergrenze.** Drain-Notaus schaltet HP aus wenn SOC diesen Wert erreicht. |
+| drain_stop_soc_pct | 15% | 5–30% | **Drain-SOC-Untergrenze.** Drain-AUS schaltet HP aus wenn SOC diesen Wert erreicht. |
 | drain_max_haushalt | 700 W | 200–2000 W | **Max. Hausverbrauch für Drain.** HP-Drain nur bei niedrigem Haushalt — sonst leert die Batterie schon schnell genug. |
 | drain_max_wp | 500 W | 100–2000 W | **Max. WP-Leistung für Drain.** Wenn WP läuft, braucht die Batterie keinen zusätzlichen Drain. |
 | drain_max_ev | 1000 W | 200–5000 W | **Max. EV-Ladung für Drain.** EV verbraucht bereits genug Batterie. |
 | drain_min_prognose | 4.0 kW | 2–10 kW | **Mindest-Prognoseleistung.** Forecast muss in den kommenden Stunden ≥ diesen Wert in kW zeigen. Stellt sicher, dass PV die Batterie später wieder füllt. |
 | drain_fenster_ende | 10.0 h | 8–12 h | **Drain nur vor dieser Uhrzeit.** Standard 10:00 — danach produziert PV und Phase 1–3 übernehmen. |
-| drain_burst_dauer | 2700 s | 900–5400 s | **Drain-Burst Maximaldauer (45 Min).** Sicherheits-Backstop — Drain-Notaus (SOC, Verbraucher) beendet den Drain meist früher. |
+| drain_burst_dauer | 2700 s | 900–5400 s | **Drain-Burst Maximaldauer (45 Min).** Sicherheits-Backstop — Drain-AUS (SOC, Verbraucher) beendet den Drain meist früher. |
 | drain_abschalt_verzoegerung_min | 5 min | 1–10 min | **Verzögerung beim Drain-Abschalten durch Verbrauchsspitzen.** Haushaltsgeräte (Wasserkocher, Backofen, Hauswasserwerk) unterbrechen den Drain erst nach anhaltender Überschreitung des jeweiligen Schwellwerts. **Nicht verzögert (sofort): SOC-Schutz, WW-Übertemperatur und Netzbezug.** Standard 5 Min. |
 | abend_soc_ein_unter_max_pct | 2% | 1–5% | **Abend-Zyklus EIN-Schwelle.** HP darf an wenn SOC ≥ SOC_MAX − diesen Wert. |
 | abend_soc_aus_unter_max_pct | 10% | 5–20% | **Abend-Zyklus AUS-Schwelle.** HP muss aus wenn SOC < SOC_MAX − diesen Wert. |
@@ -533,8 +527,8 @@ SOC_MAX auf 100% geht (Nachmittag) wird die Batterie-Entladung strenger bewertet
 | kurz_burst_max_s | 420 s | 180–900 s | **Kurz-Burst maximale Dauer (7 Min).** HP läuft maximal diese Zeit bei kurzen Restperioden (z.B. Wolkenbruch, Abend). Standard 420s (7 Min) seit 2026-03-24; vorher 300s. |
 | kurz_burst_limit | 2 | 1–5 | **Max. Kurz-Bursts hintereinander.** Nach dieser Zahl von Kurz-Bursts > 5-Min-Päuse erzwungen. Verhindert Flip-Flop-Muster. Seit 2026-03-24. |
 | kurz_burst_sperre_s | 1800 s | 300–3600 s | **Sperrzeit nach Kurz-Burst-Limit erreicht (30 Min).** HP wird für diese Dauer blockiert wenn `kurz_burst_limit` Bursts hintereinander stattgefunden haben. Standard 1800s (30 Min) seit 2026-03-24; vorher 420s. |
-| extern_respekt | 1800 s | 900–7200 s | **Autoritätszeit (30 Min, 15 Min–2 h).** Bei manueller Einschaltung: Engine respektiert Nutzer-Entscheidung, nur Übertemp und SOC ≤ extern_notaus_soc überstimmen. Bei manuellem Ausschalten: hp_ein für diese Dauer gesperrt. |
-| extern_notaus_soc | 15% | 5–30% | **Autoritäts-Override bei niedrigem SOC.** Wird HP manuell eingeschaltet, überstimmt die Engine bei SOC ≤ diesem Wert und schaltet HP aus (Batterieschutz). |
+| extern_respekt | 1800 s | 900–7200 s | **Autoritätszeit (30 Min, 15 Min–2 h).** Bei manueller Einschaltung: Engine respektiert Nutzer-Entscheidung, nur Übertemp und SOC ≤ extern_aus_soc überstimmen. Bei manuellem Ausschalten: hp_ein für diese Dauer gesperrt. |
+| extern_aus_soc | 15% | 5–30% | **Autoritäts-Override bei niedrigem SOC.** Wird HP manuell eingeschaltet, überstimmt die Engine bei SOC ≤ diesem Wert und schaltet HP aus (Batterieschutz). |
 
 **Rechenbeispiel (sonniger Märztag, ≈ 45 kWh Prognose, 9h Sonne):**
 ```

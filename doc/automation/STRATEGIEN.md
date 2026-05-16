@@ -247,7 +247,7 @@ sunshine_h    = prognostizierte Sonnenstunden heute [h] (aus Wetter-API)
 #   Batterie gezielt leeren BEVOR PV produziert. Sunrise-basiert,
 #   NICHT P_Batt-abhängig (P_Batt > 0 bei erzwungener Netzladung!).
 #   Sonnenstunden-Guard: kein Drain bei < 5h prognostizierter Sonne.
-#   Drain-Notaus prüft PV < 500W und Netzbezug Ø > 200W.
+#   Drain-AUS prüft PV < 500W und Netzbezug Ø > 200W.
 WENN now_h >= (sunrise - 1h) UND now_h < 10:00:
     UND sunshine_h >= 5.0:          ← NEU: Sonnenstunden-Guard
     UND SOC > 20%:
@@ -318,37 +318,37 @@ ENTLADESCHUTZ:   SOC-abhängig (siehe unten)
 # ── Autoritätsschaltung (manuelles Schalten) ─────────────────────
 # Manuell EIN: Engine respektiert für `extern_respekt_s` (30 Min, 15–120 Min).
 #   ALLE weichen Kriterien + Phase 4 pausiert. Nur Übertemp, SOC ≤ 5%
-#   und SOC ≤ `extern_notaus_soc_pct` (15%) überstimmen sofort.
+#   und SOC ≤ `extern_aus_soc_pct` (15%) überstimmen sofort.
 # Manuell AUS: Engine sperrt hp_ein für `extern_respekt_s`.
-WENN HP extern EIN UND SOC ≤ extern_notaus_soc_pct (15%):
+WENN HP extern EIN UND SOC ≤ extern_aus_soc_pct (15%):
   → HP SOFORT AUS ("Extern-Override: SOC zu niedrig")
 WENN HP extern AUS:
   → EIN-Sperre für extern_respekt_s```
 
-#### SOC-abhängiger Entladeschutz (Notaus)
+#### SOC-abhängiger Entladeschutz (AUS)
 
-Der HP-Notaus ist **immer aktiv**, auch wenn der Regelkreis `heizpatrone`
+Der HP-AUS ist **immer aktiv**, auch wenn der Regelkreis `heizpatrone`
 auf `aktiv: false` steht. Dies schützt vor manuell eingeschalteter HP,
 die unbemerkt die Batterie entlädt.
 
-**Architektur-Entscheidung:** Der Notaus läuft im **Engine fast-cycle (60 s)**
+**Architektur-Entscheidung:** Der AUS-Pfad läuft im **Engine fast-cycle (60 s)**
 (Tier-2), nicht im Observer (Tier-1). Begründung: 1–5 Minuten Reaktionszeit
 sind für HP akzeptabel, Tier-1 (10 s) wäre übertrieben für einen thermischen
 Verbraucher.
 
 ```
 # ── SOC-abhängige Schwellen ──────────────────────────────────────
-notaus_soc_schwelle_pct  = 90   # konfigurierbar (50–100%)
-notaus_entladung_hochsoc_w = -1000  # konfigurierbar (-2000–0 W)
+hp_aus_soc_schwelle_pct  = 90   # konfigurierbar (50–100%)
+hp_aus_entladung_hochsoc_w = -1000  # konfigurierbar (-2000–0 W)
 
 WENN HP_aktiv == True UND P_Batt < 0 (Batterie entlädt):
-  WENN SOC >= notaus_soc_schwelle_pct:
+  WENN SOC >= hp_aus_soc_schwelle_pct:
     # Hochladen-Phase: toleriere bis zu -1000 W Entladung
-    WENN P_Batt < notaus_entladung_hochsoc_w:
-      → HP SOFORT AUS ("HP-Notaus: Batterie entlädt {P_Batt}W < {Schwelle}W")
+    WENN P_Batt < hp_aus_entladung_hochsoc_w:
+      → HP SOFORT AUS ("HP-AUS: Batterie entlädt {P_Batt}W < {Schwelle}W")
   SONST:
     # SOC < 90%: Jede Entladung → sofort AUS
-    → HP SOFORT AUS ("HP-Notaus: SOC {soc}% < {Schwelle}%, Entladung {P_Batt}W")
+    → HP SOFORT AUS ("HP-AUS: SOC {soc}% < {Schwelle}%, Entladung {P_Batt}W")
 ```
 
 **Warum SOC-abhängig?**
@@ -442,7 +442,7 @@ die Regelung des Nulleinspeisers braucht bis zu 30 s zum Nachregeln.
 | Probe-Logik (Nulleinspeiser) | in `geraete.py` Phase 1b | ✅ Produktiv (2026-03-08) |
 | Abend-Nachladezyklus | in `geraete.py` Phase 4 | ✅ Produktiv (2026-03-08) |
 | Phasenströme Pipeline | `data_collector.py → obs_state.py` | ✅ Produktiv (2026-03-08) |
-| Autoritätsschaltung (Extern) | in `geraete.py` + `extern_notaus_soc_pct` | ✅ Produktiv (2026-03-14) |
+| Autoritätsschaltung (Extern) | in `geraete.py` + `extern_aus_soc_pct` | ✅ Produktiv (2026-03-14) |
 | Klima Extern-Erkennung | in `geraete.py` (analog HP-Muster) | ✅ Produktiv (2026-04-11) |
 | Klima Schaltfrequenz-Schutz | in `geraete.py` (`_verarbeite_schaltfrequenz_aus`) | ✅ Produktiv (2026-05-02) |
 | Parametermatrix (30+ Param.) | `config/soc_param_matrix.json` | ✅ Produktiv |

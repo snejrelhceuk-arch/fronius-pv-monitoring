@@ -425,8 +425,8 @@ if (obs.batt_soc_pct or 0) <= soc_schutz_abs:  # ≤ 5%
 
 # Extern-Autoritäts-Override: manuelle Einschaltung bei niedrigem SOC überstimmen
 if ist_extern:
-    extern_notaus_soc = get_param(matrix, self.regelkreis, 'extern_notaus_soc_pct', 15)
-    if (obs.batt_soc_pct or 0) <= extern_notaus_soc:
+    extern_aus_soc = get_param(matrix, self.regelkreis, 'extern_aus_soc_pct', 15)
+    if (obs.batt_soc_pct or 0) <= extern_aus_soc:
         return int(score * 1.5)  # ← If user turns ON but SOC < 15%, override
 ```
 
@@ -437,7 +437,7 @@ def validate_action(action: str, params: dict[str, Any], respekt_s: int) -> dict
     # Hard Guard: Heizpatrone darf nicht EIN bei kritischem SOC/Uebertemperatur.
     if action == 'hp_toggle' and state == 'on':
         soc_pct = params.get('soc_pct')
-        if isinstance(soc_pct, (int, float)) and soc_pct <= config.STEUERBOX_HP_NOTAUS_SOC_PCT:
+        if isinstance(soc_pct, (int, float)) and soc_pct <= config.STEUERBOX_HP_AUS_SOC_PCT:
             abort(422, description='hp blocked: soc too low')  # ← Reject at API level
         
         uebertemp_c = params.get('uebertemp_c')
@@ -461,7 +461,7 @@ From `config/battery_control.json`:
       "einheit": "s",
       "beschreibung": "Respektiere manuelle EIN/AUS für diese Zeit (30 min default, 15–120 min)"
     },
-    "extern_notaus_soc_pct": {
+    "extern_aus_soc_pct": {
       "wert": 15,
       "min": 5,
       "max": 30,

@@ -19,7 +19,7 @@ liest und fuehrt aus. Steuerbox hat **keinen direkten Hardware-Zugriff**.
 ## Architektur-Regeln (MUSS eingehalten werden)
 
 1. **Kein direkter Aktor-Aufruf aus Steuerbox.** Alle Writes gehen ueber Schicht C.
-2. **Hard Guards sind absolut.** SOC nie < 5%, Temp-Offset nie < -15K, HP-Notaus bei SOC<=15% oder Uebertemp>=78°C.
+2. **Hard Guards sind absolut.** SOC nie < 5%, Temp-Offset nie < -15K, HP-AUS bei SOC<=15% oder Uebertemp>=78°C.
 3. **Respekt-Verfahren statt fester Timer.** Alle Intents nutzen das bestehende `extern_respekt_s`-Muster (default 30 min, 15–120 min konfigurierbar). Automation pausiert weiche Regeln waehrend Respekt-Zeit. KEIN fester Timer pro Schaltertyp.
 4. **6h = Sicherheitsnetz, nicht Normalbetrieb.** 6h-Reset greift nur bei Automation-Versagen oder Fehler → Reset der GESAMTEN Parametermatrix auf konservative Defaults.
 5. **IP-Allowlist vor Auth-Check.** Erst IP pruefen, dann Token.
@@ -99,7 +99,7 @@ liest und fuehrt aus. Steuerbox hat **keinen direkten Hardware-Zugriff**.
 2. **Auth-Block:** Anfrage ohne Token → 401
 3. **Guard-Block:** SOC=3% → 422
 4. **Respekt-Test:** Override setzen, Respekt-Zeit ablaufen lassen → Automation uebernimmt
-5. **HP-Notaus:** HP EIN bei SOC<=15% → SOFORT AUS (Engine fast-cycle)
+5. **HP-AUS:** HP EIN bei SOC<=15% → SOFORT AUS (Engine fast-cycle)
 6. **Failover-Block:** Steuerbox auf Failover → nur GET erlaubt
 7. **Power-Restore:** Reboot simulieren → Normparameter gesetzt, Audit geschrieben
 8. **Audit-Vollstaendigkeit:** Jede Aktion hat Eintrag in steuerbox_audit

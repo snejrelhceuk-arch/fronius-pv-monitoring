@@ -83,7 +83,7 @@ Diese Grenzen kann der Operator **nicht** ueberschreiben:
 | SOC_MIN | >= 5% | BYD Notaus-Schutz |
 | SOC_MAX | <= 100% | Physikalisch |
 | WP Temp-Offset | >= -15K | Frostschutz |
-| HP bei SOC <= extern_notaus_soc_pct (15%) | SOFORT AUS | Entladeschutz |
+| HP bei SOC <= extern_aus_soc_pct (15%) | SOFORT AUS | Entladeschutz |
 | HP bei Uebertemperatur (>= 78°C) | SOFORT AUS | Speicherschutz |
 
 **Hinweis:** Timeouts sind KEINE Hard Guards, sondern Teil des Respekt-Verfahrens (§5).
@@ -109,7 +109,7 @@ manuelle Aenderungen ueber die Fronius-App oder Fritz!DECT.
 4. **Waehrend der Respekt-Zeit** (default `extern_respekt_s` = 1800s / 30 min,
    konfigurierbar 15–120 min): Automation pausiert alle weichen Regeln fuer
    diesen Aktor. Nur Hard Guards (SOC <= 5%, Uebertemperatur >= 78°C,
-   SOC <= extern_notaus_soc_pct) ueberstimmen sofort.
+   SOC <= extern_aus_soc_pct) ueberstimmen sofort.
 5. **Nach Ablauf der Respekt-Zeit:** Automation uebernimmt wieder die volle
    Regelhoheit. Der Override ist „abgearbeitet".
 6. **Operator kann erneut setzen** (neuer Respekt-Zyklus).

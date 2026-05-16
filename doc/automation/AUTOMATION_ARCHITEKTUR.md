@@ -1,7 +1,7 @@
 # Automation-Architektur — Schicht C
 
 **Erstellt:** 2026-02-22  
-**Letzte Überarbeitung:** 2026-03-01 (HP-Automation produktiv: Fritz!DECT, SOC-Notaus, flow_view)  
+**Letzte Überarbeitung:** 2026-03-01 (HP-Automation produktiv: Fritz!DECT, SOC-AUS, flow_view)  
 **Status:** Produktiv (Batterie + Heizpatrone laufen über pv-automation.service)  
 **Referenz Rollenmodell:** [ABCD_ROLLENMODELL.md](../system/ABCD_ROLLENMODELL.md)
 
@@ -348,13 +348,13 @@ Konkret:
 Die Tier-1-Sofort-Aktionen (EV drosseln) laufen
 **unabhängig** von der Engine direkt im Observer → Actuator Bypass.
 
-> **HP-Notaus — Architekturentscheidung (2026-03-01):**
+> **HP-AUS — Architekturentscheidung (2026-03-01):**
 > Der HP-Entladeschutz läuft bewusst im **Engine fast-cycle (60 s)**,
 > nicht im Observer (Tier-1, 10 s). Begründung: Die HP ist ein thermischer
-> Verbraucher — 1–5 Minuten Reaktionszeit sind akzeptabel. Der Notaus ist
+> Verbraucher — 1–5 Minuten Reaktionszeit sind akzeptabel. Der AUS-Pfad ist
 > **immer aktiv** (auch bei `aktiv: false`) und nutzt SOC-abhängige
 > Schwellen: SOC ≥ 90% toleriert bis −1000 W, SOC < 90% → sofort AUS.
-> Konfigurierbar via `notaus_soc_schwelle_pct` und `notaus_entladung_hochsoc_w`
+> Konfigurierbar via `hp_aus_soc_schwelle_pct` und `hp_aus_entladung_hochsoc_w`
 > in `config/soc_param_matrix.json`.
 
 ### Entscheidungsablauf pro Zyklus

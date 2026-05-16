@@ -253,7 +253,7 @@ class Engine:
         #    Schutz-Regeln werden ALLE ausgeführt (parallel-safe: versch. Aktoren),
         #    Optimierung: nur der Gewinner pro Aktor-Cascade.
         #    Schutz = Name enthält 'schutz' ODER Regel nutzt fremden Aktor
-        #    mit erhöhtem Score (= Notaus, z.B. heizpatrone→fritzdect).
+        #    mit erhöhtem Score (= AUS-Override, z.B. heizpatrone→fritzdect).
         def _ist_schutz(score, regel):
             if 'schutz' in regel.name:
                 return True
@@ -264,7 +264,7 @@ class Engine:
                               'ww_boost', 'wp_pflichtlauf',
                               'heiz_bedarf'):
                 return True
-            # HP-Notaus: fritzdect-Aktor mit erhöhtem Score (>score_gewicht)
+            # HP-AUS: fritzdect-Aktor mit erhöhtem Score (>score_gewicht)
             if regel.aktor == 'fritzdect' and score > get_score_gewicht(self._matrix, regel.regelkreis):
                 return True
             return False
