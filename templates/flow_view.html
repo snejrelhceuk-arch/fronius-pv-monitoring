@@ -551,6 +551,24 @@
             .batt-auto-table .ba-phase { width: 62px; }
             .hp-auto-row { font-size: 10px; gap: 6px; padding: 3px 4px; flex-wrap: wrap; }
             .hp-auto-row .hp-detail { font-size: 9px; max-width: 200px; }
+
+            /* Status-Badges in Portrait: kompakt unten links statt overlay rechts oben,
+               damit sie weder die Bubbles noch das Datum überdecken. */
+            .status-group {
+                position: static;
+                flex-direction: row;
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 4px;
+                padding: 4px 0 2px 0;
+                align-items: center;
+            }
+            .status-badge {
+                padding: 2px 7px;
+                font-size: 9px;
+            }
+            /* Sub-Nav-Buttons (Echtzeit/NQ) im SVG: größerer Tap-Bereich auf Mobile */
+            .mr-subbtn rect { stroke-width: 1.2; }
         }
 
         /* Querformat-Hinweis (nur Portrait + schmal) */
@@ -682,7 +700,7 @@
                 <a id="monitorOverlayLink" class="monitor-overlay-cover" href="/monitoring?period=tag" aria-label="Monitoring in Tagesansicht öffnen"></a>
             </div>
 
-            <svg id="flow-svg" viewBox="130 -40 590 420" preserveAspectRatio="xMidYMin meet">
+            <svg id="flow-svg" viewBox="130 -40 590 460" preserveAspectRatio="xMidYMin meet">
                 <defs>
                     <filter id="glow">
                         <feGaussianBlur stdDeviation="2.5" result="blur"/>
@@ -729,8 +747,8 @@
                 <text x="200" y="250" text-anchor="middle"
                       fill="#ef4444" font-size="13" font-weight="700" id="sub-netz">0 kWh</text>
 
-                    <!-- PV Prognose-Icon (font-unabhaengig, links vom PV-Kreis, ueber Netz-Kreis) -->
-                    <g id="pv-forecast-icon" transform="translate(250 110)" style="pointer-events:none;">
+                    <!-- PV Prognose-Icon (rechts oben vom PV-Kreis, mit Abstand zur PV-Gesamt-Bubble) -->
+                    <g id="pv-forecast-icon" transform="translate(457 105)" style="pointer-events:none;">
                         <title id="pv-forecast-icon-title">PV-Prognose: gut</title>
                         <defs>
                             <radialGradient id="pv-sun-core" cx="35%" cy="35%" r="70%">
@@ -804,6 +822,22 @@
                               letter-spacing="0.2">Maschinenraum</text>
                     </g>
 
+                    <!-- Sub-Buttons: Echtzeit + NQ (nur sichtbar nach Klick auf Maschinenraum) -->
+                    <g id="btn-echtzeit" class="mr-subbtn" transform="translate(200, 360)" style="display:none; cursor:pointer;">
+                        <rect x="-45" y="-12" width="90" height="24" rx="6"
+                              fill="rgba(34,197,94,0.18)" stroke="rgba(34,197,94,0.55)" stroke-width="1"/>
+                        <text x="0" y="4" text-anchor="middle"
+                              fill="rgba(187,247,208,0.95)" font-size="10" font-weight="600"
+                              letter-spacing="0.2">Echtzeit</text>
+                    </g>
+                    <g id="btn-nq" class="mr-subbtn" transform="translate(200, 390)" style="display:none; cursor:pointer;">
+                        <rect x="-45" y="-12" width="90" height="24" rx="6"
+                              fill="rgba(99,102,241,0.18)" stroke="rgba(129,140,248,0.6)" stroke-width="1"/>
+                        <text x="0" y="4" text-anchor="middle"
+                              fill="rgba(199,210,254,0.95)" font-size="10" font-weight="600"
+                              letter-spacing="0.2">Netzqualität</text>
+                    </g>
+
                     <!-- PV Gesamt -->
                     <circle cx="350" cy="135" r="58" fill="none"
                         stroke="#fbbf24" stroke-width="3" id="node-pv"/>
@@ -826,12 +860,12 @@
                     <text x="350" y="342" text-anchor="middle"
                       fill="#10b981" font-size="13" font-weight="700" id="sub-battery-soc">SOC: 0%</text>
 
-                    <!-- Datum + Uhrzeit (zwischen Bubbles) -->
-                        <text x="475" y="117" text-anchor="middle"
+                    <!-- Datum + Uhrzeit (mittig zwischen F1- und Netz-Bubble) -->
+                    <text x="212" y="105" text-anchor="middle"
                         fill="rgba(200,200,215,0.80)" font-size="14" font-weight="600"
                         font-family="Georgia, 'Book Antiqua', Palatino, serif"
                       id="datestamp">--</text>
-                        <text x="475" y="138" text-anchor="middle"
+                    <text x="212" y="126" text-anchor="middle"
                         fill="rgba(220,220,230,0.85)" font-size="18" font-weight="700"
                         font-family="Georgia, 'Book Antiqua', Palatino, serif"
                       id="timestamp">--:--</text>
@@ -1004,7 +1038,7 @@
 
     const API_BASE = {{ api_base_url | tojson }};
     const apiUrl = (path) => API_BASE ? `${API_BASE}${path}` : path;
-    const DEFAULT_VIEWBOX = '130 -40 590 420';
+    const DEFAULT_VIEWBOX = '130 -40 590 460';
 
     const flowChartEl = document.querySelector('.flow-chart');
     const overlayToggleEl = document.getElementById('overlayToggle');
@@ -1049,8 +1083,11 @@
     function adjustSvgViewBox(overlayActive) {
         const svg = document.getElementById('flow-svg');
         const isPortraitMobile = window.innerWidth < 600 && window.innerHeight > window.innerWidth;
+        // Portrait-viewBox je nach Sichtbarkeit der Sub-Buttons dynamisch erweitern
+        const subBtnsVisible = document.getElementById('btn-echtzeit') &&
+                               document.getElementById('btn-echtzeit').style.display !== 'none';
         if (isPortraitMobile) {
-            svg.setAttribute('viewBox', '80 80 500 300');
+            svg.setAttribute('viewBox', subBtnsVisible ? '80 70 500 360' : '80 70 500 320');
         } else {
             svg.setAttribute('viewBox', DEFAULT_VIEWBOX);
         }
@@ -1929,7 +1966,9 @@
         const svg = document.getElementById('flow-svg');
         const isPortraitMobile = window.innerWidth < 600 && window.innerHeight > window.innerWidth;
         if (isPortraitMobile) {
-            svg.setAttribute('viewBox', '80 80 500 300');
+            const subBtnsVisible = document.getElementById('btn-echtzeit') &&
+                                   document.getElementById('btn-echtzeit').style.display !== 'none';
+            svg.setAttribute('viewBox', subBtnsVisible ? '80 70 500 360' : '80 70 500 320');
         }
     }
     adjustSvgForMobile();
@@ -1940,7 +1979,7 @@
         if (lastFlowStatusData) renderFlowStatusDetail(lastFlowStatusData);
     });
 
-    // ── Maschinenraum-Button: Info 60s einblenden ──
+    // ── Maschinenraum-Button: Info 60s einblenden + Sub-Buttons (Echtzeit / NQ) ──
     (function() {
         const btnEl   = document.getElementById('btn-maschinenraum');
         const btnBg   = document.getElementById('btn-mr-bg');
@@ -1949,7 +1988,19 @@
         const tickerWrap = document.getElementById('ticker-wrap');
         const tickerText = document.getElementById('ticker-text');
         const tickerSubText = document.getElementById('ticker-subtext');
+        const btnEchtzeit = document.getElementById('btn-echtzeit');
+        const btnNQ       = document.getElementById('btn-nq');
         let timerInterval = null;
+
+        // Sub-Buttons: Navigation
+        btnEchtzeit.addEventListener('click', function(ev) {
+            ev.stopPropagation();
+            window.location.href = '/maschinenraum';
+        });
+        btnNQ.addEventListener('click', function(ev) {
+            ev.stopPropagation();
+            window.location.href = '/netzqualitaet';
+        });
 
                 // Ticker Fetcher
         function updateTicker() {
@@ -1984,15 +2035,21 @@
         function hideInfo() {
             if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
             infoWrap.classList.remove('visible');
+            btnEchtzeit.style.display = 'none';
+            btnNQ.style.display = 'none';
             resetBtn();
+            if (typeof adjustSvgViewBox === 'function') adjustSvgViewBox(false);
         }
 
         btnEl.addEventListener('click', function() {
             // zweiter Klick: sofort ausblenden
             if (timerInterval) { hideInfo(); return; }
             infoWrap.classList.add('visible');
+            btnEchtzeit.style.display = '';
+            btnNQ.style.display = '';
             btnBg.setAttribute('fill', 'rgba(99,102,241,0.28)');
             btnBg.setAttribute('stroke', 'rgba(129,140,248,0.75)');
+            if (typeof adjustSvgViewBox === 'function') adjustSvgViewBox(false);
             // Nach Transition: scroll in Sicht falls nötig
             setTimeout(function() {
                 infoWrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });

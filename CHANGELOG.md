@@ -14,6 +14,10 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/).
 ### Removed
 - **Matrix-Parameter (Regelkreis `heizpatrone`):** `notaus_netzbezug_w`, `notaus_netzbezug_aktuell_veto_w`, `notaus_forecast_sicherheit_kwh`, `notaus_forecast_haushalt_min_w`, `notaus_forecast_batt_ziel_soc_pct`, `notaus_forecast_batt_ignore_ab_soc_pct`, `notaus_forecast_klima_last_w`, `notaus_forecast_klima_plan_h`, `notaus_drain_netzbezug_w`, `notaus_winter_schutz_soc_pct`, `notaus_transient_aktiv_ab_h`, `notaus_transient_einspeisung_w`, `notaus_transient_fenster_zyklen` ersatzlos entfernt; ersetzt durch `aus_netzbezug_energie_kwh` (0.02 kWh), `aus_netzbezug_fenster_min` (5 min), `aus_netzbezug_aktuell_veto_w` (200 W). Rename: `extern_notaus_soc_pct` → `extern_aus_soc_pct`.
 
+### UI
+- **Flow-Ansicht:** Datum/Uhrzeit höher gesetzt (mittig zwischen F1- und Netz-Bubble); Prognose-Symbol weiter nach rechts oben verschoben, damit Abstand zur PV-Gesamt-Bubble entsteht.
+- **NQ-Ansicht (Extrema-Marker):** Mouseover-Tooltip zeigt Wert + exakte Zeit; Min-Marker zusätzlich zu Max für Spannung **und** Frequenz. Backend `/api/netzqualitaet/maxima` liefert dafür `u_voltage_min` und `f_netz_min` (inkl. Zeitstempel) über alle vier Aggregationsstufen.
+
 ---
 
 ## v1.3.5 — 2026-05-03

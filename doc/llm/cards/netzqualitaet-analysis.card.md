@@ -5,7 +5,7 @@ role: B
 applyTo: "netzqualitaet/**"
 tags: [netzqualitaet, dfd, export, analyse, api]
 status: stable
-last_review: 2026-05-03
+last_review: 2026-05-16
 ---
 
 # Netzqualitaet Analyse
@@ -15,6 +15,8 @@ Separates NQ-Teilprojekt im PV-System: Export netzrelevanter Rohdaten, 15min-DFD
 
 ## Code-Anchor
 - **Tag-API:** `routes/netzqualitaet.py:api_netzqualitaet_tag`
+- **Zeitraum-API (Auto-Fallback):** `routes/netzqualitaet.py:api_netzqualitaet_zeitraum`
+- **Maxima-API (Sammler):** `routes/netzqualitaet.py:api_netzqualitaet_maxima`
 - **Analyse-API:** `routes/netzqualitaet.py:api_netzqualitaet_analyse`
 - **Exportlauf:** `netzqualitaet/nq_export.py:run_export`
 - **Analyse-Lauf:** `netzqualitaet/nq_analysis.py:run_analysis`
@@ -23,12 +25,13 @@ Separates NQ-Teilprojekt im PV-System: Export netzrelevanter Rohdaten, 15min-DFD
 
 ## Inputs / Outputs
 - **Inputs:** `raw_data`-Felder (`f_Netz`, `U_L*_L*_Netz`, `I_L*_Netz`) aus Haupt-DB, Tagesparameter `date=YYYY-MM-DD`.
-- **Outputs:** Monatsdatenbanken mit `nq_samples` und Analyse-Tabellen (`nq_15min_blocks`, `nq_boundary_events`, `nq_daily_summary`) sowie JSON fuer `/api/netzqualitaet/*`.
+- **Outputs:** Monatsdatenbanken mit `nq_samples` und Analyse-Tabellen (`nq_15min_blocks`, `nq_boundary_events`, `nq_daily_summary`) sowie JSON fuer `/api/netzqualitaet/*` inkl. Zeitraumdaten (`period=tag|monat|jahr|gesamt`) und Extrema (Min+Max fuer L-L-Spannung und Frequenz inkl. Zeitstempel) ueber `/api/netzqualitaet/maxima`.
 
 ## Invarianten
 - NQ schreibt ausschliesslich in eigene DBs unter `netzqualitaet/db/`.
 - Haupt-DB wird von NQ-Skripten nur read-only gelesen (`mode=ro` in Export).
 - Tages-API liefert 5min-Buckets aus `raw_data` (keine Aktorik, keine Schreibpfade).
+- Zeitraum-API springt bei Historie automatisch ueber Aggregationsstufen (RAW -> 1min -> 15min -> monthly), bleibt dabei read-only.
 - Analyse-API liefert `available=false`, wenn die Monats-DB fuer den Tag fehlt.
 
 ## No-Gos
