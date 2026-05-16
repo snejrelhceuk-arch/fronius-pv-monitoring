@@ -527,12 +527,19 @@ class RegelNachmittagSocMax(Regel):
         if intent:
             ziel_max = max(ziel_max, int(intent.get('target_soc_pct', 100)))
         if obs.soc_max is not None and obs.soc_max >= ziel_max:
-            # Phase 2: Ziel=100%, noch im manual-Modus, Batterie voll → Auto-Umschaltung
+            # Phase 2: Ziel=100%, noch im manual-Modus → Auto-Umschaltung,
+            # sobald Prognose 'gut' UND SOC > min_soc (default 15%).
+            # Begründung: Bei guter Prognose lädt PV die Batterie sicher
+            # wieder auf — kein Bedarf für manuelles 100%-Ziel; Auto-Modus
+            # entlastet BMS-Hysterese (kein ständiges Nachladen).
             if ziel_max == 100 and obs.soc_mode == 'manual':
-                soc_voll = int(get_param(matrix, self.regelkreis, 'auto_switch_soc_pct', 95))
-                if obs.batt_soc_pct is None or obs.batt_soc_pct < soc_voll:
-                    return 0  # Phase 1 aktiv, Batterie noch nicht voll – warten
-                # Batterie voll: weiter → erzeuge_aktionen setzt auto-Modus
+                min_soc = int(get_param(matrix, self.regelkreis, 'auto_switch_min_soc_pct', 15))
+                quality = get_effective_forecast_quality(obs, matrix) or ''
+                if quality != 'gut':
+                    return 0  # Prognose unsicher → Phase 1 halten
+                if obs.batt_soc_pct is None or obs.batt_soc_pct <= min_soc:
+                    return 0  # SOC zu niedrig → erst weiter laden
+                # Bedingungen erfüllt → erzeuge_aktionen setzt auto-Modus
             else:
                 return 0
 
@@ -608,21 +615,26 @@ class RegelNachmittagSocMax(Regel):
         if intent:
             soc_max_ziel = max(soc_max_ziel, int(intent.get('target_soc_pct', 100)))
 
-        # Phase 2: Ziel=100%, manual-Modus, Batterie voll → Fronius-Auto (LFP-Schonung)
-        soc_voll = int(get_param(matrix, self.regelkreis, 'auto_switch_soc_pct', 95))
+        # Phase 2: Ziel=100%, manual-Modus → Fronius-Auto, sobald Prognose 'gut'
+        # UND SOC > min_soc (default 15%). PV-Refill ist gesichert → kein Bedarf
+        # mehr für manuelles 100%-Halten; Auto entlastet BMS-Hysterese.
+        min_soc = int(get_param(matrix, self.regelkreis, 'auto_switch_min_soc_pct', 15))
+        quality_now = get_effective_forecast_quality(obs, matrix) or ''
         if (soc_max_ziel == 100 and obs.soc_mode == 'manual'
                 and obs.soc_max == 100
-                and obs.batt_soc_pct is not None and obs.batt_soc_pct >= soc_voll):
+                and quality_now == 'gut'
+                and obs.batt_soc_pct is not None and obs.batt_soc_pct > min_soc):
             LOG.info(
-                "nachmittag_soc_max: SOC %.1f%% ≥ %d%% → Fronius Auto-Modus"
+                "nachmittag_soc_max: Prognose=gut, SOC %.1f%% > %d%% → Fronius Auto-Modus"
                 " (Phase 2, LFP-Schonung)",
-                obs.batt_soc_pct, soc_voll,
+                obs.batt_soc_pct, min_soc,
             )
             return [{
                 'tier': 2, 'aktor': 'batterie',
                 'kommando': 'set_soc_mode', 'wert': 'auto',
-                'grund': (f'Nachmittag-Auto: SOC {obs.batt_soc_pct:.0f}% ≥ {soc_voll}% '
-                          f'→ Fronius-Auto-Modus (LFP-Schonung)'),
+                'grund': (f'Nachmittag-Auto: Prognose=gut, SOC {obs.batt_soc_pct:.0f}% '
+                          f'> {min_soc}% → Fronius-Auto-Modus (LFP-Schonung, '
+                          f'PV-Refill gesichert)'),
             }]
 
         if obs.soc_max is None or obs.soc_max != soc_max_ziel:

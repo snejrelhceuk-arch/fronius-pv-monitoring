@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/aktoren/aktor_batterie.py"
 tags: [batterie, soc, fronius, modbus]
 status: stable
-last_review: 2026-05-12
+last_review: 2026-05-16
 ---
 
 # Battery-Algorithm
@@ -44,7 +44,7 @@ Setzt SOC-Grenzen (`soc_min`, `soc_max`) und Lademodus an der Fronius GEN24 — 
 - `soc_min_morgen` ist **kein** Hardcoded-Wert sondern Matrix-Parameter (`morgen_soc_min.morgen_vorlauf_min`).
 - Wattpilot-Ladung kann SOC kritisch ziehen → siehe `automation-regel-wattpilot.card.md` (RegelWattpilotBattSchutz hebt `soc_min` an).
 - `HYB_EVU_CHARGEFROMGRID` (Netzladen) wird selten gesetzt; bei Änderung Konflikt mit `RegelMorgenSocMin` prüfen.
-- **SOC_MAX=100% muss immer in Auto-Modus münden**: `RegelNachmittagSocMax` und `operator_overrides battery_mode=auto` nutzen denselben Zwei-Phasen-Ablauf: Phase 1 `manual/5–25%/100%` (Fronius lädt durch), Phase 2 `set_soc_mode=auto` sobald SOC ≥ `nachmittag_soc_max.auto_switch_soc_pct` (default 95%). Im Auto-Modus regelt der BMS die Hysterese selbst — kein ständiges Nachladen bei geringer Hysterese.
+- **SOC_MAX=100% muss immer in Auto-Modus münden**: `RegelNachmittagSocMax` und `operator_overrides battery_mode=auto` nutzen einen Zwei-Phasen-Ablauf: Phase 1 `manual/5–25%/100%` (Fronius lädt durch), Phase 2 `set_soc_mode=auto` sobald **Prognose=`gut`** UND **SOC > `nachmittag_soc_max.auto_switch_min_soc_pct`** (default 15%). Begründung: Bei guter Prognose ist PV-Refill gesichert — manuelles 100%-Halten unnötig; Auto-Modus entlastet BMS-Hysterese (kein ständiges Nachladen). `RegelForecastPlausi` (setzt SOC_MAX=100 bei *schlechter* Prognose) bleibt bewusst in manual.
 
 ## Verwandte Cards
 - [`automation-engine.card.md`](./automation-engine.card.md)
