@@ -50,3 +50,19 @@
 - Knapp. Keine Floskeln.
 - Code-Refs als Markdown-Links: `[file.py](file.py#L42)`.
 - Bei Unsicherheit über Fakten: lade die zuständige Card, statt zu raten.
+
+## Datei- und Ordneranlage (LLM-Richtlinien)
+
+- **Rollentrennung beachten:** Dateien müssen der Rolle (A-E) zugeordnet werden.
+- **Root-Level vermeiden:** Nur für rollenübergreifende Module.
+- **Namenskonventionen:** Python-Dateien `snake_case.py`, Ordner `lowercase/`, zentrale Doku `UPPERCASE.md`.
+- **Rollenbasierte Ablage:**
+  - A → `collector/` (z. B. `aggregate/`, `fritzdect.py`)
+  - B → `routes/` (z. B. `realtime.py`)
+  - C → `automation/` (z. B. `engine/`)
+  - D → `diagnos/` (z. B. `health.py`)
+  - E → `steuerbox/`
+- **Entscheidungsbaum:**
+  1. Rollenspezifisch → Rollenpaket.
+  2. Konfiguration → `config/`.
+  3. Temporär → `tmp/`, persistent → Rollenpaket.
