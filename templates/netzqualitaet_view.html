@@ -123,21 +123,7 @@
             z-index: 10;
             pointer-events: none;
         }
-        .chart-box .minmax-info {
-            position: absolute;
-            top: 8px;
-            right: 14px;
-            font-size: 11px;
-            color: rgba(255,255,255,0.72);
-            z-index: 10;
-            pointer-events: none;
-            font-variant-numeric: tabular-nums;
-            text-align: right;
-            max-width: 60%;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
+        /* Min/Max info removed to avoid overlapping the legend; markers + tooltips provide this info */
         #mainChart {
             width: 100%;
             height: 100%;
@@ -221,7 +207,6 @@
     <div class="chart-area">
         <div class="chart-box">
             <span class="chart-title" id="chartTitle">Leiterspannungen L-L [V] · Netzfrequenz [Hz]</span>
-            <span class="minmax-info" id="minMaxInfo">Min/Max: --</span>
             <div id="mainChart"></div>
             <div class="loading" id="loadingMain">Lade Netzqualitätsdaten...</div>
         </div>
@@ -299,63 +284,7 @@
             });
         }
 
-        function updateMinMaxInfo(data) {
-            const infoEl = document.getElementById('minMaxInfo');
-            if (!data || !Array.isArray(data.datapoints) || data.datapoints.length === 0) {
-                infoEl.textContent = 'Min/Max: --';
-                return;
-            }
-
-            const freqRange = numberRange(
-                data.datapoints.flatMap(dp => [dp.f_netz_min, dp.f_netz_max, dp.f_netz])
-            );
-
-            const collector = maximaData && maximaData.available ? maximaData.maxima : null;
-
-            if (viewMode === 'lokal') {
-                const l1Range = numberRange(data.datapoints.flatMap(dp => [dp.u_l1_l2_min, dp.u_l1_l2_max, dp.u_l1_l2]));
-                const l2Range = numberRange(data.datapoints.flatMap(dp => [dp.u_l2_l3_min, dp.u_l2_l3_max, dp.u_l2_l3]));
-                const l3Range = numberRange(data.datapoints.flatMap(dp => [dp.u_l3_l1_min, dp.u_l3_l1_max, dp.u_l3_l1]));
-                const vmaxText = collector && collector.u_voltage_max
-                    ? ` | Vmax ${collector.u_voltage_max.value.toFixed(1)} V @ ${formatTs(collector.u_voltage_max.ts)}`
-                    : '';
-                infoEl.textContent =
-                    `L1-L2 ${fmtRange(l1Range, 1)} V | ` +
-                    `L2-L3 ${fmtRange(l2Range, 1)} V | ` +
-                    `L3-L1 ${fmtRange(l3Range, 1)} V | ` +
-                    `f ${fmtRange(freqRange, 3)} Hz` +
-                    vmaxText;
-                return;
-            }
-
-            const netzMinRange = numberRange(data.datapoints.map(dp => {
-                if (Number.isFinite(dp.u_l1_l2_min) && Number.isFinite(dp.u_l2_l3_min) && Number.isFinite(dp.u_l3_l1_min)) {
-                    return (dp.u_l1_l2_min + dp.u_l2_l3_min + dp.u_l3_l1_min) / 3;
-                }
-                return Number.isFinite(dp.u_l1_l2) && Number.isFinite(dp.u_l2_l3) && Number.isFinite(dp.u_l3_l1)
-                    ? (dp.u_l1_l2 + dp.u_l2_l3 + dp.u_l3_l1) / 3
-                    : null;
-            }));
-            const netzMaxRange = numberRange(data.datapoints.map(dp => {
-                if (Number.isFinite(dp.u_l1_l2_max) && Number.isFinite(dp.u_l2_l3_max) && Number.isFinite(dp.u_l3_l1_max)) {
-                    return (dp.u_l1_l2_max + dp.u_l2_l3_max + dp.u_l3_l1_max) / 3;
-                }
-                return Number.isFinite(dp.u_l1_l2) && Number.isFinite(dp.u_l2_l3) && Number.isFinite(dp.u_l3_l1)
-                    ? (dp.u_l1_l2 + dp.u_l2_l3 + dp.u_l3_l1) / 3
-                    : null;
-            }));
-            const netzCombined = (netzMinRange && netzMaxRange)
-                ? { min: netzMinRange.min, max: netzMaxRange.max }
-                : netzMinRange || netzMaxRange;
-
-            const vmaxText = collector && collector.u_voltage_max
-                ? ` | Vmax ${collector.u_voltage_max.value.toFixed(1)} V @ ${formatTs(collector.u_voltage_max.ts)}`
-                : '';
-            infoEl.textContent =
-                `Netz ${fmtRange(netzCombined, 1)} V | ` +
-                `f ${fmtRange(freqRange, 3)} Hz` +
-                vmaxText;
-        }
+        // Min/Max info removed: extrema are shown via chart markers and tooltips.
 
         function updatePeriodButtons() {
             document.getElementById('btnPeriodTag').classList.toggle('active', currentPeriod === 'tag');
@@ -559,7 +488,7 @@
             const dom = document.getElementById('mainChart');
             if (mainChart) mainChart.dispose();
             mainChart = echarts.init(dom);
-            updateMinMaxInfo(data);
+            // Min/Max info removed from DOM; markers + tooltips show extrema
 
             const bounds = getBoundsFromData(data, dateStr);
             const tsL1L2 = [], tsL2L3 = [], tsL3L1 = [], tsFreq = [], tsNetz = [];
@@ -720,8 +649,23 @@
                     }
                 ];
 
+            // Compute legend/grid top dynamically from the chart title to avoid overlap
+            const titleEl = document.getElementById('chartTitle');
+            let legendTop = 4;
+            if (titleEl) {
+                try {
+                    // offsetTop is relative to the chart container (.chart-box)
+                    const titleBottom = titleEl.offsetTop + titleEl.offsetHeight;
+                    // Add small padding so legend sits below the title
+                    legendTop = Math.max(4, titleBottom + 6);
+                } catch (e) {
+                    legendTop = 4;
+                }
+            }
+            const gridTop = legendTop + 18;
+
             mainChart.setOption({
-                grid: { left: 55, right: 55, top: 40, bottom: 66 },
+                grid: { left: 55, right: 55, top: gridTop, bottom: 66 },
                 tooltip: {
                     trigger: 'axis',
                     axisPointer: { type: 'cross', snap: false },
@@ -780,7 +724,7 @@
                         ? ['L1-L2', 'L2-L3', 'L3-L1', 'Frequenz']
                         : ['Netzspannung', 'Frequenz'],
                     textStyle: { color: '#94a3b8', fontSize: 11 },
-                    top: 4, right: 60
+                    top: legendTop, right: 60
                 },
                 xAxis: {
                     type: 'time', min: bounds.min, max: bounds.max,

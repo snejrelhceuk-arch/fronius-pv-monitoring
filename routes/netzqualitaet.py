@@ -20,6 +20,11 @@ bp = Blueprint('netzqualitaet', __name__)
 
 NQ_DB_DIR = os.path.join(config.BASE_DIR, 'netzqualitaet', 'db')
 SQRT3 = math.sqrt(3)
+# Plausibility corridors
+VOLTAGE_MIN = 200.0
+VOLTAGE_MAX = 600.0
+FREQ_MIN = 40.0
+FREQ_MAX = 60.0
 
 
 def _parse_anchor_date(date_param):
@@ -377,16 +382,26 @@ def _period_where_clause(period, date_param):
 def _fetch_maxima_raw(cursor, period, date_param):
     where_clause, params = _period_where_clause(period, date_param)
 
+    # For raw_data the voltage columns are already L-L values
+    v_low, v_high = VOLTAGE_MIN, VOLTAGE_MAX
+    f_low, f_high = FREQ_MIN, FREQ_MAX
+
     def one(col, order='DESC'):
+        cl = col.lower()
+        if 'f_netz' in cl or cl.startswith('f_'):
+            low, high = f_low, f_high
+        else:
+            low, high = v_low, v_high
+
         cursor.execute(
             f"""
             SELECT ts, {col}
             FROM raw_data
-            WHERE {where_clause} AND {col} IS NOT NULL
+            WHERE {where_clause} AND {col} IS NOT NULL AND {col} BETWEEN ? AND ?
             ORDER BY {col} {order}, ts ASC
             LIMIT 1
             """,
-            params,
+            params + (low, high),
         )
         return cursor.fetchone()
 
@@ -425,16 +440,26 @@ def _fetch_maxima_1min(cursor, period, date_param):
 
     where_clause, params = _period_where_clause(period, date_param)
 
+    # data_1min stores phase (L-N) voltages; convert L-L bounds to L-N for filtering
+    v_low, v_high = VOLTAGE_MIN / SQRT3, VOLTAGE_MAX / SQRT3
+    f_low, f_high = FREQ_MIN, FREQ_MAX
+
     def one(col, order='DESC'):
+        cl = col.lower()
+        if 'f_netz' in cl or cl.startswith('f_'):
+            low, high = f_low, f_high
+        else:
+            low, high = v_low, v_high
+
         cursor.execute(
             f"""
             SELECT ts, {col}
             FROM data_1min
-            WHERE {where_clause} AND {col} IS NOT NULL
+            WHERE {where_clause} AND {col} IS NOT NULL AND {col} BETWEEN ? AND ?
             ORDER BY {col} {order}, ts ASC
             LIMIT 1
             """,
-            params,
+            params + (low, high),
         )
         return cursor.fetchone()
 
@@ -473,16 +498,26 @@ def _fetch_maxima_15min(cursor, period, date_param):
 
     where_clause, params = _period_where_clause(period, date_param)
 
+    # data_15min stores phase (L-N) voltages; convert L-L bounds to L-N for filtering
+    v_low, v_high = VOLTAGE_MIN / SQRT3, VOLTAGE_MAX / SQRT3
+    f_low, f_high = FREQ_MIN, FREQ_MAX
+
     def one(col, order='DESC'):
+        cl = col.lower()
+        if 'f_netz' in cl or cl.startswith('f_'):
+            low, high = f_low, f_high
+        else:
+            low, high = v_low, v_high
+
         cursor.execute(
             f"""
             SELECT ts, {col}
             FROM data_15min
-            WHERE {where_clause} AND {col} IS NOT NULL
+            WHERE {where_clause} AND {col} IS NOT NULL AND {col} BETWEEN ? AND ?
             ORDER BY {col} {order}, ts ASC
             LIMIT 1
             """,
-            params,
+            params + (low, high),
         )
         return cursor.fetchone()
 
@@ -521,16 +556,26 @@ def _fetch_maxima_monthly(cursor, period, date_param):
 
     where_clause, params = _period_where_clause(period, date_param)
 
+    # data_monthly stores phase (L-N) voltages; convert L-L bounds to L-N for filtering
+    v_low, v_high = VOLTAGE_MIN / SQRT3, VOLTAGE_MAX / SQRT3
+    f_low, f_high = FREQ_MIN, FREQ_MAX
+
     def one(col, order='DESC'):
+        cl = col.lower()
+        if 'f_netz' in cl or cl.startswith('f_'):
+            low, high = f_low, f_high
+        else:
+            low, high = v_low, v_high
+
         cursor.execute(
             f"""
             SELECT ts, {col}
             FROM data_monthly
-            WHERE {where_clause} AND {col} IS NOT NULL
+            WHERE {where_clause} AND {col} IS NOT NULL AND {col} BETWEEN ? AND ?
             ORDER BY {col} {order}, ts ASC
             LIMIT 1
             """,
-            params,
+            params + (low, high),
         )
         return cursor.fetchone()
 

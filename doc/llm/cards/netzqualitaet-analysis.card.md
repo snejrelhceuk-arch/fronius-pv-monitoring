@@ -5,7 +5,9 @@ role: B
 applyTo: "netzqualitaet/**"
 tags: [netzqualitaet, dfd, export, analyse, api]
 status: stable
-last_review: 2026-05-16
+last_review: 2026-05-17
+changes:
+	- 2026-05-17: UI: removed Min/Max info line from Netzqualitaet view; Backend: ignore implausible extrema in maxima collector (U 200-600 V, f 40-60 Hz); Chart: fixed mobile legend overlap; webserver restarted to apply changes.
 ---
 
 # Netzqualitaet Analyse
