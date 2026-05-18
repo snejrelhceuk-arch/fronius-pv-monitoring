@@ -46,3 +46,66 @@ Dieser Service erfordert **keinen** Code/Datenbank-Clone des Haupt-Repos.
    sudo systemctl daemon-reload
    sudo systemctl enable pv-ticker --now
    ```
+
+## Konfiguration & Rollback
+
+Die Ticker-Konfiguration wird aus `~/.infra.local` geladen:
+
+```bash
+# Erklaerungsmodell waehlen:
+PV_TICKER_EXPLAIN_MODEL=mi24ins8:latest    # Experimental (Mistral 25GB)
+# PV_TICKER_EXPLAIN_MODEL=qwen2.5:7b       # Fallback (wenn Mistral zu langsam)
+
+# Timeout fuer Modell-Generierung:
+PV_TICKER_EXPLAIN_TIMEOUT_SEC=25           # Fuer mi24ins8 (groesseres Modell)
+
+# Ollama-URL (Beispiel):
+PV_TICKER_EXPLAIN_OLLAMA_URL=http://192.0.2.116:11434/api/generate
+```
+
+### Systemsicheres Rollback (bei Performance-Problemen)
+
+Wenn `mi24ins8:latest` zu viele Timeouts erzeugt:
+
+1. **In `.infra.local` aendern:**
+   ```bash
+   PV_TICKER_EXPLAIN_MODEL=qwen2.5:7b
+   PV_TICKER_EXPLAIN_TIMEOUT_SEC=15
+   ```
+
+2. **Ticker-Service neu starten:**
+   ```bash
+   sudo systemctl restart pv-ticker
+   ```
+
+3. **Logs prüfen** (um Performance zu vergleichen):
+   ```bash
+   journalctl -u pv-ticker -n 50 -f
+   ```
+
+   Timeouts erscheinen als: `Ollama TIMEOUT nach 25s (Modell: mi24ins8:latest)`
+
+## Modellwechsel mit Reset der Erklaerungszeile
+
+Wenn du zu einem neuen Modell wechselst und die zweite Tickerzeile cleanly leer starten möchtest:
+
+1. **In `.infra.local` uncomment:**
+   ```bash
+   # Diese Zeile hinzufügen oder uncomment:
+   TICKER_RESET_EXPLANATIONS_ONCE=1
+   
+   # Auch das neue Modell setzen:
+   PV_TICKER_EXPLAIN_MODEL=mi24ins8:latest
+   ```
+
+2. **Service neu starten:**
+   ```bash
+   sudo systemctl restart pv-ticker
+   ```
+
+3. **Verhalten beim Start:**
+   - Der Service liest `TICKER_RESET_EXPLANATIONS_ONCE=1`
+   - Loescht alle bestehenden Erklaerungen → zweite Zeile wird leer
+   - Logs zeigen: `[RESET] Alle X Erklaerungszeilen geloescht (Modellwechsel). Zweite Tickerzeile ist jetzt leer.`
+   - `[INIT] ... Zweite Zeile wird jetzt vom neuen Modell (mi24ins8:latest) gefüllt.`
+   - Ab dem nächsten RSS-Fetch generiert das neue Modell frische Erklaerungen

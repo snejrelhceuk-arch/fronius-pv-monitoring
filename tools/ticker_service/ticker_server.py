@@ -1,5 +1,6 @@
 import re
 import os
+import sys
 import time
 import json
 import logging
@@ -8,6 +9,16 @@ import requests
 import xml.etree.ElementTree as ET
 from urllib.error import URLError
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+
+# Pfad zu config.py (Parent-Dir des Parent-Dir von ticker_service)
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+try:
+    from config import load_local_setting
+except ImportError:
+    def load_local_setting(key, default=''):
+        return os.environ.get(key, default)
 
 # Logging-Setup
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -15,16 +26,19 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 # Konfiguration
 PORT = int(os.environ.get("TICKER_PORT", 8050))
 UPDATE_INTERVAL_SEC = int(os.environ.get("TICKER_UPDATE_INTERVAL_SEC", 5 * 60))
-DETAIL_MAX_CHARS = int(os.environ.get("TICKER_DETAIL_MAX_CHARS", 256))
+DETAIL_MAX_CHARS = int(os.environ.get("TICKER_DETAIL_MAX_CHARS", 500))  # erhöht für besseren Ollama-Kontext
 # Optionale zweite Zeile: Erlaeuterungen vom externen Ubuntu-Ollama.
 EXPLAIN_REMOTE_ENABLE = os.environ.get("TICKER_EXPLAIN_ENABLE", "1").lower() in ("1", "true", "yes", "on")
-EXPLAIN_REMOTE_URL = os.environ.get("TICKER_EXPLAIN_OLLAMA_URL", "http://192.0.2.116:11434/api/generate")
-EXPLAIN_REMOTE_MODEL = os.environ.get("TICKER_EXPLAIN_MODEL", "qwen2.5:7b")
-EXPLAIN_TIMEOUT_SEC = int(os.environ.get("TICKER_EXPLAIN_TIMEOUT_SEC", 20))
+EXPLAIN_REMOTE_URL = os.environ.get("TICKER_EXPLAIN_OLLAMA_URL") or load_local_setting("PV_TICKER_EXPLAIN_OLLAMA_URL", "http://ollama-host:11434/api/generate")
+EXPLAIN_REMOTE_MODEL = os.environ.get("TICKER_EXPLAIN_MODEL") or load_local_setting("PV_TICKER_EXPLAIN_MODEL", "qwen2.5:7b")
+EXPLAIN_REMOTE_MODEL_FALLBACK = os.environ.get("TICKER_EXPLAIN_MODEL_FALLBACK") or load_local_setting("PV_TICKER_EXPLAIN_MODEL_FALLBACK", "qwen2.5:7b")
+EXPLAIN_TIMEOUT_SEC = int(os.environ.get("TICKER_EXPLAIN_TIMEOUT_SEC", 25))  # erhöht für Mistral 25GB
+EXPLAIN_TIMEOUT_FALLBACK_SEC = int(os.environ.get("TICKER_EXPLAIN_TIMEOUT_FALLBACK_SEC", 15))
 EXPLAIN_TEMPERATURE = float(os.environ.get("TICKER_EXPLAIN_TEMPERATURE", 0.12))
 EXPLAIN_TOP_P = float(os.environ.get("TICKER_EXPLAIN_TOP_P", 0.6))
 EXPLAIN_MIN_WORDS = int(os.environ.get("TICKER_EXPLAIN_MIN_WORDS", 20))
 EXPLAIN_MAX_WORDS = int(os.environ.get("TICKER_EXPLAIN_MAX_WORDS", 35))
+TICKER_RESET_EXPLANATIONS_ONCE = os.environ.get("TICKER_RESET_EXPLANATIONS_ONCE", "0").lower() in ("1", "true", "yes", "on")
 
 # Globale Variable für den aktuellen Ticker-Zustand
 _CURRENT_TICKER_TEXT = "Ticker lädt Neuigkeiten..."
@@ -161,6 +175,20 @@ def _backfill_missing_explanations():
     return updated
 
 
+def _reset_all_explanations():
+    """Loescht alle Erklaerungszeilen aus bestehenden Items (für Modellwechsel)."""
+    global _CURRENT_TICKER_ITEMS
+    count = 0
+    for item in _CURRENT_TICKER_ITEMS:
+        if item.get("explain"):
+            item["explain"] = ""
+            count += 1
+    if count:
+        _refresh_ticker_strings()
+        logging.info(f"[RESET] Alle {count} Erklaerungszeilen geloescht (Modellwechsel). Zweite Tickerzeile ist jetzt leer.")
+    return count
+
+
 def format_raw_topics(items):
     """Liefert direkte Themenzeilen ohne KI-Umformulierung."""
     topics = []
@@ -274,14 +302,27 @@ def explain_topics_with_remote_ollama(items):
                 explain_parts.append(line)
 
         return explain_parts
+    except requests.exceptions.Timeout as te:
+        # Timeout kann wichtig sein beim Modell-Experiment (mi24ins8)
+        logging.warning(f"Ollama TIMEOUT nach {EXPLAIN_TIMEOUT_SEC}s (Modell: {EXPLAIN_REMOTE_MODEL}). "
+                       f"Erklaerungszeile bleibt leer. Ggf. Rollback noetig: siehe .infra.local")
+        return []
+    except requests.exceptions.RequestException as re:
+        logging.warning(f"Ollama HTTP-Fehler: {re}")
+        return []
     except Exception as e:
-        # Gewuenschtes Verhalten fuer Experiment: Zeile bleibt leer, wenn Ubuntu/Ollama aus ist.
-        logging.warning(f"Erklaerungszeile deaktiviert (Ubuntu-Ollama nicht erreichbar): {e}")
+        # Alle anderen Fehler (JSON-Parse, etc.)
+        logging.warning(f"Erklaerungszeile deaktiviert (Ubuntu-Ollama nicht erreichbar oder Fehler): {type(e).__name__}: {e}")
         return []
 
 def background_updater():
     """Hintergrund-Thread, der zyklisch neue Meldungen holt."""
     global _CURRENT_TICKER_ITEMS, _LAST_UPDATE
+    
+    # Beim Start prüfen: falls Reset-Flag gesetzt, alle Erklaerungen loeschen
+    if TICKER_RESET_EXPLANATIONS_ONCE:
+        _reset_all_explanations()
+        logging.info(f"[INIT] TICKER_RESET_EXPLANATIONS_ONCE war gesetzt. Zweite Zeile wird jetzt vom neuen Modell ({EXPLAIN_REMOTE_MODEL}) gefüllt.")
     
     while True:
         try:
