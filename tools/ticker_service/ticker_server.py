@@ -25,7 +25,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 
 # Konfiguration
 PORT = int(os.environ.get("TICKER_PORT", 8050))
-UPDATE_INTERVAL_SEC = int(os.environ.get("TICKER_UPDATE_INTERVAL_SEC", 5 * 60))
+# Increase default update interval by 15% to slow system speed slightly
+UPDATE_INTERVAL_SEC = int(os.environ.get("TICKER_UPDATE_INTERVAL_SEC", int(5 * 60 * 1.15)))
 DETAIL_MAX_CHARS = int(os.environ.get("TICKER_DETAIL_MAX_CHARS", 500))  # erhöht für besseren Ollama-Kontext
 # Optionale zweite Zeile: Erlaeuterungen vom externen Ubuntu-Ollama.
 EXPLAIN_REMOTE_ENABLE = os.environ.get("TICKER_EXPLAIN_ENABLE", "1").lower() in ("1", "true", "yes", "on")
@@ -39,6 +40,9 @@ EXPLAIN_TOP_P = float(os.environ.get("TICKER_EXPLAIN_TOP_P", 0.6))
 EXPLAIN_MIN_WORDS = int(os.environ.get("TICKER_EXPLAIN_MIN_WORDS", 20))
 EXPLAIN_MAX_WORDS = int(os.environ.get("TICKER_EXPLAIN_MAX_WORDS", 35))
 TICKER_RESET_EXPLANATIONS_ONCE = os.environ.get("TICKER_RESET_EXPLANATIONS_ONCE", "0").lower() in ("1", "true", "yes", "on")
+TICKER_RESET_BACKFILL_IMMEDIATELY = os.environ.get(
+    "TICKER_RESET_BACKFILL_IMMEDIATELY", "0"
+).lower() in ("1", "true", "yes", "on")
 
 # Globale Variable für den aktuellen Ticker-Zustand
 _CURRENT_TICKER_TEXT = "Ticker lädt Neuigkeiten..."
@@ -152,7 +156,11 @@ def _backfill_missing_explanations():
     missing_indexes = []
 
     for idx, item in enumerate(_CURRENT_TICKER_ITEMS):
-        if (item.get("topic") or "").strip() and not (item.get("explain") or "").strip():
+        if (
+            (item.get("topic") or "").strip()
+            and not (item.get("explain") or "").strip()
+            and not item.get("skip_backfill")
+        ):
             missing_items.append(item)
             missing_indexes.append(idx)
 
@@ -180,6 +188,15 @@ def _reset_all_explanations():
     global _CURRENT_TICKER_ITEMS
     count = 0
     for item in _CURRENT_TICKER_ITEMS:
+        # Verhalten abhängig von TICKER_RESET_BACKFILL_IMMEDIATELY:
+        # - Wenn True: keine Skip-Markierung setzen => anschliessendes Backfill
+        #   (so werden die Erklaerungen sofort neu vom LLM erzeugt)
+        # - Wenn False: markiere mit skip_backfill, damit alte Eintraege
+        #   nicht sofort per Backfill wiederbefuellt werden (Standard)
+        if TICKER_RESET_BACKFILL_IMMEDIATELY:
+            item.pop("skip_backfill", None)
+        else:
+            item["skip_backfill"] = True
         if item.get("explain"):
             item["explain"] = ""
             count += 1
@@ -307,8 +324,8 @@ def explain_topics_with_remote_ollama(items):
         logging.warning(f"Ollama TIMEOUT nach {EXPLAIN_TIMEOUT_SEC}s (Modell: {EXPLAIN_REMOTE_MODEL}). "
                        f"Erklaerungszeile bleibt leer. Ggf. Rollback noetig: siehe .infra.local")
         return []
-    except requests.exceptions.RequestException as re:
-        logging.warning(f"Ollama HTTP-Fehler: {re}")
+    except requests.exceptions.RequestException as req_exc:
+        logging.warning(f"Ollama HTTP-Fehler: {req_exc}")
         return []
     except Exception as e:
         # Alle anderen Fehler (JSON-Parse, etc.)
@@ -323,6 +340,14 @@ def background_updater():
     if TICKER_RESET_EXPLANATIONS_ONCE:
         _reset_all_explanations()
         logging.info(f"[INIT] TICKER_RESET_EXPLANATIONS_ONCE war gesetzt. Zweite Zeile wird jetzt vom neuen Modell ({EXPLAIN_REMOTE_MODEL}) gefüllt.")
+        if TICKER_RESET_BACKFILL_IMMEDIATELY:
+            try:
+                backfilled = _backfill_missing_explanations()
+                if backfilled:
+                    _LAST_UPDATE = time.time()
+                    logging.info(f"[INIT] Nach Reset {backfilled} Erklaerungen sofort nachgefüllt.")
+            except Exception as e:
+                logging.warning(f"[INIT] Sofortiges Backfill fehlgeschlagen: {type(e).__name__}: {e}")
     
     while True:
         try:
@@ -348,6 +373,7 @@ def background_updater():
                             "topic": (item.get("topic") or "").strip(),
                             "details": (item.get("details") or "").strip(),
                             "explain": explain_parts[idx] if idx < len(explain_parts) else "",
+                            "skip_backfill": False,
                         })
 
                     _CURRENT_TICKER_ITEMS = (new_entries + _CURRENT_TICKER_ITEMS)[:MAX_STORED_ITEMS]

@@ -53,11 +53,12 @@ Die Ticker-Konfiguration wird aus `~/.infra.local` geladen:
 
 ```bash
 # Erklaerungsmodell waehlen:
-PV_TICKER_EXPLAIN_MODEL=mi24ins8:latest    # Experimental (Mistral 25GB)
-# PV_TICKER_EXPLAIN_MODEL=qwen2.5:7b       # Fallback (wenn Mistral zu langsam)
+PV_TICKER_EXPLAIN_MODEL=mi24ins8:latest    # Primary (Mistral 25GB)
+PV_TICKER_EXPLAIN_MODEL_FALLBACK=mi24ins8:latest  # qwen removed from fallback
 
 # Timeout fuer Modell-Generierung:
-PV_TICKER_EXPLAIN_TIMEOUT_SEC=25           # Fuer mi24ins8 (groesseres Modell)
+PV_TICKER_EXPLAIN_TIMEOUT_SEC=180           # Erhöht fuer grosses Modell (mi24ins8)
+PV_TICKER_EXPLAIN_TIMEOUT_FALLBACK_SEC=30
 
 # Ollama-URL (Beispiel):
 PV_TICKER_EXPLAIN_OLLAMA_URL=http://192.0.2.116:11434/api/generate
@@ -67,23 +68,18 @@ PV_TICKER_EXPLAIN_OLLAMA_URL=http://192.0.2.116:11434/api/generate
 
 Wenn `mi24ins8:latest` zu viele Timeouts erzeugt:
 
-1. **In `.infra.local` aendern:**
-   ```bash
-   PV_TICKER_EXPLAIN_MODEL=qwen2.5:7b
-   PV_TICKER_EXPLAIN_TIMEOUT_SEC=15
-   ```
+1. **Timeout erhöhen:** Setze in `.infra.local` `PV_TICKER_EXPLAIN_TIMEOUT_SEC` auf einen höheren Wert (z.B. `180`) und starte den Dienst neu.
 
-2. **Ticker-Service neu starten:**
-   ```bash
-   sudo systemctl restart pv-ticker
-   ```
+2. **Model vorladen / prüfen:** Stelle sicher, dass `mi24ins8:latest` auf dem Ollama-Host vorab geladen ist (siehe `http://<ollama-host>:11434/api/ps`).
 
-3. **Logs prüfen** (um Performance zu vergleichen):
+3. **Bei akuten Problemen (Notfall):** Deaktiviere kurzzeitig Erklärungen durch Entfernen der `PV_TICKER_EXPLAIN_OLLAMA_URL`-Zeile oder setze in der Systemd-Unit `TICKER_EXPLAIN_ENABLE=0`, dann `sudo systemctl restart pv-ticker`.
+
+4. **Logs prüfen:**
    ```bash
    journalctl -u pv-ticker -n 50 -f
    ```
 
-   Timeouts erscheinen als: `Ollama TIMEOUT nach 25s (Modell: mi24ins8:latest)`
+   Timeouts erscheinen als: `Ollama TIMEOUT nach <N>s (Modell: mi24ins8:latest)`
 
 ## Modellwechsel mit Reset der Erklaerungszeile
 
@@ -98,6 +94,10 @@ Wenn du zu einem neuen Modell wechselst und die zweite Tickerzeile cleanly leer 
    PV_TICKER_EXPLAIN_MODEL=mi24ins8:latest
    ```
 
+   # Optional: Sofortiges Backfill nach Reset (neue Erklaerungen sofort erzeugen)
+   # Setze diese Variable nur, wenn Ollama erreichbar und leistungsfähig ist:
+   # TICKER_RESET_BACKFILL_IMMEDIATELY=1
+
 2. **Service neu starten:**
    ```bash
    sudo systemctl restart pv-ticker
@@ -106,6 +106,13 @@ Wenn du zu einem neuen Modell wechselst und die zweite Tickerzeile cleanly leer 
 3. **Verhalten beim Start:**
    - Der Service liest `TICKER_RESET_EXPLANATIONS_ONCE=1`
    - Loescht alle bestehenden Erklaerungen → zweite Zeile wird leer
+   - Bereits vorhandene Meldungen werden danach **nicht** sofort wieder via Backfill erklaert
+   - Erklaerungen werden wieder nur fuer neu eintreffende Meldungen erzeugt
    - Logs zeigen: `[RESET] Alle X Erklaerungszeilen geloescht (Modellwechsel). Zweite Tickerzeile ist jetzt leer.`
    - `[INIT] ... Zweite Zeile wird jetzt vom neuen Modell (mi24ins8:latest) gefüllt.`
    - Ab dem nächsten RSS-Fetch generiert das neue Modell frische Erklaerungen
+
+   Hinweis: Wenn `TICKER_RESET_BACKFILL_IMMEDIATELY=1` gesetzt ist, versucht der Dienst
+   direkt nach dem Reset, alle fehlenden Erklärungen einmalig per LLM zu erzeugen.
+   Ohne diese Option bleiben alte Einträge nach Reset leer und werden erst für neu
+   eingehende Meldungen wieder erläutert (sicherer Modus).

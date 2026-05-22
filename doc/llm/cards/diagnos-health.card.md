@@ -5,7 +5,7 @@ role: D
 applyTo: "diagnos/health.py"
 tags: [health, services, freshness, mirror, backup]
 status: stable
-last_review: 2026-05-03
+last_review: 2026-05-22
 ---
 
 # Diagnos Health
@@ -43,7 +43,7 @@ Read-only Zustandspruefung fuer Host, Services und Datenfrische. Liefert eine sc
 
 ## Bekannte Fallstricke
 - Service-Namen in `diagnos/config.py` koennen von lokalen systemd-Unit-Namen abweichen und false-crit erzeugen.
-- Auf Hosts ohne `vcgencmd` faellt `check_throttle` auf `fail`.
+- `check_throttle` unterscheidet zwei Faelle: Binary fehlt dauerhaft → `fail` (Sofort-Alarm); transientes non-zero exit / timeout → einmal Retry, dann `warn` (nur Sunset-Mail). Kein Sofort-Alarm fuer transiente VideoCore-Glitches.
 - Bei fehlender RAM-DB (`/dev/shm/fronius_data.db`) werden Freshness-Checks als `fail` gemeldet, auch wenn Persist-DB intakt ist.
 
 ## Verwandte Cards

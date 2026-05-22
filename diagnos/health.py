@@ -77,10 +77,41 @@ def check_cpu_temp() -> dict:
 
 
 def check_throttle() -> dict:
-    """Raspberry Pi Throttle-Flags via vcgencmd."""
-    raw = _run(['vcgencmd', 'get_throttled'])
+    """Raspberry Pi Throttle-Flags via vcgencmd.
+
+    Unterscheidet dauerhaft fehlende Binary (FAIL → Sofort-Alarm) von
+    transientem VideoCore-Fehler (WARN → nur Sunset-Mail, einmal Retry).
+    """
+
+    def _call() -> tuple:
+        """Gibt (stdout, None) oder (None, fehlerbeschreibung) zurück."""
+        try:
+            r = subprocess.run(
+                ['vcgencmd', 'get_throttled'],
+                capture_output=True, text=True, timeout=5,
+            )
+            if r.returncode == 0:
+                return r.stdout.strip(), None
+            stderr = r.stderr.strip()
+            return None, f'exit {r.returncode}' + (f': {stderr}' if stderr else '')
+        except FileNotFoundError:
+            return None, 'binary nicht gefunden'
+        except subprocess.TimeoutExpired:
+            return None, 'timeout'
+        except OSError as exc:
+            return None, str(exc)
+
+    raw, err = _call()
     if raw is None:
-        return {'check': 'throttle', 'severity': FAIL, 'error': 'vcgencmd nicht verfügbar'}
+        # Einmal wiederholen — VideoCore kann kurz beschäftigt sein
+        time.sleep(2)
+        raw, err = _call()
+
+    if raw is None:
+        # Dauerhaft fehlende Binary → FAIL (Sofort-Alarm gerechtfertigt)
+        # Transiente Fehler (non-zero exit, timeout) → WARN (Sunset-Mail genügt)
+        sev = FAIL if err and 'binary nicht gefunden' in err else WARN
+        return {'check': 'throttle', 'severity': sev, 'error': f'vcgencmd: {err}'}
 
     # Format: throttled=0x50000
     m = re.search(r'0x([0-9a-fA-F]+)', raw)

@@ -629,7 +629,7 @@
         }
         .ticker-line-sub {
             color: #cbd5e1;
-            font-size: 13px;
+            font-size: calc(13px + 2pt);
             font-weight: 500;
             border-top: 1px solid rgba(51,65,85,0.25);
         }
@@ -637,7 +637,7 @@
             display: inline-block;
             white-space: nowrap;
             padding-left: 100%;
-            animation: tickerScroll 240s linear infinite;
+            animation: tickerScroll 276s linear infinite;
             will-change: transform;
         }
         @keyframes tickerScroll {
@@ -2017,10 +2017,23 @@
                     }
                     tickerText.textContent = newText;
                     tickerSubText.textContent = newExplainText;
+
+                    // Wenn keine Erklaerungszeile vorhanden ist, verstecke die zweite Zeile
+                    if (newExplainText && newExplainText.trim()) {
+                        tickerSubText.parentElement.style.display = 'flex';
+                        // beide Zeilen sichtbar -> Container max-height = 62px
+                        tickerWrap.style.maxHeight = '62px';
+                    } else {
+                        tickerSubText.parentElement.style.display = 'none';
+                        // nur eine Zeile sichtbar -> Container max-height = 31px
+                        tickerWrap.style.maxHeight = '31px';
+                    }
                 })
                 .catch(err => {
                     tickerText.textContent = "+++ Ticker temporär offline +++";
                     tickerSubText.textContent = "";
+                    tickerSubText.parentElement.style.display = 'none';
+                    tickerWrap.style.maxHeight = '31px';
                 });
         }
         updateTicker();

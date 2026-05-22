@@ -99,7 +99,9 @@ def _read_afternoon_charge_intent(db_path: str) -> dict[str, Any] | None:
         'override_id': int(row[0]),
         'status': str(row[4]),
         'target_soc_pct': target_soc,
-        'pause_hp_until_target': _parse_bool(params.get('pause_hp_until_target'), True),
+        # Standardverhalten: Afternoon-Intent soll kein HP-Pause erzwingen
+        # (wird durch Regeln auswertbar sein). Default auf False gesetzt.
+        'pause_hp_until_target': _parse_bool(params.get('pause_hp_until_target'), False),
         'start_earliest_h': round(start_earliest, 2),
         'start_latest_h': round(start_latest, 2),
         'until_hour': until_hour,

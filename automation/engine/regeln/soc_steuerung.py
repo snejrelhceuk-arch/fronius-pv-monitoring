@@ -509,9 +509,17 @@ class RegelNachmittagSocMax(Regel):
 
         intent = read_active_afternoon_charge_intent()
 
+        # ── Steuerbox-Intent: Override-Processor übernimmt ──
+        # Wenn ein afternoon_charge_request aktiv ist, pausiert die Regel
+        # komplett. Der OperatorOverrideProcessor führt die 2-Schritt-Logik
+        # aus (SOC_MAX → target, nach 60s SOC_MODE → auto). Dies vermeidet
+        # Doppelausführung und respektiert die Steuerbox-Autorität.
+        if intent:
+            return 0
+
         # ── SOC-Extern-Toleranz ──
         soc_extern_tracker.aktualisiere(obs, matrix)
-        if not intent and soc_extern_tracker.ist_toleriert(matrix):
+        if soc_extern_tracker.ist_toleriert(matrix):
             verbleibend = soc_extern_tracker.verbleibend_s(matrix)
             LOG.debug(f'{self.name}: SOC extern geändert '
                       f'({soc_extern_tracker.extern_grund}) '
@@ -581,7 +589,10 @@ class RegelNachmittagSocMax(Regel):
         komfort = get_param(matrix, self.regelkreis, 'komfort_max_pct', 75)
         stress = get_param(matrix, self.regelkreis, 'stress_max_pct', 100)
         aktionen = []
-        intent = read_active_afternoon_charge_intent()
+
+        # Hinweis: Bei aktivem afternoon_charge_request gibt bewerte() bereits
+        # Score=0 zurück → diese Methode wird in dem Fall nicht aufgerufen.
+        # Der OperatorOverrideProcessor übernimmt die Ausführung.
 
         if obs.soc_mode != 'manual':
             aktionen.append({
@@ -596,9 +607,6 @@ class RegelNachmittagSocMax(Regel):
 
         peak_str = f"Peak {peak_h:.1f}h" if peak_h else "Peak ?"
         dyn_start = self._berechne_dynamische_startzeit(obs, matrix)
-        intent_start = None
-        if intent:
-            intent_start = self._berechne_intent_startzeit(obs, dyn_start, intent)
 
         soc_max_ziel = stress  # Fallback: 100%
         dyn = _dynamische_soc_ziele(obs, matrix)
@@ -611,9 +619,6 @@ class RegelNachmittagSocMax(Regel):
                 f"{prog['wp_est_kwh']:.1f}kWh" if prog['wp_est_kwh'] is not None else '-',
                 prog['samples'], soc_max_ziel,
             )
-
-        if intent:
-            soc_max_ziel = max(soc_max_ziel, int(intent.get('target_soc_pct', 100)))
 
         # Phase 2: Ziel=100%, manual-Modus → Fronius-Auto, sobald Prognose 'gut'
         # UND SOC > min_soc (default 15%). PV-Refill ist gesichert → kein Bedarf
@@ -638,18 +643,7 @@ class RegelNachmittagSocMax(Regel):
             }]
 
         if obs.soc_max is None or obs.soc_max != soc_max_ziel:
-            if intent:
-                remaining_min = int(intent.get('respekt_remaining_s', 0)) // 60
-                until_hour = intent.get('until_hour')
-                until_hint = f", bis {until_hour:.2f}h" if isinstance(until_hour, (int, float)) else ''
-                aktionen.append({
-                    'tier': 2, 'aktor': 'batterie',
-                    'kommando': 'set_soc_max', 'wert': soc_max_ziel,
-                    'grund': (f'Nachmittag-Ladewunsch: SOC_MAX {obs.soc_max or "?"}%→{soc_max_ziel}% '
-                              f'(Start {intent_start:.1f}h{until_hint}, '
-                              f'Restlaufzeit ~{remaining_min} min)'),
-                })
-            elif dyn is not None:
+            if dyn is not None:
                 aktionen.append({
                     'tier': 2, 'aktor': 'batterie',
                     'kommando': 'set_soc_max', 'wert': soc_max_ziel,

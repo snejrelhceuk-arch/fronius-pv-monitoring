@@ -307,8 +307,14 @@ class OperatorOverrideProcessor:
                     return False
                 return True
         if action == 'afternoon_charge_request':
-            # Tages-Intent wirkt als Policy-Hold für Regelpfade (SOC/HP),
-            # nicht als dedizierte Aktor-Reapply-Aktion.
+            # Tages-Intent wirkt primär als Policy-Hold für Regelpfade (SOC/HP).
+            # Reapply nur dann erlauben, wenn die Phase-2-Timeout abgelaufen
+            # ist und Fronius nicht bereits im `auto`-Modus ist.
+            if elapsed_s >= BATTERY_AUTO_PHASE2_DELAY_S:
+                ist_mode = obs_flags.get('soc_mode')
+                if ist_mode is None:
+                    return True
+                return ist_mode != 'auto'
             return False
         # Für andere Actions konservativ: Reapply erlaubt.
         return True
@@ -560,7 +566,26 @@ class OperatorOverrideProcessor:
             return None
 
         if action == 'afternoon_charge_request':
-            # Reiner Policy-Hold: wird von RegelNachmittagSocMax/RegelHeizpatrone ausgewertet.
+            # Steuerbox Tages-Intent: Wir behandeln den Intent als reinen
+            # Trigger, der initial nur SOC_MAX setzt. Nach Ablauf der
+            # Phase-2-Delay (BATTERY_AUTO_PHASE2_DELAY_S) soll Fronius
+            # wieder in den Auto-Modus geschaltet werden. Solange die
+            # Hold-Phase läuft, gelten keine weiteren direkten Aktionen.
+            target = int(params.get('target_soc_pct', 100))
+            # Active-Row: elapsed_s wird vom Caller gesetzt; nur in Phase2
+            # eine Aktion zurückgeben (Auto-Switch).
+            if elapsed_s >= BATTERY_AUTO_PHASE2_DELAY_S:
+                return [
+                    self._mk('batterie', 'set_soc_mode', 'auto',
+                             'Steuerbox Override: Nachmittag Phase2 → Fronius-Auto-Modus'),
+                ]
+            # Open-Row (initial): nur SOC_MAX setzen, kein Mode-Change.
+            if elapsed_s == 0:
+                return [
+                    self._mk('batterie', 'set_soc_max', target,
+                             f'Steuerbox Override: Nachmittag-Ladewunsch: SOC_MAX → {target}%'),
+                ]
+            # Active but not yet Phase2: no-op (policy hold)
             return []
 
         return None
