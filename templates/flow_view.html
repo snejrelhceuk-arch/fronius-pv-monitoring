@@ -624,12 +624,12 @@
         }
         .ticker-line-main {
             color: #e2e8f0;
-            font-size: 18px;
+            font-size: calc(18px + 2pt);
             font-weight: 600;
         }
         .ticker-line-sub {
             color: #cbd5e1;
-            font-size: calc(13px + 2pt);
+            font-size: calc(13px + 6pt);
             font-weight: 500;
             border-top: 1px solid rgba(51,65,85,0.25);
         }
@@ -637,7 +637,8 @@
             display: inline-block;
             white-space: nowrap;
             padding-left: 100%;
-            animation: tickerScroll 276s linear infinite;
+            /* Original: 276s. To reduce visible speed by 20%, increase duration by 25% (276s * 1.25 = 345s) */
+            animation: tickerScroll 345s linear infinite;
             will-change: transform;
         }
         @keyframes tickerScroll {

@@ -5,13 +5,17 @@ role: B
 applyTo: "routes/**"
 tags: [web-api, blueprints, templates, formatting, read-only]
 status: stable
-last_review: 2026-05-16
+last_review: 2026-05-23
+
 ---
 
 # Web Display/API
 
 ## Zweck
 Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly bereitstellen und Werte konsistent im Frontend darstellen.
+
+## Changes
+- 2026-05-23: Adjusted ticker animation duration and increased ticker font sizes in `templates/flow_view.html` (UI tweak to slow ticker by ~20%).
 
 ## Code-Anchor
 - **App + Blueprint-Setup:** `web_api.py` (`app.register_blueprint(...)`)
