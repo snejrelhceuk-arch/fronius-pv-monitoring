@@ -1394,6 +1394,7 @@ class RegelHeizpatrone(Regel):
                 elif all([haushalt_ok, wp_ok, ev_ok, soc_ok, forecast_ok, prognose_stark]):
                     self._burst_start = time.time()
                     self._burst_ende = time.time() + drain_burst
+                    self._grid_history.clear()  # Stale-History-Fix: Deque frisch starten
                     self._drain_modus = True
                     self._letzte_phase = 'phase0'
                     # Erwarteten Zustand vormerken: Observer hat HP=AUS gesehen
@@ -1511,6 +1512,7 @@ class RegelHeizpatrone(Regel):
         if burst_dauer > 0:
             self._burst_start = time.time()
             self._burst_ende = time.time() + burst_dauer
+            self._grid_history.clear()  # Stale-History-Fix: Deque frisch starten
             self._drain_modus = False  # Normal-Burst, kein Drain
             # Phase merken für Wiedereintritt-Logik
             if 'Phase 1 ' in grund:

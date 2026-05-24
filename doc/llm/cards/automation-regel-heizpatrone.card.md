@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/regeln/geraete.py"
 tags: [heizpatrone, fritzdect, ww-speicher, prognose]
 status: stable
-last_review: 2026-05-16
+last_review: 2026-05-24
 ---
 
 # Regel Heizpatrone
@@ -54,6 +54,7 @@ Zusätzlich pausiert die Regel bei aktivem `afternoon_charge_request` den HP-Bet
 - Ladewunsch-Pause anpassen → `RegelHeizpatrone.bewerte` und `RegelHeizpatrone.erzeuge_aktionen` (Intent-Lesepfad: `automation/engine/operator_intents.py`).
 
 ## Bekannte Fallstricke
+- **Stale-Grid-History (2026-05-24):** `_grid_history` wird nur gepflegt wenn HP ON ist. Nach einer OFF-Pause (z.B. 10–30 Min) enthält der Deque noch hohe Bezugswerte aus dem vorherigen EIN-Zeitraum. Phase 1b schaltet HP EIN, Netzbezug-Integral feuert sofort auf Basis der alten Werte — Probe läuft nie durch. **Fix:** `_grid_history.clear()` am Anfang jedes neuen Bursts (beide Stellen in `erzeuge_aktionen`). Die `len < fenster_min`-Guard verhindert dann frühzeitiges Feuern.
 - ExternalRespect: Wenn der Aktor erfolgreich schreibt, aber die Engine den Zielwert nicht registriert, erkennt der nächste Tick eine "fremde" Änderung → Endlos-Hold (`hp-extern-respekt-hold-note`).
 - FritzDECT-Session: 15 min Cache, bei Fritz!Box-Reboot kurzzeitig 401 → Aktor retry.
 - AIN-Mapping aus `fritz_config.json` muss zur HW passen — Vertauschungen sind häufige Quelle stiller Fehlschaltung (`fritzdect-ain-mapping-note`).
