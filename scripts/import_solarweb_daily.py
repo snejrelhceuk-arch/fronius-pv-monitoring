@@ -27,6 +27,7 @@ Nutzung:
 import sys
 import os
 import csv
+import glob
 import sqlite3
 import logging
 from datetime import datetime, timezone
@@ -45,10 +46,9 @@ logging.basicConfig(
 SOLARWEB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                              'imports', 'solarweb')
 
-CSV_FILES = [
-    os.path.join(SOLARWEB_DIR, 'solarweb_daily_2026-01_working.csv'),
-    os.path.join(SOLARWEB_DIR, 'solarweb_daily_2026-02_working.csv'),
-]
+CSV_FILES = sorted(glob.glob(
+    os.path.join(SOLARWEB_DIR, 'solarweb_daily_*_working.csv')
+))
 
 
 def date_to_daily_ts(date_str):
