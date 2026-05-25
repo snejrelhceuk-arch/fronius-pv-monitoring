@@ -519,12 +519,15 @@ def jahr_visualization():
             month, solar, bezug, einsp, batt_lad, batt_entl, direkt, gesamt, heiz, wattpilot, sonnenstd = row
 
             # Legacy-Logik fuer historische Jahre: Wattpilot dem Direktverbrauch zuordnen.
-            # Damit ist links/rechts "Direkt" konsistent und Autarkie folgt der
-            # Formel (Direkt + BattEntl) / (Direkt + BattEntl + Netzbezug).
+            # (Anzeige-Konsolidierung; ändert nicht die Gesamtbilanz.)
             direkt_monitoring = (direkt or 0) + ((wattpilot or 0) if year <= 2025 else 0)
-            eigenverbrauch = direkt_monitoring + (batt_entl or 0)
-            gesamtverbrauch = eigenverbrauch + (bezug or 0)
-            autarkie = (eigenverbrauch / gesamtverbrauch * 100) if gesamtverbrauch > 0 else 0
+            # Konsistente Quelle für Verbrauch + Autarkie: gesamt_verbrauch_kwh aus
+            # monthly_statistics (counter-basiert via statistics.py). Fallback nur,
+            # wenn DB-Wert fehlt (historische Lücken).
+            gesamtverbrauch = (gesamt or 0)
+            if gesamtverbrauch <= 0:
+                gesamtverbrauch = direkt_monitoring + (batt_entl or 0) + (bezug or 0)
+            autarkie = ((1 - (bezug or 0) / gesamtverbrauch) * 100) if gesamtverbrauch > 0 else 0
 
             datapoints.append({
                 'month': month,
@@ -592,12 +595,12 @@ def gesamt_visualization():
                 continue
 
             # Legacy-Logik fuer historische Jahre: Wattpilot dem Direktverbrauch zuordnen.
-            # Damit ist links/rechts "Direkt" konsistent und Autarkie folgt der
-            # Formel (Direkt + BattEntl) / (Direkt + BattEntl + Netzbezug).
             direkt_monitoring = (direkt or 0) + ((wattpilot or 0) if year <= 2025 else 0)
-            eigenverbrauch = direkt_monitoring + (batt_entl or 0)
-            gesamtverbrauch = eigenverbrauch + (bezug or 0)
-            autarkie = (eigenverbrauch / gesamtverbrauch * 100) if gesamtverbrauch > 0 else 0
+            # Konsistente Quelle: SUM(gesamt_verbrauch_kwh). Fallback nur bei DB-Lücke.
+            gesamtverbrauch = (gesamt or 0)
+            if gesamtverbrauch <= 0:
+                gesamtverbrauch = direkt_monitoring + (batt_entl or 0) + (bezug or 0)
+            autarkie = ((1 - (bezug or 0) / gesamtverbrauch) * 100) if gesamtverbrauch > 0 else 0
 
             datapoints.append({
                 'year': year,

@@ -5,7 +5,7 @@ role: B
 applyTo: "routes/**"
 tags: [web-api, blueprints, templates, formatting, read-only]
 status: stable
-last_review: 2026-05-23
+last_review: 2026-05-25
 
 ---
 
@@ -15,6 +15,7 @@ last_review: 2026-05-23
 Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly bereitstellen und Werte konsistent im Frontend darstellen.
 
 ## Changes
+- 2026-05-25: Konsistenz Monat/Jahr/Gesamt → `routes/visualization.py` nutzt jetzt `gesamt_verbrauch_kwh` aus `monthly_statistics` (Counter-basiert); Autarkie-Anzeige in `templates/tag_view.html` mit 1 Nachkommastelle.
 - 2026-05-23: Adjusted ticker animation duration and increased ticker font sizes in `templates/flow_view.html` (UI tweak to slow ticker by ~20%).
 
 ## Code-Anchor

@@ -513,11 +513,13 @@
                 const verbrauchTotal = chartData.datapoints.filter(dp => !dp.is_forecast).reduce((sum, dp) => {
                     return sum + (dp.w_gesamtverbrauch || 0);
                 }, 0);
-                const einspeisTotal = chartData.datapoints.filter(dp => !dp.is_forecast).reduce((sum, dp) => {
-                    return sum + (dp.w_einspeisung || 0);
+                const bezugTotal = chartData.datapoints.filter(dp => !dp.is_forecast).reduce((sum, dp) => {
+                    return sum + (dp.w_netzbezug || 0);
                 }, 0);
-                const eigenverbrauchTotal = Math.max(0, ertragTotal - einspeisTotal);
-                const autarkiePeriod = verbrauchTotal > 0 ? Math.min(100, (eigenverbrauchTotal / verbrauchTotal * 100)) : 0;
+                // Konsistente Autarkie: (1 − Bezug/Verbrauch) · 100 (gleiche Formel wie statistics.py).
+                const autarkiePeriod = verbrauchTotal > 0
+                    ? Math.min(100, Math.max(0, (1 - bezugTotal / verbrauchTotal) * 100))
+                    : 0;
 
                 let kwpRef = null;
                 if (currentPeriod === 'monat') {
@@ -545,7 +547,7 @@
 
                 const specificText = kwpRef ? formatSpecificYield(ertragTotal, kwpRef) : '–';
                 
-                let summaryText = `${formatEnergy(ertragTotal)} / ${formatEnergy(verbrauchTotal)} · ${autarkiePeriod.toFixed(0)}% · ${specificText}`;
+                let summaryText = `${formatEnergy(ertragTotal)} / ${formatEnergy(verbrauchTotal)} · ${autarkiePeriod.toFixed(1)}% · ${specificText}`;
                 
                 // Jahr-Ansicht: Sonnenstunden anzeigen (aus API-Daten)
                 if (currentPeriod === 'jahr' && chartData.sonnenstunden) {
@@ -2108,7 +2110,7 @@
                         result += '<br/>';
                         result += `<strong>Spez. Ertrag:</strong> ${formatSpecificYield(dp.w_pv_total || 0, getInstalledKwpForDate(datum))}<br/>`;
                         result += `<strong>Verbrauch:</strong> ${formatEnergy(dp.w_gesamtverbrauch)}<br/>`;
-                        result += `<strong>Autarkie:</strong> ${dp.autarkie} %`;
+                        result += `<strong>Autarkie:</strong> ${dp.autarkie != null ? Number(dp.autarkie).toFixed(1) : "&ndash;"} %`;
                         
                         return result;
                     }
@@ -2439,7 +2441,7 @@
                         }
                         result += `<strong>Spez. Ertrag:</strong> ${formatSpecificYield(dp.w_pv_total || 0, kwpRef)}<br/>`;
                         result += `<strong>Verbrauch:</strong> ${formatEnergy(dp.w_gesamtverbrauch)}<br/>`;
-                        result += `<strong>Autarkie:</strong> ${dp.autarkie} %`;
+                        result += `<strong>Autarkie:</strong> ${dp.autarkie != null ? Number(dp.autarkie).toFixed(1) : "&ndash;"} %`;
                         
                         return result;
                     }

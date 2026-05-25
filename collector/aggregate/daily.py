@@ -225,11 +225,14 @@ def aggregate_daily():
 
             # ── 3. F2/F3-Counter + Wärmepumpe-Counter aus raw_data (ab 12.02.) ──
             # NULLIF(x,0) schützt vor Fronius-Gateway-Init (0.0 nach FW-Update/Neustart)
+            # Imp_F2/F3 = AC-Standby-Bezug der WR (typ. ~0,2% von Exp) → für Netto-PV abziehen.
             c.execute("""
                 SELECT
                     MAX(NULLIF(W_Exp_F2,0)) - MIN(NULLIF(W_Exp_F2,0)),
                     MAX(NULLIF(W_Exp_F3,0)) - MIN(NULLIF(W_Exp_F3,0)),
-                    MAX(NULLIF(W_Imp_WP,0)) - MIN(NULLIF(W_Imp_WP,0))
+                    MAX(NULLIF(W_Imp_WP,0)) - MIN(NULLIF(W_Imp_WP,0)),
+                    MAX(NULLIF(W_Imp_F2,0)) - MIN(NULLIF(W_Imp_F2,0)),
+                    MAX(NULLIF(W_Imp_F3,0)) - MIN(NULLIF(W_Imp_F3,0))
                 FROM raw_data
                 WHERE ts >= ? AND ts < ?
             """, (q_start, q_end))
@@ -238,6 +241,8 @@ def aggregate_daily():
             cnt_f2 = raw_row[0] if (raw_row and raw_row[0] is not None) else None
             cnt_f3 = raw_row[1] if (raw_row and raw_row[1] is not None) else None
             cnt_waermepumpe = raw_row[2] if (raw_row and raw_row[2] is not None) else None
+            cnt_imp_f2 = raw_row[3] if (raw_row and raw_row[3] is not None) else None
+            cnt_imp_f3 = raw_row[4] if (raw_row and raw_row[4] is not None) else None
 
             # ── 4. Wattpilot-Zähler aus wattpilot_daily ──
             c.execute("""
@@ -281,19 +286,26 @@ def aggregate_daily():
             W_Imp_Netz, src_imp = _counter_or_fallback(cnt_imp, sum_imp_delta, f"{date_str} Bezug")
             W_Exp_Netz, src_exp = _counter_or_fallback(cnt_exp, sum_exp_delta, f"{date_str} Einsp")
 
-            # PV: Counter = DC1+DC2 (F1) + F2 + F3 | Fallback = SUM(W_PV_total_delta)
+            # PV: Counter = DC1+DC2 (F1) + F2_netto + F3_netto | Fallback = SUM(W_PV_total_delta)
+            # F2/F3 netto = Exp − Imp (AC-Standby-Bezug der WR abziehen, ~0,2% von Exp)
             if cnt_pv_f1 is not None:
                 pv_f1, src_pv1 = _counter_or_fallback(cnt_pv_f1, sum_pv_delta, f"{date_str} PV-F1")
                 # F2/F3: Counter aus raw_data oder Anteil aus P×t
-                pv_f2 = abs(cnt_f2) if cnt_f2 is not None else 0.0
-                pv_f3 = abs(cnt_f3) if cnt_f3 is not None else 0.0
+                exp_f2 = abs(cnt_f2) if cnt_f2 is not None else 0.0
+                exp_f3 = abs(cnt_f3) if cnt_f3 is not None else 0.0
+                # Imp_F2/F3 plausibilisieren (Reset/Init = unrealistisch große Sprünge unterdrücken)
+                # Schwelle 100 kWh/Tag ist deutlich über jedem realistischen Standby-Bezug eines WR.
+                imp_f2 = cnt_imp_f2 if (cnt_imp_f2 is not None and 0 <= cnt_imp_f2 < 100_000) else 0.0
+                imp_f3 = cnt_imp_f3 if (cnt_imp_f3 is not None and 0 <= cnt_imp_f3 < 100_000) else 0.0
+                pv_f2 = max(0.0, exp_f2 - imp_f2)
+                pv_f3 = max(0.0, exp_f3 - imp_f3)
 
                 if src_pv1 == "counter":
-                    # Bei Counter-Modus für F1: PV-Gesamt = F1-Counter + F2/F3-Counter
+                    # Bei Counter-Modus für F1: PV-Gesamt = F1-Counter + F2/F3-Netto
                     # Falls F2/F3-Counter fehlt → PV-Gesamtdelta aus hourly als Fallback
                     if cnt_f2 is not None and cnt_f3 is not None:
                         W_PV_total = pv_f1 + pv_f2 + pv_f3
-                        src_pv = "counter(DC1+DC2+F2+F3)"
+                        src_pv = "counter(DC1+DC2+F2net+F3net)"
                     else:
                         # F2/F3-Counter fehlt: SUM(Δ) enthält bereits alle 3 Inverter
                         W_PV_total = sum_pv_delta or 0.0

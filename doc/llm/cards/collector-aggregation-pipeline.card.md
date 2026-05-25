@@ -5,7 +5,7 @@ role: A
 applyTo: "collector/aggregate/**"
 tags: [aggregation, pipeline, cron, retention]
 status: stable
-last_review: 2026-05-16
+last_review: 2026-05-25
 ---
 
 # Aggregation-Pipeline
@@ -49,6 +49,8 @@ _Konkrete Cron-Minuten liegen in der User-Crontab (nicht im Repo)._
 - **Cron-Staffelung:** Skripte laufen zeitlich versetzt (Reihenfolge `collector.aggregate.min1` → `fifteen` → `daily` → `monthly` → `statistics`), damit jede Stufe auf konsistenten Vorgaengerdaten arbeitet.
 - **Backfill:** `collector/aggregate/min1.py` prueft die letzten 10 min auf Luecken.
 - **Counter-Fixpunkte:** `daily_data.*_start`/`*_end` für Drift-Korrektur (Vergleich mit Counter-Differenzen).
+- **PV-Netto-Bilanz (2026-05-25):** `daily.py` rechnet `W_PV_total = DC1+DC2 + (Exp_F2−Imp_F2) + (Exp_F3−Imp_F3)`. Imp_F2/F3 = AC-Standby der WR (~0,2 % von Exp).
+- **Counter-Konsistenz Monat (2026-05-25):** `statistics.py` speist `monthly_statistics` vorrangig aus `data_monthly`-Counter-Diffs (eichgenau); Fallback auf `SUM(daily_data)` bei Drift > 3 %/5 kWh oder bei Reset-verdacht (Sanity-Schwelle 5000 kWh/Monat).
 - **Permanenz:** `monthly_statistics`, `yearly_statistics` werden nicht überschrieben (Korrekturen nur additiv).
 
 ## No-Gos

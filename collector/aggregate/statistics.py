@@ -139,6 +139,64 @@ def update_monthly_statistics():
                 continue
 
             solar, bezug, einsp, batt_lad, batt_entl, direkt, gesamt, wp_total, tage = row
+            counter_source = "daily_data"  # default
+
+            # ── Counter-Konsistenz: data_monthly bevorzugen (eichgenaue Counter-Diff) ──
+            # PV-, Bezug-, Einsp- und Batt-Werte aus data_monthly überschreiben SUM(daily_data),
+            # sofern Counter-Sanity OK ist. Direktverbrauch und Gesamt werden danach konsistent
+            # aus diesen Größen neu hergeleitet (Verbrauch = PV + Bezug − Einsp).
+            try:
+                cursor.execute("""
+                    SELECT
+                        W_DC1_delta, W_DC2_delta,
+                        W_Exp_F2_delta, W_Imp_F2_delta,
+                        W_Exp_F3_delta, W_Imp_F3_delta,
+                        W_Imp_Netz_delta, W_Exp_Netz_delta,
+                        W_Batt_Charge_total, W_Batt_Discharge_total
+                    FROM data_monthly
+                    WHERE ts = ?
+                """, (ts_start,))
+                dm_row = cursor.fetchone()
+            except sqlite3.OperationalError:
+                dm_row = None
+
+            if dm_row is not None and all(v is not None for v in dm_row):
+                dc1, dc2, exp_f2, imp_f2, exp_f3, imp_f3, imp_netz, exp_netz, b_ch, b_dch = dm_row
+                # Sanity: alle Deltas ≥ 0 und unter plausiblem Monats-Maximum (kWh)
+                # Schwelle 5000 kWh/Monat deckt selbst Sommermonate komfortabel ab.
+                vals = (dc1, dc2, exp_f2, imp_f2, exp_f3, imp_f3, imp_netz, exp_netz, b_ch, b_dch)
+                if all(v is not None and 0 <= v < 5_000_000 for v in vals):
+                    pv_counter_kwh = (dc1 + dc2 + max(0.0, exp_f2 - imp_f2) + max(0.0, exp_f3 - imp_f3)) / 1000.0
+                    bezug_counter_kwh = imp_netz / 1000.0
+                    einsp_counter_kwh = exp_netz / 1000.0
+                    batt_lad_counter_kwh = b_ch / 1000.0
+                    batt_entl_counter_kwh = b_dch / 1000.0
+                    # Übernahme nur, wenn die SUM(daily)- und Counter-Werte konsistent sind
+                    # (Toleranz 3% oder 5 kWh, was größer ist).
+                    def _close(a: float, b: float) -> bool:
+                        tol = max(5.0, 0.03 * max(abs(a), abs(b)))
+                        return abs(a - b) <= tol
+                    if (_close(pv_counter_kwh, solar)
+                            and _close(bezug_counter_kwh, bezug)
+                            and _close(einsp_counter_kwh, einsp)):
+                        solar = pv_counter_kwh
+                        bezug = bezug_counter_kwh
+                        einsp = einsp_counter_kwh
+                        batt_lad = batt_lad_counter_kwh
+                        batt_entl = batt_entl_counter_kwh
+                        counter_source = "data_monthly"
+                        # Gesamt konsistent neu: PV + Bezug − Einsp
+                        gesamt_counter = max(0.0, solar + bezug - einsp)
+                        # Direktverbrauch als Restgröße: PV − Einsp − BattLad (≥0)
+                        direkt = max(0.0, solar - einsp - batt_lad)
+                        gesamt = gesamt_counter
+                    else:
+                        logging.warning(
+                            f"  {year}-{month:02d}: Counter-Drift data_monthly↔daily_data: "
+                            f"PV {pv_counter_kwh:.1f}↔{solar:.1f}, "
+                            f"Bezug {bezug_counter_kwh:.1f}↔{bezug:.1f}, "
+                            f"Einsp {einsp_counter_kwh:.1f}↔{einsp:.1f} kWh → bleibe bei daily_data"
+                        )
             wp_total, wp_correction = apply_monthly_stat_correction(
                 year, month, 'waermepumpe_kwh', wp_total, corrections
             )
@@ -245,7 +303,7 @@ def update_monthly_statistics():
                 strompreis, sonnenstunden
             ))
             count += 1
-            logging.info(f"  {year}-{month:02d}: {solar:.1f} kWh Solar, {bezug:.1f} kWh Bezug, {tage} Tage")
+            logging.info(f"  {year}-{month:02d}: {solar:.1f} kWh Solar, {bezug:.1f} kWh Bezug, {tage} Tage [{counter_source}]")
 
         conn.commit()
         logging.info(f"✓ {count} Monate in monthly_statistics aktualisiert")
