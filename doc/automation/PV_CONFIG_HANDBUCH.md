@@ -447,7 +447,7 @@ Wenn `morgen_soc_min` den SOC_MIN früh auf 5% öffnet, entlädt sich die Batter
 
 Die Heizpatrone ist Verbraucher für PV-Überschuss und darf grundsätzlich keinen Netzbezug verursachen. Toleriert sind nur kurze Schaltverluste durch Lastwechsel und Erzeugungsschwankungen (Wattpilot-Start, Wolkenfront, Backofen), bis die Wechselrichter sich angepasst haben.
 
-Messung: Energie-Integral des positiven Netzbezugs über `aus_netzbezug_fenster_min` (Default 5 Min, Engine-Tick ≈ 60 s). Überschreitet die integrierte Energie `aus_netzbezug_energie_kwh` (Default 0.02 kWh ≡ Ø 240 W über 5 Min) → HP AUS. Schaltspitzen (z. B. einmal 3 kW für 30 s) bleiben darunter.
+Messung: Energie-Integral des positiven Netzbezugs über `aus_netzbezug_fenster_min` (Default 5 Min, Engine-Tick ≈ 60 s). Überschreitet die integrierte Energie `aus_netzbezug_energie_kwh` (Default 0.1 kWh ≡ Ø 1200 W über 5 Min) → HP AUS. Schaltspitzen (z. B. einmal 3 kW für 30 s) bleiben darunter.
 
 Veto: Aktueller Bezug `< aus_netzbezug_aktuell_veto_w` (200 W) → keine Auswertung (Historie evtl. veraltet). Die früheren Forecast-Rest-Vetos (»gute Prognose holt's nach«) und Winter-Schutz-Vetos wurden entfernt: kein Forecast und keine SOC-Lage rechtfertigen sustained Netzbezug durch die HP.
 
@@ -497,7 +497,7 @@ SOC_MAX auf 100% geht (Nachmittag) wird die Batterie-Entladung strenger bewertet
 | max_wattpilot | 500 W | 0–5000 W | **Obergrenze EV-Ladung.** (Legacy, durch Potenzial-Logik ersetzt.) HP darf mit EV parallel laufen wenn Potenzial ≥ `gut`. |
 | batt_reserve | 2.0 kWh | 0.5–5.0 kWh | **Prognose-Reserve.** Restprognose muss Batterie-Volladung + diese Reserve decken, damit HP erlaubt wird. |
 | batt_reserve_nachmittag | 3.0 kWh | 1–8 kWh | **Größere Reserve nachmittags.** Weniger Restzeit → mehr Puffer für sichere Volladung. |
-| aus_netzbezug_energie_kwh | 0.02 kWh | 0.005–0.1 kWh | **HP-AUS-Schwelle (Energie-Integral).** Sustained Netzbezug ≥ dieser Energie über `aus_netzbezug_fenster_min` → HP AUS. Default 0.02 kWh/5 min ≡ Ø 240 W. Kurze Schaltspitzen (Wattpilot, Backofen) bleiben darunter. Seit 2026-05-16. |
+| aus_netzbezug_energie_kwh | 0.1 kWh | 0.05–0.5 kWh | **HP-AUS-Schwelle (Energie-Integral).** Sustained Netzbezug ≥ dieser Energie über `aus_netzbezug_fenster_min` → HP AUS. Default 0.1 kWh/5 min ≡ Ø 1200 W. Kurze Schaltspitzen (Wattpilot, Backofen) bleiben darunter. Seit 2026-05-16, erhöht 2026-05-25. |
 | aus_netzbezug_fenster_min | 5 min | 2–10 min | **Fensterlänge** für das Netzbezug-Energie-Integral. Engine-Tick ≈ 60 s, d.h. 5 Samples = 5 Min. |
 | aus_netzbezug_aktuell_veto_w | 200 W | 0–1000 W | **Istwert-Veto.** Aktueller Netzbezug darunter → keine AUS-Auswertung (Historie evtl. veraltet, kein akuter Bezug). |
 | speicher_temp_max | 78 °C | 60–85 °C | **Warmwasser-Übertemperatur.** HP sofort AUS bei ≥78 °C. Schutz vor Verbrühung/Überdruck. |

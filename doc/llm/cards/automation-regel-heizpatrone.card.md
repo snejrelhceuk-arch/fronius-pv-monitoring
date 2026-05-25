@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/regeln/geraete.py"
 tags: [heizpatrone, fritzdect, ww-speicher, prognose]
 status: stable
-last_review: 2026-05-24
+last_review: 2026-05-25
 ---
 
 # Regel Heizpatrone
@@ -34,7 +34,7 @@ Zusätzlich pausiert die Regel bei aktivem `afternoon_charge_request` den HP-Bet
 - **Netzbezug-AUS (`_netzbezug_aus_ausloesen`, seit 2026-05-16, Vorfall »3 h Netzbezug im Drain«):** Energie-Integral-Verfahren
   1. **Veto:** Aktueller Bezug `< aus_netzbezug_aktuell_veto_w` (200 W) → keine Auswertung (Historie evtl. veraltet, kein akuter Bezug).
   2. **Messung:** Σ der positiven `grid_power_w`-Samples der letzten `aus_netzbezug_fenster_min` (5) Engine-Ticks (≈ 60 s/Tick) als Energie (kWh = Σ_W / 60000).
-  3. **Auslöser:** Energie ≥ `aus_netzbezug_energie_kwh` (0.02 kWh ≡ Ø 240 W über 5 Min) → HP AUS. Schaltspitzen (z. B. einmal 3 kW für 30 s) bleiben darunter.
+  3. **Auslöser:** Energie ≥ `aus_netzbezug_energie_kwh` (0.1 kWh ≡ Ø 1200 W über 5 Min) → HP AUS. Schaltspitzen (z. B. einmal 3 kW für 30 s) bleiben darunter. Wert erhöht 2026-05-25 (vorher 0.02 kWh).
   Es gibt **keine Vetos durch Forecast-Rest, Winter-Schutz oder Transient-Fenster mehr**. Winter-Tiefentladung wird über das **dynamische SOC_MIN-Sliding (5–25 %)** in `RegelSocSteuerung` und die HART-Schwellen `stop_entladung_unter`/`extern_aus_soc_pct` abgesichert, nicht durch toleriertes HP-Netzbezug.
 - Begriff **„Notaus"** ist reserviert für menschen-/spannungsbezogene Schutzkontexte (BYD-BMS, Tier-1-Alarm). Im HP-Kontext heißt es **„AUS"** (`aus_grund`, `_netzbezug_aus_ausloesen`, `extern_aus_soc_pct`, AUS-Pfad, AUS-Kriterienwerk).
 - Externe Schaltung erkannt → `_cancel_conflicting_overrides()` annulliert offene Operator-Overrides + setzt 30-min-Respekt-Hold (`extern_respekt_s`).

@@ -1079,10 +1079,10 @@
           "beschreibung": "Fensterlänge für das Netzbezug-Energie-Integral. Engine-Tick ≈ 60 s, d.h. 5 Samples = 5 Min."
         },
         "aus_netzbezug_energie_kwh": {
-          "wert": 0.02,
+          "wert": 0.1,
           "bereich": [
-            0.005,
-            0.1
+            0.05,
+            0.5
           ],
           "einheit": "kWh",
           "obs_feld": "grid_power_w",
