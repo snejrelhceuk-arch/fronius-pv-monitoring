@@ -12,7 +12,7 @@ PV_PRIMARY_IP=192.0.2.181
 PV_PRIMARY_REPO=/srv/pv-system
 PV_PRIMARY_DB_PATH=/srv/pv-system/data.db
 
-PV_WATTPILOT_IP=192.0.2.197
+PV_WATTPILOT_IP=192.0.2.176
 PV_SECONDARY_INVERTER_API=http://192.0.2.123/components/readable
 
 PV_PI5_BACKUP_HOST=backup-user@backup-host

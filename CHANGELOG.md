@@ -7,7 +7,12 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+- **Wattpilot Hardware-Tausch (2026-05-27):** Neuer Wattpilot Flex Home 22kW ersetzt bisheriges Go-Modell. `PV_WATTPILOT_IP` auf die neue lokale Wallbox-Adresse aktualisiert.
+
 ### Fixes
+- **Wattpilot Flex Local-Auth (2026-05-27):** Authentifizierung auf Hash-Negotiation über `authRequired.hash` umgestellt. Für Flex (`hash=bcrypt`) wird bcrypt-basierte Passwort-Ableitung genutzt, für ältere Geräte weiterhin `pbkdf2`. Betrifft `wattpilot_api.py` (Read + setValue) und `tools/wattpilot_read.py`.
+
 - **HP-AUS Energie-Integral statt Forecast/Winter-Vetos (2026-05-16):** Vorfall an diesem Tag — HP lief 04:16–08:03 (≈ 3 h) mit sustained Netzbezug (>3 kWh) im Drain-Modus, weil das alte `_netzbezug_notaus_ausloesen` ein Forecast-Rest-Veto („gute Prognose holt's nach") besaß, das Netzbezug tolerierte. Neue Logik: HP ist Überschuss-Verbraucher und darf grundsätzlich keinen Netzbezug verursachen; nur kurze Schaltverluste durch Lastwechsel/Erzeugungsschwankungen werden geduldet. Messung über Energie-Integral des positiven Netzbezugs über 5 Min (Engine-Tick 60 s, 5 Samples): ≥ 0.02 kWh ≡ Ø 240 W → HP AUS. Veto nur bei aktuellem Bezug < 200 W. Forecast-Vetos, Winter-Schutz-Veto, Transient-Fenster-Veto und Drain-spezifische Netzbezug-Schwelle entfernt. Winter-Tiefentladung ist weiterhin über dynamisches SOC_MIN-Sliding (5–25 %) und die HART-Schwellen `stop_entladung_unter`/`extern_aus_soc_pct` abgesichert.
 - **Terminologie Notaus → AUS (HP-Kontext):** „Notaus" ist reserviert für menschen-/spannungsbezogene Schutzkontexte (BYD-BMS, Tier-1-Alarm). Im HP-Kontext: `notaus_grund`→`aus_grund`, `notaus_ausloesen`→`aus_ausloesen`, `extern_notaus_soc_pct`→`extern_aus_soc_pct`, Drain-Notaus→Drain-AUS, Notaus-Pfad→AUS-Pfad, Notaus-Kriterien→AUS-Kriterien. Doku (PV_CONFIG_HANDBUCH, HP_TOGGLE_OVERRIDE_FLOW, Card automation-regel-heizpatrone) konsistent nachgezogen.
 

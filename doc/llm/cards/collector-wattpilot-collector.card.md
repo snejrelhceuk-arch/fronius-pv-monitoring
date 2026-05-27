@@ -5,7 +5,7 @@ role: A
 applyTo: "collector/wattpilot.py"
 tags: [wattpilot, collector, websocket, eto]
 status: stable
-last_review: 2026-05-16
+last_review: 2026-05-27
 ---
 
 # Wattpilot-Collector
@@ -27,6 +27,7 @@ Liest die Fronius-Wattpilot (go-e basiert) zyklisch via WebSocket-API und persis
 ## Invarianten
 - **Polling-Intervall** ca. 30 s (`WATTPILOT_POLL_INTERVAL` in `config.py`).
 - **`eto` ist Gesamt-Counter** — Tageswert nur über Differenz.
+- **Auth-Hash-Negotiation:** `wattpilot_api.py` nutzt `authRequired.hash` (`bcrypt` bei Flex, sonst `pbkdf2`).
 - **WS-Konflikt-Tolerance:** Bei Verdraengung durch Fronius-/go-e-App bis zu 3 Retries (`collector/wattpilot.py`).
 - **PID-Lock:** `wattpilot_collector.pid` im Repo-Root.
 

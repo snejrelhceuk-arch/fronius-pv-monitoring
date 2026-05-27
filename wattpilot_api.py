@@ -7,8 +7,8 @@ Wiederverwendbares Modul für Wattpilot-Zugriff per WebSocket.
 Liest Zählerstand (eto), Live-Status, Session-Daten und
 Geräteinformationen über die lokale WebSocket-Schnittstelle.
 
-Authentifizierung: PBKDF2-HMAC-SHA512 + SHA256 Challenge-Response
-(identisch zur joscha82/wattpilot Library).
+Authentifizierung: Challenge-Response mit PBKDF2 oder bcrypt
+(abwaerts kompatibel zu Go/Home/Flex Varianten).
 
 Nutzung:
   from wattpilot_api import WattpilotClient
@@ -27,6 +27,7 @@ import asyncio
 import json
 import hashlib
 import base64
+import crypt
 import os
 import sys
 import logging
@@ -40,7 +41,7 @@ try:
     import config as _cfg
     DEFAULT_IP = _cfg.WATTPILOT_IP
 except ImportError:
-    DEFAULT_IP = "192.0.2.197"
+    DEFAULT_IP = "192.0.2.176"
 DEFAULT_TIMEOUT = 10
 
 # Auto-Status Mapping
@@ -60,6 +61,10 @@ CHARGE_MODES = {
     5: 'Nächste Fahrt'
 }
 
+HASH_PBKDF2 = 'pbkdf2'
+HASH_BCRYPT = 'bcrypt'
+FLEX_DEVICETYPE = 'wattpilot_flex'
+
 
 def _load_password():
     """Passwort aus Umgebungsvariable oder .secrets-Datei laden."""
@@ -76,31 +81,94 @@ def _load_password():
     )
 
 
-def _compute_auth(serial: str, password: str, token1: str, token2: str):
-    """
-    Wattpilot Auth-Hash berechnen (PBKDF2 + SHA256 Challenge-Response).
-    
-    Exakt nach joscha82/wattpilot Library:
-    1. PBKDF2-HMAC-SHA512(password, serial, 100000, 256 bytes) -> base64 -> [:32]
-    2. hash1 = SHA256(token1_bytes + hashed_password_bytes)
-    3. token3 = random 32 hex chars
-    4. hash  = SHA256((token3 + token2 + hash1).encode())
-    """
+def _bcryptjs_base64_encode_bytes(data: bytes, length: int) -> str:
+    """bcrypt.js-kompatible Base64-Codierung (eigener Zeichensatz, ohne '=')."""
+    alphabet = list("./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
+    if length <= 0 or length > len(data):
+        raise ValueError(f"Illegal len: {length}")
+
+    off = 0
+    out = []
+    while off < length:
+        c1 = data[off] & 0xFF
+        off += 1
+        out.append(alphabet[(c1 >> 2) & 0x3F])
+        c1 = (c1 & 0x03) << 4
+        if off >= length:
+            out.append(alphabet[c1 & 0x3F])
+            break
+
+        c2 = data[off] & 0xFF
+        off += 1
+        c1 |= (c2 >> 4) & 0x0F
+        out.append(alphabet[c1 & 0x3F])
+        c1 = (c2 & 0x0F) << 2
+        if off >= length:
+            out.append(alphabet[c1 & 0x3F])
+            break
+
+        c2 = data[off] & 0xFF
+        off += 1
+        c1 |= (c2 >> 6) & 0x03
+        out.append(alphabet[c1 & 0x3F])
+        out.append(alphabet[c2 & 0x3F])
+
+    return ''.join(out)
+
+
+def _bcryptjs_encode_serial(serial: str, length: int = 16) -> str:
+    """Serial-Encoding analog zu Flex-Referenzimplementierungen."""
+    if not serial.isdigit():
+        raise ValueError(f"Unsupported serial format for bcrypt auth: {serial}")
+    vals = [ord(ch) - ord('0') for ch in serial]
+    raw = bytes([0] * (length - len(vals)) + vals)
+    return _bcryptjs_base64_encode_bytes(raw, length)
+
+
+def _hash_password_bcrypt(password: str, serial: str, iterations: int = 8) -> bytes:
+    """Erzeuge bcrypt-basierten Passwort-Hash fuer Flex-Auth."""
+    password_sha256 = hashlib.sha256(password.encode('utf-8')).hexdigest()
+    serial_b64 = _bcryptjs_encode_serial(serial, 16)
+    salt = f"$2a${iterations:02d}${serial_b64}"
+    full_hash = crypt.crypt(password_sha256, salt)
+    if not full_hash or not full_hash.startswith(salt):
+        raise RuntimeError("bcrypt hashing via crypt() fehlgeschlagen")
+    return full_hash[len(salt):].encode('ascii')
+
+
+def _resolve_auth_hash_type(auth_hash: str = None, devicetype: str = None) -> str:
+    if auth_hash:
+        value = str(auth_hash).strip().lower()
+        if value in {HASH_PBKDF2, HASH_BCRYPT}:
+            return value
+    if devicetype == FLEX_DEVICETYPE:
+        return HASH_BCRYPT
+    return HASH_PBKDF2
+
+
+def _compute_auth(
+    serial: str,
+    password: str,
+    token1: str,
+    token2: str,
+    auth_hash: str = None,
+    devicetype: str = None,
+):
+    """Wattpilot Auth-Hash berechnen (PBKDF2/BCRYPT + SHA256 Challenge-Response)."""
     import secrets
 
-    # Schritt 1: Passwort-Hash
-    dk = hashlib.pbkdf2_hmac('sha512', password.encode(), serial.encode(), 100000, 256)
-    hashed_pw = base64.b64encode(dk)[:32]  # bytes, 32 Zeichen
+    hash_type = _resolve_auth_hash_type(auth_hash=auth_hash, devicetype=devicetype)
+    if hash_type == HASH_PBKDF2:
+        dk = hashlib.pbkdf2_hmac('sha512', password.encode(), serial.encode(), 100000, 256)
+        hashed_pw = base64.b64encode(dk)[:32]
+    elif hash_type == HASH_BCRYPT:
+        hashed_pw = _hash_password_bcrypt(password, serial)
+    else:
+        raise RuntimeError(f"Unbekannter Wattpilot hash-Typ: {hash_type}")
 
-    # Schritt 2: token3 generieren
     token3 = secrets.token_hex(16)
-
-    # Schritt 3: hash1
     hash1 = hashlib.sha256((token1.encode() + hashed_pw)).hexdigest()
-
-    # Schritt 4: final hash
     final_hash = hashlib.sha256((token3 + token2 + hash1).encode()).hexdigest()
-
     return token3, final_hash
 
 
@@ -171,10 +239,18 @@ class WattpilotClient:
                 
                 token1 = auth_req['token1']
                 token2 = auth_req['token2']
+                auth_hash_type = auth_req.get('hash')
                 
                 # 3) Auth senden
                 password = self._get_password()
-                token3, auth_hash = _compute_auth(serial, password, token1, token2)
+                token3, auth_hash = _compute_auth(
+                    serial,
+                    password,
+                    token1,
+                    token2,
+                    auth_hash=auth_hash_type,
+                    devicetype=hello.get('devicetype'),
+                )
                 await ws.send(json.dumps({
                     "type": "auth",
                     "token3": token3,
@@ -292,12 +368,26 @@ class WattpilotClient:
 
                 # 3) Auth senden + hashed_password berechnen (für HMAC)
                 password = self._get_password()
-                token3, auth_hash = _compute_auth(serial, password, auth_req['token1'], auth_req['token2'])
+                hash_type = _resolve_auth_hash_type(
+                    auth_hash=auth_req.get('hash'),
+                    devicetype=hello.get('devicetype'),
+                )
+                token3, auth_hash = _compute_auth(
+                    serial,
+                    password,
+                    auth_req['token1'],
+                    auth_req['token2'],
+                    auth_hash=hash_type,
+                    devicetype=hello.get('devicetype'),
+                )
                 await ws.send(json.dumps({"type": "auth", "token3": token3, "hash": auth_hash}))
 
-                # Hashed Password für securedMsg (gleiche PBKDF2 wie in _compute_auth)
-                dk = hashlib.pbkdf2_hmac('sha512', password.encode(), serial.encode(), 100000, 256)
-                hashed_pw = base64.b64encode(dk)[:32]  # 32 Bytes
+                # Hashed Password für securedMsg analog zum gewählten Auth-Typ
+                if hash_type == HASH_BCRYPT:
+                    hashed_pw = _hash_password_bcrypt(password, serial)
+                else:
+                    dk = hashlib.pbkdf2_hmac('sha512', password.encode(), serial.encode(), 100000, 256)
+                    hashed_pw = base64.b64encode(dk)[:32]
 
                 # 4) Auth-Ergebnis + fullStatus abwarten
                 auth_ok = False

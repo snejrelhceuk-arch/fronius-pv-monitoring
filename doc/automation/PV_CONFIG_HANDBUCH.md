@@ -831,7 +831,9 @@ Zeigt den Gesamtzustand des PV-Systems:
 
 Steuert die 2-kW-Heizpatrone im Warmwasserspeicher über eine Fritz!DECT-Steckdose (AHA-HTTP-API).
 
-**Zugangsdaten:** Werden in `.secrets` gespeichert (nicht in JSON), genau wie `FRONIUS_PASS` und `WATTPILOT_PASSWORD`.
+**Zugangsdaten:** Werden in `.secrets` gespeichert (nicht in JSON).
+`FRONIUS_PASS` gilt nur für Fronius F1.
+`WATTPILOT_PASSWORD` gilt nur für die Wattpilot-Authentifizierung.
 
 | Eintrag | Funktion |
 |---------|----------|

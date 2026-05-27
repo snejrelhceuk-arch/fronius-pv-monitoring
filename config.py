@@ -150,7 +150,7 @@ FAILOVER_USER = load_local_setting('PV_FAILOVER_USER', 'failover-user')
 FAILOVER_PV_BASE = load_local_setting('PV_FAILOVER_PV_BASE', '/srv/pv-system')
 
 # --- Wattpilot (Wallbox) ---
-WATTPILOT_IP = load_local_setting('PV_WATTPILOT_IP', '192.0.2.197')
+WATTPILOT_IP = load_local_setting('PV_WATTPILOT_IP', '192.0.2.176')
 WATTPILOT_TIMEOUT = 10             # WebSocket Timeout (Sek.)
 WATTPILOT_POLL_INTERVAL = 30       # Zählerstand-Abfrage alle 30s (WebSocket-Belegung ~8%)
 WATTPILOT_RETRY_INTERVAL = 5       # Sekunden bis Retry bei WebSocket-Konflikt (App, Netzwerk)

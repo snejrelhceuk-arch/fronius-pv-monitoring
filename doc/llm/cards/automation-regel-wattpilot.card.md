@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/aktoren/aktor_wattpilot.py"
 tags: [wattpilot, ev-lader, websocket, soc-schutz]
 status: stable
-last_review: 2026-05-16
+last_review: 2026-05-27
 ---
 
 # Regel Wattpilot
@@ -27,6 +27,7 @@ Schützt die Hausbatterie vor EV-Ladung via Wattpilot (Fronius/go-e Wallbox). He
 ## Invarianten
 - Trigger 1: `SOC ≤ SOC_MIN + puffer` während Ladung → `soc_min` auf 25 % (Netzbezug erzwungen, Batterie wird nicht weiter entladen).
 - Trigger 2: Letzte 2 h vor Sunset + `SOC < 25 %` → `soc_min = 25 %`.
+- Auth-Hash wird pro Session aus `authRequired.hash` abgeleitet (`bcrypt` für Flex, sonst `pbkdf2`) und gilt für Read + `setValue`.
 - SLS-Schutz (Hauptsicherung 35 A) hat Vorrang: `RegelSlsSchutz` ruft `reduce_current` ohne Matrix-Pfad.
 - WS-Sessions konkurrieren mit Fronius- und go-e-App; Aktor toleriert Verdrängung mit Retry (max 3).
 

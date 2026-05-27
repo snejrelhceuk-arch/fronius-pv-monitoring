@@ -28,7 +28,7 @@ try:
     sys.path.insert(0, ROOT_DIR)
     from config import WATTPILOT_IP as _CFG_WATTPILOT_IP
 except ImportError:
-    _CFG_WATTPILOT_IP = "192.0.2.197"
+    _CFG_WATTPILOT_IP = "192.0.2.176"
 
 WATTPILOT_IP = _CFG_WATTPILOT_IP
 WEBSOCKET_TIMEOUT = 10               # Sekunden
@@ -107,30 +107,25 @@ KNOWN_PROPS = {
 CAR_STATES = {0: 'Unknown', 1: 'Idle', 2: 'Charging', 3: 'WaitCar', 4: 'Complete', 5: 'Error'}
 
 
-def compute_auth(serial: str, password: str, token1: str, token2: str):
-    """Berechne Wattpilot-Auth-Hash (PBKDF2 + SHA256 Challenge-Response).
-    
-    Exakt nach joscha82/wattpilot Library implementiert:
-    1. PBKDF2-HMAC-SHA512(password, serial, 100000, 256 bytes) -> base64 -> [:32]
-    2. hash1 = SHA256(token1_bytes + hashed_password_bytes)
-    3. token3 = random 32 hex chars
-    4. hash  = SHA256( (token3 + token2 + hash1).encode() )
-    """
-    # Schritt 1: Passwort-Hash (identisch zu wattpilot.__init__.py Zeile 139)
-    dk = hashlib.pbkdf2_hmac('sha512', password.encode(), serial.encode(), 100000, 256)
-    hashed_pw = base64.b64encode(dk)[:32]  # bytes, 32 Zeichen
+def compute_auth(
+    serial: str,
+    password: str,
+    token1: str,
+    token2: str,
+    auth_hash: str = None,
+    devicetype: str = None,
+):
+    """Delegiert an produktive Auth-Logik (PBKDF2/BCRYPT)."""
+    from wattpilot_api import _compute_auth
 
-    # Schritt 2: token3 generieren (32 hex chars, wie in __on_auth)
-    import secrets
-    token3 = secrets.token_hex(16)
-
-    # Schritt 3: hash1 = SHA256(token1_bytes + hashed_password_bytes)
-    hash1 = hashlib.sha256((token1.encode() + hashed_pw)).hexdigest()
-
-    # Schritt 4: final hash = SHA256(string concatenation encoded)
-    final_hash = hashlib.sha256((token3 + token2 + hash1).encode()).hexdigest()
-
-    return token3, final_hash
+    return _compute_auth(
+        serial,
+        password,
+        token1,
+        token2,
+        auth_hash=auth_hash,
+        devicetype=devicetype,
+    )
 
 
 async def read_all_properties():
@@ -177,7 +172,14 @@ async def read_all_properties():
 
             # 3) Auth senden
             password = _load_password()
-            token3, auth_hash = compute_auth(serial, password, token1, token2)
+            token3, auth_hash = compute_auth(
+                serial,
+                password,
+                token1,
+                token2,
+                auth_hash=auth_req.get('hash'),
+                devicetype=hello.get('devicetype'),
+            )
             await ws.send(json.dumps({
                 "type": "auth",
                 "token3": token3,

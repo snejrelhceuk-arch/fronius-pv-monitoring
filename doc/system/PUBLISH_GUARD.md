@@ -45,7 +45,7 @@ ssh "${PV_FAILOVER_HOST:-failover-user@failover-host}" ...
 | `PV_INVERTER_IP` | Fronius GEN24 Modbus | `192.0.2.122` |
 | `PV_FAILOVER_IP` / `_USER` / `_HOST` | Failover-Pi4 | `192.0.2.105` / `failover-user` |
 | `PV_PRIMARY_HOST` / `_IP` / `_REPO` | Primary-Pi4 | `primary-user@primary-host` |
-| `PV_WATTPILOT_IP` | WattPilot Go | `192.0.2.197` |
+| `PV_WATTPILOT_IP` | Wattpilot Flex Home 22kW | `192.0.2.176` |
 | `PV_PI5_BACKUP_HOST` / `_DB_PATH` / `_BASE` | NVMe-Backup | `backup-user@backup-host` |
 | `PV_OLLAMA_SSH_HOST` | LLM-Server | `ollama-host` |
 | `PV_NOTIFICATION_EMAIL` / `_SMTP_HOST` / `_SMTP_USER` / `_FROM` | E-Mail-Alerts | `alerts@example.invalid` |
