@@ -1,7 +1,7 @@
 {
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
-  "_updated": "2026-04-13",
+  "_updated": "2026-05-26",
   "regelkreise": {
     "soc_extern": {
       "_doc": "Toleranz für extern geänderte SOC-Werte (z.B. manuell via Fronius App). Wenn SOC_MIN oder SOC_MAX außerhalb der Automation geändert werden, respektiert die Engine die Werte für die konfigurierte Dauer.",
@@ -1136,7 +1136,7 @@
           "beschreibung": "Ausschalt-Hysterese gegen die jeweilige Einschalt-Temperatur. Klima AUS wenn Temp unter (Startschwelle - Hysterese) fällt."
         },
         "sunset_soc_stop_pct": {
-          "wert": 90,
+          "wert": 75,
           "bereich": [
             30,
             100
