@@ -30,9 +30,9 @@ bleiben read-only.
 
 ```bash
 # Steuerbox-Port nur fuer freigegebene Endgeraete
-sudo ufw allow from <GERAETE_IP>/32 to any port 8001 proto tcp \
+sudo ufw allow from <GERAETE_IP>/32 to any port 11933 proto tcp \
   comment 'Steuerbox: Laptop Admin'
-sudo ufw allow from <GERAETE_IP>/32 to any port 8001 proto tcp \
+sudo ufw allow from <GERAETE_IP>/32 to any port 11933 proto tcp \
   comment 'Steuerbox: Handy Admin'
 
 # NICHT: allow from <LAN_CIDR>
@@ -41,7 +41,7 @@ sudo ufw allow from <GERAETE_IP>/32 to any port 8001 proto tcp \
 
 ### Port-Wahl
 
-- Nicht-Standard-Port (z.B. 8001, konfigurierbar)
+- Nicht-Standard-Port (Produktion: 11933, konfigurierbar via `config.py` / `PV_STEUERBOX_PORT`)
 - Kein Internet-Exposure (nur LAN)
 - Optional: Binding auf 127.0.0.1 + nginx Reverse-Proxy mit Client-Cert
 

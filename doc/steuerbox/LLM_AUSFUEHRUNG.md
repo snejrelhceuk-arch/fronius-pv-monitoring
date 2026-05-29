@@ -10,7 +10,7 @@ sondern gibt die kuerzeste Wegbeschreibung mit allen No-Go-Grenzen.
 
 ## Was ist die Steuerbox?
 
-Eigener Flask-Dienst auf Port != 8000 (z.B. 8001). Nimmt Operator-Intents entgegen,
+Eigener Flask-Dienst auf Port != 8000 (Produktion: 11933, konfigurierbar via `config.py` / `PV_STEUERBOX_PORT`). Nimmt Operator-Intents entgegen,
 validiert gegen Hard Guards, schreibt in `operator_overrides`-Tabelle, Automation (Schicht C)
 liest und fuehrt aus. Steuerbox hat **keinen direkten Hardware-Zugriff**.
 

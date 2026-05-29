@@ -1,6 +1,6 @@
 # Zentrale TODO-Liste — PV-System
 
-**Stand:** 2026-05-16  
+**Stand:** 2026-05-29  
 **Regel:** Alle offenen Aufgaben gehoeren in DIESE Datei. Keine verteilten TODOs in Subdirectories. Nur offene `- [ ]` Items + bewusst verworfene Strategien (`~~..~~ verworfen`) bleiben hier.
 
 ---
@@ -35,7 +35,7 @@
 - [ ] Plugin-faehige Engine: Regel-/Aktor-Registrierung von Hardcode zu JSON-Registry (`engine.py` A1/A2; grosse Investition)
 - [ ] Zentrale Modbus-Register-Map extrahieren (aktuell auf collectors/aktoren verteilt)
 - [ ] State-Machine fuer HP-Phasen statt If-Kette (6 Phasen, ~1600 LOC)
-- [ ] `engine_vorausschau()` Web-API: 9 fehlende Regeln nachtragen (WP-Absenkung, Klimaanlage, WP-Regeln, Heiz-Bedarf) oder Code-Duplikation eliminieren (Audit DEEP-2026-06 K-02)
+- [ ] `engine_vorausschau()` Code-Duplikation eliminieren: Regel-Liste wird in `engine.py` und `engine_vorausschau()` doppelt gepflegt (aktuell beide vollständig/synchron) — Single-Source erwägen. *(Teil »9 fehlende Regeln« aus DEEP-2026-06 K-02 ist erledigt: Vorausschau ist vollständig, Audit DEEP-2026-05-29 verifiziert.)*
 - [ ] Klimaanlage-Startup-Pruefung: `_hp_startup_check()` auf Fritz!DECT-Geraete erweitern oder `_fritzdect_startup_check()` (K-03)
 - [ ] Matrix-Reload klaeren: SIGHUP-Auto-Trigger in pv-config.py ODER Engine pruft mtime periodisch ODER pv-config-Text korrigieren (K-04 — "Wirksam ≤1 Min" stimmt aktuell nicht)
 - [ ] pv-config Whiptail-UI: ~40 versteckte Parameter freilegen (Drain-, WP-Soll-, Absenkung-, Klima-Parameter)
@@ -63,6 +63,7 @@
 - [ ] `PV_CONFIG_HANDBUCH.md`: alle 31 Regelkreise aufnehmen (aktuell nur 18)
 - [ ] `SCHUTZREGELN.md`: SR-EV-01 (NMC-Ueberladeschutz) als "GEPLANT — E-Auto-SOC nicht verfuegbar" kennzeichnen
 - [ ] `CHANGELOG.md` v1.3.1 K-04 (Matrix-Auto-Reload): Feature implementieren ODER Eintrag korrigieren
+- [ ] Steuerbox `afternoon_charge_request`: Default von `pause_hp_until_target` angleichen — Code (`steuerbox`-Validator/Meta) nutzt `True`, Card/Doku sagen `False` (seit 2026-05-22). Code an Doku angleichen oder Doku korrigieren (Audit DEEP-2026-05-29).
 
 ### Mittel: Warnungen & Benachrichtigungen
 

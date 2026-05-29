@@ -27,7 +27,7 @@
 
 ## Hosts (knapp)
 
-- **Pi4 Primary** `192.0.2.181` (admin) — Produktion. UFW noch nicht aktiviert (TODO).
+- **Pi4 Primary** `192.0.2.181` (admin) — Produktion. UFW aktiv (seit 2026-05-03).
 - **Pi4 Failover** `192.0.2.105` (jk) — UFW aktiv. `.role`-Datei steuert aktive Services.
 - **Pi5 Backup** `192.0.2.195` (admin) — UFW aktiv. Hält Workspace-Klone als Archiv.
 

@@ -47,7 +47,7 @@ E hat keinen direkten Zugriff auf Aktoren, Modbus oder Fritz!DECT.
 
 ### Port und Binding
 
-- Nicht-Standard-Port (z.B. 8001, konfigurierbar via `config.py`)
+- Nicht-Standard-Port (Produktion: 11933, konfigurierbar via `config.py` / `PV_STEUERBOX_PORT`)
 - UFW erlaubt diesen Port **nur** fuer freigegebene Endgeraete (IP-Allowlist)
 - Binding: `0.0.0.0` oder `127.0.0.1` + Reverse-Proxy (entscheidbar)
 
@@ -57,17 +57,19 @@ E hat keinen direkten Zugriff auf Aktoren, Modbus oder Fritz!DECT.
 - Zentrale Auth (z.B. API-Key oder Session-Token) plus IP-Allowlist
 - Kein Internet-Zugriff, nur LAN
 
-### Endpunkte (Release-1)
+### Endpunkte (Stand 2026-05-29, implementiert)
+
+Ein einziger Intent-Endpunkt nimmt alle Aktionen entgegen (Feld `action` im Body) — **nicht** ein Endpunkt pro Aktion:
 
 | Endpunkt | Methode | Funktion |
 |---|---|---|
-| `POST /api/ops/hp_toggle` | POST | Heizpatrone EIN/AUS |
-| `POST /api/ops/wp_offset` | POST | WP Komfort/Auto (Hz/WW Offset) |
-| `POST /api/ops/battery_mode` | POST | Batterie Komfort/Auto + SOC Override |
-| `POST /api/ops/wattpilot_ctrl` | POST | Wattpilot Start/Pause/Laden |
-| `POST /api/ops/regelkreis_toggle` | POST | Regelkreis EIN/AUS pro Bereich |
-| `GET  /api/ops/status` | GET | Aktueller Override-Status + Respekt-Restlaufzeiten |
-| `GET  /api/ops/audit` | GET | Letzte Aktionen mit Ergebnis |
+| `/api/ops/intent` | POST | Operator-Intent (Feld `action` ∈ `config.STEUERBOX_ALLOWED_ACTIONS`) |
+| `/api/ops/control-meta` | GET | Steuer-Metadaten (erlaubte Aktionen, Defaults, Guards) |
+| `/api/ops/status` | GET | Aktueller Override-Status + Respekt-Restlaufzeiten |
+| `/api/ops/audit` | GET | Letzte Aktionen mit Ergebnis |
+| `/api/ops/health` | GET | Liveness |
+
+**Erlaubte `action`-Werte (`config.STEUERBOX_ALLOWED_ACTIONS`):** `wp_mode`, `battery_mode`, `afternoon_charge_request`, `hp_toggle`, `klima_toggle`, `lueftung_toggle`, `wattpilot_mode`, `wattpilot_start_stop`, `wattpilot_amp`.
 
 **Timeout-Modell:** Alle Schalter nutzen das bestehende Respekt-Verfahren (siehe §5).
 Kein fester Timer pro Endpunkt.

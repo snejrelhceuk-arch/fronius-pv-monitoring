@@ -61,7 +61,7 @@ DB: SQLite 3.45.1 WAL-Mode, tmpfs (/dev/shm/fronius_data.db)
 
 Tabellen: raw_data(96 Sp, 3s, 7d) → data_1min(90d) → data_15min(90d) →
   hourly_data(365d) → daily_data(10y) → monthly_statistics(perm) → yearly_statistics(perm)
-  + forecast_daily(365d), wattpilot_readings(90d), battery_control_log(90d)
+  + forecast_daily(365d), wattpilot_readings(90d)
 
 Aggregation (Cron): aggregate_1min.py(*/1), aggregate.py(0,15,30,45),
   aggregate_daily.py(2,17,32,47), aggregate_monthly.py(6,21,36,51),

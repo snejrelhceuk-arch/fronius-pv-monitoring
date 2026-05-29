@@ -5,7 +5,7 @@ role: A
 applyTo: "db_init.py"
 tags: [db, schema, raw-data, aggregat]
 status: stable
-last_review: 2026-05-03
+last_review: 2026-05-29
 ---
 
 # DB-Schema
@@ -46,7 +46,7 @@ Schema-Übersicht der zentralen `data.db` (SQLite). Pflichttabellen, Aggregat-Pi
 - `automation_log` — Aktor-Resultate (geschrieben durch `automation/engine/actuator.py`).
 
 ## Invarianten
-- Pflichttabellen müssen existieren — `db_init.py` legt sie an, prüft `REQUIRED_TABLES`.
+- Pflichttabellen müssen existieren — `db_init.py` **prüft** `REQUIRED_TABLES` (kein CREATE der Kern-Tabellen); die Anlage erfolgt aus dem SQL-Schema (`doc/collector/schema/db_schema_v4_tech.sql`, `db_schema_1min.sql`). `db_init.py` legt nur Neben-/Forecast-Tabellen via `CREATE TABLE IF NOT EXISTS` an.
 - `monthly_statistics`/`yearly_statistics` sind **permanent** — kein Löschen, keine Retention.
 - `data_1min` Retention 90 Tage; ältere Daten via Aggregat-Pipeline in `daily_data` archiviert.
 - Counter-Felder (`*_start`/`*_end` in `daily_data`): Fixpunkte zur Drift-Korrektur.

@@ -27,7 +27,7 @@
 | `energy_state` | 14 | permanent | Key-Value-Store für Energiezähler |
 | `forecast_daily` | — | 365 Tage | Tages-Prognose + Clear-Sky |
 | `automation_log` | — | permanent | Automations-Protokoll (alle Aktoren) |
-| `battery_control_log` | 16 | 90 Tage | Batterie-Steuerungsprotokoll (Legacy) |
+| `battery_control_log` | — | — | **Legacy:** wird von `db_init.py`/SQL nicht (mehr) angelegt und seit 2026-03 nicht mehr beschrieben; nur noch Lese-Fallback in `pv-config.py`/`routes/system.py` — Reader-Cleanup offen (s. `doc/TODO.md`) |
 | `system_info` | 1 | permanent | System-Metadaten |
 | `wattpilot_readings` | ~5.300 | 90 Tage | Wallbox-Einzelmessungen |
 | `wattpilot_daily` | 2 | 10 Jahre | Wallbox-Tagesaggregate |
