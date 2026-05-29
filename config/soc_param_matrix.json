@@ -743,7 +743,36 @@
             85
           ],
           "einheit": "°C",
-          "beschreibung": "Warmwasserspeicher Übertemperatur → HP sofort AUS"
+          "beschreibung": "Warmwasserspeicher Übertemperatur → HP sofort AUS (Hart-Cap, oberhalb wird der mechanische Thermostat bei ~72°C ohnehin abschalten)."
+        },
+        "drain_aus_ww_temp_c": {
+          "wert": 55,
+          "bereich": [
+            50,
+            65
+          ],
+          "einheit": "°C",
+          "obs_feld": "ww_temp_c",
+          "beschreibung": "WP-Koordination Morgens: im Drain-Modus (Phase 0) wird die HP bei WW_Temp ≥ Schwelle abgeschaltet bzw. nicht gestartet, damit der Speicher kühl genug bleibt für einen späteren Dimplex-WP-Lauf am Tag. Hart-Schwelle (78°C) bleibt zusätzlich aktiv."
+        },
+        "abend_ww_cap_aktiv_vor_sunset_h": {
+          "wert": 4.0,
+          "bereich": [
+            1.0,
+            8.0
+          ],
+          "einheit": "h",
+          "beschreibung": "WP-Koordination Abends: ab N Stunden vor Sunset gilt die strengere Abend-Schwelle `abend_ww_temp_c` zusätzlich zur Hart-Schwelle. Andere AUS-/EIN-Kriterien (Phase 4, Forecast, SOC, Netzbezug) bleiben unverändert."
+        },
+        "abend_ww_temp_c": {
+          "wert": 65,
+          "bereich": [
+            60,
+            70
+          ],
+          "einheit": "°C",
+          "obs_feld": "ww_temp_c",
+          "beschreibung": "WP-Koordination Abends: innerhalb `abend_ww_cap_aktiv_vor_sunset_h` vor Sunset schaltet HP bei WW_Temp ≥ Schwelle aus bzw. startet nicht mehr — vermeidet harten Thermostat-Abwurf (~72°C) über Nacht und hält Spielraum für den WP-Lauf am Folgemorgen."
         },
         "_drain_doc": "Phase 0 — Morgen-Drain: HP um Batterie schneller zu leeren. Frühestens sunrise-1h, prognosegetrieben. Sonnenstunden-Guard: kein Drain bei Regentagen (< 5h Sonne).",
         "drain_min_sunshine_h": {

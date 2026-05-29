@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/regeln/geraete.py"
 tags: [heizpatrone, fritzdect, ww-speicher, prognose]
 status: stable
-last_review: 2026-05-25
+last_review: 2026-05-29
 ---
 
 # Regel Heizpatrone
@@ -18,6 +18,7 @@ Zusätzlich pausiert die Regel bei aktivem `afternoon_charge_request` den HP-Bet
 ## Code-Anchor
 - **Regel:** `automation/engine/regeln/geraete.py:RegelHeizpatrone.bewerte` (~L280)
 - **Override-Annullation:** `automation/engine/regeln/geraete.py:RegelHeizpatrone._cancel_conflicting_overrides`
+- **WP-Koordinations-Cap:** `automation/engine/regeln/geraete.py:RegelHeizpatrone._dynamic_temp_max_c`
 - **Aktor:** `automation/engine/aktoren/aktor_fritzdect.py:AktorFritzDECT.ausfuehren` (Kommando `hp_ein`/`hp_aus`)
 - **Matrix:** `config/soc_param_matrix.json` Regelkreis `heizpatrone`
 - **AIN-Mapping:** `config/fritz_config.json`
@@ -30,7 +31,12 @@ Zusätzlich pausiert die Regel bei aktivem `afternoon_charge_request` den HP-Bet
 ## Invarianten
 - **Grundprinzip:** Die Heizpatrone ist ein Verbraucher für PV-Überschuss. Sie darf grundsätzlich **keinen Netzbezug verursachen**. Toleriert sind ausschließlich kurze Schaltverluste durch Lastwechsel/Erzeugungsschwankungen (Wattpilot-Start, Wolkenfront, Backofen), bis die Wechselrichter sich angepasst haben.
 - Prognose-Klassifikation: `<40 kWh = schlecht`, `40–100 = mittel`, `≥100 = gut` → bestimmt Freigabegrad pro Phase.
-- AUS-Schwellen (immer aktiv): `WW_Temp ≥ 78 °C`, `SOC ≤ stop_entladung_unter` (5 %), `SOC ≤ extern_aus_soc_pct` (15 %, nur bei Extern-EIN), Netzbezug-Energie-Integral, `PV<1500 W` in PV-only-Phasen.
+- AUS-Schwellen (immer aktiv): `WW_Temp ≥ 78 °C` (Hart), `SOC ≤ stop_entladung_unter` (5 %), `SOC ≤ extern_aus_soc_pct` (15 %, nur bei Extern-EIN), Netzbezug-Energie-Integral, `PV<1500 W` in PV-only-Phasen.
+- **WP-Koordinations-Cap (`_dynamic_temp_max_c`, seit 2026-05-28):** kontextabhängige Verschaerfung der WW-Temp-Schwelle, damit der Dimplex-WP-Lauf möglich bleibt und der mechanische Thermostat (~72 °C) nicht hart abwirft.
+  - `now_h < drain_fenster_ende_h` (Morgens) → Cap = `drain_aus_ww_temp_c` (Default 55 °C, Bereich 50–65).
+  - `<= abend_ww_cap_aktiv_vor_sunset_h` vor Sunset → Cap = `abend_ww_temp_c` (Default 65 °C, Bereich 60–70).
+  - Sonst → Hart-Cap `speicher_temp_max_c` (78 °C).
+  Wirkt **sowohl AUS-Pfad als auch EIN-Pfad**; Phasen-Reihenfolge, Score, Forecast-Bedingungen, Netzbezug-Integral, ExternalRespect bleiben unberührt.
 - **Netzbezug-AUS (`_netzbezug_aus_ausloesen`, seit 2026-05-16, Vorfall »3 h Netzbezug im Drain«):** Energie-Integral-Verfahren
   1. **Veto:** Aktueller Bezug `< aus_netzbezug_aktuell_veto_w` (200 W) → keine Auswertung (Historie evtl. veraltet, kein akuter Bezug).
   2. **Messung:** Σ der positiven `grid_power_w`-Samples der letzten `aus_netzbezug_fenster_min` (5) Engine-Ticks (≈ 60 s/Tick) als Energie (kWh = Σ_W / 60000).
@@ -49,6 +55,7 @@ Zusätzlich pausiert die Regel bei aktivem `afternoon_charge_request` den HP-Bet
 ## Häufige Aufgaben
 - Phasenschwelle ändern → Matrix `heizpatrone.<phase>.<param>` (z. B. `phase2.soc_min_freigabe`).
 - ExternalRespect-Dauer ändern → Matrix `heizpatrone.extern_respekt_s` (Default 1800).
+- WP-Koordinations-Cap justieren → Matrix `heizpatrone.drain_aus_ww_temp_c` (Morgens, 50–65), `heizpatrone.abend_ww_temp_c` (Abends, 60–70), `heizpatrone.abend_ww_cap_aktiv_vor_sunset_h` (1–8 h).
 - Neue Phase einbauen → `RegelHeizpatrone.bewerte` + Score-Logik + Matrix-Schema dokumentieren.
 - HP-Startup-Check (Daemon-Restart schaltet HP AUS) → `automation/engine/automation_daemon.py:_hp_startup_check`.
 - Ladewunsch-Pause anpassen → `RegelHeizpatrone.bewerte` und `RegelHeizpatrone.erzeuge_aktionen` (Intent-Lesepfad: `automation/engine/operator_intents.py`).

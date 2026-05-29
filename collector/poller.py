@@ -289,6 +289,7 @@ def cleanup_db():
         # Retention-Policies (monthly/yearly: PERMANENT)
         RETENTION = [
             ('raw_data',    config.RAW_DATA_RETENTION_DAYS),
+            ('fritzdect_readings', config.FRITZDECT_RETENTION_DAYS),
             ('data_1min',   config.DATA_1MIN_RETENTION_DAYS),
             ('data_15min',  config.DATA_15MIN_RETENTION_DAYS),
             ('hourly_data', config.HOURLY_RETENTION_DAYS),

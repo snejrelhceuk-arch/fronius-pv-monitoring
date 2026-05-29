@@ -337,6 +337,55 @@ class RegelHeizpatrone(Regel):
                 f'(desired={desired_state}): {e}'
             )
 
+    # ── Dynamische WW-Temperatur-Obergrenze (WP-Koordination) ────────
+
+    def _dynamic_temp_max_c(self, obs: ObsState, matrix: dict, now_h: float):
+        """Effektive WW-Temperatur-Obergrenze fuer HP-AUS/EIN.
+
+        Kontextabhaengige Verschaerfung der Hart-Schwelle
+        `speicher_temp_max_c` (Default 78 C), damit der WW-Speicher
+        kuehl genug bleibt fuer den Dimplex-WP-Lauf am Tag und der
+        mechanische Thermostat (~72 C) nicht hart abwirft.
+
+          - Morgen-Drain-Fenster (now_h < drain_fenster_ende_h):
+                Cap = drain_aus_ww_temp_c  (Default 55 C)
+          - <= abend_ww_cap_aktiv_vor_sunset_h vor Sunset:
+                Cap = abend_ww_temp_c      (Default 65 C)
+          - Sonst:
+                Cap = speicher_temp_max_c  (78 C)
+
+        Andere AUS-/EIN-Kriterien (Phase 4, Forecast, SOC, Netzbezug,
+        Extern-Respekt) bleiben unveraendert; diese Funktion liefert nur
+        die wirksame WW-Temperatur-Obergrenze.
+
+        Returns: (cap_c: float, grund: str)  grund in {'hart','drain','abend'}.
+        """
+        hart = float(get_param(matrix, self.regelkreis, 'speicher_temp_max_c', 78))
+        eff = hart
+        grund = 'hart'
+
+        drain_fenster = float(get_param(
+            matrix, self.regelkreis, 'drain_fenster_ende_h', 10.0))
+        if now_h < drain_fenster:
+            drain_cap = float(get_param(
+                matrix, self.regelkreis, 'drain_aus_ww_temp_c', 55))
+            if drain_cap < eff:
+                eff = drain_cap
+                grund = 'drain'
+
+        sunset_h = obs.sunset
+        if sunset_h is not None:
+            vor_h = float(get_param(
+                matrix, self.regelkreis,
+                'abend_ww_cap_aktiv_vor_sunset_h', 4.0))
+            abend_cap = float(get_param(
+                matrix, self.regelkreis, 'abend_ww_temp_c', 65))
+            if (sunset_h - vor_h) <= now_h <= sunset_h and abend_cap < eff:
+                eff = abend_cap
+                grund = 'abend'
+
+        return eff, grund
+
     # ── Potenzial-Klassifikation ─────────────────────────────
 
     def _potenzial(self, obs: ObsState, matrix: dict) -> str:
@@ -660,13 +709,18 @@ class RegelHeizpatrone(Regel):
         # ── AUS-Pfad: IMMER aktiv ──
         if obs.heizpatrone_aktiv:
             min_rest_h = get_param(matrix, self.regelkreis, 'min_rest_h', 2.0)
-            temp_max = get_param(matrix, self.regelkreis, 'speicher_temp_max_c', 78)
+            temp_max, temp_max_grund = self._dynamic_temp_max_c(obs, matrix, now_h)
             soc_schutz_abs = get_param(matrix, 'soc_schutz', 'stop_entladung_unter_pct', 5)
 
             # ── HARTE Kriterien: IMMER sofort, auch bei Extern ──
             if obs.ww_temp_c is not None:
                 self._ww_temp_letzte_gueltig = time.time()
                 if obs.ww_temp_c >= temp_max:
+                    if temp_max_grund != 'hart':
+                        LOG.info(
+                            'HP-AUS: WW_Temp %.1f°C ≥ Cap %.0f°C (%s) — '
+                            'WP-Koordination', obs.ww_temp_c, temp_max,
+                            temp_max_grund)
                     return int(score * 1.5)
             else:
                 # Watchdog: WW-Temp unbekannt (Modbus-Ausfall) → AUS nach Timeout
@@ -824,8 +878,12 @@ class RegelHeizpatrone(Regel):
         min_rest_h = get_param(matrix, self.regelkreis, 'min_rest_h', 2.0)
         # rest_h < min_rest_h ist KEIN early return mehr → Phase 4 am Ende
 
-        temp_max = get_param(matrix, self.regelkreis, 'speicher_temp_max_c', 78)
+        temp_max, temp_max_grund = self._dynamic_temp_max_c(obs, matrix, now_h)
         if obs.ww_temp_c is not None and obs.ww_temp_c >= temp_max:
+            if temp_max_grund != 'hart':
+                LOG.debug(
+                    'HP-EIN blockiert: WW_Temp %.1f°C ≥ Cap %.0f°C (%s) — '
+                    'WP-Koordination', obs.ww_temp_c, temp_max, temp_max_grund)
             return 0
 
         min_pause = get_param(matrix, self.regelkreis, 'min_pause_s', 300)

@@ -104,6 +104,7 @@
 
 ## Betriebsstabilitaet
 
+- [ ] **DB-Wachstum/Persist-Dauer entschärfen** (entdeckt 2026-05-28): `tmpfs → SD`-Persist dauerte 156.8 s bei 495 MB DB; blockiert `flush_buffer_to_db` und löst kurzzeitig "API rot" im Dashboard aus. Retention/Pruning für `raw_data` prüfen, Persist-Strategie (inkrementell statt full-copy) erwägen. Siehe `collector/poller.py:start_persist_thread`.
 - [ ] Auffrischungs-Policy: Service-Restart vs. Host-Reboot definieren
 - [ ] `pv-restart.timer` Intervall benchmarken (3 vs. 7/14 Tage)
 - [ ] Restart-Fenster standardisieren (Geisterstunde, minimales Risiko)

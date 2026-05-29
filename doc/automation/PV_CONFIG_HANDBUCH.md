@@ -434,7 +434,9 @@ Wenn `morgen_soc_min` den SOC_MIN früh auf 5% öffnet, entlädt sich die Batter
 
 | # | Kriterium | Typ | Autoritätsschaltung | Wirkung |
 |---|-----------|-----|---------------------|--------|
-| 1 | WW-Temperatur ≥ 78 °C | **HART** | Sofort | Verbrühungs-/Überdruckschutz |
+| 1 | WW-Temperatur ≥ `speicher_temp_max_c` (Hart, 78 °C) | **HART** | Sofort | Verbrühungs-/Überdruckschutz; greift IMMER. |
+| 1a | WW-Temperatur ≥ `drain_aus_ww_temp_c` (Morgens, Default 55 °C, Bereich 50–65) | **WP-Koord.** | Sofort | Innerhalb Drain-Fenster (`now_h < drain_fenster_ende_h`): hält den Speicher kühl genug für den späteren Dimplex-WP-Lauf am Tag. |
+| 1b | WW-Temperatur ≥ `abend_ww_temp_c` (Default 65 °C, Bereich 60–70) innerhalb `abend_ww_cap_aktiv_vor_sunset_h` (Default 4 h) vor Sunset | **WP-Koord.** | Sofort | Vermeidet harten Thermostat-Abwurf (~72 °C) über Nacht; hält Spielraum für WP-Lauf am Folgemorgen. Andere Abend-Phase-4-Bedingungen (Prognose, SOC, PV) bleiben aktiv. |
 | 2 | SOC ≤ `stop_entladung_unter` (5%) | **HART** | Sofort | Absoluter Tiefentladeschutz (Tier-1) |
 | 3 | SOC ≤ `extern_aus_soc_pct` (15%) | **HART** | Sofort | Autoritäts-Override: manuelle Einschaltung überstimmt bei niedrigem SOC |
 | 4 | `rest_h < min_rest_h` (2h vor Sunset) | **DIFFERENZIERT** | **Pausiert** | Phase 4 Abend-Zyklus: SOC ≈ MAX + PV ok → HP erlaubt; sonst AUS |

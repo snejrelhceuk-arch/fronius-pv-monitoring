@@ -42,7 +42,7 @@ source "$SCRIPT_DIR/load_infra_env.sh"
 
 # --- Konfiguration ---
 PI5_HOST="${PI5_BACKUP_HOST:-${PV_PI5_BACKUP_HOST:-admin@192.0.2.195}}"
-PI5_BACKUP_DIR="/home/user"   # Zielverzeichnis für *.tar.gz auf Pi5
+PI5_BACKUP_DIR="/home/admin"  # Zielverzeichnis für *.tar.gz auf Pi5 (user=admin)
 PI5_BACKUP_BASE_RAW="${PV_PI5_BACKUP_BASE:-/srv/pv-system/backup/db}"
 PI5_DB_DAILY="${PI5_BACKUP_BASE_RAW}/daily"
 STAMP="$(date +%Y%m%d)"

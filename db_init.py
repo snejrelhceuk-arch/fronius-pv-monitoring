@@ -660,15 +660,10 @@ def ensure_forecast_table():
                 PRIMARY KEY (ts, device_id)
             )
         """)
-        conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_fritzdect_ts
-            ON fritzdect_readings(ts)
-        """)
-        conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_fritzdect_device_id
-            ON fritzdect_readings(device_id)
-        """)
-        
+        # Keine Zusatz-Indizes: alle Abfragen sind ts-begrenzt und nutzen den
+        # PK-Index (ts, device_id) per führender ts-Spalte. idx_fritzdect_ts war
+        # redundant zum PK, idx_fritzdect_device_id wurde von keiner Abfrage genutzt.
+
         # Klimaanlage Tages- und Monatsreferenzen (analog zu Heizpatrone)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS klimaanlage_daily (

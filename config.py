@@ -198,6 +198,7 @@ PI5_BACKUP_DB_PATH = load_local_setting('PV_PI5_BACKUP_DB_PATH', '/srv/pv-system
 
 # --- Retention Policies ---
 RAW_DATA_RETENTION_DAYS = 7        # raw_data (Pi4/SD-Karten-kompatibel)
+FRITZDECT_RETENTION_DAYS = 7      # fritzdect_readings (10s-Raw, wie raw_data)
 DATA_1MIN_RETENTION_DAYS = 90     # 1min-Aggregate (Tag-Chart)
 DATA_15MIN_RETENTION_DAYS = 90    # 15min-Aggregate (techn. Basis)
 HOURLY_RETENTION_DAYS = 365       # Stunden-Aggregate
