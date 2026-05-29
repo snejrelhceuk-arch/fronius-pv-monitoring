@@ -525,7 +525,7 @@ aus der DB liest:
 |--------------|--------|-------|
 | `/api/battery_status` → `soc_switches` | `automation_log` | Vergangene SOC-Umschaltungen (letzte 24 h) |
 | `/api/battery_status` → `last_engine_action` | `automation_log` | Letzte Engine-Aktion (Kommando, Grund, Ergebnis) |
-| `/api/battery_status` → `last_soc_switch` | `automation_log` (Lesefallback `battery_control_log` — Tabelle wird seit 2026-03 nicht mehr beschrieben, Reader-Cleanup ausstehend) | Letzte SOC_MIN/MAX-Änderung |
+| `/api/battery_status` → `last_soc_switch` | `automation_log` | Letzte SOC_MIN/MAX-Änderung |
 | `/api/battery_status` → `scheduler` | `battery_scheduler_state.json` | Phasen-Flags (Legacy-Kompatibilität) |
 
 Alle angezeigten Umschaltungen sind **echte

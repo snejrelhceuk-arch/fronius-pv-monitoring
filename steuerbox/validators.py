@@ -89,7 +89,7 @@ def validate_action(action: str, params: dict[str, Any], respekt_s: int) -> dict
         if target_soc > config.STEUERBOX_SOC_MAX_PCT:
             abort(422, description='target_soc_pct above hard guard')
 
-        pause_hp = params.get('pause_hp_until_target', True)
+        pause_hp = params.get('pause_hp_until_target', False)
         try:
             pause_hp_norm = _expect_bool(pause_hp, 'pause_hp_until_target')
         except ValueError as exc:

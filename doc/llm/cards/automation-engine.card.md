@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/**"
 tags: [engine, tick-loop, regeln, registry]
 status: stable
-last_review: 2026-05-03
+last_review: 2026-05-29
 ---
 
 # Automation-Engine
@@ -49,7 +49,7 @@ Zentrale Steuerschleife (Rolle C). Sammelt Beobachtungen, ruft Schutz-Checks, da
 ## Bekannte Fallstricke
 - 16 Regeln registriert (Stand 2026-05). Reihenfolge im Code = Auswertungsreihenfolge bei Score-Gleichstand.
 - ExternalRespect-Hold (HP/WP, 30 min) wird per `extern_respekt_s` in der Matrix gesteuert — siehe `automation-regel-heizpatrone.card.md` und `automation-regel-wattpilot.card.md`.
-- `automation_log` ist die einzige aktive Persistenz-Tabelle für Aktor-Resultate. **`battery_control_log` wird vom Code mehrheitlich noch gelesen, aber nicht mehr geschrieben** — Reader-Pfad in `pv-config.py`/`routes/system.py` ist offene Tech-Debt (s. `doc/TODO.md`).
+- `automation_log` ist die einzige aktive Persistenz-Tabelle für Aktor-Resultate. **`battery_control_log` wird nicht mehr geschrieben**; der frühere Lese-Fallback in `pv-config.py`/`routes/system/` wurde 2026-05-29 entfernt.
 - Tier-1-Bypass: Schutz-Aktoren laufen weiter, auch wenn Engine pausiert. Wer einen neuen Schutz-Pfad einbaut, muss Tier-1-kompatibel sein.
 
 ## Verwandte Cards

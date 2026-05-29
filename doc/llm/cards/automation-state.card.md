@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/obs_state.py"
 tags: [state, obs-state, persist, ram-db, configs]
 status: stable
-last_review: 2026-05-03
+last_review: 2026-05-29
 ---
 
 # Automation-State
@@ -42,7 +42,7 @@ Wo lebt welcher Zustand? Welche Datei/Tabelle ist Quelle der Wahrheit? Klärung 
 - Matrix-Eintrag ändern → `config/soc_param_matrix.json` (Daemon-Restart bis K-04 erledigt).
 
 ## Bekannte Fallstricke
-- **`battery_control_log` (Persist-DB):** Wird vom Code mehrheitlich noch gelesen (`pv-config.py`, `routes/system.py`), aber nicht mehr geschrieben. Reader-Cleanup ist offene Tech-Debt (`doc/TODO.md`).
+- **`battery_control_log` (Persist-DB):** Wird nicht mehr geschrieben; der frühere Lese-Fallback in `pv-config.py`/`routes/system/` wurde 2026-05-29 entfernt.
 - RAM-DB-Pfad muss vor Daemon-Start existieren (`/dev/shm/`). Bei Container/Restricted-Mounts prüfen.
 - Config-Reload: Aktuell nur per Daemon-Restart (K-04 in TODO).
 - `failover-sync` kann Config-JSONs überschreiben — Pfad-Mapping prüfen (`failover-sync-orange-status-note`).

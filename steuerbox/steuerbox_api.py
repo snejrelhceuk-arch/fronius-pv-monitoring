@@ -85,7 +85,7 @@ def _build_afternoon_charge_meta() -> dict:
         'action': 'afternoon_charge_request',
         'defaults': {
             'target_soc_pct': 100,
-            'pause_hp_until_target': True,
+            'pause_hp_until_target': False,
             'start_earliest_h': 12.0,
             'start_latest_h': 15.0,
         },

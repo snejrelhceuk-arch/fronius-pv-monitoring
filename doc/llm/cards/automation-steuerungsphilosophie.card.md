@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/engine.py"
 tags: [philosophie, prioritaet, matrix, external-respect]
 status: stable
-last_review: 2026-05-03
+last_review: 2026-05-29
 ---
 
 # Steuerungsphilosophie
@@ -19,7 +19,7 @@ last_review: 2026-05-03
 - **Parameter-Matrix:** `automation/engine/param_matrix.py:lade_matrix`
 - **Matrix-Quelle:** `config/soc_param_matrix.json` (Single Source of Truth)
 - **ExternalRespect (HP):** `automation/engine/regeln/geraete.py:RegelHeizpatrone._cancel_conflicting_overrides`
-- **ExternalRespect (WP):** `automation/engine/regeln/waermepumpe.py:_prüfe_extern_respekt`
+- **ExternalRespect (WP):** Engine schreibt Sollwerte über `waermepumpe.py:_registriere_engine_wert`; der frühere Lese-Pfad `_prüfe_extern_respekt` wurde 2026-05-29 als Dead Code entfernt.
 
 ## Inputs / Outputs
 - **Inputs:** Beobachtungen (ObsState), Matrix-Parameter, Operator-Overrides, Tier-1-Flags.

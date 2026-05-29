@@ -1,7 +1,20 @@
 # PV-CONFIG Handbuch
 
 **Konfigurationsprogramm für die PV-Batterie-Automation**
-Version 1.7 — Stand: 9. April 2026
+Version 2.0 — Stand: 29. Mai 2026
+
+---
+
+## Wie dieses Handbuch zu lesen ist
+
+Das Handbuch hat zwei Teile:
+
+1. **Bedienung** (Kapitel 1–3, 5–9): Wie du `pv-config.py` startest und durch die Menüs navigierst.
+2. **Regelkreis-Referenz** (Kapitel 4) und **Schutzmechanik** (Kapitel 11): Was jeder Parameter bewirkt und wie die Regeln zusammenspielen.
+
+Jeder Regelkreis folgt demselben Aufbau: **Zweck** (ein Satz), **Bedingungsgefüge** (wann greift die Regel), **Parametertabelle** und ein **Rechenbeispiel** mit konkreten Zahlen. Das Bedingungsgefüge zeigt die UND/ODER-Verknüpfungen, das Beispiel rechnet einen realen Tag durch.
+
+> **Single Source of Truth:** Alle Parameter liegen in `config/soc_param_matrix.json`. Änderungen über das pv-config-Menü wirken automatisch — der Automation-Daemon erkennt die Dateiänderung und lädt die Matrix innerhalb von ≤ 10 s neu. Kein Neustart nötig.
 
 ---
 
@@ -10,18 +23,19 @@ Version 1.7 — Stand: 9. April 2026
 1. [Starten und Navigation](#1-starten-und-navigation)
 2. [Hauptmenü-Übersicht](#2-hauptmenü-übersicht)
 3. [Menü 1: Regelkreise ein/aus](#3-menü-1-regelkreise-einaus)
-4. [Menü 2: Parameter-Matrix](#4-menü-2-parameter-matrix)
+4. [Menü 2: Parameter-Matrix](#4-menü-2-parameter-matrix) — die 18 konfigurierbaren Regelkreise
    - [4.0 soc_extern — SOC-Extern-Toleranz](#40-soc_extern--soc-extern-toleranz)
-  - [4.1 tier1_alarmierung — Mail/Alarm bei kritischen Werten](#41-tier1_alarmierung--mailalarm-bei-kritischen-werten)
-  - [4.1a sls_schutz — SLS-Netzschutz 35A/Phase](#41a-sls_schutz--sls-netzschutz-35aphase-priorität-1)
+   - [4.1 tier1_alarmierung — Mail/Alarm bei kritischen Werten](#41-tier1_alarmierung--mailalarm-bei-kritischen-werten)
+   - [4.1a sls_schutz — SLS-Netzschutz 35A/Phase](#41a-sls_schutz--sls-netzschutz-35aphase-priorität-1)
    - [4.2 morgen_soc_min — Morgenöffnung](#42-morgen_soc_min--morgenöffnung-priorität-2)
    - [4.3 nachmittag_soc_max — Nachmittagsanhebung](#43-nachmittag_soc_max--nachmittagsanhebung-priorität-2)
-  - [4.4 komfort_reset — Abend-Reset auf Komfortwerte](#44-komfort_reset--abend-reset-auf-komfortwerte-priorität-2)
+   - [4.4 komfort_reset — Abend-Reset auf Komfortwerte](#44-komfort_reset--abend-reset-auf-komfortwerte-priorität-2)
    - [4.5 zellausgleich — Quartalszellausgleich](#45-zellausgleich--quartalszellausgleich-priorität-3)
+   - [4.6 forecast_bewertung — Zentrale Prognose-Schwellen](#46-forecast_bewertung--zentrale-prognose-schwellen)
    - [4.7 forecast_plausibilisierung — Prognosekorrektur](#47-forecast_plausibilisierung--prognosekorrektur-priorität-2)
    - [4.9 wattpilot_battschutz — EV-Ladeschutz](#49-wattpilot_battschutz--ev-ladeschutz-priorität-1)
    - [4.10 heizpatrone — HP-Burst-Steuerung](#410-heizpatrone--hp-burst-steuerung-priorität-2)
-  - [4.11 klimaanlage — Temperatur- und Prognosesteuerung](#411-klimaanlage--temperatur--und-prognosesteuerung-priorität-2)
+   - [4.11 klimaanlage — Temperatur- und Prognosesteuerung](#411-klimaanlage--temperatur--und-prognosesteuerung-priorität-2)
    - [4.12 ww_absenkung — WW-Nachtabsenkung](#412-ww_absenkung--ww-nachtabsenkung-priorität-2)
    - [4.13 heiz_absenkung — Heiz-Nachtabsenkung](#413-heiz_absenkung--heiz-nachtabsenkung-priorität-2)
    - [4.14 ww_verschiebung — WW-Bereitung verschieben](#414-ww_verschiebung--ww-bereitung-verschieben-priorität-2)
@@ -35,6 +49,44 @@ Version 1.7 — Stand: 9. April 2026
 8. [Menü 6: Heizpatrone (Fritz!DECT)](#8-menü-6-heizpatrone-fritzdect)
 9. [Menü 9: Handbuch anzeigen](#9-menü-9-handbuch-anzeigen)
 10. [Grundlagenwissen](#10-grundlagenwissen)
+11. [Schutzmechanik: nicht konfigurierbar](#11-schutzmechanik-nicht-konfigurierbar) — Tier-1-Checks und entfernte Regeln
+
+---
+
+## Gesamtübersicht aller Regelkreise
+
+Das System hat zwei Schichten. **Konfigurierbare Regelkreise** (Kapitel 4) entscheidest du über das Menü mit. **Nicht-konfigurierbare Schutzmechanik** (Kapitel 11) läuft immer und lässt sich nicht abschalten.
+
+| # | Regelkreis | Prio | Score | Zyklus | Konfigurierbar | Kapitel |
+|---|------------|------|-------|--------|----------------|---------|
+| 1 | `soc_extern` | — | — | config | ✅ | [4.0](#40-soc_extern--soc-extern-toleranz) |
+| 2 | `tier1_alarmierung` | P1 | — | — | ✅ (Events) | [4.1](#41-tier1_alarmierung--mailalarm-bei-kritischen-werten) |
+| 3 | `sls_schutz` | P1 | 95 | fast | ✅ | [4.1a](#41a-sls_schutz--sls-netzschutz-35aphase-priorität-1) |
+| 4 | `morgen_soc_min` | P2 | 72 | fast | ✅ | [4.2](#42-morgen_soc_min--morgenöffnung-priorität-2) |
+| 5 | `nachmittag_soc_max` | P2 | 55 | strategic | ✅ | [4.3](#43-nachmittag_soc_max--nachmittagsanhebung-priorität-2) |
+| 6 | `komfort_reset` | P2 | 70 | fast | ✅ | [4.4](#44-komfort_reset--abend-reset-auf-komfortwerte-priorität-2) |
+| 7 | `zellausgleich` | P3 | 30 | strategic | ✅ | [4.5](#45-zellausgleich--quartalszellausgleich-priorität-3) |
+| 8 | `forecast_bewertung` | P2 | — | config | ✅ | [4.6](#46-forecast_bewertung--zentrale-prognose-schwellen) |
+| 9 | `forecast_plausibilisierung` | P2 | 50 | strategic | ✅ | [4.7](#47-forecast_plausibilisierung--prognosekorrektur-priorität-2) |
+| 10 | `wattpilot_battschutz` | P1 | 60 | fast | ✅ | [4.9](#49-wattpilot_battschutz--ev-ladeschutz-priorität-1) |
+| 11 | `heizpatrone` | P2 | 40 | fast | ✅ | [4.10](#410-heizpatrone--hp-burst-steuerung-priorität-2) |
+| 12 | `klimaanlage` | P2 | 52 | fast | ✅ | [4.11](#411-klimaanlage--temperatur--und-prognosesteuerung-priorität-2) |
+| 13 | `ww_absenkung` | P2 | 45 | fast | ✅ | [4.12](#412-ww_absenkung--ww-nachtabsenkung-priorität-2) |
+| 14 | `heiz_absenkung` | P2 | 44 | fast | ✅ | [4.13](#413-heiz_absenkung--heiz-nachtabsenkung-priorität-2) |
+| 15 | `ww_verschiebung` | P2 | 47 | fast | ✅ | [4.14](#414-ww_verschiebung--ww-bereitung-verschieben-priorität-2) |
+| 16 | `heiz_verschiebung` | P2 | 46 | fast | ✅ | [4.15](#415-heiz_verschiebung--heiz-soll-verschieben-priorität-2) |
+| 17 | `ww_boost` | P2 | 48 | fast | ✅ | [4.16](#416-ww_boost--ww-soll-bei-pv-überschuss-anheben-priorität-2) |
+| 18 | `wp_pflichtlauf` | P2 | 49 | fast | ✅ | [4.17](#417-wp_pflichtlauf--wp-täglicher-pflichtlauf-priorität-2) |
+| 19 | `heiz_bedarf` | P2 | 50 | fast | ✅ | [4.18](#418-heiz_bedarf--fbh-heizbedarf-nach-außentemperatur-priorität-2) |
+| 20 | Tier-1: Batterie-Temperatur (40/45 °C) | P1 | — | jeder Tick | ❌ | [11.1](#111-tier-1-deterministische-schutzprüfungen) |
+| 21 | Tier-1: Batterie-SOC kritisch (< 5 %) | P1 | — | jeder Tick | ❌ | [11.1](#111-tier-1-deterministische-schutzprüfungen) |
+| 22 | Tier-1: Netz-Überlast (24/26 kW) | P1 | — | jeder Tick | ❌ | [11.1](#111-tier-1-deterministische-schutzprüfungen) |
+| — | _entfernt:_ `soc_schutz` | — | — | — | ❌ | [11.2](#112-entfernte-historische-regeln) |
+| — | _entfernt:_ `temp_schutz` | — | — | — | ❌ | [11.2](#112-entfernte-historische-regeln) |
+| — | _entfernt:_ `abend_entladerate` | — | — | — | ❌ | [11.2](#112-entfernte-historische-regeln) |
+| — | _entfernt:_ `laderate_dynamisch` | — | — | — | ❌ | [11.2](#112-entfernte-historische-regeln) |
+
+> **Hinweis zur Zählung:** Frühere Audits sprachen von „31 Regelkreisen". Diese Zahl stammt aus einer älteren Code-Generation, die vier inzwischen entfernte Software-Ratenlimit-Regeln (siehe [11.2](#112-entfernte-historische-regeln)) und die Tier-1-Checks je Schwelle einzeln mitzählte. Der aktuelle, verifizierte Stand: **19 konfigurierbare Regelkreise + 3 Tier-1-Schutzprüfungen**.
 
 ---
 
@@ -341,9 +393,35 @@ Wenn nachmittags (ab `frueh_reset_ab_h`) die PV-Restprognose unter `erholung_sch
 
 ---
 
----
+### 4.6 forecast_bewertung — Zentrale Prognose-Schwellen
 
-### 4.7 forecast_plausibilisierung — Prognosekorrektur (Priorität 2)
+**Zweck:** Eine Tagesprognose (in kWh) in drei Stufen einteilen: `schlecht`, `mittel`, `gut`. Diese eine Einteilung benutzen alle anderen Regeln — SolarForecast, die SOC-Steuerung, die Heizpatrone und pv-config greifen auf dieselben Schwellen zu. Wer hier dreht, verschiebt das Verhalten des ganzen Systems.
+
+**Score:** — (kein eigener Score, reine Konfiguration)
+**Zyklus:** config (wird beim Laden ausgewertet, keine eigene Aktion)
+
+**Bedingungsgefüge:**
+- Tagesprognose `< schlecht_unter_kwh` → **schlecht**
+- `schlecht_unter_kwh ≤` Prognose `< mittel_unter_kwh` → **mittel**
+- Prognose `≥ mittel_unter_kwh` → **gut**
+
+Pflicht: `schlecht_unter_kwh < mittel_unter_kwh`. Die Matrix-Validierung lehnt ein Speichern ab, wenn diese Bedingung verletzt ist.
+
+| Parameter | Standard | Bereich | Wirkung |
+|-----------|----------|---------|---------|
+| schlecht_unter_kwh | 40.0 kWh | 5–150 kWh | **Untergrenze für `mittel`.** Darunter gilt der Tag als `schlecht`: keine HP-Bursts, keine Morgenöffnung, Verbraucher haben Vorrang. |
+| mittel_unter_kwh | 100.0 kWh | 20–250 kWh | **Untergrenze für `gut`.** Ab hier laufen HP, WP und EV parallel. Muss größer als `schlecht_unter_kwh` sein. |
+
+**Beispiel (drei typische Tage):**
+```
+Nebeltag im November:   28 kWh  → schlecht  → HP/Drain blockiert, Reserve halten
+Wechselhafter März:     65 kWh  → mittel    → HP+WP parallel, EV blockiert
+Klarer Junitag:        140 kWh  → gut       → alle Verbraucher parallel erlaubt
+```
+
+> **Warum zentral?** Vor dieser Vereinheitlichung hatte jede Regel eigene kWh-Schwellen. Das führte zu Widersprüchen — die HP hielt einen Tag für „gut", die Morgenöffnung für „mittel". Seit 2026 entscheidet eine Quelle.
+
+---
 
 **Zweck:** Die Tagesprognose mit der tatsächlichen PV-Erzeugung vergleichen und bei Abweichung die Rest-Prognose reduzieren. Verhindert, dass optimistische Prognosen zu falschen Entscheidungen führen.
 
@@ -607,6 +685,23 @@ temperaturgeführter Betrieb.
 
 **Schaltfrequenz-Schutz:** Erkennt Kompressor-AUS-Ereignisse über **Lastflanken am Steckdosen-Zähler** (`klima_power_w`, Hysterese 600 W → 200 W). Damit werden auch geräte-interne Kurzzyklen erfasst (Klimagerät taktet selbst, SD bleibt EIN, Last springt ~1 kW ↔ ~30 W) — nicht nur SD-Schaltvorgänge. Bei 2× AUS-Flanke innerhalb `schaltintervall_s` wird `klima_ein` für `cooldown_s` gesperrt (SD geht aktiv aus, gibt dem Kompressor echte Pause). Steuerbox-Hold und Extern-Hold können während Cooldown kein `klima_ein` aus dem pv-system erzwingen. Mindestabstand 60 s zwischen gezählten Events (Dedup gegen Last-Wackler). Der Cooldown-Zustand überlebt einen Daemon-Neustart (Persistenz in RAM-DB `engine_flags`). Nach Ablauf startet das 30-Min-Fenster mit der nächsten AUS-Flanke neu.
 
+**Beispiel (Vormittag, gute Prognose):**
+```
+06:00 — Sunrise 06:40, also noch vor sunrise-1h-Freigabe → Klima bleibt AUS
+06:10 — Forecast = gut UND Klima-Temp 16 °C ≥ initial_temp_c (15 °C)
+  Freigabe ab sunrise-1h (05:40) erreicht ✓
+  → klima_ein: Vorlauf-Wärme aus erwartetem PV-Überschuss
+
+11:00 — Klima-Temp fällt auf 13,8 °C
+  Startschwelle (gut, nach Sunrise) = 15 °C, Hysterese = 1 K
+  13,8 °C < (15 − 1) = 14 °C ✓  → klima_aus
+
+Sonnenuntergang + SOC 88 % < sunset_soc_stop_pct (90 %)
+  → harte Abschaltung, überstimmt alles
+```
+
+> **Drei Schutzschichten greifen ineinander:** (1) der Sunset+SOC-Stopp ist die harte Grenze, (2) der Cooldown schützt den Kompressor vor Kurzzyklen, (3) der Extern-Hold respektiert manuelle Schaltungen für 30 Min. Nur der Sunset+SOC-Stopp durchbricht alle anderen.
+
 ---
 
 ### 4.12 ww_absenkung — WW-Nachtabsenkung (Priorität 2)
@@ -687,6 +782,20 @@ wird. Die WP pausiert die WW-Bereitung, SOC wird geschont.
 | soc_restore_pct | 30 % | 10–80 % | SOC-Rücknahme-Schwelle |
 | max_verschiebung_h | 1 h | 0.5–6 h | Max. Verschiebungsdauer |
 
+**Beispiel (trüber Vormittag, aber Aufklarung erwartet):**
+```
+09:30 — SOC = 8 %, PV = 1400 W, Forecast-Rest = 14 kWh, WW-Ist = 49 °C
+  SOC 8 % < 10 % ✓  UND  PV 1400 W < 2000 W ✓
+  Forecast-Rest 14 kWh > 10 kWh ✓  (Sonne kommt noch)
+  WW-Ist 49 °C > 45 °C ✓  (genug Reserve zum Warten)
+  → WW-Soll 57 °C → 50 °C: WP startet jetzt KEINE WW-Bereitung, SOC wird geschont
+
+12:15 — PV = 3200 W > pv_restore 3000 W
+  → Rücknahme: WW-Soll zurück auf 57 °C, WP darf bereiten
+```
+
+> **Sunset-Ausnahme:** Weniger als 2 h vor Sonnenuntergang wird die Forecast-Schwelle halbiert (hier 5 kWh). Begründung: Am Abend lohnt sich Warten kaum noch — die Sonne reicht nicht mehr für eine volle Erholung.
+
 ---
 
 ### 4.15 heiz_verschiebung — Heiz-Soll verschieben (Priorität 2)
@@ -698,7 +807,14 @@ Energiebilanz Heiz-Soll absenken um Kompressor-Starts zu vermeiden.
 **Zyklus:** fast
 **Aktor:** `waermepumpe` (`set_heiz_soll`)
 
-Gleiche Bedingungslogik und Sunset-Ausnahme wie ww_verschiebung. Parameter analog.
+**Bedingungsgefüge (identisch zu ww_verschiebung):**
+- SOC `< soc_schwelle_pct` UND PV `< pv_min_w`
+- Forecast-Rest `> forecast_rest_min_kwh` (Sonne kommt noch)
+- Heiz-Ist über Mindestwert (genug Restwärme im Estrich)
+- Rücknahme: PV `> pv_restore_w` ODER SOC `> soc_restore_pct` ODER Timeout `max_verschiebung_h`
+- Sunset-Ausnahme: < 2 h vor Sonnenuntergang → Forecast-Schwelle halbiert
+
+Wirkung: Statt der WW-Soll wird die **Heiz-Festwertsoll** (Reg 5037) abgesenkt. So vermeidet die Regel einen Kompressorstart aus der Batterie, wenn die Sonne in Kürze ohnehin Überschuss liefert. Parameter und Bereiche sind analog zu [4.14](#414-ww_verschiebung--ww-bereitung-verschieben-priorität-2).
 
 ---
 
@@ -726,6 +842,20 @@ thermisch in Warmwasser puffern, statt einzuspeisen.
 | boost_temp_c | 62 °C | 55–70 °C | Boost-Zieltemperatur |
 | max_boost_h | 2 h | 0.5–4 h | Max. Boost-Dauer |
 
+**Beispiel (sonniger Mittag, Batterie voll):**
+```
+13:00 — SOC = 94 %, Netz-Export = 3500 W, WW-Ist = 54 °C
+  SOC 94 % ≥ 90 % ✓  UND  Export 3500 W ≥ 2000 W ✓
+  WW-Ist 54 °C < 60 °C ✓  (Luft nach oben)
+  ww_verschiebung aktiv? Nein ✓
+  → WW-Soll → 62 °C: Überschuss wird als Wärme gepuffert statt eingespeist
+
+14:40 — WW-Ist = 60 °C erreicht
+  → Rücknahme (ww_max_c): WW-Soll zurück, kein weiterer Boost
+```
+
+> **Reihenfolge wichtig:** `ww_boost` und `ww_verschiebung` sind Gegenspieler (anheben vs. absenken). Die Sperre „Verschiebung darf nicht aktiv sein" verhindert, dass beide gleichzeitig am WW-Soll ziehen.
+
 ---
 
 ### 4.17 wp_pflichtlauf — WP Täglicher Pflichtlauf (Priorität 2)
@@ -748,6 +878,16 @@ stillstehen.
 | pflichtlauf_ab_h | 12 h | 8–16 h | Frühester Start |
 | boost_temp_c | 55 °C | 40–55 °C | Boost-Zieltemperatur |
 | max_boost_min | 30 min | 10–60 min | Max. Boost-Dauer |
+
+**Beispiel (Sommertag, WP stand bisher still):**
+```
+12:00 — WP heute noch nicht gelaufen, Uhrzeit ≥ pflichtlauf_ab_h (12:00) ✓
+  → Heiz-Soll kurzzeitig auf 55 °C: WP-Kompressor startet
+12:08 — Kompressor läuft → Pflichtlauf erfüllt, Heiz-Soll zurück
+  (oder spätestens nach max_boost_min = 30 min Timeout)
+```
+
+> **Warum?** Im Sommer braucht weder Heizung noch oft Warmwasser die WP. Ein Kompressor, der tagelang steht, riskiert Ölabsetzung und festsitzende Ventile. Der Pflichtlauf erzwingt einmal täglich Bewegung.
 
 ---
 
@@ -781,6 +921,20 @@ und es draußen kalt ist, den Heiz-Soll anheben oder auf Standard halten.
 | temp_mild_c | 15 °C | 5–25 °C | Mittlere Priorität unterhalb. Darüber: keine Aktion. |
 | boost_k | 3 K | 0–10 K | Zuschlag bei ≤ temp_kalt_c |
 | max_bedarf_h | 3 h | 1–8 h | Max. Dauer des Heizbedarf-Boosts |
+
+**Beispiel (kalter Wintermorgen, Bad fordert Wärme):**
+```
+07:00 — FBH-Steckdose meldet fbh_aktiv = 1, Außentemp = 2 °C
+  Außentemp 2 °C ≤ temp_kalt_c (5 °C) → Stufe „kalt", volle Priorität
+  → Heiz-Soll = Standard + boost_k = 37 + 3 = 40 °C
+  heiz_absenkung/heiz_verschiebung wollen absenken (Score 44/46),
+  heiz_bedarf gewinnt (Score 50) → setzt 40 °C durch
+
+10:30 — Außentemp steigt auf 16 °C > temp_mild_c (15 °C)
+  → keine Aktion mehr, Absenkung darf wieder greifen
+```
+
+> **Score-Vorrang:** `heiz_bedarf` hat mit Score 50 den höchsten Wert aller WP-Regeln. Eine echte Wärmeanforderung der Fußbodenheizung schlägt also Nacht-Absenkung und Verschiebung — das Bad wird warm, egal was der Energiesparmodus sagt.
 
 ---
 
@@ -920,3 +1074,30 @@ Bei gleichzeitig aktiven Regeln entscheidet der Score:
 | Heizpatrone | 2 kW (Warmwasserspeicher) |
 | Schaltaktor | Fritz!DECT 200/210 (AIN …) |
 | Fritz!Box | AHA-HTTP-API via login_sid.lua |
+
+---
+
+## 11. Schutzmechanik: nicht konfigurierbar
+
+Nicht jeder Regelkreis steht in der Parametermatrix. Manches darf der Nutzer bewusst **nicht** verstellen — entweder weil es eine harte Sicherheitsfunktion ist (Tier-1), oder weil die Regel historisch entfernt wurde. Dieses Kapitel erklärt beides, damit die Gesamtübersicht (oben) vollständig nachvollziehbar bleibt.
+
+### 11.1 Tier-1 deterministische Schutzprüfungen
+
+Tier-1 läuft **vor** jeder Score-Bewertung und lässt sich über das Menü nicht abschalten. Die Schwellen sind im Code fest verdrahtet (`automation/engine/collectors/tier1_checker.py`). Es gibt drei Prüfungen:
+
+| Prüfung | Schwelle | Reaktion |
+|---------|----------|----------|
+| **batt_temp** | 40 °C Warnung / 45 °C Alarm | Setzt nur **Alarm-Flags** (Mail/Flow). **Kein** Hardware-Eingriff — die BYD-BCU regelt die Temperatur selbst. |
+| **batt_soc** | < 5 % | Kritisch-Flag. Schutz vor BYD-Notaus; greift mit den SOC_MIN-Regeln ineinander. |
+| **netz_ueberlast** | 24 kW Warnung / 26 kW Alarm | 24 kW → `reduce_power` am Wattpilot; 26 kW → `set_power 1400` am Wattpilot (harte Drosselung des EV-Laders). |
+
+**Bedingungsgefüge (netz_ueberlast):**
+```
+Netzbezug/-einspeisung > 24 kW  → Warnung + Wattpilot reduzieren
+Netzbezug/-einspeisung > 26 kW  → Alarm  + Wattpilot auf 1400 W hart begrenzen
+```
+
+> **Warum nur der Wattpilot?** Er ist der einzige Verbraucher mit großem, schnell steuerbarem Lastband. WP und Heizpatrone tragen zu wenig zur 26-kW-Grenze bei, um sie für den Netzschutz zu drosseln.
+
+> **Hinweis zu den SR-IDs:** Im Code wird auf Kennungen wie `SR-BAT-01` verwiesen. Eine eigene Schutzregel-Doku ist geplant; bis dahin ist `tier1_checker.py` die maßgebliche Quelle.
+

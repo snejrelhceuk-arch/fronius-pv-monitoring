@@ -31,6 +31,11 @@ from automation.engine.schaltlog import logge_extern
 LOG = logging.getLogger('engine')
 RAM_DB_PATH = '/dev/shm/automation_obs.db'
 
+# Harte SOC-Schutzgrenze (Entladung-Stopp). Der frühere Regelkreis 'soc_schutz'
+# existiert seit 2026-03-07 nicht mehr in der Matrix; SOC<5 % wird durch
+# Tier-1-Alarm abgefangen. Konstante ersetzt die Phantom-Matrix-Referenz.
+SOC_SCHUTZ_ABS_PCT = 5
+
 # Override-Bridge: Steuerbox-Klima-Aktionen als engine-initiiert markieren,
 # damit die Extern-Erkennung keinen falschen OFF->ON Extern-Event loggt.
 _klima_engine_ein_ts: float = 0.0
@@ -693,7 +698,7 @@ class RegelHeizpatrone(Regel):
                       and (time.time() - self._extern_ein_ts) < extern_respekt)
 
         intent = read_active_afternoon_charge_intent()
-        if intent and bool(intent.get('pause_hp_until_target', True)):
+        if intent and bool(intent.get('pause_hp_until_target', False)):
             target_soc = int(intent.get('target_soc_pct', 100))
             soc_now = float(obs.batt_soc_pct if obs.batt_soc_pct is not None else 0.0)
             if soc_now < max(0, target_soc - 1):
@@ -710,7 +715,7 @@ class RegelHeizpatrone(Regel):
         if obs.heizpatrone_aktiv:
             min_rest_h = get_param(matrix, self.regelkreis, 'min_rest_h', 2.0)
             temp_max, temp_max_grund = self._dynamic_temp_max_c(obs, matrix, now_h)
-            soc_schutz_abs = get_param(matrix, 'soc_schutz', 'stop_entladung_unter_pct', 5)
+            soc_schutz_abs = SOC_SCHUTZ_ABS_PCT
 
             # ── HARTE Kriterien: IMMER sofort, auch bei Extern ──
             if obs.ww_temp_c is not None:
@@ -1090,7 +1095,7 @@ class RegelHeizpatrone(Regel):
         soc_max_eff = obs.soc_max if obs.soc_max is not None else 75
 
         intent = read_active_afternoon_charge_intent()
-        if intent and bool(intent.get('pause_hp_until_target', True)):
+        if intent and bool(intent.get('pause_hp_until_target', False)):
             target_soc = int(intent.get('target_soc_pct', 100))
             if soc < max(0, target_soc - 1):
                 # HP nur abschalten wenn Batterie aktiv laedt UND Ladeleistung < 8 kW.
@@ -1127,7 +1132,7 @@ class RegelHeizpatrone(Regel):
             extern_respekt = get_param(matrix, self.regelkreis, 'extern_respekt_s', 1800)
             ist_extern = (self._extern_ein_ts > 0
                           and (time.time() - self._extern_ein_ts) < extern_respekt)
-            soc_schutz_abs = get_param(matrix, 'soc_schutz', 'stop_entladung_unter_pct', 5)
+            soc_schutz_abs = SOC_SCHUTZ_ABS_PCT
 
             # ── HARTE Kriterien: IMMER sofort ──
             if obs.ww_temp_c is not None and obs.ww_temp_c >= temp_max:

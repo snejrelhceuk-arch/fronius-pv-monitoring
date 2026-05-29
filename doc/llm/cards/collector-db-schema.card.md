@@ -62,7 +62,7 @@ Schema-Übersicht der zentralen `data.db` (SQLite). Pflichttabellen, Aggregat-Pi
 - Schema-Vergleich → SQL-Dateien in `doc/collector/schema/`.
 
 ## Bekannte Fallstricke
-- **`battery_control_log`:** Doku erwähnte historisch eine solche Tabelle, **existiert aber nicht in `db_init.py`/SQL**. Code (`pv-config.py`, `routes/system.py`) liest sie noch — Reader-Cleanup ist offene Tech-Debt (`doc/TODO.md`).
+- **`battery_control_log`:** Doku erwähnte historisch eine solche Tabelle, **existiert aber nicht in `db_init.py`/SQL** und wird seit 2026-03 nicht mehr beschrieben. Der frühere Lese-Fallback in `pv-config.py`/`routes/system/` wurde 2026-05-29 entfernt.
 - **`automation_log` vs. `battery_control_log`:** `automation_log` ist die aktive Persist-Tabelle für Aktor-Resultate.
 - `W_AC_Inv` ≠ PV-Erzeugung (siehe `collector-feldnamen-referenz.card.md`) — beim Schema lesen die Semantik beachten.
 - WAL-Modus: `db_utils.py` aktiviert WAL; lange Schreibvorgänge können Lese-Locks verlängern.

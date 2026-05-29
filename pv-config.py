@@ -256,17 +256,6 @@ def _tagesertrag() -> Optional[float]:
 
 def _automation_phase() -> str:
     """Letzte Automation-Aktion."""
-    # Primaer: battery_control_log (echte Scheduler-Aktionen)
-    row = _query_one("""
-        SELECT datetime(ts, 'unixepoch', 'localtime'), action, param, new_value, reason
-        FROM battery_control_log
-        ORDER BY ts DESC LIMIT 1
-    """)
-    if row:
-        ts, action, param, new_val, reason = row
-        ts_short = ts[11:16] if ts and len(ts) > 16 else ts or '?'
-        return f'{ts_short} {action}:{param}={new_val} ({(reason or "")[:40]})'
-    # Fallback: automation_log
     row = _query_one("""
         SELECT ts, kommando, wert, grund
         FROM automation_log
@@ -664,25 +653,13 @@ def _zeige_scheduler_status():
 
 def _zeige_scheduler_log():
     """Letzte 20 Scheduler-Aktionen."""
-    # Primaer: battery_control_log (echte Scheduler-Aktionen)
     rows = _query_all("""
-        SELECT datetime(ts, 'unixepoch', 'localtime'), action, param, new_value, reason
-        FROM battery_control_log
+        SELECT ts, kommando, wert, grund, ergebnis
+        FROM automation_log
+        WHERE aktor = 'batterie'
         ORDER BY ts DESC
         LIMIT 20
     """)
-    source = 'battery_control_log'
-
-    if not rows:
-        # Fallback: automation_log
-        rows = _query_all("""
-            SELECT ts, kommando, wert, grund, ergebnis
-            FROM automation_log
-            WHERE aktor = 'batterie'
-            ORDER BY ts DESC
-            LIMIT 20
-        """)
-        source = 'automation_log'
 
     if not rows:
         wt_msgbox('Keine Scheduler-Aktionen in der DB.')
@@ -690,21 +667,14 @@ def _zeige_scheduler_log():
 
     tmp = '/tmp/pv_scheduler_log.txt'
     with open(tmp, 'w') as f:
-        f.write(f'BATTERIE-SCHEDULER LOG ({source})\n')
+        f.write('BATTERIE-SCHEDULER LOG (automation_log)\n')
         f.write(f'{"═" * 70}\n\n')
         for row in rows:
-            if source == 'battery_control_log':
-                ts, action, param, new_val, reason = row
-                ts_short = ts[5:16] if ts and len(ts) > 16 else ts or '?'
-                f.write(f'{ts_short}  {action}:{param}={new_val}\n')
-                if reason:
-                    f.write(f'  {reason[:65]}\n')
-            else:
-                ts, cmd, wert, grund, erg = row
-                ts_short = ts[5:16] if ts and len(ts) > 16 else ts or '?'
-                f.write(f'{ts_short}  {cmd}={wert}  {erg or ""}\n')
-                if grund:
-                    f.write(f'  {grund[:65]}\n')
+            ts, cmd, wert, grund, erg = row
+            ts_short = ts[5:16] if ts and len(ts) > 16 else ts or '?'
+            f.write(f'{ts_short}  {cmd}={wert}  {erg or ""}\n')
+            if grund:
+                f.write(f'  {grund[:65]}\n')
         f.write(f'\n{"─" * 70}\n')
 
     wt_textbox(tmp)

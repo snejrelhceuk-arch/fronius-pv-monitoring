@@ -27,6 +27,11 @@ LOG = logging.getLogger('schaltlog')
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 SCHALTLOG_PATH = os.path.join(_PROJECT_ROOT, 'logs', 'schaltlog.txt')
 MAX_ZEILEN = 10000
+# Truncation ist teuer (liest die ganze Datei). Nicht bei jedem Eintrag
+# pruefen, sondern nur alle N Schreibvorgaenge. Die Datei waechst dadurch
+# hoechstens auf MAX_ZEILEN + _TRUNCATE_CHECK_INTERVAL Zeilen.
+_TRUNCATE_CHECK_INTERVAL = 500
+_write_count = 0
 
 _lock = threading.Lock()
 
@@ -92,12 +97,15 @@ def logge(quelle: str, aktor: str, kommando: str,
 
     with _lock:
         try:
+            global _write_count
             _ensure_dir()
             zeile = _format_zeile(quelle, aktor, kommando, wert,
                                   ergebnis, grund, now, ungefaehr)
             with open(SCHALTLOG_PATH, 'a') as f:
                 f.write(zeile)
-            _truncate_if_needed()
+            _write_count += 1
+            if _write_count % _TRUNCATE_CHECK_INTERVAL == 0:
+                _truncate_if_needed()
         except Exception as e:
             LOG.error(f'Schaltlog Schreibfehler: {e}')
 

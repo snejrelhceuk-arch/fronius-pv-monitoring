@@ -63,51 +63,6 @@ _wp_extern = {
 }
 
 
-def _prüfe_extern_respekt(register: str, aktuell: int, matrix: dict,
-                           regelkreis: str) -> bool:
-    """Prüfe ob ein extern geänderter Wert noch respektiert werden muss.
-
-    Returns True → Regel soll NICHT eingreifen (extern-Toleranz läuft).
-    """
-    prefix = 'ww' if register == 'ww' else 'heiz'
-    key_engine = f'{prefix}_letzter_engine_wert'
-    key_seit = f'{prefix}_extern_seit'
-
-    respekt_s = get_param(matrix, regelkreis, 'extern_respekt_s', 1800)
-    if respekt_s <= 0:
-        return False
-
-    engine_wert = _wp_extern[key_engine]
-
-    # Engine hat noch nie geschrieben → aktuellen Wert als "engine_wert" annehmen
-    if engine_wert is None:
-        return False
-
-    # Aktueller Wert stimmt mit Engine-Wert überein → kein externer Eingriff
-    if int(aktuell) == int(engine_wert):
-        _wp_extern[key_seit] = None  # Timer zurücksetzen
-        return False
-
-    # Abweichung erkannt → extern-Timer starten oder prüfen
-    now = datetime.now()
-    if _wp_extern[key_seit] is None:
-        _wp_extern[key_seit] = now
-        LOG.info(f"WP extern_respekt ({prefix}): Externe Änderung erkannt "
-                 f"(Engine={engine_wert}°C, Aktuell={aktuell}°C) — "
-                 f"respektiere für {respekt_s}s")
-
-    alter_s = (now - _wp_extern[key_seit]).total_seconds()
-    if alter_s < respekt_s:
-        LOG.debug(f"WP extern_respekt ({prefix}): Noch {respekt_s - alter_s:.0f}s Toleranz")
-        return True
-
-    # Toleranzzeit abgelaufen → Regel darf überschreiben
-    LOG.info(f"WP extern_respekt ({prefix}): Toleranz abgelaufen nach {alter_s:.0f}s — "
-             f"Engine überschreibt {aktuell}°C")
-    _wp_extern[key_seit] = None
-    return False
-
-
 def _registriere_engine_wert(register: str, wert: int):
     """Registriere den Wert den die Engine gerade schreibt."""
     prefix = 'ww' if register == 'ww' else 'heiz'

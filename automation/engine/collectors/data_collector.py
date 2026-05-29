@@ -42,6 +42,7 @@ class DataCollector:
         self._db_path = db_path or app_config.DB_PATH
         self._modbus_client = None
         self._modbus_last_poll: float = 0
+        self._modbus_fail_count: int = 0
         # W4: Cache-Variablen als Instanzvariablen (nicht class-level)
         self._soc_config_cache_ts: float = 0
         # Throttle für SOC-Config-API-Fehler (siehe _collect_battery_soc_config)
@@ -158,7 +159,6 @@ class DataCollector:
 
     # ── Batterie Modbus (StorCtl_Mod, Lade-/Entladerate) ────
 
-    _modbus_fail_count: int = 0
     _MODBUS_MAX_FAIL_LOG = 5  # Log-Flood-Schutz: nur alle 5 Fehler loggen
     _MODBUS_POLL_INTERVAL = 30  # Sekunden — Steuerregister ändern sich selten
     _BATTERY_HTTP_TEMP_INTERVAL = 30  # Sekunden — Zelltemperaturen ändern sich träge
