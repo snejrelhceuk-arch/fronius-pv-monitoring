@@ -571,6 +571,16 @@ class OperatorOverrideProcessor:
             # Phase-2-Delay (BATTERY_AUTO_PHASE2_DELAY_S) soll Fronius
             # wieder in den Auto-Modus geschaltet werden. Solange die
             # Hold-Phase läuft, gelten keine weiteren direkten Aktionen.
+            
+            # Zeitfenster-Prüfung: Intent soll erst ab start_earliest_h aktiv werden
+            now = datetime.now()
+            now_h = now.hour + now.minute / 60.0
+            earliest = float(params.get('start_earliest_h', 12.0))
+            
+            # Noch zu früh → policy hold ohne Aktion
+            if now_h < earliest:
+                return []
+            
             target = int(params.get('target_soc_pct', 100))
             # Active-Row: elapsed_s wird vom Caller gesetzt; nur in Phase2
             # eine Aktion zurückgeben (Auto-Switch).

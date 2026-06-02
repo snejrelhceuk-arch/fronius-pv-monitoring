@@ -5,7 +5,7 @@ role: E
 applyTo: "steuerbox/**"
 tags: [intent, overrides, respekt, hard-guards, audit]
 status: stable
-last_review: 2026-05-22
+last_review: 2026-06-02
 ---
 
 # Steuerbox Intents
@@ -27,7 +27,7 @@ Schicht E nimmt Operator-Intents entgegen, validiert sie und schreibt sie als Ov
 - **Outputs:** DB-Schreibpfad in `/dev/shm/automation_obs.db` (`operator_overrides`, `steuerbox_audit`) und API-Response mit `override_id`, Restlaufzeit, normalisierten Parametern.
 
 ### Action-Hinweis
-- `afternoon_charge_request`: Tages-Intent für Nachmittags-Ladewunsch. Standardmäßig wird `respekt_s` serverseitig bis Sunset desselben Tages abgeleitet (Fallback 17:00), damit ein HA-Einmal-Trigger ohne zweite Aktion auskommt. Parameter: `target_soc_pct` (default 100), `pause_hp_until_target` (default False seit 2026-05-22). Ausführung: 2-Phasen-Sequenz — Phase 1 (initial): `set_soc_max → target_soc_pct`, Phase 2 (nach 60s): `set_soc_mode → auto`. Während der Hold-Zeit pausiert `RegelNachmittagSocMax` (Score=0), sodass keine Doppelausführung erfolgt.
+- `afternoon_charge_request`: Tages-Intent für Nachmittags-Ladewunsch. Standardmäßig wird `respekt_s` serverseitig bis Sunset desselben Tages abgeleitet (Fallback 17:00), damit ein HA-Einmal-Trigger ohne zweite Aktion auskommt. Parameter: `target_soc_pct` (default 100), `pause_hp_until_target` (default False seit 2026-05-22), `start_earliest_h` (default 12.0), `start_latest_h` (default 15.0). Ausführung: 2-Phasen-Sequenz — Phase 1 (ab `start_earliest_h`): `set_soc_max → target_soc_pct`, Phase 2 (nach 60s): `set_soc_mode → auto`. Vor `start_earliest_h` bleibt der Intent als policy hold inaktiv. Während der Hold-Zeit pausiert `RegelNachmittagSocMax` (Score=0), sodass keine Doppelausführung erfolgt.
 
 ## Invarianten
 - Steuerbox macht keine direkten Hardware-Schreibzugriffe (kein Modbus/FritzDECT/Wattpilot aus E).
