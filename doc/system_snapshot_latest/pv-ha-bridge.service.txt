@@ -1,0 +1,18 @@
+# /etc/systemd/system/pv-ha-bridge.service
+[Unit]
+Description=PV-System HA MQTT Bridge (optional)
+After=network-online.target pv-web.service pv-steuerbox.service
+Wants=network-online.target
+
+[Service]
+User=admin
+WorkingDirectory=/home/primary-user/Dokumente/PVAnlage/pv-system
+ExecStart=/usr/bin/python3 -m steuerbox.ha_mqtt_bridge
+Restart=on-failure
+RestartSec=20
+StandardOutput=journal
+StandardError=journal
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
