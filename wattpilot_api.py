@@ -27,12 +27,16 @@ import asyncio
 import json
 import hashlib
 import base64
-import crypt
 import os
 import sys
 import logging
 import time
 from datetime import datetime
+
+try:
+    import crypt  # Removed in Python 3.13
+except ImportError:
+    crypt = None
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +134,16 @@ def _hash_password_bcrypt(password: str, serial: str, iterations: int = 8) -> by
     password_sha256 = hashlib.sha256(password.encode('utf-8')).hexdigest()
     serial_b64 = _bcryptjs_encode_serial(serial, 16)
     salt = f"$2a${iterations:02d}${serial_b64}"
-    full_hash = crypt.crypt(password_sha256, salt)
+    if crypt is not None:
+        full_hash = crypt.crypt(password_sha256, salt)
+    else:
+        try:
+            import bcrypt as _bcrypt
+        except ImportError as exc:
+            raise RuntimeError(
+                "bcrypt hashing nicht verfuegbar: installiere Paket 'bcrypt' fuer Python >= 3.13"
+            ) from exc
+        full_hash = _bcrypt.hashpw(password_sha256.encode('ascii'), salt.encode('ascii')).decode('ascii')
     if not full_hash or not full_hash.startswith(salt):
         raise RuntimeError("bcrypt hashing via crypt() fehlgeschlagen")
     return full_hash[len(salt):].encode('ascii')
