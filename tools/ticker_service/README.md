@@ -2,6 +2,14 @@
 
 Dieser Dienst ist ein leichtgewichtiger, entkoppelter Service für das PV-System. Er holt standardmaessig alle 5 Minuten RSS-Nachrichten (z.B. Tagesschau, Heise), erkennt neue Meldungen seit dem letzten Lauf und stellt sie im Ticker vorne an. Nur diese neuen Meldungen werden fuer die optionale zweite Zeile via Ollama erklaert. Falls Ollama beim Start oder zwischendurch offline ist, bleiben die Rohmeldungen sichtbar; fehlende Erklaerungen fuer bereits laufende Meldungen werden nachgezogen, sobald Ollama wieder erreichbar ist.
 
+## Feeds und Verhaeltnis (API/Flow-Ticker)
+
+- ARD-Quelle ist weiterhin aktiv: `https://www.tagesschau.de/xml/rss2/`
+- Heise-Quelle: `https://www.heise.de/rss/heise-atom.xml`
+- Geplantes Mischverhaeltnis in der Anzeige: **12:3 (ARD:Heise)**
+- Der Server begrenzt die laufende Tickerliste pro Quelle auf dieses Kontingent,
+  damit Heise bei hoeherer Update-Frequenz nicht den gesamten Lauftext dominiert.
+
 ## Architektur & Sicherheit
 * **Separation of Concerns:** Durch die Auslagerung auf z.B. den Pi5 (Backup-Host) wird der Primary-Host entlastet.
 * **Fallbacks:** Fällt der Ticker-Server.oder Ollama aus, fallbacked der Code sauber auf Roh-RSS-Titel oder gibt dem Primary signal, dass der Ticker nicht verfügbar ist.

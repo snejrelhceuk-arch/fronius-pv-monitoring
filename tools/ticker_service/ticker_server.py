@@ -52,12 +52,14 @@ _CURRENT_TICKER_ITEMS = []
 _SEEN_TOPICS = set()
 _SEEN_TOPIC_ORDER = []
 
-# RSS-Feeds (Öffentlich, frei, stabil) - Format: (URL, Max_Anzahl)
+# RSS-Feeds (oeffentlich, frei, stabil)
+# Das geplante Verhaeltnis im Ticker bleibt 12:3 (ARD:Heise).
 FEEDS = [
-    ("https://www.tagesschau.de/xml/rss2/", 12),
-    ("https://www.heise.de/rss/heise-atom.xml", 3)
+    {"source": "ard", "url": "https://www.tagesschau.de/xml/rss2/", "limit": 12},
+    {"source": "heise", "url": "https://www.heise.de/rss/heise-atom.xml", "limit": 3},
 ]
-MAX_STORED_ITEMS = int(os.environ.get("TICKER_MAX_ITEMS", sum(limit for _, limit in FEEDS)))
+SOURCE_LIMITS = {feed["source"]: int(feed["limit"]) for feed in FEEDS}
+MAX_STORED_ITEMS = int(os.environ.get("TICKER_MAX_ITEMS", sum(feed["limit"] for feed in FEEDS)))
 SEEN_TOPIC_HISTORY = int(os.environ.get("TICKER_SEEN_TOPIC_HISTORY", 200))
 
 
@@ -77,9 +79,14 @@ def _clean_desc(text):
 def fetch_rss_items():
     """Holt RSS-Meldungen als strukturierte Items (topic/details)."""
     items = []
-    for feed_url, limit in FEEDS:
+    for feed in FEEDS:
+        source = (feed.get("source") or "").strip().lower()
+        feed_url = (feed.get("url") or "").strip()
+        limit = int(feed.get("limit") or 0)
+        if not feed_url or limit <= 0:
+            continue
         try:
-            logging.info(f"Hole {limit} RSS-Meldungen von: {feed_url}")
+            logging.info(f"Hole {limit} RSS-Meldungen von [{source}]: {feed_url}")
             resp = requests.get(feed_url, timeout=10)
             resp.raise_for_status()
             
@@ -93,7 +100,7 @@ def fetch_rss_items():
                 if title_elem is not None and title_elem.text:
                     topic = title_elem.text.strip()
                     details = _clean_desc(desc_elem.text if desc_elem is not None else "")
-                    items.append({"topic": topic, "details": details})
+                    items.append({"topic": topic, "details": details, "source": source})
             
             # Atom Format
             for entry in root.findall(".//{http://www.w3.org/2005/Atom}entry")[:limit]:
@@ -102,7 +109,7 @@ def fetch_rss_items():
                 if title_elem is not None and title_elem.text:
                     topic = title_elem.text.strip()
                     details = _clean_desc(desc_elem.text if desc_elem is not None else "")
-                    items.append({"topic": topic, "details": details})
+                    items.append({"topic": topic, "details": details, "source": source})
                     
         except Exception as e:
             logging.error(f"Fehler beim Holen von {feed_url}: {e}")
@@ -132,6 +139,25 @@ def _remember_topics(items):
     while len(_SEEN_TOPIC_ORDER) > SEEN_TOPIC_HISTORY:
         expired_topic = _SEEN_TOPIC_ORDER.pop(0)
         _SEEN_TOPICS.discard(expired_topic)
+
+
+def _enforce_source_ratio(items):
+    """Begrenzt die Anzeige pro Quelle auf die geplanten Feed-Kontingente."""
+    counts = {source: 0 for source in SOURCE_LIMITS}
+    balanced = []
+
+    for item in items:
+        source = (item.get("source") or "").strip().lower()
+        source_limit = SOURCE_LIMITS.get(source)
+        if source_limit is None:
+            balanced.append(item)
+            continue
+
+        if counts[source] < source_limit:
+            counts[source] += 1
+            balanced.append(item)
+
+    return balanced[:MAX_STORED_ITEMS]
 
 
 def _refresh_ticker_strings():
@@ -372,11 +398,12 @@ def background_updater():
                         new_entries.append({
                             "topic": (item.get("topic") or "").strip(),
                             "details": (item.get("details") or "").strip(),
+                            "source": (item.get("source") or "").strip().lower(),
                             "explain": explain_parts[idx] if idx < len(explain_parts) else "",
                             "skip_backfill": False,
                         })
 
-                    _CURRENT_TICKER_ITEMS = (new_entries + _CURRENT_TICKER_ITEMS)[:MAX_STORED_ITEMS]
+                    _CURRENT_TICKER_ITEMS = _enforce_source_ratio(new_entries + _CURRENT_TICKER_ITEMS)
                     _remember_topics(new_items)
                     _refresh_ticker_strings()
                     _LAST_UPDATE = time.time()
