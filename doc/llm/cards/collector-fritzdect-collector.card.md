@@ -5,7 +5,7 @@ role: A
 applyTo: "collector/fritzdect.py"
 tags: [fritzdect, collector, aha-api, ain]
 status: stable
-last_review: 2026-05-29
+last_review: 2026-06-06
 ---
 
 # FritzDECT-Collector

@@ -5,7 +5,7 @@ role: A
 applyTo: "collector/**,collector.py"
 tags: [collector, fronius, modbus, solar-api]
 status: stable
-last_review: 2026-05-16
+last_review: 2026-06-06
 ---
 
 # Fronius-Collector

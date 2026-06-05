@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/collectors/tier1_checker.py"
 tags: [schutz, tier1, sls, no-op, watchdog]
 status: stable
-last_review: 2026-05-03
+last_review: 2026-06-06
 ---
 
 # Schutzregeln

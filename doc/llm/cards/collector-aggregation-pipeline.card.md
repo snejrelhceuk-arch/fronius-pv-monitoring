@@ -5,7 +5,7 @@ role: A
 applyTo: "collector/aggregate/**"
 tags: [aggregation, pipeline, cron, retention]
 status: stable
-last_review: 2026-05-25
+last_review: 2026-06-06
 ---
 
 # Aggregation-Pipeline

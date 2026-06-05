@@ -5,7 +5,7 @@ role: D
 applyTo: "diagnos/health.py"
 tags: [health, services, freshness, mirror, backup]
 status: stable
-last_review: 2026-05-22
+last_review: 2026-06-06
 ---
 
 # Diagnos Health

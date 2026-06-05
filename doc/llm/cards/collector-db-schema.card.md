@@ -5,7 +5,7 @@ role: A
 applyTo: "db_init.py"
 tags: [db, schema, raw-data, aggregat]
 status: stable
-last_review: 2026-05-29
+last_review: 2026-06-06
 ---
 
 # DB-Schema

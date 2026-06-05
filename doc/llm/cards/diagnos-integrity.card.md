@@ -5,7 +5,7 @@ role: D
 applyTo: "diagnos/integrity.py"
 tags: [integritaet, gap-scan, rollup, balance, config-parse]
 status: stable
-last_review: 2026-05-03
+last_review: 2026-06-06
 ---
 
 # Diagnos Integritaet

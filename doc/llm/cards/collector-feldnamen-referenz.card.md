@@ -5,7 +5,7 @@ role: A
 applyTo: "collector/aggregate/**"
 tags: [feldnamen, semantik, dupletten]
 status: stable
-last_review: 2026-05-16
+last_review: 2026-06-06
 ---
 
 # Feldnamen-Referenz

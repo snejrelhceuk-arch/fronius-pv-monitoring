@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/obs_state.py"
 tags: [state, obs-state, persist, ram-db, configs]
 status: stable
-last_review: 2026-05-29
+last_review: 2026-06-06
 ---
 
 # Automation-State
@@ -18,7 +18,7 @@ Wo lebt welcher Zustand? Welche Datei/Tabelle ist Quelle der Wahrheit? Klärung 
 - **RAM-DB-Pfad:** `/dev/shm/automation_obs.db` (Tabellen: `obs_state`, `tier1_flags`, `operator_overrides`)
 - **Operator-Override-Verarbeitung:** `automation/engine/operator_overrides.py:OperatorOverrideProcessor.process_pending`
 - **Persist-Log:** `data.db` Tabelle `automation_log` (geschrieben durch `aktoren/*` via `actuator.py`)
-- **Configs:** `config/soc_param_matrix.json`, `config/battery_control.json`, `config/battery_scheduler_state.json`, `config/fritz_config.json`, `config/heizpatrone_fritz_reference.json`, `config/diagnos_alert_state.json`
+- **Configs:** `config/soc_param_matrix.json`, `config/battery_control.json`, `config/fritz_config.json`, `config/heizpatrone_fritz_reference.json`, `config/diagnos_alert_state.json`
 
 ## Inputs / Outputs
 - **Schreibend in RAM-DB:** Collector (ObsState alle 10 s), Tier1Checker, Steuerbox (`operator_overrides`).
@@ -29,7 +29,7 @@ Wo lebt welcher Zustand? Welche Datei/Tabelle ist Quelle der Wahrheit? Klärung 
 - RAM-DB ist **transient**: Bei System-Reboot weg. Daemon muss "sauber" starten können.
 - Persist-DB ist **dauerhaft**: einzige Quelle für historische Auswertungen.
 - Configs sind **persistent + manuell editierbar** (per `pv-config.py` TUI). Quelle der Wahrheit für Schwellen.
-- `battery_scheduler_state.json` ist **Legacy-Fallback**, nicht primär.
+- Legacy-State-Dateien sind **Fallback**, nicht primär.
 
 ## No-Gos
 - Keine Schreibvorgänge auf RAM-DB außerhalb der dafür vorgesehenen Module (Collector, Tier1, Steuerbox).

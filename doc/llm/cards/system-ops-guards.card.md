@@ -5,7 +5,7 @@ role: meta
 applyTo: "scripts/**"
 tags: [role-guard, failover, backup, publish-guard, sync]
 status: stable
-last_review: 2026-05-03
+last_review: 2026-06-06
 ---
 
 # System Ops-Guards

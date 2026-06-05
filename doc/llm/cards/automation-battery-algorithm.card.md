@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/aktoren/aktor_batterie.py"
 tags: [batterie, soc, fronius, modbus]
 status: stable
-last_review: 2026-06-02
+last_review: 2026-06-06
 ---
 
 # Battery-Algorithm
@@ -17,7 +17,7 @@ Setzt SOC-Grenzen (`soc_min`, `soc_max`) und Lademodus an der Fronius GEN24 — 
 - **Aktor:** `automation/engine/aktoren/aktor_batterie.py:AktorBatterie.ausfuehren`
 - **API-Schicht:** `fronius_api.py:BatteryConfig.write` (+ `set_soc_min`, `set_soc_max`, `set_soc_mode`)
 - **Diagnose-Tool (kein Schreibpfad im Daemon):** `automation/battery_control.py`
-- **State:** `config/battery_scheduler_state.json` (Legacy-Fallback `soc_min_last`/`soc_max_last`)
+- **State:** `config/battery_control.json` (Legacy-Fallbackwerte `soc_min_last`/`soc_max_last`)
 - **Matrix:** `config/soc_param_matrix.json` Regelkreise `morgen_soc_min`, `nachmittag_soc_max`
 
 ## Inputs / Outputs
@@ -40,7 +40,7 @@ Setzt SOC-Grenzen (`soc_min`, `soc_max`) und Lademodus an der Fronius GEN24 — 
 - Default-Werte prüfen → `config/battery_control.json` (Diagnose-Tool-Defaults, nicht Daemon-Defaults).
 
 ## Bekannte Fallstricke
-- `battery_scheduler_state.json` ist **nur Legacy-Fallback**, keine Quelle der Wahrheit. Quelle = Fronius-Live-Wert + Matrix.
+- Legacy-State-Dateien sind **nur Fallback**, keine Quelle der Wahrheit. Quelle = Fronius-Live-Wert + Matrix.
 - `soc_min_morgen` ist **kein** Hardcoded-Wert sondern Matrix-Parameter (`morgen_soc_min.morgen_vorlauf_min`).
 - Wattpilot-Ladung kann SOC kritisch ziehen → siehe `automation-regel-wattpilot.card.md` (RegelWattpilotBattSchutz hebt `soc_min` an).
 - `HYB_EVU_CHARGEFROMGRID` (Netzladen) wird selten gesetzt; bei Änderung Konflikt mit `RegelMorgenSocMin` prüfen.

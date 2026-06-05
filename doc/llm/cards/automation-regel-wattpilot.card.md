@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/aktoren/aktor_wattpilot.py"
 tags: [wattpilot, ev-lader, websocket, soc-schutz]
 status: stable
-last_review: 2026-05-27
+last_review: 2026-06-06
 ---
 
 # Regel Wattpilot

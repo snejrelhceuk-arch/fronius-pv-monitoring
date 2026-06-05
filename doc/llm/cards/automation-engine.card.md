@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/**"
 tags: [engine, tick-loop, regeln, registry]
 status: stable
-last_review: 2026-06-02
+last_review: 2026-06-06
 ---
 
 # Automation-Engine
