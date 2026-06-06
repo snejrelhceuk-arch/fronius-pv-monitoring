@@ -5,8 +5,16 @@
 # Richtet auf einem Display-Host (z. B. Pi4-Failover, rpd-labwc/Wayland)
 # den automatischen Browser-Start beim Login ein. Idempotent.
 #
-# Mechanik: schreibt ~/.config/labwc/autostart so, dass nach dem Start
-# der Desktop-Basis pv_kiosk_browser.sh ausgefuehrt wird.
+# WICHTIG (labwc-pi): Raspberry Pi OS startet SOWOHL die System-Autostart
+# (/etc/xdg/labwc/autostart, liefert Panel/Dateimanager) ALS AUCH die
+# User-Autostart (~/.config/labwc/autostart). Die User-Datei darf daher
+# NUR eigene Zeilen enthalten — NICHT die System-Zeilen kopieren, sonst
+# starten Panel (wf-panel-pi) und Dateimanager (pcmanfm-pi) doppelt
+# ("doppelte Taskleiste").
+#
+# Diese User-Autostart startet:
+#   - das PV-Dashboard im Vollbild (pv_kiosk_browser.sh)
+#   - die On-Screen-Keyboard 'onboard' mit verschiebbarem Floating-Icon
 #
 # Nutzung:  bash scripts/install_kiosk_autostart.sh
 # =============================================================
@@ -20,30 +28,22 @@ AUTOSTART_DIR="${HOME}/.config/labwc"
 AUTOSTART="${AUTOSTART_DIR}/autostart"
 mkdir -p "$AUTOSTART_DIR"
 
-# Vorhandene Desktop-Basiszeile von Raspberry Pi OS erhalten, falls vorhanden.
-if [ ! -f "$AUTOSTART" ]; then
-    if [ -f /etc/xdg/labwc/autostart ]; then
-        cp /etc/xdg/labwc/autostart "$AUTOSTART"
-    else
-        : > "$AUTOSTART"
-    fi
-fi
-
-MARKER="# >>> pv-kiosk-autostart >>>"
-ENDMARK="# <<< pv-kiosk-autostart <<<"
-
-# Alten Block entfernen (idempotent), dann neu anhaengen.
-if grep -qF "$MARKER" "$AUTOSTART"; then
-    sed -i "/$MARKER/,/$ENDMARK/d" "$AUTOSTART"
-fi
+# User-Autostart enthaelt NUR eigene Zeilen (labwc-pi laeuft system+user).
+# Falls die Datei frueher faelschlich eine Kopie der System-Autostart war,
+# wird sie hier auf den reinen pv-Block reduziert.
+: > "$AUTOSTART"
 
 cat >>"$AUTOSTART" <<EOF
-$MARKER
-# Automatischer Start des PV-Dashboards (GPU-beschleunigtes Browser-Fenster).
+# >>> pv-kiosk-autostart >>>
+# On-Screen-Keyboard (verschiebbar, mit F-/Pfeiltasten); blendet ein kleines
+# Floating-Icon zum Ein-/Ausblenden ein, statt die Tastatur dauerhaft zu zeigen.
+onboard &
+# Automatischer Start des PV-Dashboards (GPU-beschleunigtes Browser-Fenster, Vollbild).
 $LAUNCHER &
-$ENDMARK
+# <<< pv-kiosk-autostart <<<
 EOF
 
-echo "OK: Autostart eingerichtet in $AUTOSTART"
+echo "OK: User-Autostart (nur pv-Zeilen) geschrieben: $AUTOSTART"
 echo "Launcher: $LAUNCHER"
+echo "Panel/Dateimanager kommen weiterhin aus /etc/xdg/labwc/autostart (System)."
 echo "Wirksam nach naechstem Login/Reboot (Autologin-Session)."

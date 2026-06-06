@@ -6,9 +6,14 @@
 # Zweck: Auf einem Host mit Bildschirm (z. B. Pi4-Failover) beim
 # Boot/Login automatisch das PV-Dashboard anzeigen.
 #
-# KEIN harter Kiosk-Lockdown — bewusst nur Auto-Start mit App-Fenster.
-# Chromium mit nativem Wayland-Backend + V3D-GPU laeuft auf dem Pi4
-# deutlich ruckelfreier (Ticker!) als Firefox.
+# Startet das App-Fenster im Vollbild (--start-fullscreen). Kein harter
+# Kiosk-Lockdown — F11/onboard etc. bleiben nutzbar. Chromium mit nativem
+# Wayland-Backend + V3D-GPU laeuft auf dem Pi4 deutlich ruckelfreier
+# (Ticker!) als Firefox.
+#
+# --password-store=basic: verhindert, dass Chromium beim Start den
+# Gnome-Keyring/Secret-Service entsperren will (sonst Passwort-Dialog
+# bei jedem Start). Fuer ein reines Anzeige-Dashboard ohne Logins ok.
 #
 # URL ueberschreibbar:  PV_KIOSK_URL=http://host:8000 ./pv_kiosk_browser.sh
 # Default kommt aus .infra.local (PV_PRIMARY_IP) oder Fallback unten.
@@ -56,13 +61,14 @@ if [ -n "$BROWSER" ]; then
         --ignore-gpu-blocklist \
         --enable-gpu-rasterization \
         --enable-zero-copy \
+        --password-store=basic \
         --disable-session-crashed-bubble \
         --disable-infobars \
         --no-first-run \
-        --start-maximized \
+        --start-fullscreen \
         --user-data-dir="$PROFILE_DIR" \
         --app="$URL"
 else
     # Fallback: Firefox, falls kein Chromium vorhanden
-    exec firefox --new-window "$URL"
+    exec firefox --kiosk "$URL"
 fi
