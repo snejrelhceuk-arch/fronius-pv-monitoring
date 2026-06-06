@@ -1,6 +1,16 @@
 # Private Infrastruktur-Overrides fuer lokale Laufzeit
 # Diese Datei als .infra.local kopieren und mit echten Werten befuellen.
 
+# Optional: LAN-Parameter (werden sonst automatisch aus dem Default-Route-Interface erkannt)
+# PV_LAN_IFACE=eth0
+# PV_LAN_CIDR=192.0.2.0/24
+# PV_LAN_GATEWAY=192.0.2.1
+# PV_DNS_PRIMARY=192.0.2.1
+# PV_VPN_CIDR=10.8.0.0/24
+
+# Optional: Kritische Host-Liste fuer Wartungs-Checks (name=ip, kommasepariert)
+# PV_CRITICAL_HOSTS=failover=192.0.2.105,laptop=192.0.2.106,ollama=192.0.2.116,f1=192.0.2.122,f2=192.0.2.123,f3=192.0.2.124,wattpilot=192.0.2.176,pv=192.0.2.181,backup=192.0.2.195,nq=192.0.2.204
+
 PV_INVERTER_IP=192.0.2.122
 PV_FAILOVER_IP=192.0.2.105
 PV_FAILOVER_USER=failover-user

@@ -8,6 +8,7 @@ __pycache__/
 .venv/
 venv/
 ENV/
+.ruff_cache/
 
 # Datenbank
 *.db

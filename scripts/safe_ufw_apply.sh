@@ -15,18 +15,6 @@
 # ──────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-# ── Projekt-Konventionen ─────────────────────────────────────────
-_SCRIPT_BASE="$(cd "$(dirname "$0")/.." && pwd)"
-source "${_SCRIPT_BASE}/scripts/load_infra_env.sh"
-
-# ── Konfigurierbare Parameter (aus .infra.local oder Defaults) ───
-[[ -n "${PV_LAN_CIDR:-}" ]] || die "PV_LAN_CIDR nicht gesetzt (in .infra.local definieren)"
-LAN_CIDR="${PV_LAN_CIDR}"
-VPN_CIDR="${PV_VPN_CIDR:-}"            # leer = kein VPN-Regel
-WEB_PORT="${PV_WEB_PORT:-8000}"
-SSH_PORT="${PV_SSH_PORT:-22}"
-ROLLBACK_SEC="${PV_UFW_ROLLBACK_SEC:-180}"
-
 LOG_FILE="/tmp/pv_ufw_apply.log"
 
 # ── Hilfs-Funktionen ─────────────────────────────────────────────
@@ -36,6 +24,18 @@ log() {
 }
 
 die() { log "FEHLER: $1"; exit 1; }
+
+# ── Projekt-Konventionen ─────────────────────────────────────────
+_SCRIPT_BASE="$(cd "$(dirname "$0")/.." && pwd)"
+source "${_SCRIPT_BASE}/scripts/load_infra_env.sh"
+
+# ── Konfigurierbare Parameter (aus .infra.local oder Defaults) ───
+[[ -n "${PV_LAN_CIDR:-}" ]] || die "PV_LAN_CIDR nicht gesetzt und konnte nicht auto-detektiert werden"
+LAN_CIDR="${PV_LAN_CIDR}"
+VPN_CIDR="${PV_VPN_CIDR:-}"            # leer = kein VPN-Regel
+WEB_PORT="${PV_WEB_PORT:-8000}"
+SSH_PORT="${PV_SSH_PORT:-22}"
+ROLLBACK_SEC="${PV_UFW_ROLLBACK_SEC:-180}"
 
 # ── Voraussetzungen ──────────────────────────────────────────────
 [[ $EUID -eq 0 ]] || die "Bitte mit sudo ausführen."
