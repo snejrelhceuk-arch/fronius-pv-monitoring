@@ -15,6 +15,7 @@ last_review: 2026-06-14
 Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly bereitstellen und Werte konsistent im Frontend darstellen.
 
 ## Changes
+- 2026-06-14: Flow-Fix in `routes/system/battery.py`: falscher Import `SolarGeometry` (Klasse nicht vorhanden) auf `get_clearsky_day_curve` korrigiert; damit liefert `/api/flow_status` wieder Forecast-kWh und ratio-basierte Qualitaet fuer das Flow-Prognoseicon.
 - 2026-06-14: `/api/flow_status` (`routes/system/battery.py`) nutzt fuer die Flow-Prognoseanzeige bei fehlendem Live-Forecast einen Fallback auf `get_stored_forecast(heute)`, damit Icon/Klassifikation und kWh-Wert stabil angezeigt werden.
 - 2026-06-14: Flow-Ansicht-Prognoseicon in `templates/flow_view.html` nutzt jetzt Forecast/Clear-Sky-Verhaeltnis aus `/api/flow_status` (`routes/system/battery.py`): `mittel` bei <70%, `schlecht` bei <40%; zusaetzlich wird die Tages-Prognose als kWh-Wert unter dem Icon angezeigt.
 - 2026-06-02: `routes/system/info.py:/api/ticker` bleibt schlanker Proxy auf den konfigurierten Ticker-Upstream; Quoten-/Mischlogik liegt ausschliesslich im Ticker-Service (`tools/ticker_service/ticker_server.py`).

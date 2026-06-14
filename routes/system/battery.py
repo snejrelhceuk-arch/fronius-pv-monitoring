@@ -74,7 +74,7 @@ def _build_flow_status_result(now, api):
     # PV-Prognose-Emoji und Qualität ergänzen
     try:
         from routes.helpers import get_forecast, get_stored_forecast
-        from solar_geometry import SolarGeometry
+        from solar_geometry import get_clearsky_day_curve
 
         target_date = date.today()
         target_date_str = target_date.isoformat()
@@ -94,7 +94,7 @@ def _build_flow_status_result(now, api):
 
             if clearsky_kwh is None:
                 try:
-                    cs_curve = SolarGeometry().get_clearsky_day_curve(target_date, interval_min=15)
+                    cs_curve = get_clearsky_day_curve(target_date, interval_min=15)
                     if cs_curve:
                         total_wh = 0.0
                         for point in cs_curve:
