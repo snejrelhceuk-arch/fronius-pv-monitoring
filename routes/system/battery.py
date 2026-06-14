@@ -65,24 +65,57 @@ def _build_flow_status_result(now, api):
     _fetch_hp_status(now, result)
     _fetch_wp_status(result)
 
+    result['pv_forecast_emoji'] = '❓'
+    result['pv_forecast_quality'] = None
+    result['pv_forecast_expected_kwh'] = None
+    result['pv_forecast_clearsky_kwh'] = None
+    result['pv_forecast_ratio_pct'] = None
+
     # PV-Prognose-Emoji und Qualität ergänzen
     try:
         from routes.helpers import get_forecast
+        from solar_geometry import SolarGeometry
+
         forecast = get_forecast()
         if forecast:
             day_fc = forecast.get_day_forecast()
-            quality = day_fc.get('quality')
+            expected_kwh = day_fc.get('expected_kwh') if day_fc else None
+            clearsky_kwh = None
+            ratio_pct = None
+
+            try:
+                cs_curve = SolarGeometry().get_clearsky_day_curve(datetime.now().date(), interval_min=15)
+                if cs_curve:
+                    total_wh = 0.0
+                    for point in cs_curve:
+                        total_ac = point.get('total_ac', 0) or 0
+                        total_wh += max(0.0, float(total_ac)) * 0.25
+                    if total_wh > 0:
+                        clearsky_kwh = round(total_wh / 1000.0, 1)
+            except Exception as cs_err:
+                logging.debug(f"PV-ClearSky für Flow-Status nicht verfügbar: {cs_err}")
+
+            quality = day_fc.get('quality') if day_fc else None
+            if expected_kwh is not None and clearsky_kwh and clearsky_kwh > 0:
+                ratio_pct = (float(expected_kwh) / float(clearsky_kwh)) * 100.0
+                if ratio_pct < 40.0:
+                    quality = 'schlecht'
+                elif ratio_pct < 70.0:
+                    quality = 'mittel'
+                else:
+                    quality = 'gut'
+
             # Emoji-Mapping wie in solar_forecast.py
             def _quality_emoji(quality):
                 return {'gut': '☀️', 'mittel': '⛅', 'schlecht': '☁️'}.get(quality, '❓')
             emoji = _quality_emoji(quality)
             result['pv_forecast_emoji'] = emoji
             result['pv_forecast_quality'] = quality
+            result['pv_forecast_expected_kwh'] = round(float(expected_kwh), 1) if expected_kwh is not None else None
+            result['pv_forecast_clearsky_kwh'] = clearsky_kwh
+            result['pv_forecast_ratio_pct'] = round(ratio_pct, 1) if ratio_pct is not None else None
     except Exception as e:
-        import logging
         logging.warning(f"PV-Prognose-Emoji konnte nicht geladen werden: {e}")
-        result['pv_forecast_emoji'] = '❓'
-        result['pv_forecast_quality'] = None
 
     return result
 

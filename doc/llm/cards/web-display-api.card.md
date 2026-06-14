@@ -5,7 +5,7 @@ role: B
 applyTo: "routes/**"
 tags: [web-api, blueprints, templates, formatting, read-only]
 status: stable
-last_review: 2026-06-06
+last_review: 2026-06-14
 
 ---
 
@@ -15,6 +15,7 @@ last_review: 2026-06-06
 Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly bereitstellen und Werte konsistent im Frontend darstellen.
 
 ## Changes
+- 2026-06-14: Flow-Ansicht-Prognoseicon in `templates/flow_view.html` nutzt jetzt Forecast/Clear-Sky-Verhaeltnis aus `/api/flow_status` (`routes/system/battery.py`): `mittel` bei <70%, `schlecht` bei <40%; zusaetzlich wird die Tages-Prognose als kWh-Wert unter dem Icon angezeigt.
 - 2026-06-02: `routes/system/info.py:/api/ticker` bleibt schlanker Proxy auf den konfigurierten Ticker-Upstream; Quoten-/Mischlogik liegt ausschliesslich im Ticker-Service (`tools/ticker_service/ticker_server.py`).
 - 2026-05-29: `routes/system` (Monolith, ≈1950 Z.) in das Paket `routes/system/` aufgeteilt (Audit-Refactor 2026-05-16). Submodule: `automation.py`, `battery.py`, `ha.py`, `wattpilot.py`, `failover.py`, `info.py`, gemeinsames `_shared.py`; `routes/system/__init__.py` definiert das geteilte `bp` und importiert die Submodule (Blueprint-Sharing). Verhalten/Endpunkte unverändert (14 Routen), `web_api.py` unverändert.
 - 2026-05-25: Konsistenz Monat/Jahr/Gesamt → `routes/visualization.py` nutzt jetzt `gesamt_verbrauch_kwh` aus `monthly_statistics` (Counter-basiert); Autarkie-Anzeige in `templates/tag_view.html` mit 1 Nachkommastelle.

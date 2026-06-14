@@ -812,6 +812,10 @@
                             <circle cx="0" cy="0" r="15" fill="rgba(148,163,184,0.08)" stroke="#94a3b8" stroke-width="1.6"></circle>
                             <text x="0" y="6" text-anchor="middle" fill="#cbd5e1" font-size="18" font-weight="700">?</text>
                         </g>
+                        <text x="0" y="42" text-anchor="middle"
+                              fill="rgba(220,220,230,0.85)" font-size="14" font-weight="700"
+                              font-family="Georgia, 'Book Antiqua', Palatino, serif"
+                              id="pv-forecast-kwh">-- kWh</text>
                     </g>
 
                     <!-- Maschinenraum-Button (unterhalb Netz-Bubble) -->
@@ -1728,7 +1732,7 @@
     // ══════════════════════════════════════════════════════════
     //  Battery Detail (SOH, Ladung/Entladung, SOC-Range)
     // ══════════════════════════════════════════════════════════
-    function setPvForecastIcon(quality, emoji) {
+    function setPvForecastIcon(quality, emoji, expectedKwh, clearSkyKwh, ratioPct) {
         const states = {
             good: document.getElementById('pv-forecast-icon-good'),
             medium: document.getElementById('pv-forecast-icon-medium'),
@@ -1736,6 +1740,7 @@
             unknown: document.getElementById('pv-forecast-icon-unknown'),
         };
         const titleEl = document.getElementById('pv-forecast-icon-title');
+        const kwhEl = document.getElementById('pv-forecast-kwh');
 
         let normalized = 'unknown';
         if (quality === 'gut') normalized = 'good';
@@ -1756,7 +1761,24 @@
                 bad: 'PV-Prognose: schlecht',
                 unknown: 'PV-Prognose: unbekannt',
             }[normalized];
-            titleEl.textContent = label;
+            const hasExpected = expectedKwh != null && Number.isFinite(Number(expectedKwh));
+            const hasClearSky = clearSkyKwh != null && Number.isFinite(Number(clearSkyKwh));
+            const hasRatio = ratioPct != null && Number.isFinite(Number(ratioPct));
+            if (hasExpected && hasClearSky && hasRatio) {
+                titleEl.textContent = `${label} (${Number(expectedKwh).toFixed(1)} kWh / ${Number(clearSkyKwh).toFixed(1)} kWh = ${Number(ratioPct).toFixed(1)}%)`;
+            } else if (hasExpected) {
+                titleEl.textContent = `${label} (${Number(expectedKwh).toFixed(1)} kWh)`;
+            } else {
+                titleEl.textContent = label;
+            }
+        }
+
+        if (kwhEl) {
+            if (expectedKwh != null && Number.isFinite(Number(expectedKwh))) {
+                kwhEl.textContent = `${Number(expectedKwh).toFixed(1)} kWh`;
+            } else {
+                kwhEl.textContent = '-- kWh';
+            }
         }
     }
 
@@ -1776,7 +1798,13 @@
             document.getElementById('bd-soh').textContent = d.soh != null ? d.soh : '--';
 
             // PV-Prognose-Icon setzen
-            setPvForecastIcon(d.pv_forecast_quality, d.pv_forecast_emoji);
+            setPvForecastIcon(
+                d.pv_forecast_quality,
+                d.pv_forecast_emoji,
+                d.pv_forecast_expected_kwh,
+                d.pv_forecast_clearsky_kwh,
+                d.pv_forecast_ratio_pct,
+            );
             // SOH-Quellen-Indikator
             const sohSrcEl = document.getElementById('bd-soh-source');
             if (sohSrcEl) {
