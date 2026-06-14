@@ -11,7 +11,7 @@ import logging
 import os
 import sqlite3
 import time
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from flask import jsonify
@@ -73,27 +73,37 @@ def _build_flow_status_result(now, api):
 
     # PV-Prognose-Emoji und Qualität ergänzen
     try:
-        from routes.helpers import get_forecast
+        from routes.helpers import get_forecast, get_stored_forecast
         from solar_geometry import SolarGeometry
 
+        target_date = date.today()
+        target_date_str = target_date.isoformat()
+        day_fc = None
         forecast = get_forecast()
         if forecast:
-            day_fc = forecast.get_day_forecast()
+            day_fc = forecast.get_day_forecast(target_date)
+
+        # Fallback: gespeicherte Prognose für heute nutzen, wenn Live-Forecast fehlt.
+        if not day_fc:
+            day_fc = get_stored_forecast(target_date_str)
+
+        if day_fc:
             expected_kwh = day_fc.get('expected_kwh') if day_fc else None
-            clearsky_kwh = None
+            clearsky_kwh = day_fc.get('clearsky_kwh') if day_fc else None
             ratio_pct = None
 
-            try:
-                cs_curve = SolarGeometry().get_clearsky_day_curve(datetime.now().date(), interval_min=15)
-                if cs_curve:
-                    total_wh = 0.0
-                    for point in cs_curve:
-                        total_ac = point.get('total_ac', 0) or 0
-                        total_wh += max(0.0, float(total_ac)) * 0.25
-                    if total_wh > 0:
-                        clearsky_kwh = round(total_wh / 1000.0, 1)
-            except Exception as cs_err:
-                logging.debug(f"PV-ClearSky für Flow-Status nicht verfügbar: {cs_err}")
+            if clearsky_kwh is None:
+                try:
+                    cs_curve = SolarGeometry().get_clearsky_day_curve(target_date, interval_min=15)
+                    if cs_curve:
+                        total_wh = 0.0
+                        for point in cs_curve:
+                            total_ac = point.get('total_ac', 0) or 0
+                            total_wh += max(0.0, float(total_ac)) * 0.25
+                        if total_wh > 0:
+                            clearsky_kwh = round(total_wh / 1000.0, 1)
+                except Exception as cs_err:
+                    logging.debug(f"PV-ClearSky für Flow-Status nicht verfügbar: {cs_err}")
 
             quality = day_fc.get('quality') if day_fc else None
             if expected_kwh is not None and clearsky_kwh and clearsky_kwh > 0:
