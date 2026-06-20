@@ -411,10 +411,11 @@
                 PVNavUI.attachCalendar(document.getElementById('currentDateDisplay'), 'day',
                     () => isoDay(currentDate),
                     v => { currentDate = new Date(`${v}T12:00:00`); syncAnchors('date'); saveState(); loadData(); });
-                // Monat: Tag wählen → dessen Monat anzeigen
-                PVNavUI.attachCalendar(document.getElementById('currentMonthDisplay'), 'day',
-                    () => isoDay(new Date(currentYear, currentMonth - 1, 1)),
-                    v => { const d = new Date(`${v}T12:00:00`); currentYear = d.getFullYear(); currentMonth = d.getMonth() + 1; syncAnchors('month'); saveState(); loadMonthData(); });
+                // Monat: kalendarischen Monat wählen
+                PVNavUI.attachCalendar(document.getElementById('currentMonthDisplay'), 'month',
+                    () => `${currentYear}-${String(currentMonth).padStart(2,'0')}`,
+                    v => { const p = v.split('-'); currentYear = +p[0]; currentMonth = +p[1]; syncAnchors('month'); saveState(); loadMonthData(); },
+                    { min: '2021-01' });
                 // Jahr: Tag wählen → dessen Jahr anzeigen
                 PVNavUI.attachCalendar(document.getElementById('currentYearDisplay'), 'day',
                     () => isoDay(new Date(currentYear, 0, 1)),
@@ -422,7 +423,8 @@
                 // Gesamt: Monat wählen → in Monatsansicht springen
                 PVNavUI.attachCalendar(document.getElementById('gesamtCalBtn'), 'month',
                     () => `${currentYear}-${String(currentMonth).padStart(2,'0')}`,
-                    v => { const p = v.split('-'); currentYear = +p[0]; currentMonth = +p[1]; navigateToView('monat', true); });
+                    v => { const p = v.split('-'); currentYear = +p[0]; currentMonth = +p[1]; navigateToView('monat', true); },
+                    { min: '2021-01' });
             }
         });
 

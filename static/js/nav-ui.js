@@ -125,11 +125,14 @@
         document.addEventListener('keydown', function (e) { if (e.key === 'Escape') shut(); });
     }
 
-    function attachCalendar(triggerEl, kind, getCurrent, onPick) {
+    function attachCalendar(triggerEl, kind, getCurrent, onPick, opts) {
         if (!triggerEl) return;
+        opts = opts || {};
         const input = document.createElement('input');
         input.type = kind === 'month' ? 'month' : 'date';
         input.className = 'pv-cal-input';
+        if (opts.min) input.min = opts.min;
+        if (opts.max) input.max = opts.max;
         (triggerEl.parentNode || document.body).appendChild(input);
         triggerEl.classList.add('pv-cal-trigger');
 
@@ -147,6 +150,14 @@
                 : /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(value);
             if (!ok) {
                 window.alert('Ungültiges Format. Bitte ' + hint + ' verwenden.');
+                return;
+            }
+            if (opts.min && value < opts.min) {
+                window.alert('Frühestes erlaubtes Datum: ' + opts.min);
+                return;
+            }
+            if (opts.max && value > opts.max) {
+                window.alert('Spätestes erlaubtes Datum: ' + opts.max);
                 return;
             }
             onPick(value);

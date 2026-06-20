@@ -807,15 +807,17 @@
             PVNavUI.attachCalendar(document.getElementById('tagDateDisplay'), 'day',
                 () => isoDay(currentDate),
                 v => { currentDate = new Date(`${v}T12:00:00`); syncAnchors('date'); updateNavUI(); loadData(); });
-            PVNavUI.attachCalendar(document.getElementById('monatDateDisplay'), 'day',
-                () => isoDay(new Date(currentYear, currentMonth - 1, 1)),
-                v => { const d = new Date(`${v}T12:00:00`); currentYear = d.getFullYear(); currentMonth = d.getMonth() + 1; syncAnchors('month'); updateNavUI(); loadData(); });
+            PVNavUI.attachCalendar(document.getElementById('monatDateDisplay'), 'month',
+                () => `${currentYear}-${String(currentMonth).padStart(2,'0')}`,
+                v => { const p = v.split('-'); currentYear = +p[0]; currentMonth = +p[1]; syncAnchors('month'); updateNavUI(); loadData(); },
+                { min: '2021-01' });
             PVNavUI.attachCalendar(document.getElementById('jahrDateDisplay'), 'day',
                 () => isoDay(new Date(currentYear, 0, 1)),
                 v => { currentYear = new Date(`${v}T12:00:00`).getFullYear(); syncAnchors('year'); updateNavUI(); loadData(); });
             PVNavUI.attachCalendar(document.getElementById('gesamtCalBtn'), 'month',
                 () => `${currentYear}-${String(currentMonth).padStart(2,'0')}`,
-                v => { const p = v.split('-'); currentYear = +p[0]; currentMonth = +p[1]; switchView('monat'); });
+                v => { const p = v.split('-'); currentYear = +p[0]; currentMonth = +p[1]; switchView('monat'); },
+                { min: '2021-01' });
         }
 
         document.addEventListener('visibilitychange', function() {

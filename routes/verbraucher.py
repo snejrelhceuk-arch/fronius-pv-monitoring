@@ -560,10 +560,48 @@ def api_verbraucher_tag():
         except Exception:
             pass
 
+        fritz_tag_power_maps = {
+            'klima': {},
+            'gefrier': {},
+            'lueftung': {},
+        }
+        fritz_tag_predicates = {
+            'klima': "(lower(COALESCE(device_id, '')) IN ('klima', 'klimaanlage') OR lower(COALESCE(name, '')) LIKE '%klima%')",
+            'gefrier': "(lower(COALESCE(device_id, '')) IN ('gefrier', 'gefriertruhe') OR lower(COALESCE(name, '')) LIKE '%gefrier%')",
+            'lueftung': "(lower(COALESCE(device_id, '')) IN ('lueftung', 'lüftung') OR lower(COALESCE(name, '')) LIKE '%lueft%' OR lower(COALESCE(name, '')) LIKE '%lüft%')",
+        }
+        for key, predicate in fritz_tag_predicates.items():
+            try:
+                cursor.execute(
+                    f"""
+                    SELECT
+                        CAST((ts / 300) AS INTEGER) * 300 AS ts5,
+                        AVG(power_w) AS p_fritz
+                    FROM fritzdect_readings
+                    {where}
+                      AND {predicate}
+                    GROUP BY CAST((ts / 300) AS INTEGER)
+                    """,
+                    where_params,
+                )
+                for r in cursor.fetchall():
+                    fritz_tag_power_maps[key][int(r[0])] = max(0.0, r[1] or 0.0)
+            except Exception:
+                pass
+
         conn.close()
 
         datapoints = []
-        totals = {'wp': 0, 'heizpatrone': 0, 'wattpilot': 0, 'haushalt': 0, 'gesamt': 0}
+        totals = {
+            'wp': 0,
+            'heizpatrone': 0,
+            'wattpilot': 0,
+            'klima': 0,
+            'gefrier': 0,
+            'lueftung': 0,
+            'haushalt': 0,
+            'gesamt': 0,
+        }
 
         for row in rows:
             ts5, p_wp, p_gesamt, w_wp, w_gesamt = row
@@ -574,7 +612,10 @@ def api_verbraucher_tag():
 
             p_heizpatrone = heizpatrone_power_map.get(int(ts5), 0)
             p_wattpilot = wattpilot_power_map.get(int(ts5), 0)
-            p_sum = p_wp + p_heizpatrone + p_wattpilot
+            p_klima = fritz_tag_power_maps['klima'].get(int(ts5), 0)
+            p_gefrier = fritz_tag_power_maps['gefrier'].get(int(ts5), 0)
+            p_lueftung = fritz_tag_power_maps['lueftung'].get(int(ts5), 0)
+            p_sum = p_wp + p_heizpatrone + p_wattpilot + p_klima + p_gefrier + p_lueftung
             if p_sum <= p_gesamt:
                 p_haushalt = max(0, p_gesamt - p_sum)
                 p_norm = p_gesamt
@@ -587,17 +628,26 @@ def api_verbraucher_tag():
             if p_norm > 0:
                 w_heizpatrone = w_gesamt * (p_heizpatrone / p_norm)
                 w_wattpilot = w_gesamt * (p_wattpilot / p_norm)
+                w_klima = w_gesamt * (p_klima / p_norm)
+                w_gefrier = w_gesamt * (p_gefrier / p_norm)
+                w_lueftung = w_gesamt * (p_lueftung / p_norm)
                 w_haushalt = w_gesamt * (p_haushalt / p_norm)
                 w_wp_actual = w_gesamt * (p_wp / p_norm)
             else:
                 w_heizpatrone = 0
                 w_wattpilot = 0
+                w_klima = 0
+                w_gefrier = 0
+                w_lueftung = 0
                 w_haushalt = 0
                 w_wp_actual = w_wp
 
             totals['wp'] += w_wp_actual
             totals['heizpatrone'] += w_heizpatrone
             totals['wattpilot'] += w_wattpilot
+            totals['klima'] += w_klima
+            totals['gefrier'] += w_gefrier
+            totals['lueftung'] += w_lueftung
             totals['haushalt'] += w_haushalt
             totals['gesamt'] += w_gesamt
 
@@ -606,6 +656,9 @@ def api_verbraucher_tag():
                 'p_wp': round(p_wp, 1),
                 'p_heizpatrone': round(p_heizpatrone, 1),
                 'p_wattpilot': round(p_wattpilot, 1),
+                'p_klima': round(p_klima, 1),
+                'p_gefrier': round(p_gefrier, 1),
+                'p_lueftung': round(p_lueftung, 1),
                 'p_haushalt': round(p_haushalt, 1),
                 'p_gesamt': round(p_gesamt, 1),
             })

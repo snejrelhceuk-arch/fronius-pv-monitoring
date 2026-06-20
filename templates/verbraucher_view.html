@@ -384,6 +384,9 @@
             const wpData   = allTimes.map(t => byTime[t] ? byTime[t].p_wp          : null);
             const hpData   = allTimes.map(t => byTime[t] ? byTime[t].p_heizpatrone  : null);
             const wattData = allTimes.map(t => byTime[t] ? byTime[t].p_wattpilot    : null);
+            const klimaData = allTimes.map(t => byTime[t] ? byTime[t].p_klima      : null);
+            const gefrierData = allTimes.map(t => byTime[t] ? byTime[t].p_gefrier   : null);
+            const lueftungData = allTimes.map(t => byTime[t] ? byTime[t].p_lueftung : null);
             const hhData   = allTimes.map(t => byTime[t] ? byTime[t].p_haushalt     : null);
 
             // Peak-Leistung (genau 1 Marker) – Maximum des Gesamtverbrauchs, inkl. Uhrzeit.
@@ -418,6 +421,9 @@
                         html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.wp};border-radius:2px;margin-right:5px;"></span>Wärmepumpe: <strong>${d.p_wp.toFixed(0)} W</strong><br/>`;
                         html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.heizpatrone};border-radius:2px;margin-right:5px;"></span>Heizpatrone: <strong>${d.p_heizpatrone.toFixed(0)} W</strong><br/>`;
                         html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.wattpilot};border-radius:2px;margin-right:5px;"></span>E-Auto: <strong>${d.p_wattpilot.toFixed(0)} W</strong><br/>`;
+                        if (d.p_klima > 0) html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.klima};border-radius:2px;margin-right:5px;"></span>Klima: <strong>${d.p_klima.toFixed(0)} W</strong><br/>`;
+                        if (d.p_gefrier > 0) html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.gefrier};border-radius:2px;margin-right:5px;"></span>Gefriertruhe: <strong>${d.p_gefrier.toFixed(0)} W</strong><br/>`;
+                        if (d.p_lueftung > 0) html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.lueftung};border-radius:2px;margin-right:5px;"></span>Lüftung: <strong>${d.p_lueftung.toFixed(0)} W</strong><br/>`;
                         html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.haushalt};border-radius:2px;margin-right:5px;"></span>Sonstige: <strong>${d.p_haushalt.toFixed(0)} W</strong><br/>`;
                         html += `<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>`;
                         html += `<strong>Gesamt: ${d.p_gesamt.toFixed(0)} W</strong>`;
@@ -429,7 +435,7 @@
                     }
                 },
                 legend: {
-                    data: ['Wärmepumpe', 'Heizpatrone', 'E-Auto', 'Sonstige'],
+                    data: ['Wärmepumpe', 'Heizpatrone', 'E-Auto', 'Klima', 'Gefriertruhe', 'Lüftung', 'Sonstige'],
                     bottom: 10
                 },
                 grid: {
@@ -488,6 +494,36 @@
                         smooth: true,
                         symbol: 'none',
                         areaStyle: { color: COLORS.wattpilot, opacity: 0.15 }
+                    },
+                    {
+                        name: 'Klima',
+                        type: 'line',
+                        data: klimaData,
+                        itemStyle: { color: COLORS.klima },
+                        lineStyle: { width: 2 },
+                        smooth: true,
+                        symbol: 'none',
+                        areaStyle: { color: COLORS.klima, opacity: 0.12 }
+                    },
+                    {
+                        name: 'Gefriertruhe',
+                        type: 'line',
+                        data: gefrierData,
+                        itemStyle: { color: COLORS.gefrier },
+                        lineStyle: { width: 2 },
+                        smooth: true,
+                        symbol: 'none',
+                        areaStyle: { color: COLORS.gefrier, opacity: 0.12 }
+                    },
+                    {
+                        name: 'Lüftung',
+                        type: 'line',
+                        data: lueftungData,
+                        itemStyle: { color: COLORS.lueftung },
+                        lineStyle: { width: 2 },
+                        smooth: true,
+                        symbol: 'none',
+                        areaStyle: { color: COLORS.lueftung, opacity: 0.12 }
                     },
                     {
                         name: 'Sonstige',
@@ -772,15 +808,17 @@
             PVNavUI.attachCalendar(document.getElementById('tagDateDisplay'), 'day',
                 () => isoDay(currentDate),
                 v => { currentDate = new Date(`${v}T12:00:00`); syncAnchors('date'); updateNavUI(); loadData(); });
-            PVNavUI.attachCalendar(document.getElementById('monatDateDisplay'), 'day',
-                () => isoDay(new Date(currentYear, currentMonth - 1, 1)),
-                v => { const d = new Date(`${v}T12:00:00`); currentYear = d.getFullYear(); currentMonth = d.getMonth() + 1; syncAnchors('month'); updateNavUI(); loadData(); });
+            PVNavUI.attachCalendar(document.getElementById('monatDateDisplay'), 'month',
+                () => `${currentYear}-${String(currentMonth).padStart(2,'0')}`,
+                v => { const p = v.split('-'); currentYear = +p[0]; currentMonth = +p[1]; syncAnchors('month'); updateNavUI(); loadData(); },
+                { min: '2021-01' });
             PVNavUI.attachCalendar(document.getElementById('jahrDateDisplay'), 'day',
                 () => isoDay(new Date(currentYear, 0, 1)),
                 v => { currentYear = new Date(`${v}T12:00:00`).getFullYear(); syncAnchors('year'); updateNavUI(); loadData(); });
             PVNavUI.attachCalendar(document.getElementById('gesamtCalBtn'), 'month',
                 () => `${currentYear}-${String(currentMonth).padStart(2,'0')}`,
-                v => { const p = v.split('-'); currentYear = +p[0]; currentMonth = +p[1]; switchView('monat'); });
+                v => { const p = v.split('-'); currentYear = +p[0]; currentMonth = +p[1]; switchView('monat'); },
+                { min: '2021-01' });
         }    </script>
 
     {% include 'info_overlay.html' %}
