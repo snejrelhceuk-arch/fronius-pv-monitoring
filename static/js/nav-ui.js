@@ -136,14 +136,41 @@
         input.addEventListener('change', function () {
             if (input.value) onPick(input.value);
         });
+
+        function manualFallback(currentValue) {
+            var hint = kind === 'month' ? 'YYYY-MM' : 'YYYY-MM-DD';
+            var entered = window.prompt('Datum eingeben (' + hint + '):', currentValue || '');
+            if (!entered) return;
+            var value = String(entered).trim();
+            var ok = kind === 'month'
+                ? /^\d{4}-(0[1-9]|1[0-2])$/.test(value)
+                : /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(value);
+            if (!ok) {
+                window.alert('Ungültiges Format. Bitte ' + hint + ' verwenden.');
+                return;
+            }
+            onPick(value);
+        }
+
         triggerEl.addEventListener('click', function (ev) {
             ev.preventDefault();
-            try { input.value = getCurrent() || ''; } catch (e) { /* ignore */ }
+            var currentValue = '';
+            try { currentValue = getCurrent() || ''; input.value = currentValue; } catch (e) { /* ignore */ }
             if (typeof input.showPicker === 'function') {
                 try { input.showPicker(); return; } catch (e) { /* fallback */ }
             }
-            input.focus();
-            input.click();
+            try {
+                input.focus();
+                input.click();
+            } catch (e) {
+                manualFallback(currentValue);
+                return;
+            }
+
+            // Browser ohne funktionalen nativen Picker: manuelle Eingabe anbieten.
+            setTimeout(function () {
+                if (document.activeElement !== input) manualFallback(currentValue);
+            }, 0);
         });
     }
 

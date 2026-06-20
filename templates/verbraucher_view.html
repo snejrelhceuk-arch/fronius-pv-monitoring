@@ -217,6 +217,10 @@
             return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
         }
 
+        function isMobile() {
+            return window.innerWidth <= 600 || (window.innerHeight <= 500 && window.matchMedia('(orientation: landscape)').matches);
+        }
+
         // ═══════════════════════════════════════
         // DATA LOADING
         // ═══════════════════════════════════════
