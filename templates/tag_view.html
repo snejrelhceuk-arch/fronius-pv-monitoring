@@ -139,10 +139,6 @@
         <!-- Top Navigation Bar -->
         <div class="top-nav-bar">
             <div class="nav-left">
-                <a href="/" class="nav-main">Flow</a>
-                <a href="/monitoring" class="nav-main active">Monitoring</a>
-                <a href="/analyse" id="linkAnalyse" class="nav-main">Analyse</a>
-                <div class="nav-separator"></div>
                 <button class="active" id="btnViewTag" onclick="navigateToView('tag')">Tag</button>
                 <button id="btnViewMonat" onclick="navigateToView('monat')">Monat</button>
                 <button id="btnViewJahr" onclick="navigateToView('jahr')">Jahr</button>
@@ -409,7 +405,7 @@
 
             // Seiten-Schublade + Kalender-Picker (Zeit-Navi bleibt oben)
             if (window.PVNavUI && !isEmbedMode) {
-                PVNavUI.initDrawer({ title: 'Navigation' });
+                PVNavUI.initDrawer();
                 const isoDay = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
                 // Tag: beliebigen Tag wählen
                 PVNavUI.attachCalendar(document.getElementById('currentDateDisplay'), 'day',

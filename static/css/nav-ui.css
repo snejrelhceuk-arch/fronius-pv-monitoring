@@ -58,13 +58,8 @@
 .pv-drawer .pv-drawer-head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    color: #e2e8f0;
-    font-weight: 700;
-    font-size: 15px;
-    padding: 2px 6px 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    margin-bottom: 6px;
+    justify-content: flex-end;
+    padding: 0 2px 4px;
 }
 .pv-drawer .pv-drawer-close {
     background: none;
@@ -99,6 +94,19 @@
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
+}
+.pv-drawer .pv-pages .nav-heading {
+    padding: 8px 12px 4px;
+    color: rgba(255, 255, 255, 0.95);
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+.pv-drawer .pv-pages a.nav-subitem {
+    padding-left: 24px;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.78);
 }
 .pv-drawer .pv-pages a:hover,
 .pv-drawer .pv-pages button:hover { background: rgba(255, 255, 255, 0.1); }

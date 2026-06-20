@@ -4,7 +4,7 @@
  *   opts.pagesSelector : Selektor des Containers mit den Seiten-Links, der in
  *                        die Schublade verschoben wird (z. B. '.pv-pages').
  *   opts.barSelector   : Navigationsleiste, in die der Hamburger eingefügt wird.
- *   opts.title         : Überschrift der Schublade.
+ *   opts.title         : (veraltet, ohne Wirkung).
  *
  * PVNavUI.attachCalendar(triggerEl, kind, getCurrent, onPick)
  *   kind: 'day' (Tag/Monat/Jahr) | 'month' (Gesamt)
@@ -25,16 +25,19 @@
 
     // Vollständiges Seiten-Menü (Reihenfolge = Anzeige). Zeitkontext wird via
     // PVNavContext als Query angehängt, damit der Zeitraum erhalten bleibt.
+    // Typen: {href,label} Link · {heading} fette Überschrift · {href,label,sub}
+    // eingerückter Unterpunkt · {sep} Trennlinie.
     var DEFAULT_PAGES = [
         { href: '/flow', label: 'Flow' },
         { href: '/monitoring', label: 'Monitoring' },
         { sep: true },
-        { href: '/erzeuger', label: 'Analyse · Erzeuger' },
-        { href: '/verbraucher', label: 'Analyse · Verbraucher' },
-        { href: '/analyse/pv', label: 'PV-Übersicht' },
-        { href: '/analyse/haushalt', label: 'Haushalt' },
-        { href: '/analyse/amortisation', label: 'Amortisation' },
-        { href: '/analyse/primaerenergie', label: '🌍 Primärenergie', stale: true },
+        { heading: 'Analyse' },
+        { href: '/erzeuger', label: 'Erzeuger', sub: true },
+        { href: '/verbraucher', label: 'Verbraucher', sub: true },
+        { href: '/analyse/pv', label: 'PV-Übersicht', sub: true },
+        { href: '/analyse/haushalt', label: 'Haushalt', sub: true },
+        { href: '/analyse/amortisation', label: 'Amortisation', sub: true },
+        { href: '/analyse/primaerenergie', label: '🌍 Primärenergie', sub: true, stale: true },
         { sep: true },
         { href: '/netzqualitaet', label: 'Netzqualität' },
         { href: '/maschinenraum', label: 'Maschinenraum' },
@@ -62,10 +65,18 @@
                 wrap.appendChild(s);
                 return;
             }
+            if (p.heading) {
+                var h = document.createElement('div');
+                h.className = 'nav-heading';
+                h.textContent = p.heading;
+                wrap.appendChild(h);
+                return;
+            }
             var a = document.createElement('a');
             var base = p.href.replace(/\/$/, '') || '/';
             a.href = p.href + (p.noctx ? '' : q);
             a.textContent = p.label;
+            if (p.sub) a.classList.add('nav-subitem');
             if (p.stale && primaerStale()) {
                 a.textContent += '  ⚠';
                 a.title = 'Datenstand veraltet – Aktualisierung fällig';
@@ -95,7 +106,6 @@
         drawer.className = 'pv-drawer';
         var head = document.createElement('div');
         head.className = 'pv-drawer-head';
-        head.innerHTML = '<span>' + (opts.title || 'Navigation') + '</span>';
         var close = document.createElement('button');
         close.className = 'pv-drawer-close';
         close.setAttribute('aria-label', 'Schließen');
