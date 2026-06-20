@@ -9,6 +9,7 @@
 - Beim Editieren auf den **Pre-commit-Hook** achten: Code-Änderungen in `automation/`, `collector/`, `diagnos/`, `steuerbox/`, `netzqualitaet/`, `routes/`, `web_api.py` erfordern eine begleitende Card-Aktualisierung in `doc/llm/cards/`.
 - Bei Unsicherheit über Konzepte/Module: zuerst `doc/llm/INDEX.md` durchsuchen, nicht direkt in den Quellcode springen.
 - File-Refs in deinen Antworten als Markdown-Links: `[file.py](file.py#L42)`.
+- Lokale Web-/Smoke-Tests immer gegen **Port 8000** durchführen (z. B. `http://127.0.0.1:8000/...`), nicht gegen Port 5000.
 
 ## Knappheit
 
