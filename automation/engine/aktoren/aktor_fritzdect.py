@@ -211,6 +211,8 @@ class AktorFritzDECT(AktorBase):
             klima_aus  — setswitchoff (Klimaanlage AUS)
             lueftung_ein — setswitchon  (Lueftung EIN)
             lueftung_aus — setswitchoff (Lueftung AUS)
+            fbh_ein    — setswitchon  (Fussbodenheizung EIN)
+            fbh_aus    — setswitchoff (Fussbodenheizung AUS)
     """
 
     name = 'fritzdect'
@@ -225,6 +227,9 @@ class AktorFritzDECT(AktorBase):
         # Lueftung: AIN 00000 0000000 (device_id lueftung)
         'lueftung_ein': ('setswitchon', 'lueftung'),
         'lueftung_aus': ('setswitchoff', 'lueftung'),
+        # Fussbodenheizung (Bad-FBH-Pumpe): nur Nacht-Schaltung für Regelmäßigkeit
+        'fbh_ein': ('setswitchon', 'fussbodenheizung'),
+        'fbh_aus': ('setswitchoff', 'fussbodenheizung'),
     }
 
     def __init__(self, dry_run: bool = False):

@@ -1,17 +1,18 @@
 {
-  "ghi_factor": 3.801,
+  "ghi_factor": 3.53,
   "model": "simple",
   "model_coeffs": {
-    "factor": 3.801
+    "factor": 3.53
   },
-  "calibrated_at": "2026-05-31 05:00",
+  "calibrated_at": "2026-06-14 05:00",
   "data_points": 90,
-  "r_squared": 0.121,
+  "r_squared": 0.237,
   "r_squared_multi": 0,
-  "avg_error_pct": 27.3,
+  "avg_error_pct": 25.5,
   "monthly_factors": {
-    "3": 4.681,
+    "3": 4.608,
     "4": 3.761,
-    "5": 3.204
+    "5": 3.204,
+    "6": 2.97
   }
 }

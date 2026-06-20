@@ -183,6 +183,8 @@ FLUSH_INTERVAL = 60        # Sekunden zwischen DB-Writes
 
 # --- WP Leistungsnachweis (Netzbetreiber) ---
 # Dauerhafte Protokolldatei mit minutlichen Maximalwerten der WP-Leistung.
+# BEWUSST PERMANENT/ENDLOS: Keine automatische Rotation oder Trunkierung,
+# da dies ein rechtlich relevanter Nachweis fuer den Netzbetreiber ist.
 WP_LEISTUNG_LIMIT_W = 4200
 WP_POWER_PROTOCOL_FILE = os.path.join(BASE_DIR, 'logs', 'wp_netzbetreiber_leistung.csv')
 WP_POWER_PROTOCOL_INTERVAL_S = 60
@@ -270,7 +272,7 @@ PRIMAERENERGIE_STALE_MONTHS = 3       # Hinweis nach 3 Monaten (Quartal)
 
 # --- E-Mail-Benachrichtigungen ---
 # Einmalige Meldung bei kritischen Events (Deduplizierung: 1× pro Event-Typ pro Tag)
-NOTIFICATION_EMAIL = load_local_setting('PV_NOTIFICATION_EMAIL', 'alerts@example.invalid')
+NOTIFICATION_EMAIL = 'navigator@hekabe.de'
 NOTIFICATION_SMTP_HOST = load_local_setting('PV_NOTIFICATION_SMTP_HOST', 'smtp.example.invalid')
 NOTIFICATION_SMTP_PORT = 465               # SSL (nicht 587/STARTTLS)
 NOTIFICATION_SMTP_USER = load_local_setting('PV_NOTIFICATION_SMTP_USER', 'alerts@example.invalid')

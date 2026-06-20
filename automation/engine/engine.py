@@ -43,6 +43,7 @@ from automation.engine.regeln import (          # noqa: E402
     RegelWattpilotBattSchutz,
     RegelHeizpatrone,
     RegelKlimaanlage,
+    RegelFussbodenheizungNacht,
     RegelWwAbsenkung,
     RegelHeizAbsenkung,
     RegelWwVerschiebung,
@@ -163,6 +164,7 @@ class Engine:
             RegelWattpilotBattSchutz(),
             RegelKlimaanlage(),
             RegelHeizpatrone(),
+            RegelFussbodenheizungNacht(),
             RegelWwVerschiebung(),
             RegelHeizVerschiebung(),
             RegelWwBoost(),
@@ -262,7 +264,7 @@ class Engine:
             if regel.name in ('ww_absenkung', 'heiz_absenkung',
                               'ww_verschiebung', 'heiz_verschiebung',
                               'ww_boost', 'wp_pflichtlauf',
-                              'heiz_bedarf'):
+                              'heiz_bedarf', 'fbh_nacht'):
                 return True
             # HP-AUS: fritzdect-Aktor mit erhöhtem Score (>score_gewicht)
             if regel.aktor == 'fritzdect' and score > get_score_gewicht(self._matrix, regel.regelkreis):

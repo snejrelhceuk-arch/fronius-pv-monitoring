@@ -5,7 +5,7 @@ role: A
 applyTo: "collector/fritzdect.py"
 tags: [fritzdect, collector, aha-api, ain]
 status: stable
-last_review: 2026-06-06
+last_review: 2026-06-14
 ---
 
 # FritzDECT-Collector
@@ -42,7 +42,10 @@ Liest Fritz!DECT-Steckdosen (z. B. Heizpatrone, Klimaanlage, WP-Schaltdose) via 
 ## Bekannte Fallstricke
 - **AIN-Vertauschung** ist eine häufige stille Fehlerquelle — Heizpatrone schaltet, aber Klimaanlage geht ein/aus (`fritzdect-ain-mapping-note`).
 - Fritz!Box-Reboot → Session ungültig → Reauth nötig.
-- Energie-Counter (`energy_total_wh`) springt bei Steckdosen-Reset → Tagesdeltas können negativ werden.
+- Energie-Counter (`energy_total_wh`) springt bei Steckdosen-Reset → Tagesdeltas könnten negativ werden; Daily-Aggregation guarded mit `max(0, ...)`.
+- **Zähler-Freeze:** Steckdosen aktualisieren `energy_total_wh` zeitweise nur ~1×/Tag → Intraday-Delta 0. Abgesichert in `collector/aggregate/daily.py` (Interday-Fallback + `getbasicdevicestats`-Fallback, ~31 Tage Box-Tagesenergie).
+- **Status-only-Geräte:** `fussbodenheizung` ist ein DECT-Thermostat ohne Leistungsmessung (`power_w`=0, `energy_total_wh` konstanter Garbage-Wert). Nicht als Energieverbraucher aggregieren/auswerten.
+- **Metering-Geräte mit Daily-Tabelle:** heizpatrone, klimaanlage, lueftung, gefriertruhe (`*_daily`/`*_monthly`). Mapping `FRITZDECT_DAILY_DEVICES` in `daily.py`.
 
 ## Verwandte Cards
 - [`collector-db-schema.card.md`](./collector-db-schema.card.md)

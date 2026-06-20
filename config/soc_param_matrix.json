@@ -615,6 +615,43 @@
       "score_gewicht": 60,
       "engine_zyklus": "fast"
     },
+    "fussbodenheizung": {
+      "_doc": "Minimale nächtliche Schaltung der Fußbodenheizungs-Steckdose (Fritz!DECT, AIN 11657 0600249). Hintergrund: Im Sommer ist die HomeAssistant-Heizungssteuerung deaktiviert (Haus kühl halten), damit entfällt die nächtliche Bad-Fußboden-Erwärmung. Diese Regel schaltet die FBH-SD edge-getriggert genau 1× EIN zu fenster_start_h und 1× AUS im Nachlauf nach fenster_ende_h — kein Nachstellen (oszillationssicher, kein Konflikt mit HA). Die Erwärmung selbst ist nicht messbar; die FBH-Temperatur regelt eine eigene Thermostatik.",
+      "aktiv": true,
+      "prioritaet": 2,
+      "beschreibung": "FBH-Nachtschaltung EIN 03:00 / AUS 05:00 (Flanke, oszillationssicher)",
+      "parameter": {
+        "fenster_start_h": {
+          "wert": 3,
+          "bereich": [
+            0,
+            23
+          ],
+          "einheit": "h",
+          "beschreibung": "Lokale Stunde der EIN-Flanke (genau 1×/Tag im Fenster [start, ende))."
+        },
+        "fenster_ende_h": {
+          "wert": 5,
+          "bereich": [
+            0,
+            23
+          ],
+          "einheit": "h",
+          "beschreibung": "Lokale Stunde der AUS-Flanke / Fensterende."
+        },
+        "aus_nachlauf_h": {
+          "wert": 1,
+          "bereich": [
+            0,
+            6
+          ],
+          "einheit": "h",
+          "beschreibung": "AUS-Flanke feuert nur im Nachlauffenster [ende, ende+aus_nachlauf). Verhindert spurious-OFF nach Daemon-Neustart tagsüber."
+        }
+      },
+      "score_gewicht": 50,
+      "engine_zyklus": "fast"
+    },
     "heizpatrone": {
       "_doc": "Heizpatrone (HP, 2kW) via Fritz!DECT-Steckdose — prognosegesteuerte Burst-Strategie. Trigger: Batterie-Ladeleistung + Forecast. Siehe STRATEGIEN.md §2.6",
       "aktiv": true,

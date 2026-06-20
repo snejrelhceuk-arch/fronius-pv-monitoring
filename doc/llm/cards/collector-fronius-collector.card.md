@@ -5,7 +5,7 @@ role: A
 applyTo: "collector/**,collector.py"
 tags: [collector, fronius, modbus, solar-api]
 status: stable
-last_review: 2026-06-06
+last_review: 2026-06-13
 ---
 
 # Fronius-Collector
@@ -40,6 +40,7 @@ Liest Fronius GEN24 zyklisch (3 s) via Modbus + ergänzt Solar-API-Werte (HTTP).
 - **PID-Lock:** `collector.pid` verhindert Doppelstart ([collector/pid_lock.py](../../../collector/pid_lock.py)).
 - **Read-only-Trennung:** Web-API nutzt `routes/helpers.py:FroniusReadOnly` — keine Schreibwege Richtung GEN24 (Rolle B = read-only). Bewusste Code-Duplette zur Absicherung der ABCDE-Rollentrennung.
 - **Persist-Sicherheit:** Bei DB-Fehler bleibt der RAM-Buffer erhalten und wird beim nächsten Tick erneut geschrieben.
+- **Netzbetreiber-Nachweisdatei ist permanent/endlos:** `logs/wp_netzbetreiber_leistung.csv` wird bewusst append-only gefuehrt (keine Rotation/Trunkierung), da rechtlich relevanter Langzeit-Nachweis.
 
 ## No-Gos
 - Keine Modbus-Schreibzugriffe an die Batterie-Register (40309/40311/40316/40317/40321) im Collector.

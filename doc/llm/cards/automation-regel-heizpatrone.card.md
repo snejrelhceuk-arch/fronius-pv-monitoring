@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/regeln/geraete.py"
 tags: [heizpatrone, fritzdect, ww-speicher, prognose]
 status: stable
-last_review: 2026-06-06
+last_review: 2026-06-14
 ---
 
 # Regel Heizpatrone
