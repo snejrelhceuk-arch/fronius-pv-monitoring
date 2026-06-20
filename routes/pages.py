@@ -22,6 +22,26 @@ def _get_installed_kwp_for_month(year, month):
     return config.PV_KWP_TOTAL
 
 
+def _get_pv_grenzwerte_yearly(cursor):
+    """Jährliche PV-/Netz-Extremwerte je Jahr für die Statistik-Tabelle.
+
+    Nutzt dieselbe Logik wie die Gesamt-Tooltips (`/api/period_extremes`,
+    `_extremes_gesamt`) → konsistente Werte (Ertrag, Spannung L-L, Frequenz,
+    cos φ, Peak-Leistung – jeweils mit Datum/Uhrzeit, soweit verfügbar).
+    """
+    try:
+        from routes.visualization import _extremes_gesamt
+        data = _extremes_gesamt(cursor).get('by_key', {})
+    except Exception:
+        return []
+    result = []
+    for year in sorted(data.keys(), reverse=True):
+        e = dict(data[year])
+        e['year'] = year
+        result.append(e)
+    return result
+
+
 def _get_nav_context(args):
     """Normalisiere den UI-Zeitkontext für Links zwischen verwandten Ansichten."""
     now = datetime.now()
@@ -112,8 +132,24 @@ def analyse_primaerenergie():
     """Primärenergie-Importe Deutschland 1990–2026 — statische Übersicht"""
     nav_context = _get_nav_context(request.args)
     nav_query = urlencode(nav_context)
+
+    # Aktualitäts-Hinweis: manuell gepflegte Seite, Verfallstimer (Quartal)
+    stand = getattr(config, 'PRIMAERENERGIE_STAND', None)
+    stale_months = getattr(config, 'PRIMAERENERGIE_STALE_MONTHS', 3)
+    primaer_stale = False
+    primaer_stand_label = None
+    try:
+        d = datetime.strptime(stand, '%Y-%m-%d')
+        primaer_stand_label = d.strftime('%d.%m.%Y')
+        age_days = (datetime.now() - d).days
+        primaer_stale = age_days > stale_months * 30
+    except Exception:
+        pass
+
     return render_template('analyse_primaerenergie_view.html',
-                           nav_query=('?' + nav_query) if nav_query else '')
+                           nav_query=('?' + nav_query) if nav_query else '',
+                           primaer_stale=primaer_stale,
+                           primaer_stand=primaer_stand_label)
 
 
 @bp.route('/analyse/pv')
@@ -497,6 +533,10 @@ def analyse():
     }
     template = template_map.get(request.path, 'analyse_pv_view.html')
 
+    # PV-Anlage-Grenzwerte: jährliche Min/Max-Netzextremwerte (Spannung L-L, Frequenz)
+    # Quelle: data_monthly (Spannung L-N → L-L via √3, Frequenz). Permanent (~10 Jahre).
+    pv_grenzwerte = _get_pv_grenzwerte_yearly(cursor)
+
     try:
         return render_template(template,
                              invest_pv_2022=invest_pv_2022,
@@ -512,6 +552,7 @@ def analyse():
                              amort_haushalt_jahr=amort_haushalt_jahr,
                              current_year=current_year,
                              freq_extremes=freq_extremes,
+                             pv_grenzwerte=pv_grenzwerte,
                              nav_query=('?' + nav_query) if nav_query else '')
     finally:
         conn.close()

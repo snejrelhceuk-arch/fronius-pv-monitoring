@@ -9,6 +9,9 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
     <title>Primärenergie-Importe — PV-Anlage</title>
     <link rel="stylesheet" href="/static/css/analyse-dark.css?v=20260302">
+    <link rel="stylesheet" href="/static/css/nav-ui.css">
+    <script src="/static/js/nav-context.js"></script>
+    <script src="/static/js/nav-ui.js"></script>
     <style>
         .charts-grid-full {
             margin: 32px 0;
@@ -268,7 +271,15 @@
         <div style="color:rgba(255,255,255,0.4); font-size:13px; margin-top:-20px; margin-bottom:24px;">
             Öl · Erdgas · Steinkohle &nbsp;·&nbsp; 1990–Q1 2026
             <span class="dm-badge">1990–2001 in DM umgerechnet</span>
+            {% if primaer_stand %}<span class="dm-badge">Datenstand {{ primaer_stand }}</span>{% endif %}
         </div>
+
+        {% if primaer_stale %}
+        <div style="background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.4); color:rgba(251,191,36,0.95); padding:12px 16px; border-radius:8px; margin-bottom:20px; font-size:13px;">
+            ⚠ Diese Übersicht wird manuell gepflegt und ist seit dem Datenstand
+            {{ primaer_stand }} über ein Quartal alt. Eine Aktualisierung der Import-/Preisdaten ist fällig.
+        </div>
+        {% endif %}
 
         <!-- Summary Cards -->
         <div class="stat-cards">
@@ -2030,6 +2041,9 @@
             }
         }
     });
+    </script>
+    <script>
+        if (window.PVNavUI) PVNavUI.initDrawer({ title: 'Navigation', primaerStale: {{ 'true' if primaer_stale else 'false' }} });
     </script>
 </body>
 </html>

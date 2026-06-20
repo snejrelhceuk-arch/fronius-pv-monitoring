@@ -421,6 +421,28 @@ def _fetch_maxima_raw(cursor, period, date_param):
     vmax_row = max(rows, key=lambda x: x[1])
     rows_min = [r for r in [l1n, l2n, l3n] if r]
     vmin_row = min(rows_min, key=lambda x: x[1]) if rows_min else None
+
+    # Leistungsfaktor (Netzanschluss) – nur in raw_data vorhanden (Retention 7 Tage),
+    # daher nur für die Tagesansicht der letzten Tage verfügbar.
+    cursor.execute(
+        f"""
+        SELECT ts, PF_Netz FROM raw_data
+        WHERE {where_clause} AND PF_Netz IS NOT NULL AND PF_Netz BETWEEN -1.0 AND 1.0
+        ORDER BY PF_Netz DESC, ts ASC LIMIT 1
+        """,
+        params,
+    )
+    pfmax = cursor.fetchone()
+    cursor.execute(
+        f"""
+        SELECT ts, PF_Netz FROM raw_data
+        WHERE {where_clause} AND PF_Netz IS NOT NULL AND PF_Netz BETWEEN -1.0 AND 1.0
+        ORDER BY PF_Netz ASC, ts ASC LIMIT 1
+        """,
+        params,
+    )
+    pfmin = cursor.fetchone()
+
     return {
         'source': 'raw_data',
         'accuracy': '5s',
@@ -431,6 +453,8 @@ def _fetch_maxima_raw(cursor, period, date_param):
         'u_voltage_min': {'ts': vmin_row[0], 'value': round(vmin_row[1], 2)} if vmin_row else None,
         'f_netz_max': {'ts': fmax[0], 'value': round(fmax[1], 4)} if fmax else None,
         'f_netz_min': {'ts': fmin[0], 'value': round(fmin[1], 4)} if fmin else None,
+        'pf_netz_max': {'ts': pfmax[0], 'value': round(pfmax[1], 3)} if pfmax else None,
+        'pf_netz_min': {'ts': pfmin[0], 'value': round(pfmin[1], 3)} if pfmin else None,
     }
 
 

@@ -14,6 +14,321 @@ from routes.helpers import get_db_connection, api_error_response, validate_year_
 
 bp = Blueprint('visualization', __name__)
 
+_SQRT3 = 3 ** 0.5
+
+
+def _ex_day_label(d, with_year=False):
+    """'YYYY-MM-DD' -> 'DD.MM.' bzw. 'DD.MM.YY'."""
+    try:
+        p = d.split('-')
+        return f"{p[2]}.{p[1]}.{p[0][2:]}" if with_year else f"{p[2]}.{p[1]}."
+    except Exception:
+        return d
+
+
+_MONTHS_EX = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun',
+              'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
+
+
+def _ex_one(cur, table, col, where, params, order='DESC', conv=None):
+    """Hole (ts, value) des Extremums einer Spalte. conv optional auf value."""
+    cur.execute(
+        f"SELECT ts, {col} FROM {table} WHERE {where} AND {col} IS NOT NULL "
+        f"ORDER BY {col} {order}, ts ASC LIMIT 1",
+        params)
+    r = cur.fetchone()
+    if not r:
+        return None
+    return (r[0], conv(r[1]) if conv else r[1])
+
+
+def _ex_time(ts):
+    return datetime.fromtimestamp(ts).strftime('%H:%M')
+
+
+def _extremes_tag(cur, date_param):
+    """Tages-Extremwerte (Leistung, Spannung, Frequenz, cos φ) inkl. Uhrzeit."""
+    if not date_param:
+        date_param = datetime.now().strftime('%Y-%m-%d')
+    overall = {}
+    w1 = ("datetime(ts, 'unixepoch', 'localtime') >= date(?, 'start of day') "
+          "AND datetime(ts, 'unixepoch', 'localtime') < date(?, '+1 day', 'start of day')")
+    p1 = (date_param, date_param)
+
+    # Leistung (Wechselrichter AC) – data_1min, sonst raw_data
+    pw = _ex_one(cur, 'data_1min', 'P_AC_Inv_max', w1, p1)
+    if not pw:
+        pw = _ex_one(cur, 'raw_data', 'P_AC_Inv', w1, p1)
+    if pw and pw[1] is not None:
+        overall['power'] = {'kw': round(pw[1] / 1000.0, 2), 'label': _ex_time(pw[0])}
+
+    # Spannung L-L: raw_data direkt (L-L), sonst data_1min (L-N ×√3)
+    vmax = vmin = None
+    cur.execute("SELECT COUNT(*) FROM raw_data WHERE " + w1, p1)
+    if cur.fetchone()[0] > 0:
+        cand_max = [_ex_one(cur, 'raw_data', c, w1 + f" AND {c} BETWEEN 300 AND 600", p1, 'DESC')
+                    for c in ('U_L1_L2_Netz', 'U_L2_L3_Netz', 'U_L3_L1_Netz')]
+        cand_min = [_ex_one(cur, 'raw_data', c, w1 + f" AND {c} BETWEEN 300 AND 600", p1, 'ASC')
+                    for c in ('U_L1_L2_Netz', 'U_L2_L3_Netz', 'U_L3_L1_Netz')]
+        cm = [x for x in cand_max if x]
+        cn = [x for x in cand_min if x]
+        if cm:
+            vmax = max(cm, key=lambda x: x[1])
+        if cn:
+            vmin = min(cn, key=lambda x: x[1])
+    else:
+        cand_max = [_ex_one(cur, 'data_1min', c, w1 + f" AND {c} BETWEEN 173 AND 347", p1, 'DESC',
+                            conv=lambda v: v * _SQRT3)
+                    for c in ('U_L1_N_Netz_max', 'U_L2_N_Netz_max', 'U_L3_N_Netz_max')]
+        cand_min = [_ex_one(cur, 'data_1min', c, w1 + f" AND {c} BETWEEN 173 AND 347", p1, 'ASC',
+                            conv=lambda v: v * _SQRT3)
+                    for c in ('U_L1_N_Netz_min', 'U_L2_N_Netz_min', 'U_L3_N_Netz_min')]
+        cm = [x for x in cand_max if x]
+        cn = [x for x in cand_min if x]
+        if cm:
+            vmax = max(cm, key=lambda x: x[1])
+        if cn:
+            vmin = min(cn, key=lambda x: x[1])
+    if vmin and vmax:
+        overall['voltage'] = {
+            'min': round(vmin[1], 1), 'min_label': _ex_time(vmin[0]),
+            'max': round(vmax[1], 1), 'max_label': _ex_time(vmax[0]),
+        }
+
+    # Frequenz – data_1min, sonst raw_data
+    fmin = _ex_one(cur, 'data_1min', 'f_Netz_min', w1 + " AND f_Netz_min BETWEEN 40 AND 60", p1, 'ASC') \
+        or _ex_one(cur, 'raw_data', 'f_Netz', w1 + " AND f_Netz BETWEEN 40 AND 60", p1, 'ASC')
+    fmax = _ex_one(cur, 'data_1min', 'f_Netz_max', w1 + " AND f_Netz_max BETWEEN 40 AND 60", p1, 'DESC') \
+        or _ex_one(cur, 'raw_data', 'f_Netz', w1 + " AND f_Netz BETWEEN 40 AND 60", p1, 'DESC')
+    if fmin and fmax:
+        overall['frequency'] = {
+            'min': round(fmin[1], 3), 'min_label': _ex_time(fmin[0]),
+            'max': round(fmax[1], 3), 'max_label': _ex_time(fmax[0]),
+        }
+
+    # Leistungsfaktor – nur raw_data (≤7 Tage)
+    pfmin = _ex_one(cur, 'raw_data', 'PF_Netz', w1 + " AND PF_Netz BETWEEN -1.0 AND 1.0", p1, 'ASC')
+    pfmax = _ex_one(cur, 'raw_data', 'PF_Netz', w1 + " AND PF_Netz BETWEEN -1.0 AND 1.0", p1, 'DESC')
+    if pfmin and pfmax:
+        overall['powerfactor'] = {
+            'min': round(pfmin[1], 3), 'min_label': _ex_time(pfmin[0]),
+            'max': round(pfmax[1], 3), 'max_label': _ex_time(pfmax[0]),
+        }
+
+    return {'period': 'tag', 'overall': overall, 'by_key': {}}
+
+
+def _vf_pf_extremes(cur, t0, t1, label_kind):
+    """Spannung (L-L), Frequenz, cos φ – Min/Max mit Zeitstempel-Label.
+
+    Quelle data_1min (Minute, ≤90 Tage, mit Zeit). Fallback data_monthly
+    (Monatsaggregat, ohne präzise Zeit). label_kind: 'time'|'date'|'datey'.
+    """
+    def lab(ts):
+        d = datetime.fromtimestamp(ts)
+        if label_kind == 'time':
+            return d.strftime('%H:%M')
+        if label_kind == 'datey':
+            return d.strftime('%d.%m.%y')
+        return d.strftime('%d.%m.')
+
+    out = {}
+    p = (t0, t1)
+    cur.execute("SELECT COUNT(*) FROM data_1min WHERE ts >= ? AND ts < ?", p)
+    if cur.fetchone()[0] > 0:
+        vmins = [_ex_one(cur, 'data_1min', c,
+                         f"ts >= ? AND ts < ? AND {c} BETWEEN 173 AND 347", p, 'ASC',
+                         conv=lambda v: v * _SQRT3)
+                 for c in ('U_L1_N_Netz_min', 'U_L2_N_Netz_min', 'U_L3_N_Netz_min')]
+        vmaxs = [_ex_one(cur, 'data_1min', c,
+                         f"ts >= ? AND ts < ? AND {c} BETWEEN 173 AND 347", p, 'DESC',
+                         conv=lambda v: v * _SQRT3)
+                 for c in ('U_L1_N_Netz_max', 'U_L2_N_Netz_max', 'U_L3_N_Netz_max')]
+        vmins = [x for x in vmins if x]
+        vmaxs = [x for x in vmaxs if x]
+        if vmins and vmaxs:
+            vn = min(vmins, key=lambda x: x[1])
+            vx = max(vmaxs, key=lambda x: x[1])
+            out['voltage'] = {'min': round(vn[1], 1), 'min_label': lab(vn[0]),
+                              'max': round(vx[1], 1), 'max_label': lab(vx[0])}
+        fn = _ex_one(cur, 'data_1min', 'f_Netz_min',
+                     "ts >= ? AND ts < ? AND f_Netz_min BETWEEN 40 AND 60", p, 'ASC')
+        fx = _ex_one(cur, 'data_1min', 'f_Netz_max',
+                     "ts >= ? AND ts < ? AND f_Netz_max BETWEEN 40 AND 60", p, 'DESC')
+        if fn and fx:
+            out['frequency'] = {'min': round(fn[1], 3), 'min_label': lab(fn[0]),
+                                'max': round(fx[1], 3), 'max_label': lab(fx[0])}
+        try:
+            pn = _ex_one(cur, 'data_1min', 'PF_Netz_min',
+                         "ts >= ? AND ts < ? AND PF_Netz_min BETWEEN -1 AND 1", p, 'ASC')
+            px = _ex_one(cur, 'data_1min', 'PF_Netz_max',
+                         "ts >= ? AND ts < ? AND PF_Netz_max BETWEEN -1 AND 1", p, 'DESC')
+            if pn and px:
+                out['powerfactor'] = {'min': round(pn[1], 3), 'min_label': lab(pn[0]),
+                                      'max': round(px[1], 3), 'max_label': lab(px[0])}
+        except Exception:
+            pass
+        if out:
+            return out
+
+    # Fallback: Monatsaggregat (ohne präzise Zeit → kein Label)
+    try:
+        cur.execute("""
+            SELECT MIN(U_L1_N_Netz_min), MIN(U_L2_N_Netz_min), MIN(U_L3_N_Netz_min),
+                   MAX(U_L1_N_Netz_max), MAX(U_L2_N_Netz_max), MAX(U_L3_N_Netz_max),
+                   MIN(f_Netz_min), MAX(f_Netz_max)
+            FROM data_monthly WHERE ts >= ? AND ts < ?
+        """, p)
+        r = cur.fetchone()
+    except Exception:
+        r = None
+    if r:
+        umins = [x for x in r[0:3] if x and 150 < x < 300]
+        umaxs = [x for x in r[3:6] if x and 150 < x < 300]
+        if umins and umaxs:
+            out['voltage'] = {'min': round(min(umins) * _SQRT3, 1),
+                              'max': round(max(umaxs) * _SQRT3, 1)}
+        if r[6] and r[7] and 40 < r[6] < 60 and 40 < r[7] < 60:
+            out['frequency'] = {'min': round(r[6], 3), 'max': round(r[7], 3)}
+    return out
+
+
+def _extremes_monat(cur, year, month):
+    """Pro Tag: Peak-Leistung (System) + Spannung/Frequenz/cos φ mit Uhrzeit."""
+    if not year or not month:
+        now = datetime.now()
+        year, month = now.year, now.month
+    first_ts = int(datetime(year, month, 1).timestamp())
+    last_ts = int(datetime(year + (month == 12), (month % 12) + 1, 1).timestamp())
+    by_key = {}
+    cur.execute("""
+        SELECT CAST(strftime('%d', datetime(ts, 'unixepoch', 'localtime')) AS INTEGER) AS day,
+               COALESCE(P_PV_total_max, P_AC_Inv_max) AS pmax
+        FROM daily_data WHERE ts >= ? AND ts < ?
+    """, (first_ts, last_ts))
+    rows = cur.fetchall()
+    for day, pmax in rows:
+        entry = {}
+        if pmax is not None and pmax > 0:
+            entry['power'] = {'kw': round(pmax / 1000.0, 2)}
+        d0 = int(datetime(year, month, day).timestamp())
+        d1 = d0 + 86400
+        entry.update(_vf_pf_extremes(cur, d0, d1, 'time'))
+        if entry:
+            by_key[str(day)] = entry
+    return {'period': 'monat', 'by_key': by_key}
+
+
+def _extremes_jahr(cur, year):
+    """Pro Monat: größter/kleinster Tagesertrag, System-Peak-Tag, Spannung/Frequenz/cos φ (mit Datum)."""
+    if not year:
+        year = datetime.now().year
+    first_ts = int(datetime(year, 1, 1).timestamp())
+    last_ts = int(datetime(year + 1, 1, 1).timestamp())
+    cur.execute("""
+        SELECT CAST(strftime('%m', datetime(ts, 'unixepoch', 'localtime')) AS INTEGER) AS m,
+               date(ts, 'unixepoch', 'localtime') AS d,
+               COALESCE(W_PV_total, 0) / 1000.0 AS kwh,
+               COALESCE(P_PV_total_max, P_AC_Inv_max) AS pmax
+        FROM daily_data WHERE ts >= ? AND ts < ?
+    """, (first_ts, last_ts))
+    by_month = {}
+    for m, d, kwh, pmax in cur.fetchall():
+        e = by_month.setdefault(m, {'days': [], 'pmax': None})
+        if kwh and kwh > 0:
+            e['days'].append((d, kwh))
+        if pmax is not None and (e['pmax'] is None or pmax > e['pmax'][1]):
+            e['pmax'] = (d, pmax)
+    by_key = {}
+    for m in range(1, 13):
+        entry = {}
+        e = by_month.get(m)
+        if e:
+            if e['days']:
+                bd = max(e['days'], key=lambda x: x[1])
+                wd = min(e['days'], key=lambda x: x[1])
+                entry['yield_max'] = {'kwh': round(bd[1], 1), 'label': _ex_day_label(bd[0])}
+                entry['yield_min'] = {'kwh': round(wd[1], 1), 'label': _ex_day_label(wd[0])}
+            if e['pmax'] and e['pmax'][1] > 0:
+                entry['power'] = {'kw': round(e['pmax'][1] / 1000.0, 2), 'label': _ex_day_label(e['pmax'][0])}
+        mt0 = int(datetime(year, m, 1).timestamp())
+        mt1 = int(datetime(year + (m == 12), (m % 12) + 1, 1).timestamp())
+        entry.update(_vf_pf_extremes(cur, mt0, mt1, 'date'))
+        if entry:
+            by_key[str(m)] = entry
+    return {'period': 'jahr', 'by_key': by_key}
+
+
+def _extremes_gesamt(cur):
+    """Pro Jahr: ertragsreichster/-ärmster Monat, System-Peak (Tag), Spannung/Frequenz/cos φ (mit Datum)."""
+    cur.execute("""
+        SELECT CAST(strftime('%Y', datetime(ts, 'unixepoch', 'localtime')) AS INTEGER) AS y,
+               CAST(strftime('%m', datetime(ts, 'unixepoch', 'localtime')) AS INTEGER) AS m,
+               date(ts, 'unixepoch', 'localtime') AS d,
+               COALESCE(W_PV_total, 0) / 1000.0 AS kwh,
+               COALESCE(P_PV_total_max, P_AC_Inv_max) AS pmax
+        FROM daily_data
+    """)
+    by_year = {}
+    for y, m, d, kwh, pmax in cur.fetchall():
+        e = by_year.setdefault(y, {'months': {}, 'pmax': None})
+        if kwh and kwh > 0:
+            e['months'][m] = e['months'].get(m, 0.0) + kwh
+        if pmax is not None and (e['pmax'] is None or pmax > e['pmax'][1]):
+            e['pmax'] = (d, pmax)
+    by_key = {}
+    for y, e in by_year.items():
+        entry = {}
+        if e['months']:
+            bm = max(e['months'].items(), key=lambda x: x[1])
+            wm = min(e['months'].items(), key=lambda x: x[1])
+            entry['yield_max'] = {'kwh': round(bm[1], 1), 'label': f"{_MONTHS_EX[bm[0] - 1]} {y}"}
+            entry['yield_min'] = {'kwh': round(wm[1], 1), 'label': f"{_MONTHS_EX[wm[0] - 1]} {y}"}
+        if e['pmax'] and e['pmax'][1] > 0:
+            entry['power'] = {'kw': round(e['pmax'][1] / 1000.0, 2), 'label': _ex_day_label(e['pmax'][0], with_year=True)}
+        yt0 = int(datetime(y, 1, 1).timestamp())
+        yt1 = int(datetime(y + 1, 1, 1).timestamp())
+        entry.update(_vf_pf_extremes(cur, yt0, yt1, 'datey'))
+        if entry:
+            by_key[str(y)] = entry
+    return {'period': 'gesamt', 'by_key': by_key}
+
+
+@bp.route('/api/period_extremes')
+def api_period_extremes():
+    """Einheitliche Perioden-Extremwerte für konsistente Tooltips in Monitoring
+    (tag_view) und Analyse (erzeuger/verbraucher).
+
+    period=tag    -> overall {power, voltage, frequency, powerfactor} (inkl. Uhrzeit)
+    period=monat  -> by_key[day]   {power, frequency}
+    period=jahr   -> by_key[month] {yield_max, yield_min, power, voltage, frequency}
+    period=gesamt -> by_key[year]  {yield_max, yield_min, power, voltage, frequency}
+
+    Hinweis: cos φ (PF) nur aus raw_data (≤7 Tage) verfügbar; in Monat/Jahr/Gesamt
+    daher historisch nicht enthalten (siehe PF-Aggregation in data_1min).
+    """
+    try:
+        period = request.args.get('period', 'tag')
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"error": "DB nicht verfügbar"}), 500
+        cur = conn.cursor()
+        try:
+            if period == 'monat':
+                result = _extremes_monat(cur, request.args.get('year', type=int),
+                                         request.args.get('month', type=int))
+            elif period == 'jahr':
+                result = _extremes_jahr(cur, request.args.get('year', type=int))
+            elif period == 'gesamt':
+                result = _extremes_gesamt(cur)
+            else:
+                result = _extremes_tag(cur, request.args.get('date'))
+            return jsonify(result)
+        finally:
+            conn.close()
+    except Exception as e:
+        return api_error_response(e, "Period-Extremwerte")
+
 
 def _get_freq_extremes(cursor, ts_start, ts_end):
     """Ermittle Netzfrequenz-Extremwerte (Min/Max) mit Zeitstempel aus data_1min.

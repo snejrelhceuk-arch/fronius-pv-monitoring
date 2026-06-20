@@ -5,10 +5,13 @@ role: D
 applyTo: "diagnos/integrity.py"
 tags: [integritaet, gap-scan, rollup, balance, config-parse]
 status: stable
-last_review: 2026-06-06
+last_review: 2026-06-20
 ---
 
 # Diagnos Integritaet
+
+## Changes
+- 2026-06-20: Gap-Scan ist für `raw_data` und `data_1min` jetzt **daylight-aware** (`_run_gap_scan(..., daylight_aware=True)`, `_gap_in_darkness` via `solar_geometry.sun_position`). Lücken vollständig bei Dunkelheit/Dämmerung (Sonnenhöhe < 1°, = WR-Standby am Tagesende/Nacht) zählen NICHT zur Alarmschwere, bleiben aber in `samples` (Flag `expected_night`) und `gap_count` sichtbar; zusätzliche Felder `night_gap_count`, `daylight_gap_classes`. Severity wird aus den Tag-Lücken gebildet. Ziel: keine Warnung für betrieblich normales WR-Offline bei Dunkelheit, Lücken bleiben dokumentiert.
 
 ## Zweck
 Tiefe read-only Pruefung der Datenkonsistenz: Energiebilanz, Monats-/Jahresrollups, Zeitlueckenklassifikation und JSON-Konfigurationsparse.

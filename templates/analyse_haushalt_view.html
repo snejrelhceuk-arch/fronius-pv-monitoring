@@ -11,6 +11,9 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
     <title>Haushalt — PV-Anlage</title>
     <link rel="stylesheet" href="/static/css/analyse-dark.css?v=20260302">
+    <link rel="stylesheet" href="/static/css/nav-ui.css">
+    <script src="/static/js/nav-context.js"></script>
+    <script src="/static/js/nav-ui.js"></script>
 </head>
 <body>
     <div class="container">
@@ -145,5 +148,8 @@
     </div>
 
     {% include 'info_overlay.html' %}
+    <script>
+        if (window.PVNavUI) PVNavUI.initDrawer({ title: 'Navigation' });
+    </script>
 </body>
 </html>

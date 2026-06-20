@@ -196,6 +196,54 @@ def _load_wattpilot_daily(cursor, first_ts, last_ts):
     return data
 
 
+# Zusätzliche Fritz!DECT-Verbraucher für die Aufschlüsselung (neben WP/HP/Wattpilot).
+# Whitelist der erlaubten Daily-Tabellen (kein User-Input → keine Injection).
+# Status-only-Geräte (fussbodenheizung: Thermostat ohne Leistungsmessung) sind
+# bewusst NICHT enthalten, da deren energy_total_wh kein realer Zähler ist.
+FRITZ_BREAKDOWN_DEVICES = [
+    ('klima',    'klimaanlage_daily'),
+    ('gefrier',  'gefriertruhe_daily'),
+    ('lueftung', 'lueftung_daily'),
+]
+_FRITZ_DAILY_TABLES = {t for _, t in FRITZ_BREAKDOWN_DEVICES}
+
+
+def _load_fritz_device_daily(cursor, table, first_ts, last_ts):
+    """Lädt {day_ts: energy_wh} aus einer Fritz!DECT-Daily-Tabelle.
+
+    `table` muss aus der internen Whitelist stammen.
+    """
+    data = {}
+    if table not in _FRITZ_DAILY_TABLES:
+        return data
+    try:
+        cursor.execute(
+            f"SELECT ts, energy_wh FROM {table} WHERE ts >= ? AND ts < ? ORDER BY ts",
+            (first_ts, last_ts),
+        )
+        for ts, energy_wh in cursor.fetchall():
+            day_ts = (int(ts) // 86400) * 86400
+            data[day_ts] = max(0.0, energy_wh or 0)   # Negativ-Guard
+    except Exception:
+        pass
+    return data
+
+
+def _sum_fritz_daily_kwh(cursor, table, first_ts, last_ts):
+    """Summe einer Fritz!DECT-Daily-Tabelle im Zeitraum als kWh (Negativ-geguarded)."""
+    if table not in _FRITZ_DAILY_TABLES:
+        return 0.0
+    try:
+        cursor.execute(
+            f"SELECT SUM(MAX(energy_wh, 0)) FROM {table} WHERE ts >= ? AND ts < ?",
+            (first_ts, last_ts),
+        )
+        row = cursor.fetchone()
+        return float((row[0] or 0)) / 1000.0
+    except Exception:
+        return 0.0
+
+
 def _load_heizpatrone_daily(cursor, first_ts, last_ts):
     data = {}
     try:
@@ -288,6 +336,9 @@ def _build_average_summary(totals, divisor, unit_label):
             'wp': round((totals.get('wp') or 0) / divisor, 2),
             'heizpatrone': round((totals.get('heizpatrone') or 0) / divisor, 2),
             'wattpilot': round((totals.get('wattpilot') or 0) / divisor, 2),
+            'klima': round((totals.get('klima') or 0) / divisor, 2),
+            'gefrier': round((totals.get('gefrier') or 0) / divisor, 2),
+            'lueftung': round((totals.get('lueftung') or 0) / divisor, 2),
         },
     }
 
@@ -664,10 +715,16 @@ def api_verbraucher_monat():
         heizpatrone_by_day = _load_heizpatrone_daily(cursor, first_ts, last_ts)
         heizpatrone_month_total = _get_heizpatrone_month_total_kwh(cursor, year, month, first_ts, last_ts)
 
+        fritz_by_day = {
+            key: _load_fritz_device_daily(cursor, table, first_ts, last_ts)
+            for key, table in FRITZ_BREAKDOWN_DEVICES
+        }
+
         conn.close()
 
         datapoints = []
-        totals = {'wp': 0, 'heizpatrone': 0, 'wattpilot': 0, 'haushalt': 0, 'gesamt': 0}
+        totals = {'wp': 0, 'heizpatrone': 0, 'wattpilot': 0,
+                  'klima': 0, 'gefrier': 0, 'lueftung': 0, 'haushalt': 0, 'gesamt': 0}
 
         for row in daily_rows:
             ts, w_wp, w_consumption, w_direct, w_batt_dis, w_netz = row
@@ -679,17 +736,27 @@ def api_verbraucher_monat():
             day_key = (int(ts) // 86400) * 86400
             w_wattpilot = wattpilot_by_day.get(day_key, {}).get('energy_wh', 0)
             w_heizpatrone = heizpatrone_by_day.get(day_key, 0)
-            w_haushalt = max(0, w_consumption - w_wp - w_heizpatrone - w_wattpilot)
+            w_klima = fritz_by_day['klima'].get(day_key, 0)
+            w_gefrier = fritz_by_day['gefrier'].get(day_key, 0)
+            w_lueftung = fritz_by_day['lueftung'].get(day_key, 0)
+            w_haushalt = max(0, w_consumption - w_wp - w_heizpatrone - w_wattpilot
+                             - w_klima - w_gefrier - w_lueftung)
 
             wp_kwh = w_wp / 1000.0
             heizpatrone_kwh = w_heizpatrone / 1000.0
             wattpilot_kwh = w_wattpilot / 1000.0
+            klima_kwh = w_klima / 1000.0
+            gefrier_kwh = w_gefrier / 1000.0
+            lueftung_kwh = w_lueftung / 1000.0
             haushalt_kwh = w_haushalt / 1000.0
             gesamt_kwh = w_consumption / 1000.0
 
             totals['wp'] += wp_kwh
             totals['heizpatrone'] += heizpatrone_kwh
             totals['wattpilot'] += wattpilot_kwh
+            totals['klima'] += klima_kwh
+            totals['gefrier'] += gefrier_kwh
+            totals['lueftung'] += lueftung_kwh
             totals['haushalt'] += haushalt_kwh
             totals['gesamt'] += gesamt_kwh
 
@@ -698,6 +765,9 @@ def api_verbraucher_monat():
                 'w_wp': round(wp_kwh, 2),
                 'w_heizpatrone': round(heizpatrone_kwh, 2),
                 'w_wattpilot': round(wattpilot_kwh, 2),
+                'w_klima': round(klima_kwh, 2),
+                'w_gefrier': round(gefrier_kwh, 2),
+                'w_lueftung': round(lueftung_kwh, 2),
                 'w_haushalt': round(haushalt_kwh, 2),
                 'w_gesamt': round(gesamt_kwh, 2),
             })
@@ -706,7 +776,8 @@ def api_verbraucher_monat():
             totals['heizpatrone'] = heizpatrone_month_total
             totals['haushalt'] = max(
                 0,
-                totals['gesamt'] - totals['wp'] - totals['heizpatrone'] - totals['wattpilot'],
+                totals['gesamt'] - totals['wp'] - totals['heizpatrone'] - totals['wattpilot']
+                - totals['klima'] - totals['gefrier'] - totals['lueftung'],
             )
 
         average_summary = _build_average_summary(totals, len(datapoints), 'Tag')
@@ -750,21 +821,40 @@ def api_verbraucher_jahr():
             (year,),
         )
         rows = cursor.fetchall()
+
+        # Fritz!DECT-Zusatzverbraucher pro Monat aus Daily-Tabellen summieren
+        fritz_by_month = {}
+        for mon in range(1, 13):
+            m_first = int(datetime(year, mon, 1).timestamp())
+            m_last = int(datetime(year + (1 if mon == 12 else 0), (mon % 12) + 1, 1).timestamp())
+            fritz_by_month[mon] = {
+                key: _sum_fritz_daily_kwh(cursor, table, m_first, m_last)
+                for key, table in FRITZ_BREAKDOWN_DEVICES
+            }
+
         conn.close()
 
         datapoints = []
-        totals = {'wp': 0, 'heizpatrone': 0, 'wattpilot': 0, 'haushalt': 0, 'gesamt': 0}
+        totals = {'wp': 0, 'heizpatrone': 0, 'wattpilot': 0,
+                  'klima': 0, 'gefrier': 0, 'lueftung': 0, 'haushalt': 0, 'gesamt': 0}
 
         for mon, gesamt, wp, heiz, wattpilot in rows:
             gesamt = gesamt or 0
             wp = wp or 0
             heiz = heiz or 0
             wattpilot = wattpilot or 0
-            haushalt = max(0, gesamt - wp - heiz - wattpilot)
+            fz = fritz_by_month.get(mon, {})
+            klima = fz.get('klima', 0)
+            gefrier = fz.get('gefrier', 0)
+            lueftung = fz.get('lueftung', 0)
+            haushalt = max(0, gesamt - wp - heiz - wattpilot - klima - gefrier - lueftung)
 
             totals['wp'] += wp
             totals['heizpatrone'] += heiz
             totals['wattpilot'] += wattpilot
+            totals['klima'] += klima
+            totals['gefrier'] += gefrier
+            totals['lueftung'] += lueftung
             totals['haushalt'] += haushalt
             totals['gesamt'] += gesamt
 
@@ -773,6 +863,9 @@ def api_verbraucher_jahr():
                 'w_wp': round(wp, 2),
                 'w_heizpatrone': round(heiz, 2),
                 'w_wattpilot': round(wattpilot, 2),
+                'w_klima': round(klima, 2),
+                'w_gefrier': round(gefrier, 2),
+                'w_lueftung': round(lueftung, 2),
                 'w_haushalt': round(haushalt, 2),
                 'w_gesamt': round(gesamt, 2),
             })
@@ -814,10 +907,22 @@ def api_verbraucher_gesamt():
 
         cursor.execute("SELECT MIN(year), MAX(year) FROM monthly_statistics")
         yr_range = cursor.fetchone()
+
+        # Fritz!DECT-Zusatzverbraucher pro Jahr aus Daily-Tabellen summieren
+        fritz_by_year = {}
+        for (yr_row,) in [(r[0],) for r in rows]:
+            y_first = int(datetime(yr_row, 1, 1).timestamp())
+            y_last = int(datetime(yr_row + 1, 1, 1).timestamp())
+            fritz_by_year[yr_row] = {
+                key: _sum_fritz_daily_kwh(cursor, table, y_first, y_last)
+                for key, table in FRITZ_BREAKDOWN_DEVICES
+            }
+
         conn.close()
 
         datapoints = []
-        totals = {'wp': 0, 'heizpatrone': 0, 'wattpilot': 0, 'haushalt': 0, 'gesamt': 0}
+        totals = {'wp': 0, 'heizpatrone': 0, 'wattpilot': 0,
+                  'klima': 0, 'gefrier': 0, 'lueftung': 0, 'haushalt': 0, 'gesamt': 0}
         month_count_total = 0
 
         for yr, month_count, gesamt, wp, heiz, wattpilot in rows:
@@ -827,12 +932,19 @@ def api_verbraucher_gesamt():
             wattpilot = wattpilot or 0
             if gesamt < 1:
                 continue
-            haushalt = max(0, gesamt - wp - heiz - wattpilot)
+            fz = fritz_by_year.get(yr, {})
+            klima = fz.get('klima', 0)
+            gefrier = fz.get('gefrier', 0)
+            lueftung = fz.get('lueftung', 0)
+            haushalt = max(0, gesamt - wp - heiz - wattpilot - klima - gefrier - lueftung)
             month_count_total += month_count or 0
 
             totals['wp'] += wp
             totals['heizpatrone'] += heiz
             totals['wattpilot'] += wattpilot
+            totals['klima'] += klima
+            totals['gefrier'] += gefrier
+            totals['lueftung'] += lueftung
             totals['haushalt'] += haushalt
             totals['gesamt'] += gesamt
 
@@ -842,6 +954,9 @@ def api_verbraucher_gesamt():
                 'w_wp': round(wp, 2),
                 'w_heizpatrone': round(heiz, 2),
                 'w_wattpilot': round(wattpilot, 2),
+                'w_klima': round(klima, 2),
+                'w_gefrier': round(gefrier, 2),
+                'w_lueftung': round(lueftung, 2),
                 'w_haushalt': round(haushalt, 2),
                 'w_gesamt': round(gesamt, 2),
             })

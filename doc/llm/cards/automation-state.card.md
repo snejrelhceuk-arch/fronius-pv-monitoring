@@ -5,10 +5,13 @@ role: C
 applyTo: "automation/engine/obs_state.py"
 tags: [state, obs-state, persist, ram-db, configs]
 status: stable
-last_review: 2026-06-06
+last_review: 2026-06-20
 ---
 
 # Automation-State
+
+## Changes
+- 2026-06-20: `automation/engine/diagnos_alert_state.py` — RAW-Datenlücken (`integrity:gaps:raw_data`) sind in der Sunset-Mail jetzt „verfallend": Severity wird auf höchstens `warn` gedeckelt (`_effective_severity`), Fingerprint ist bewusst grob (nur effektive Severity → täglich wandernde Lücken alarmieren nicht erneut), und der 7-Tage-Reminder entfällt für diese Klasse (`_EXPIRING_CHECKS`). Erstauftreten wird einmal gemeldet, danach unterdrückt; die Lücken bleiben in der separaten Ausfall-/Gap-Aufstellung der Mail sichtbar (diagnos-Output unverändert).
 
 ## Zweck
 Wo lebt welcher Zustand? Welche Datei/Tabelle ist Quelle der Wahrheit? Klärung der Trennung zwischen RAM-DB (transient), Persist-DB (`data.db`) und Config-JSONs.

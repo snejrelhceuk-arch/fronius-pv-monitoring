@@ -434,6 +434,15 @@
                     const acc = maximaData.maxima.accuracy ? ` (${maximaData.maxima.accuracy})` : '';
                     status += ` · Vmax ${maximaData.maxima.u_voltage_max.value.toFixed(1)}V${acc}`;
                 }
+                // Leistungsfaktor-Extremwerte inkl. Uhrzeit (nur Tagesansicht, raw_data ≤7 Tage)
+                const _mx = maximaData && maximaData.available ? maximaData.maxima : null;
+                if (_mx && (_mx.pf_netz_max || _mx.pf_netz_min)) {
+                    const ft = ts => new Date(ts * 1000).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                    const parts = [];
+                    if (_mx.pf_netz_max) parts.push(`max ${_mx.pf_netz_max.value.toFixed(2)} (${ft(_mx.pf_netz_max.ts)})`);
+                    if (_mx.pf_netz_min) parts.push(`min ${_mx.pf_netz_min.value.toFixed(2)} (${ft(_mx.pf_netz_min.ts)})`);
+                    status += ` · cos φ ${parts.join(' / ')}`;
+                }
                 statusEl.textContent = status;
             } catch (err) {
                 console.error('Netzqualität Fehler:', err);

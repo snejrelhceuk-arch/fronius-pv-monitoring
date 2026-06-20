@@ -292,6 +292,20 @@ def api_erzeuger_jahr():
         """, (first_ts, last_ts))
 
         rows = cursor.fetchall()
+
+        # Beste/schlechteste Tageserträge je Monat (für Tooltip), aus daily_data.W_PV_total.
+        cursor.execute("""
+            SELECT CAST(strftime('%m', datetime(ts, 'unixepoch', 'localtime')) AS INTEGER) AS mon,
+                   date(ts, 'unixepoch', 'localtime') AS d,
+                   COALESCE(W_PV_total, 0) / 1000.0 AS kwh
+            FROM daily_data
+            WHERE ts >= ? AND ts < ?
+        """, (first_ts, last_ts))
+        month_days = {}
+        for mon, d, kwh in cursor.fetchall():
+            if kwh and kwh > 0:
+                month_days.setdefault(mon, []).append((d, kwh))
+
         conn.close()
 
         MONTHS = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun',
@@ -336,6 +350,10 @@ def api_erzeuger_jahr():
                 'w_f2': round(w_f2, 2),
                 'w_f3': round(w_f3, 2),
                 'w_gesamt': round(w_f1 + w_f2 + w_f3, 2),
+                'best_day': ({'date': _bd[0], 'kwh': round(_bd[1], 2)}
+                             if (_bd := (max(month_days.get(mon, []), key=lambda x: x[1], default=None))) else None),
+                'worst_day': ({'date': _wd[0], 'kwh': round(_wd[1], 2)}
+                              if (_wd := (min(month_days.get(mon, []), key=lambda x: x[1], default=None))) else None),
             })
 
         return jsonify({

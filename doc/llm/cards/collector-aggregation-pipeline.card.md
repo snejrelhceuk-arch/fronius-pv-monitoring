@@ -5,10 +5,14 @@ role: A
 applyTo: "collector/aggregate/**"
 tags: [aggregation, pipeline, cron, retention]
 status: stable
-last_review: 2026-06-06
+last_review: 2026-06-20
 ---
 
 # Aggregation-Pipeline
+
+## Changes
+- 2026-06-20 (b): `collector/aggregate/daily.py` schreibt neu `daily_data.P_PV_total_max` = zeitgleicher System-Peak `MAX(P_DC1_avg+P_DC2_avg+P_F2_avg+P_F3_avg)` aus data_1min (Fallback data_15min) via additivem UPDATE nach dem INSERT (Schritt 7b). Grund: `P_AC_Inv_max` ist nur F1 (HW-Limit ~12 kW), nicht der Anlagen-Peak. Backfill der Bestandsdaten erfolgte einmalig.
+- 2026-06-20: `collector/aggregate/min1.py` aggregiert jetzt Leistungsfaktor (cos φ): `PF_Netz_avg/min/max` + `PF_Inv_avg/min/max` in `data_1min` (aus `raw_data.PF_Netz`/`PF_Inv`). SELECT-Spaltenzahl 83→89 (PF an Index 83–88 angehängt, bestehende Indizes unverändert), Count-Check + INSERT erweitert. Schema: `doc/collector/schema/db_schema_1min.sql` + Migration in `db_init.py`. Kein Backfill (raw_data ≤7 Tage); wirkt ab nächstem Collector-Lauf. Downstream-Rollup (15min/daily/monthly) noch offen.
 
 ## Zweck
 Verdichtet `raw_data` (3-s-Polling) in mehrere Aggregat-Stufen mit unterschiedlichen Retention-Strategien. Quelle für Web-API, Reports und Statistik-Korrekturen.
@@ -63,6 +67,7 @@ _Konkrete Cron-Minuten liegen in der User-Crontab (nicht im Repo)._
 - Statistik-Korrektur einrichten → `config/statistics_corrections.json` (Modi `fixed` für abgeschlossene Monate, `offset` für laufende).
 
 ## Bekannte Fallstricke
+- **Fritz!DECT-Zähler-Freeze & generische Daily-Aggregation** (`daily.py` `_aggregate_fritzdect_device_daily`, Liste `FRITZDECT_DAILY_DEVICES`): Eine generische, abgesicherte Tagesaggregation schreibt `<gerät>_daily` (heizpatrone, klimaanlage, lueftung, gefriertruhe). Absicherungen: (a) Negativ-Guard `max(0, MAX−MIN)`; (b) Interday-Fallback bei Zähler-Freeze — nutzt den START-Zähler des Folgetags (`source='counter_interday'`), isolierte Freezes neben Normaltagen ergeben korrekt 0; (c) Zähler-basierter Fallback `_fill_fritzdect_daily_from_devstats` via Fritz-AHA `getbasicdevicestats` (~31 Tage Box-eigene Tagesenergie, Füllt 0/fehlende Tage z. B. bei Collector-Lücken, `source='fritz_devstats'`). Geschützte Quellen (`manual`, `counter_interday_recon`, `fritz_devstats`) werden nicht überschrieben. Status-only-Geräte (fussbodenheizung: Thermostat ohne Leistungsmessung, `energy_total_wh` = konstanter Garbage-Wert) sind ausgeschlossen. Historische Tage (Rohdaten weg) via `scripts/heizpatrone_reconstruct_frozen.py` (`source='counter_interday_recon'`). Schreibziel ist die RAM-DB `/dev/shm/fronius_data.db`, danach `.backup data.db`.
 - **Statistics-Corrections** (`statistics_corrections.py`): Quellen sind `daily_data` (WP/Heizpatrone) und `wattpilot_daily` (Wallbox); falsche Schreibweise/Spaltennamen führen stillschweigend zu fehlenden Korrekturen (`statistics-corrections-note`).
 - Backfill nur über die letzten 10 min — größere Lücken brauchen dedizierte Skripte (z. B. `scripts/backfill_forecast_15min.py`, `scripts/backfill_sunshine_hours.py`).
 - Sunrise/Sunset-Forecast saisonal: ForecastCollector nutzt einen festen Bezug, der saisonal driften kann (offene Tech-Debt, `doc/TODO.md`).

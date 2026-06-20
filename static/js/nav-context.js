@@ -7,6 +7,27 @@
         return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     }
 
+    // Tag-im-Monat begrenzen (z. B. 31. -> 28./30. beim Monatswechsel).
+    function clampDayOfMonth(year, month1, day) {
+        const daysInMonth = new Date(year, month1, 0).getDate();
+        return Math.min(Math.max(day, 1), daysInMonth);
+    }
+
+    // Einheitliches Anker-Modell: hält date/year/month konsistent zu EINEM Zeitpunkt,
+    // damit ein Auflösungswechsel (Tag<->Monat<->Jahr) den Zeitraum behält.
+    // anchor = { date: Date, year: Number, month: Number }
+    function syncAnchorFrom(anchor, source) {
+        if (source === 'date') {
+            anchor.year = anchor.date.getFullYear();
+            anchor.month = anchor.date.getMonth() + 1;
+        } else {
+            // 'month' oder 'year': abgeleitetes Datum auf den Anker-Tag im Monat setzen
+            const day = clampDayOfMonth(anchor.year, anchor.month, anchor.date.getDate());
+            anchor.date = new Date(anchor.year, anchor.month - 1, day, 12, 0, 0);
+        }
+        return anchor;
+    }
+
     function createContext(period, currentDate, currentYear, currentMonth) {
         const context = { period: VALID_PERIODS.has(period) ? period : 'tag' };
 
@@ -105,6 +126,8 @@
         applyToLinks,
         stripFromCurrentUrl,
         formatDateISO,
+        clampDayOfMonth,
+        syncAnchorFrom,
         contextKeys: CONTEXT_KEYS.slice(),
     };
 })();

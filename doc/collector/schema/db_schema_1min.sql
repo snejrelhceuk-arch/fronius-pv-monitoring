@@ -38,6 +38,10 @@ CREATE TABLE IF NOT EXISTS data_1min (
     U_L2_N_Netz_avg REAL, U_L2_N_Netz_min REAL, U_L2_N_Netz_max REAL,
     U_L3_N_Netz_avg REAL, U_L3_N_Netz_min REAL, U_L3_N_Netz_max REAL,
     
+    -- Leistungsfaktor (cos φ) – Netzanschluss + Wechselrichter
+    PF_Netz_avg REAL, PF_Netz_min REAL, PF_Netz_max REAL,
+    PF_Inv_avg REAL, PF_Inv_min REAL, PF_Inv_max REAL,
+    
     -- F2/F3/WP
     P_F2_avg REAL, P_F2_min REAL, P_F2_max REAL,
     P_F3_avg REAL, P_F3_min REAL, P_F3_max REAL,

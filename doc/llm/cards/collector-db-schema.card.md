@@ -5,10 +5,14 @@ role: A
 applyTo: "db_init.py"
 tags: [db, schema, raw-data, aggregat]
 status: stable
-last_review: 2026-06-06
+last_review: 2026-06-20
 ---
 
 # DB-Schema
+
+## Changes
+- 2026-06-20 (b): `daily_data` um `P_PV_total_max` (REAL) erweitert — zeitgleicher System-Peak (DC1+DC2+F2+F3), nicht F1-only. Quelle `db_schema_v4_tech.sql`; Migration `db_init.py` (ALTER TABLE idempotent). Producer: `collector/aggregate/daily.py`.
+- 2026-06-20: `data_1min` um Leistungsfaktor-Spalten erweitert: `PF_Netz_avg/min/max`, `PF_Inv_avg/min/max` (REAL). Quelle `db_schema_1min.sql`; Migration via `db_init.py` (ALTER TABLE, idempotent). Producer: `collector/aggregate/min1.py`.
 
 ## Zweck
 Schema-Übersicht der zentralen `data.db` (SQLite). Pflichttabellen, Aggregat-Pipeline-Tabellen, Nebengeräte-Tabellen, Retention-Politik. Ausgangspunkt für jede Datenfrage.

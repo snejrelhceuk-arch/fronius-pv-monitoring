@@ -423,6 +423,30 @@ def _gap_class(age_s: float) -> str:
     return 'long'
 
 
+# Sonnenstand-Schwelle, unter der WR-Standby/Offline betrieblich erwartet ist.
+# Solche Lücken (Tagesende, Nacht) sollen keine Warnung/Crit auslösen, bleiben
+# aber in der Lücken-/Ausfallliste sichtbar.
+_NIGHT_ELEV_DEG = 1.0
+
+
+def _gap_in_darkness(start_ts: float, end_ts: float) -> bool:
+    """True, wenn die Lücke vollständig bei Dunkelheit/Dämmerung liegt
+    (Sonnenhöhe < Schwelle an Beginn, Mitte und Ende) → WR-Offline erwartet."""
+    try:
+        from solar_geometry import sun_position
+    except Exception:
+        return False
+    try:
+        for ts in (start_ts, (start_ts + end_ts) / 2.0, end_ts):
+            dt = datetime.utcfromtimestamp(ts)
+            elev, _ = sun_position(dt)
+            if elev >= _NIGHT_ELEV_DEG:
+                return False
+        return True
+    except Exception:
+        return False
+
+
 def _gap_severity(category_counts: dict) -> str:
     if category_counts.get('long', 0) or category_counts.get('medium', 0):
         return CRIT
@@ -431,7 +455,7 @@ def _gap_severity(category_counts: dict) -> str:
     return OK
 
 
-def _run_gap_scan(table: str, hours: int, min_gap_s: int) -> dict:
+def _run_gap_scan(table: str, hours: int, min_gap_s: int, daylight_aware: bool = False) -> dict:
     conn = _db_readonly()
     if conn is None:
         return {'check': f'integrity:gaps:{table}', 'severity': FAIL, 'error': 'DB nicht erreichbar'}
@@ -460,8 +484,11 @@ def _run_gap_scan(table: str, hours: int, min_gap_s: int) -> dict:
         ).fetchall()
 
         category_counts = {'micro': 0, 'short': 0, 'medium': 0, 'long': 0}
+        # Severity-treibende Zählung (ohne erwartete Nacht-/EOD-Lücken)
+        sev_counts = {'micro': 0, 'short': 0, 'medium': 0, 'long': 0}
         samples = []
         max_gap = 0.0
+        night_gaps = 0
         for row in rows:
             start_ts = float(row[0])
             end_ts = float(row[1])
@@ -469,24 +496,34 @@ def _run_gap_scan(table: str, hours: int, min_gap_s: int) -> dict:
             gap_type = _gap_class(gap_s)
             category_counts[gap_type] += 1
             max_gap = max(max_gap, gap_s)
+            is_night = daylight_aware and _gap_in_darkness(start_ts, end_ts)
+            if is_night:
+                night_gaps += 1
+            else:
+                sev_counts[gap_type] += 1
             if len(samples) < 5:
                 samples.append({
                     'start_utc': datetime.fromtimestamp(start_ts, tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S'),
                     'end_utc': datetime.fromtimestamp(end_ts, tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S'),
                     'gap_s': round(gap_s, 1),
                     'class': gap_type,
+                    'expected_night': is_night,
                 })
 
-        return {
+        result = {
             'check': f'integrity:gaps:{table}',
             'window_hours': hours,
             'min_gap_s': min_gap_s,
             'gap_count': len(rows),
             'max_gap_s': round(max_gap, 1),
             'classes': category_counts,
-            'severity': _gap_severity(category_counts),
+            'severity': _gap_severity(sev_counts if daylight_aware else category_counts),
             'samples': samples,
         }
+        if daylight_aware:
+            result['night_gap_count'] = night_gaps
+            result['daylight_gap_classes'] = sev_counts
+        return result
     except sqlite3.Error as exc:
         return {'check': f'integrity:gaps:{table}', 'severity': FAIL, 'error': str(exc)}
     finally:
@@ -494,13 +531,17 @@ def _run_gap_scan(table: str, hours: int, min_gap_s: int) -> dict:
 
 
 def check_raw_data_gaps(hours: int = RAW_GAP_SCAN_HOURS) -> dict:
-    """Prüft raw_data auf Lücken > 30s im jüngeren Verlauf."""
-    return _run_gap_scan('raw_data', hours, RAW_GAP_MIN_S)
+    """Prüft raw_data auf Lücken > 30s im jüngeren Verlauf.
+
+    Daylight-aware: Lücken bei Dunkelheit (WR-Standby am Tagesende/Nacht) zählen
+    nicht zur Alarmschwere, bleiben aber in der Lückenliste sichtbar.
+    """
+    return _run_gap_scan('raw_data', hours, RAW_GAP_MIN_S, daylight_aware=True)
 
 
 def check_data_1min_gaps(hours: int = DATA_1MIN_GAP_SCAN_HOURS) -> dict:
-    """Prüft data_1min auf Lücken > 120s im jüngeren Verlauf."""
-    return _run_gap_scan('data_1min', hours, DATA_1MIN_GAP_MIN_S)
+    """Prüft data_1min auf Lücken > 120s im jüngeren Verlauf (daylight-aware)."""
+    return _run_gap_scan('data_1min', hours, DATA_1MIN_GAP_MIN_S, daylight_aware=True)
 
 
 def check_data_15min_gaps(days: int = DATA_15MIN_GAP_SCAN_DAYS) -> dict:

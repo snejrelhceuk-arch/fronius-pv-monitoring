@@ -435,6 +435,28 @@ def aggregate_daily():
                   W_Batt_Charge_BMS, W_Batt_Discharge_BMS))
             count += 1
 
+            # ── 7b. Konkurrenter System-Peak (DC1+DC2+F2+F3) ──
+            # P_AC_Inv_max ist nur F1 (HW-Limit ~12 kW). Echter Anlagen-Peak =
+            # zeitgleiche Summe aller Inverter, aus data_1min (Minuten-Präzision),
+            # sonst data_15min. Additive UPDATE, um den großen INSERT nicht zu berühren.
+            pv_peak = None
+            for src_tbl in ('data_1min', 'data_15min'):
+                try:
+                    c.execute(f"""
+                        SELECT MAX(COALESCE(P_DC1_avg,0)+COALESCE(P_DC2_avg,0)
+                                 + COALESCE(P_F2_avg,0)+COALESCE(P_F3_avg,0))
+                        FROM {src_tbl} WHERE ts >= ? AND ts < ?
+                    """, (q_start, q_end))
+                    r = c.fetchone()
+                    if r and r[0] is not None and r[0] > 0:
+                        pv_peak = r[0]
+                        break
+                except Exception:
+                    continue
+            if pv_peak is not None:
+                c.execute("UPDATE daily_data SET P_PV_total_max = ? WHERE ts = ?",
+                          (round(pv_peak, 1), day_ts))
+
         conn.commit()
         logging.info(f"✓ {count} Tage aggregiert")
 
@@ -445,96 +467,279 @@ def aggregate_daily():
     finally:
         conn.close()
 
-def _aggregate_heizpatrone_daily():
-    """Schreibe tägliche Heizpatronenverbrauchssummen aus Fritz!DECT-Zählerdaten in heizpatrone_daily.
+def _aggregate_fritzdect_device_daily(c, device_id, table):
+    """Generische Tagesaggregation eines Fritz!DECT-Verbrauchers (Zähler-Delta).
 
-    Logik:
-      - Für jeden abgeschlossenen Kalendertag mit Daten in fritzdect_readings:
-          W_HP_tag = MAX(energy_total_wh) − MIN(energy_total_wh) des Tages
-      - Bereits bestehende Zeilen mit source != 'counter_auto' (= manuell/importiert) werden NICHT überschrieben.
-      - Bestehende 'counter_auto'-Zeilen werden aktualisiert (letzter Tag wächst noch).
-      - Heutiger Tag wird ebenfalls geschrieben (vorläufig, wird morgen aktualisiert).
+    Schreibt Tagessummen in `<table>` (ts PK, energy_wh, source, note).
+
+    Absicherungen:
+      - Negativ-Guard: energy_wh = max(0, MAX−MIN) — Zähler-Resets erzeugen nie
+        negative Tageswerte.
+      - Interday-Fallback gegen Zähler-Freeze: liefert die Steckdose an einem Tag
+        nur einen konstanten Zählerstand (Intraday-Delta 0), wird der echte
+        Verbrauch aus der Differenz zum START-Zähler des Folgetags gebildet
+        (source='counter_interday'). Isolierte Freezes neben Normaltagen ergeben
+        korrekt 0 (der Folgetag verbucht den Sprung in seinem Intraday-Delta).
+      - Schutz: Zeilen mit source ∉ {counter_auto, counter_interday} (manuell,
+        rekonstruiert, fritz_devstats) werden NICHT überschrieben.
+
+    Rückgabe: (inserted, updated, skipped).
+    """
+    c.execute("""
+        SELECT
+            date(datetime(ts, 'unixepoch', 'localtime')) AS day_local,
+            MIN(energy_total_wh) AS e_start,
+            MAX(energy_total_wh) AS e_end,
+            COUNT(*) AS n_readings
+        FROM fritzdect_readings
+        WHERE lower(COALESCE(device_id, '')) = ?
+          AND energy_total_wh IS NOT NULL
+        GROUP BY day_local
+        ORDER BY day_local
+    """, (device_id.lower(),))
+    day_rows = c.fetchall()
+
+    parsed = []
+    for day_local, e_start, e_end, n_readings in day_rows:
+        if not day_local or e_start is None or e_end is None:
+            continue
+        parsed.append((day_local, float(e_start), float(e_end), n_readings))
+
+    inserted = updated = skipped = 0
+    for i, (day_local, e_start, e_end, n_readings) in enumerate(parsed):
+        delta_wh = max(0.0, e_end - e_start)   # Negativ-Guard
+        source_tag = 'counter_auto'
+        note = f"Fritz counter delta ({n_readings} Messungen, {e_start:.0f}→{e_end:.0f} Wh)"
+
+        # Interday-Fallback gegen Zähler-Freeze
+        if delta_wh < 0.1 and i + 1 < len(parsed):
+            next_start = parsed[i + 1][1]
+            interday = next_start - e_end
+            if interday > 0.1:
+                delta_wh = interday
+                source_tag = 'counter_interday'
+                note = (f"Interday-Fallback (Zähler-Freeze): "
+                        f"{e_end:.0f}→{next_start:.0f} Wh = {interday:.0f} Wh "
+                        f"({n_readings} Messungen)")
+
+        if delta_wh < 0.1 and n_readings < 5:
+            # Zu wenige Daten (z.B. Collector erst am Tagesende gestartet)
+            continue
+
+        day_ts = int(datetime.strptime(day_local, '%Y-%m-%d').replace(tzinfo=timezone.utc).timestamp())
+
+        c.execute(f"SELECT source FROM {table} WHERE ts = ?", (day_ts,))
+        existing = c.fetchone()
+
+        if existing:
+            existing_source = existing[0] or ''
+            if existing_source not in ('counter_auto', 'counter_interday'):
+                skipped += 1
+                continue
+            c.execute(f"""
+                UPDATE {table}
+                SET energy_wh = ?, source = ?, note = ?, created_at = strftime('%s','now')
+                WHERE ts = ?
+            """, (delta_wh, source_tag, note, day_ts))
+            updated += 1
+        else:
+            c.execute(f"""
+                INSERT INTO {table} (ts, energy_wh, source, note)
+                VALUES (?, ?, ?, ?)
+            """, (day_ts, delta_wh, source_tag, note))
+            inserted += 1
+
+    return inserted, updated, skipped
+
+
+# Metering-Fähige Fritz!DECT-Verbraucher → Daily-Tabelle.
+# Status-only-Geräte (fussbodenheizung: Thermostat ohne Leistungsmessung,
+# energy_total_wh ist ein konstanter Garbage-Wert) sind bewusst ausgeschlossen.
+FRITZDECT_DAILY_DEVICES = [
+    ('heizpatrone',   'heizpatrone_daily'),
+    ('klimaanlage',   'klimaanlage_daily'),
+    ('lueftung',      'lueftung_daily'),
+    ('gefriertruhe',  'gefriertruhe_daily'),
+]
+
+
+def _aggregate_heizpatrone_daily():
+    """Tagesaggregation aller metering-fähigen Fritz!DECT-Verbraucher.
+
+    Name aus Kompatibilitätsgründen beibehalten (einziger Aufruf in __main__).
+    Iteriert über FRITZDECT_DAILY_DEVICES und nutzt die generische, abgesicherte
+    Aggregation. Fehlende Tageswerte (Zähler-Freeze / Collector-Lücke) werden
+    anschließend best-effort aus den Fritz-Box-eigenen Tagesstatistiken
+    (getbasicdevicestats, ~31 Tage zurück) ergänzt.
     """
     conn = get_db_connection()
     c = conn.cursor()
     try:
-        # Prüfe ob Tabellen existieren
         c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='fritzdect_readings'")
         if not c.fetchone():
-            logging.info("HP-Daily: fritzdect_readings nicht vorhanden, übersprungen")
-            return
-        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='heizpatrone_daily'")
-        if not c.fetchone():
-            logging.info("HP-Daily: heizpatrone_daily nicht vorhanden, übersprungen")
+            logging.info("Fritz-Daily: fritzdect_readings nicht vorhanden, übersprungen")
             return
 
-        # Tages-Deltas aus Fritz-Zähler (über sqlites localtime grouping)
-        c.execute("""
-            SELECT
-                date(datetime(ts, 'unixepoch', 'localtime')) AS day_local,
-                MIN(energy_total_wh) AS e_start,
-                MAX(energy_total_wh) AS e_end,
-                COUNT(*) AS n_readings
-            FROM fritzdect_readings
-            WHERE lower(COALESCE(device_id, '')) = 'heizpatrone'
-              AND energy_total_wh IS NOT NULL
-            GROUP BY day_local
-            ORDER BY day_local
-        """)
-        day_rows = c.fetchall()
-
-        inserted = 0
-        updated = 0
-        skipped = 0
-        for day_local, e_start, e_end, n_readings in day_rows:
-            if not day_local or e_start is None or e_end is None:
+        for device_id, table in FRITZDECT_DAILY_DEVICES:
+            c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
+            if not c.fetchone():
+                logging.info(f"Fritz-Daily: {table} nicht vorhanden, übersprungen")
                 continue
-            delta_wh = max(0.0, float(e_end) - float(e_start))
-            if delta_wh < 0.1 and n_readings < 5:
-                # Zu wenige Daten (z.B. Collector erst am Ende des Tags gestartet → 1 Messung)
-                logging.debug(f"HP-Daily {day_local}: nur {n_readings} Messung(en), Delta={delta_wh:.1f} Wh → übersprungen")
-                continue
-
-            # UTC-Midnight-Timestamp des lokalen Tages (Konvention in heizpatrone_daily)
-            day_ts = int(datetime.strptime(day_local, '%Y-%m-%d').replace(tzinfo=timezone.utc).timestamp())
-
-            # Existiert bereits ein Eintrag?
-            c.execute("SELECT source, energy_wh FROM heizpatrone_daily WHERE ts = ?", (day_ts,))
-            existing = c.fetchone()
-
-            if existing:
-                existing_source = existing[0] or ''
-                if existing_source != 'counter_auto':
-                    # Manuell importierter Eintrag → nicht überschreiben
-                    skipped += 1
-                    continue
-                # Eigener counter_auto-Eintrag → aktualisieren (Tag könnte noch nicht abgeschlossen sein)
-                c.execute("""
-                    UPDATE heizpatrone_daily
-                    SET energy_wh = ?, note = ?, created_at = strftime('%s','now')
-                    WHERE ts = ?
-                """, (delta_wh,
-                      f"Fritz counter delta ({n_readings} Messungen, {e_start:.0f}→{e_end:.0f} Wh)",
-                      day_ts))
-                updated += 1
-            else:
-                c.execute("""
-                    INSERT INTO heizpatrone_daily (ts, energy_wh, source, note)
-                    VALUES (?, ?, 'counter_auto', ?)
-                """, (day_ts,
-                      delta_wh,
-                      f"Fritz counter delta ({n_readings} Messungen, {e_start:.0f}→{e_end:.0f} Wh)"))
-                inserted += 1
+            try:
+                ins, upd, skp = _aggregate_fritzdect_device_daily(c, device_id, table)
+                if ins or upd:
+                    logging.info(f"Fritz-Daily {device_id}: {ins} neu, {upd} aktualisiert, {skp} geschützt")
+            except Exception as e:
+                logging.error(f"Fritz-Daily {device_id}: {e}")
 
         conn.commit()
-        if inserted or updated:
-            logging.info(f"HP-Daily: {inserted} neu, {updated} aktualisiert, {skipped} manuell übersprungen")
+
+        # Zähler-basierter Fallback aus Fritz-Box-Tagesstatistik
+        try:
+            _fill_fritzdect_daily_from_devstats(c)
+            conn.commit()
+        except Exception as e:
+            logging.debug(f"Fritz-Devstats-Fallback übersprungen: {e}")
+
     except Exception as e:
-        logging.error(f"Fehler in _aggregate_heizpatrone_daily: {e}")
+        logging.error(f"Fehler in Fritz-Daily-Aggregation: {e}")
         import traceback
         traceback.print_exc()
     finally:
         conn.close()
+
+
+def _fill_fritzdect_daily_from_devstats(c):
+    """Ergänzt fehlende Tageswerte aus den Fritz-Box-eigenen Tagesstatistiken.
+
+    Die Fritz!Box speichert pro Steckdose tägliche Energiewerte (~31 Tage) und
+    liefert sie via AHA-Befehl `getbasicdevicestats`. Das deckt Tage ab, an denen
+    die hochauflösenden Rohdaten (10s-Polling) wegen Retention oder Collector-
+    Ausfall fehlen — die Leistungs-Tageswerte also lückenhaft sind.
+
+    Befüllt werden nur Tage, deren aktueller Tabellenwert 0/fehlend ist und die
+    nicht durch eine geschützte Quelle (manual/recon) belegt sind. Geschriebene
+    Tage erhalten source='fritz_devstats'. Best-effort: ohne Fritz-Zugriff still.
+    """
+    try:
+        from automation.engine.aktoren.aktor_fritzdect import (
+            _load_fritz_config, _get_session_id,
+        )
+    except Exception:
+        return
+
+    cfg = _load_fritz_config()
+    host = cfg.get('fritz_ip')
+    user = cfg.get('fritz_user', '')
+    pw = cfg.get('fritz_password', '')
+    if not (host and user and pw):
+        return
+    sid = _get_session_id(host, user, pw)
+    if not sid:
+        return
+
+    ain_by_id = {g.get('id'): g.get('ain', '') for g in cfg.get('geraete', [])}
+
+    for device_id, table in FRITZDECT_DAILY_DEVICES:
+        ain = ain_by_id.get(device_id)
+        if not ain:
+            continue
+        try:
+            day_energy = _fetch_fritz_daily_energy(host, ain, sid)
+        except Exception as e:
+            logging.debug(f"Devstats {device_id}: {e}")
+            continue
+        if not day_energy:
+            continue
+
+        filled = 0
+        for day_local, wh in day_energy.items():
+            if wh is None or wh < 0:
+                continue
+            day_ts = int(datetime.strptime(day_local, '%Y-%m-%d')
+                         .replace(tzinfo=timezone.utc).timestamp())
+            c.execute(f"SELECT source, energy_wh FROM {table} WHERE ts = ?", (day_ts,))
+            row = c.fetchone()
+            if row:
+                src = row[0] or ''
+                cur = row[1] or 0
+                # Nur eigene Auto-Quellen mit 0/leer überschreiben; alles andere schützen
+                if src not in ('counter_auto', 'counter_interday', 'fritz_devstats'):
+                    continue
+                if cur and cur > 0.1:
+                    continue
+                if wh < 0.1:
+                    continue
+                c.execute(f"""
+                    UPDATE {table} SET energy_wh = ?, source = 'fritz_devstats',
+                        note = ?, created_at = strftime('%s','now') WHERE ts = ?
+                """, (wh, f"Fritz getbasicdevicestats Tageswert ({wh:.0f} Wh)", day_ts))
+                filled += 1
+            else:
+                if wh < 0.1:
+                    continue
+                c.execute(f"""
+                    INSERT INTO {table} (ts, energy_wh, source, note)
+                    VALUES (?, ?, 'fritz_devstats', ?)
+                """, (day_ts, wh, f"Fritz getbasicdevicestats Tageswert ({wh:.0f} Wh)"))
+                filled += 1
+        if filled:
+            logging.info(f"Fritz-Devstats {device_id}: {filled} Tage aus Box-Statistik ergänzt")
+
+
+def _fetch_fritz_daily_energy(host, ain, sid):
+    """Liest tägliche Energiewerte (Wh) einer Steckdose via getbasicdevicestats.
+
+    Rückgabe: dict { 'YYYY-MM-DD': energy_wh } für die abgeschlossenen Tage, die
+    die Box liefert (heutiger Teiltag wird weggelassen).
+
+    Format: <devicestats><energy><stats count=N grid=86400>v0,v1,...</stats> mit
+    v0 = aktueller (Teil-)Tag, v1 = gestern, ... Werte in Wh; '-' = kein Wert.
+    """
+    import urllib.request
+    import xml.etree.ElementTree as ET
+
+    ain_clean = ain.replace(' ', '')
+    url = (f'http://{host}/webservices/homeautoswitch.lua'
+           f'?ain={ain_clean}&switchcmd=getbasicdevicestats&sid={sid}')
+    resp = urllib.request.urlopen(url, timeout=10)
+    xml_text = resp.read().decode('utf-8')
+    root = ET.fromstring(xml_text)
+
+    energy = root.find('energy')
+    if energy is None:
+        return {}
+
+    # Tagesraster (grid=86400) auswählen
+    stats_el = None
+    for st in energy.findall('stats'):
+        if st.get('grid') == '86400':
+            stats_el = st
+            break
+    if stats_el is None or not stats_el.text:
+        return {}
+
+    # Referenztag = Zeitstempel des jüngsten Samples (datatime), sonst heute.
+    # Index 0 = Referenztag (Teiltag) → überspringen; Index i = Referenztag − i Tage.
+    try:
+        ref_day = datetime.fromtimestamp(int(stats_el.get('datatime'))).date()
+    except (TypeError, ValueError):
+        ref_day = datetime.now().date()
+
+    raw = [v.strip() for v in stats_el.text.split(',')]
+    out = {}
+    for i, v in enumerate(raw):
+        if i == 0:
+            continue
+        if v in ('', '-'):
+            continue
+        try:
+            wh = float(v)
+        except ValueError:
+            continue
+        day = ref_day - timedelta(days=i)
+        out[day.strftime('%Y-%m-%d')] = wh
+    return out
 
 
 if __name__ == "__main__":

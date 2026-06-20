@@ -99,7 +99,9 @@ def _aggregate_1min_impl(conn, cur, bucket_ts):
             (SELECT W_Exp_Netz FROM raw_data WHERE ts >= ? AND ts < ? ORDER BY ts ASC LIMIT 1) as W_Exp_Netz_start,
             (SELECT W_Exp_Netz FROM raw_data WHERE ts >= ? AND ts < ? ORDER BY ts DESC LIMIT 1) as W_Exp_Netz_end,
             (SELECT W_Imp_Netz FROM raw_data WHERE ts >= ? AND ts < ? ORDER BY ts ASC LIMIT 1) as W_Imp_Netz_start,
-            (SELECT W_Imp_Netz FROM raw_data WHERE ts >= ? AND ts < ? ORDER BY ts DESC LIMIT 1) as W_Imp_Netz_end
+            (SELECT W_Imp_Netz FROM raw_data WHERE ts >= ? AND ts < ? ORDER BY ts DESC LIMIT 1) as W_Imp_Netz_end,
+            AVG(PF_Netz), MIN(PF_Netz), MAX(PF_Netz),
+            AVG(PF_Inv), MIN(PF_Inv), MAX(PF_Inv)
         FROM raw_data
         WHERE ts >= ? AND ts < ?
     """, (bucket_ts, bucket_ts + 60,
@@ -119,10 +121,11 @@ def _aggregate_1min_impl(conn, cur, bucket_ts):
         return
     
     # Validierung: SQL-Spaltenanzahl muss zu den Index-Konstanten passen
-    # 21 AVG/MIN/MAX-Triplets (0-62) + 10 Deltas (63-72) + 10 Absolut-Werte (73-82) = 83
-    if len(row) != 83:
+    # 21 AVG/MIN/MAX-Triplets (0-62) + 10 Deltas (63-72) + 10 Absolut-Werte (73-82)
+    # + 6 PF-Werte (83-88: PF_Netz avg/min/max, PF_Inv avg/min/max) = 89
+    if len(row) != 89:
         import logging
-        logging.error(f"aggregate_1min: Unerwartete Spaltenanzahl {len(row)}, erwartet 83 — Indizes prüfen!")
+        logging.error(f"aggregate_1min: Unerwartete Spaltenanzahl {len(row)}, erwartet 89 — Indizes prüfen!")
         return
     
     # === KORREKTE INDIZES (basierend auf SELECT oben) ===
@@ -315,7 +318,9 @@ def _aggregate_1min_impl(conn, cur, bucket_ts):
             P_inBatt_PV, P_inBatt_Grid,
             W_Ertrag, W_Einspeis, W_Bezug,
             W_inBatt, W_outBatt, W_Direct, W_Verbrauch,
-            W_inBatt_PV, W_inBatt_Grid
+            W_inBatt_PV, W_inBatt_Grid,
+            PF_Netz_avg, PF_Netz_min, PF_Netz_max,
+            PF_Inv_avg, PF_Inv_min, PF_Inv_max
         ) VALUES (
             ?,
             ?, ?,  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
@@ -325,7 +330,8 @@ def _aggregate_1min_impl(conn, cur, bucket_ts):
             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?
         )
     """, (
         bucket_ts,
@@ -366,7 +372,9 @@ def _aggregate_1min_impl(conn, cur, bucket_ts):
         P_inBatt_PV, P_inBatt_Grid,
         W_Ertrag, W_Einspeis, W_Bezug,
         W_inBatt, W_outBatt, W_Direct, W_Verbrauch,
-        W_inBatt_PV, W_inBatt_Grid
+        W_inBatt_PV, W_inBatt_Grid,
+        row[83], row[84], row[85],   # PF_Netz avg/min/max
+        row[86], row[87], row[88]    # PF_Inv avg/min/max
     ))
     
     conn.commit()

@@ -592,6 +592,25 @@ def ensure_forecast_table():
                 conn.execute(f"ALTER TABLE data_15min ADD COLUMN {col} REAL DEFAULT NULL")
                 conn.commit()
                 logger.info(f"data_15min.{col} Spalte hinzugefügt")
+
+        # Migration: Leistungsfaktor (cos φ) Min/Avg/Max in data_1min (RAM-DB)
+        for col in ('PF_Netz_avg', 'PF_Netz_min', 'PF_Netz_max',
+                    'PF_Inv_avg', 'PF_Inv_min', 'PF_Inv_max'):
+            try:
+                conn.execute(f"SELECT {col} FROM data_1min LIMIT 1")
+            except sqlite3.OperationalError:
+                conn.execute(f"ALTER TABLE data_1min ADD COLUMN {col} REAL DEFAULT NULL")
+                conn.commit()
+                logger.info(f"data_1min.{col} Spalte hinzugefügt")
+
+        # Migration: Konkurrenter System-Peak (DC1+DC2+F2+F3) in daily_data.
+        # P_AC_Inv_max ist nur F1 (HW-Limit ~12 kW) → echter Anlagen-Peak fehlte.
+        try:
+            conn.execute("SELECT P_PV_total_max FROM daily_data LIMIT 1")
+        except sqlite3.OperationalError:
+            conn.execute("ALTER TABLE daily_data ADD COLUMN P_PV_total_max REAL DEFAULT NULL")
+            conn.commit()
+            logger.info("daily_data.P_PV_total_max Spalte hinzugefügt")
         
         # Migration: Statistik-Spalten sicherstellen
         monthly_columns = {
@@ -693,7 +712,35 @@ def ensure_forecast_table():
             CREATE INDEX IF NOT EXISTS idx_klimaanlage_monthly_year_month
             ON klimaanlage_monthly(year, month)
         """)
-        
+
+        # Weitere Fritz!DECT-Verbraucher: Tages-/Monatsreferenzen (analog Klima).
+        # Status-only-Geräte (z. B. Fußbodenheizung-Thermostat ohne Leistungs-
+        # messung) sind bewusst NICHT enthalten.
+        for _dev in ('lueftung', 'gefriertruhe'):
+            conn.execute(f"""
+                CREATE TABLE IF NOT EXISTS {_dev}_daily (
+                    ts INTEGER PRIMARY KEY,
+                    energy_wh REAL NOT NULL DEFAULT 0,
+                    source TEXT DEFAULT 'fritz_dect',
+                    note TEXT DEFAULT '',
+                    created_at REAL DEFAULT (strftime('%s','now'))
+                )
+            """)
+            conn.execute(f"""
+                CREATE TABLE IF NOT EXISTS {_dev}_monthly (
+                    year INTEGER NOT NULL,
+                    month INTEGER NOT NULL,
+                    energy_kwh REAL NOT NULL DEFAULT 0,
+                    source TEXT DEFAULT 'fritz_dect',
+                    note TEXT DEFAULT '',
+                    created_at REAL DEFAULT (strftime('%s','now')),
+                    PRIMARY KEY (year, month)
+                )
+            """)
+            conn.execute(f"""
+                CREATE INDEX IF NOT EXISTS idx_{_dev}_daily_ts ON {_dev}_daily(ts)
+            """)
+
         conn.commit()
 
         conn.close()

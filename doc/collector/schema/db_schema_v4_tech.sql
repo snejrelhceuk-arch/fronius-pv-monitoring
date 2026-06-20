@@ -234,6 +234,7 @@ CREATE TABLE IF NOT EXISTS daily_data (
     P_F2_avg REAL, P_F2_min REAL, P_F2_max REAL,
     P_F3_avg REAL, P_F3_min REAL, P_F3_max REAL,
     SOC_Batt_avg REAL, SOC_Batt_min REAL, SOC_Batt_max REAL,
+    P_PV_total_max REAL,    -- Konkurrenter System-Peak (DC1+DC2+F2+F3), nicht F1-only
     
     -- Energiesummen
     W_PV_total REAL,        -- Gesamte PV-Produktion (F1+F2+F3)

@@ -1,0 +1,138 @@
+/* nav-ui.css — gemeinsame Seiten-Schublade (links) + Kalender-Picker.
+ * Trennt inhaltliche Navigation (Drawer) von Zeit-Navigation (oben).
+ * Desktop/Tablet-Optik der Zeitleiste bleibt unangetastet. */
+
+/* Hamburger-Button (oben links in der Navigationsleiste) */
+.pv-burger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 5px;
+    cursor: pointer;
+    color: #fff;
+    font-size: 16px;
+    line-height: 1;
+    flex: 0 0 auto;
+    padding: 0;
+}
+.pv-burger:hover { background: rgba(255, 255, 255, 0.25); }
+
+/* Backdrop hinter der Schublade */
+.pv-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 998;
+}
+.pv-drawer-backdrop.open { opacity: 1; pointer-events: auto; }
+
+/* Schublade selbst */
+.pv-drawer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 260px;
+    max-width: 82vw;
+    background: linear-gradient(160deg, #1e293b 0%, #0f172a 100%);
+    border-right: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    padding: 14px 12px;
+    gap: 4px;
+    overflow-y: auto;
+}
+.pv-drawer.open { transform: translateX(0); }
+
+.pv-drawer .pv-drawer-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #e2e8f0;
+    font-weight: 700;
+    font-size: 15px;
+    padding: 2px 6px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 6px;
+}
+.pv-drawer .pv-drawer-close {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    font-size: 22px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 4px;
+}
+.pv-drawer .pv-drawer-close:hover { color: #fff; }
+
+/* Links in der Schublade (übernimmt vorhandene Anker) */
+.pv-drawer .pv-pages {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    align-items: stretch;
+}
+.pv-drawer .pv-pages a,
+.pv-drawer .pv-pages button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 9px 12px;
+    margin: 0;
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.85);
+    background: transparent;
+    border: 1px solid transparent;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.pv-drawer .pv-pages a:hover,
+.pv-drawer .pv-pages button:hover { background: rgba(255, 255, 255, 0.1); }
+.pv-drawer .pv-pages a.active {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+    pointer-events: none;
+}
+.pv-drawer .pv-pages .nav-separator {
+    height: 1px;
+    width: auto;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 6px 4px;
+}
+
+/* Datum-Label als Kalender-Trigger kenntlich machen */
+.pv-cal-trigger { cursor: pointer; }
+.pv-cal-trigger:hover { text-decoration: underline dotted; }
+.pv-cal-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+    border: 0;
+    padding: 0;
+    margin: 0;
+}
+
+/* Auf kleinen/Querformat-Geräten: inline-Seitenlinks ausblenden (Schublade ist
+ * primär). Desktop/Tablet (Optik nahezu perfekt) bleibt unverändert. */
+@media (max-width: 600px), (orientation: landscape) and (max-height: 500px) {
+    .top-nav-bar a.nav-main,
+    .top-nav-bar a.nav-sub,
+    .top-nav a.nav-main,
+    .top-nav a.nav-sub { display: none; }
+}

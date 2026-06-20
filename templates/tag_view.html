@@ -12,7 +12,10 @@
     <title>PV-Anlage Tag-Übersicht</title>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <script src="/static/js/nav-context.js"></script>
+    <script src="/static/js/extremes.js"></script>
+    <script src="/static/js/nav-ui.js"></script>
     <link rel="stylesheet" href="/static/css/monitoring.css">
+    <link rel="stylesheet" href="/static/css/nav-ui.css">
     <style>
         /* Tag-View spezifisch */
         .top-nav-bar .btn-analyse {
@@ -117,6 +120,18 @@
                 border-radius: 4px;
             }
         }
+
+        /* Querformat Handy: Chart-Fläche maximieren (Tablet/Desktop unberührt, Höhe > 500px) */
+        @media (orientation: landscape) and (max-height: 500px) {
+            .chart-container {
+                padding: 3px 6px;
+                gap: 3px;
+            }
+            #mainChart {
+                border-radius: 4px;
+            }
+            #loading, #error { padding: 12px; font-size: 13px; }
+        }
     </style>
 </head>
 <body>
@@ -150,6 +165,7 @@
                     <button onclick="navigateYear(1)" id="btnNextYear">▶</button>
                 </div>
                 <button class="btn-jetzt" id="btnJetzt" onclick="navigateToNow()" style="display:none;">⏱ Jetzt</button>
+                <button class="date-label" id="gesamtCalBtn" style="display:none;">📅 Monat</button>
             </div>
             <div class="nav-right">
                 <span id="viewToggleNav" style="display:flex; gap:4px;">
@@ -181,6 +197,8 @@
         let currentYear = new Date().getFullYear();
         let currentMonth = new Date().getMonth() + 1;
         let chart = null;
+        let periodExtremes = null;
+        let tagExtremes = null;
 
         let chartData = null;
         let forecastData = null;  // Separate forecast for background overlay
@@ -194,6 +212,13 @@
                 const savedState = localStorage.getItem('pvViewState');
                 if (savedState) {
                     const state = JSON.parse(savedState);
+                    // Verfallszeit: gespeicherten Zeitkontext nach Ablauf verwerfen
+                    // (konsistent zur Nav-Context-Verfallszeit, Default = heute/Tag).
+                    const ttl = (window.PVNavContext && PVNavContext.MAX_AGE_MS) || 3600000;
+                    if (state.savedAt && (Date.now() - state.savedAt) > ttl) {
+                        localStorage.removeItem('pvViewState');
+                        return;
+                    }
                     currentView = state.currentView || 'ertrag';
                     currentPeriod = state.currentPeriod || 'tag';
                     if (state.currentDate) {
@@ -215,12 +240,25 @@
                     currentPeriod: currentPeriod,
                     currentDate: currentDate.toISOString(),
                     currentYear: currentYear,
-                    currentMonth: currentMonth
+                    currentMonth: currentMonth,
+                    savedAt: Date.now()
                 };
                 localStorage.setItem('pvViewState', JSON.stringify(state));
                 updateContextLinks();
             } catch (e) {
                 console.error('Fehler beim Speichern des States:', e);
+            }
+        }
+
+        // Hält currentDate/currentYear/currentMonth konsistent zu EINEM Zeitpunkt,
+        // damit ein Auflösungswechsel (Tag<->Monat<->Jahr) den Zeitraum behält.
+        function syncAnchors(source) {
+            if (window.PVNavContext && PVNavContext.syncAnchorFrom) {
+                const a = { date: currentDate, year: currentYear, month: currentMonth };
+                PVNavContext.syncAnchorFrom(a, source);
+                currentDate = a.date;
+                currentYear = a.year;
+                currentMonth = a.month;
             }
         }
 
@@ -368,6 +406,28 @@
 
             updateContextLinks();
             navigateToView(currentPeriod, true);
+
+            // Seiten-Schublade + Kalender-Picker (Zeit-Navi bleibt oben)
+            if (window.PVNavUI && !isEmbedMode) {
+                PVNavUI.initDrawer({ title: 'Navigation' });
+                const isoDay = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                // Tag: beliebigen Tag wählen
+                PVNavUI.attachCalendar(document.getElementById('currentDateDisplay'), 'day',
+                    () => isoDay(currentDate),
+                    v => { currentDate = new Date(`${v}T12:00:00`); syncAnchors('date'); saveState(); loadData(); });
+                // Monat: Tag wählen → dessen Monat anzeigen
+                PVNavUI.attachCalendar(document.getElementById('currentMonthDisplay'), 'day',
+                    () => isoDay(new Date(currentYear, currentMonth - 1, 1)),
+                    v => { const d = new Date(`${v}T12:00:00`); currentYear = d.getFullYear(); currentMonth = d.getMonth() + 1; syncAnchors('month'); saveState(); loadMonthData(); });
+                // Jahr: Tag wählen → dessen Jahr anzeigen
+                PVNavUI.attachCalendar(document.getElementById('currentYearDisplay'), 'day',
+                    () => isoDay(new Date(currentYear, 0, 1)),
+                    v => { currentYear = new Date(`${v}T12:00:00`).getFullYear(); syncAnchors('year'); saveState(); loadYearData(); });
+                // Gesamt: Monat wählen → in Monatsansicht springen
+                PVNavUI.attachCalendar(document.getElementById('gesamtCalBtn'), 'month',
+                    () => `${currentYear}-${String(currentMonth).padStart(2,'0')}`,
+                    v => { const p = v.split('-'); currentYear = +p[0]; currentMonth = +p[1]; navigateToView('monat', true); });
+            }
         });
 
         document.addEventListener('visibilitychange', function() {
@@ -399,6 +459,7 @@
         
         function navigateDay(offset) {
             currentDate.setDate(currentDate.getDate() + offset);
+            syncAnchors('date');
             saveState();
             loadData();
         }
@@ -571,6 +632,8 @@
                     btn.style.display = (v === currentPeriod) ? 'none' : '';
                 }
             });
+            const gc = document.getElementById('gesamtCalBtn');
+            if (gc) gc.style.display = (currentPeriod === 'gesamt') ? '' : 'none';
             // D: "Jetzt"-Button anzeigen wenn nicht auf heute
             updateJetztButton();
         }
@@ -643,15 +706,15 @@
                 document.getElementById('monatNavigation').style.display = 'none';
                 document.getElementById('jahrNavigation').style.display = 'none';
                 document.getElementById('viewToggleNav').style.display = 'flex';
+                const gc = document.getElementById('gesamtCalBtn'); if (gc) gc.style.display = 'none';
                 updateViewButtons();
                 saveState();
                 loadData();
             } else if (view === 'monat') {
                 currentPeriod = 'monat';
                 if (!keepState) {
-                    const now = new Date();
-                    currentYear = now.getFullYear();
-                    currentMonth = now.getMonth() + 1;
+                    // Zeitraum des aktuell betrachteten Tages behalten (statt Reset auf heute)
+                    syncAnchors('date');
                 }
                 
                 document.getElementById('viewToggleNav').style.display = 'none';
@@ -665,7 +728,8 @@
             } else if (view === 'jahr') {
                 currentPeriod = 'jahr';
                 if (!keepState) {
-                    currentYear = new Date().getFullYear();
+                    // Jahr des aktuell betrachteten Zeitraums behalten (statt Reset auf heute)
+                    syncAnchors('date');
                 }
                 
                 document.getElementById('viewToggleNav').style.display = 'none';
@@ -683,6 +747,7 @@
                 document.getElementById('tagNavigation').style.display = 'none';
                 document.getElementById('monatNavigation').style.display = 'none';
                 document.getElementById('jahrNavigation').style.display = 'none';
+                const gc = document.getElementById('gesamtCalBtn'); if (gc) gc.style.display = '';
                 
                 updateViewButtons();
                 saveState();
@@ -702,6 +767,7 @@
                 currentMonth = 1;
                 currentYear++;
             }
+            syncAnchors('month');
             saveState();
             loadMonthData();
         }
@@ -715,6 +781,7 @@
         
         function navigateYear(offset) {
             currentYear += offset;
+            syncAnchors('year');
             saveState();
             loadYearData();
         }
@@ -973,6 +1040,15 @@
                 
                 console.log('Daten geladen:', chartData.datapoints.length, 'Punkte',
                              chartData.forecast ? '(PROGNOSE)' : '(MESSDATEN)');
+                
+                // Tages-Extremwerte (Spannung/Frequenz/cos φ mit Uhrzeit) für Tooltip
+                tagExtremes = null;
+                if (window.PVExtremes && daysAhead <= 0) {
+                    try {
+                        const ex = await PVExtremes.fetchFor('tag', { date: dateStr });
+                        tagExtremes = ex ? ex.overall : null;
+                    } catch (e) { tagExtremes = null; }
+                }
                 
                 // Update Navigation Display
                 updateDateDisplay();
@@ -1270,9 +1346,10 @@
             return { min: start.getTime(), max: end.getTime() };
         }
         
-        // Mobile-Erkennung (< 600px Portrait)
+        // Mobile-Erkennung (< 600px Portrait) — inkl. Querformat-Handy (niedrige Höhe).
+        // Tablet/Desktop (Höhe > 500px) bleiben unberührt.
         function isMobile() {
-            return window.innerWidth < 600;
+            return window.innerWidth < 600 || window.innerHeight < 500;
         }
 
         function isCompactEmbed() {
@@ -1326,6 +1403,10 @@
                         else if (item.seriesName === 'Bewölkung') unit = ' %';
                         result += item.marker + ' ' + item.seriesName + ': ' + (item.value[1] || 0).toFixed(0) + unit + '<br/>';
                     });
+                    if (tagExtremes && window.PVExtremes) {
+                        const tl = PVExtremes.tagLines(tagExtremes);
+                        if (tl) result += '<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>' + tl;
+                    }
                     return result;
                 }
             };
@@ -1426,6 +1507,25 @@
             }
             
             // Monitoring data series (drawn on top)
+            // Peak-Leistung (genau 1 Marker): Maximum der PV-Produktion inkl. Uhrzeit.
+            // Aus den gezeichneten Messpunkten berechnet → funktioniert auch rückwirkend.
+            let peakTsMs = null, peakVal = -Infinity;
+            chartData.datapoints.forEach(dp => {
+                if (dp.is_forecast) return;
+                const v = dp.p_produktion;
+                if (Number.isFinite(v) && v > peakVal) { peakVal = v; peakTsMs = dp.timestamp * 1000; }
+            });
+            const peakNarrow = isMobile();
+            const peakMarkPoint = (peakTsMs != null && peakVal > 0) ? {
+                symbol: 'pin', symbolSize: peakNarrow ? 16 : 20, symbolOffset: [0, -2],
+                itemStyle: { color: 'rgba(255, 87, 34, 1)', borderColor: 'rgba(255,255,255,0.7)', borderWidth: 1 },
+                label: { show: true, position: 'top', color: 'rgba(255, 87, 34, 1)', fontSize: peakNarrow ? 9 : 11, fontWeight: 'normal',
+                    backgroundColor: 'rgba(255,255,255,0.92)', padding: [2, 4], borderRadius: 3,
+                    formatter: () => peakNarrow ? `▲${(peakVal/1000).toFixed(1)}` : `Peak ${(peakVal/1000).toFixed(2)} kW` },
+                data: [{ coord: [peakTsMs, peakVal], value: peakVal }],
+                tooltip: { show: true, trigger: 'item',
+                    formatter: () => `<b>Peak-Leistung</b><br/>${(peakVal/1000).toFixed(2)} kW<br/>${new Date(peakTsMs).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})} Uhr` }
+            } : null;
             series.push(
                 {
                     name: 'Direktverbrauch PV',
@@ -1464,6 +1564,7 @@
                     itemStyle: { color: 'rgba(128, 128, 128, 1)' },
                     areaStyle: { color: 'rgba(128, 128, 128, 0.7)' },
                     lineStyle: { color: 'rgba(128, 128, 128, 1)', width: 1 },
+                    markPoint: peakMarkPoint || undefined,
                     data: td('p_exp')
                 },
                 {
@@ -1564,6 +1665,25 @@
             
             const series = [];
             
+            // Peak-Verbrauch (genau 1 Marker): Maximum des Haushaltsverbrauchs inkl. Uhrzeit.
+            let vPeakTsMs = null, vPeakVal = -Infinity;
+            chartData.datapoints.forEach(dp => {
+                if (dp.is_forecast) return;
+                const v = dp.p_haushalt;
+                if (Number.isFinite(v) && v > vPeakVal) { vPeakVal = v; vPeakTsMs = dp.timestamp * 1000; }
+            });
+            const vPeakNarrow = isMobile();
+            const verbrauchPeakMarkPoint = (vPeakTsMs != null && vPeakVal > 0) ? {
+                symbol: 'pin', symbolSize: vPeakNarrow ? 16 : 20, symbolOffset: [0, -2],
+                itemStyle: { color: 'rgba(33, 150, 243, 1)', borderColor: 'rgba(255,255,255,0.7)', borderWidth: 1 },
+                label: { show: true, position: 'top', color: 'rgba(33, 150, 243, 1)', fontSize: vPeakNarrow ? 9 : 11, fontWeight: 'normal',
+                    backgroundColor: 'rgba(255,255,255,0.92)', padding: [2, 4], borderRadius: 3,
+                    formatter: () => vPeakNarrow ? `▲${(vPeakVal/1000).toFixed(1)}` : `Peak ${(vPeakVal/1000).toFixed(2)} kW` },
+                data: [{ coord: [vPeakTsMs, vPeakVal], value: vPeakVal }],
+                tooltip: { show: true, trigger: 'item',
+                    formatter: () => `<b>Peak-Verbrauch</b><br/>${(vPeakVal/1000).toFixed(2)} kW<br/>${new Date(vPeakTsMs).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})} Uhr` }
+            } : null;
+
             // Cloud cover background (furthest behind, z:0)
             if (hasFC && axis.forecastCloudCover) {
                 series.push({
@@ -1672,6 +1792,7 @@
                     itemStyle: { color: 'rgba(128, 128, 128, 1)' },
                     areaStyle: { color: 'rgba(128, 128, 128, 0.7)' },
                     lineStyle: { color: 'rgba(128, 128, 128, 1)', width: 1 },
+                    markPoint: verbrauchPeakMarkPoint || undefined,
                     data: td('p_imp')
                 },
                 {
@@ -1762,6 +1883,11 @@
                 
                 chartData = await response.json();
                 console.log('Monatsdaten geladen:', chartData.datapoints.length, 'Tage');
+
+                // Perioden-Extremwerte (konsistent mit Analyse Erzeuger/Verbraucher)
+                if (window.PVExtremes) {
+                    periodExtremes = await PVExtremes.fetchFor('monat', { year: currentYear, month: currentMonth });
+                }
                 
                 // Prognose-Daten für nächste 2 Tage nachladen und mergen
                 try {
@@ -1840,6 +1966,10 @@
                 
                 chartData = await response.json();
                 console.log('Jahresdaten geladen:', chartData.datapoints.length, 'Monate');
+
+                if (window.PVExtremes) {
+                    periodExtremes = await PVExtremes.fetchFor('jahr', { year: currentYear });
+                }
                 
                 updateYearDisplay();
                 
@@ -1871,6 +2001,10 @@
                 
                 chartData = await response.json();
                 console.log('Gesamtdaten geladen:', chartData.datapoints.length, 'Jahre');
+
+                if (window.PVExtremes) {
+                    periodExtremes = await PVExtremes.fetchFor('gesamt', {});
+                }
                 
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('mainChart').style.display = 'block';
@@ -2038,6 +2172,7 @@
             const zoomStart = Math.max(0, 100 - (visibleDays / daysInMonth * 100));
             
             const option = {
+                animation: false,
                 tooltip: {
                     trigger: 'axis',
                     axisPointer: { type: 'shadow' },
@@ -2111,6 +2246,10 @@
                         result += `<strong>Spez. Ertrag:</strong> ${formatSpecificYield(dp.w_pv_total || 0, getInstalledKwpForDate(datum))}<br/>`;
                         result += `<strong>Verbrauch:</strong> ${formatEnergy(dp.w_gesamtverbrauch)}<br/>`;
                         result += `<strong>Autarkie:</strong> ${dp.autarkie != null ? Number(dp.autarkie).toFixed(1) : "&ndash;"} %`;
+                        
+                        if (periodExtremes && periodExtremes.by_key && window.PVExtremes) {
+                            result += PVExtremes.lines(periodExtremes.by_key[String(day)], { period: currentPeriod });
+                        }
                         
                         return result;
                     }
@@ -2397,6 +2536,7 @@
             updateSummaryDisplay();
             
             const option = {
+                animation: false,
                 title: {
                     text: title,
                     left: 'center',
@@ -2442,6 +2582,11 @@
                         result += `<strong>Spez. Ertrag:</strong> ${formatSpecificYield(dp.w_pv_total || 0, kwpRef)}<br/>`;
                         result += `<strong>Verbrauch:</strong> ${formatEnergy(dp.w_gesamtverbrauch)}<br/>`;
                         result += `<strong>Autarkie:</strong> ${dp.autarkie != null ? Number(dp.autarkie).toFixed(1) : "&ndash;"} %`;
+                        
+                        if (periodExtremes && periodExtremes.by_key && window.PVExtremes) {
+                            const exKey = (currentPeriod === 'jahr') ? String(dp.month || (i + 1)) : String(dp.year || xLabels[i]);
+                            result += PVExtremes.lines(periodExtremes.by_key[exKey], { period: currentPeriod });
+                        }
                         
                         return result;
                     }

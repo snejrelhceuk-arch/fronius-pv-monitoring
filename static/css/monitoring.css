@@ -253,3 +253,53 @@ body {
         padding: 8px 4px;
     }
 }
+
+/* ── Querformat auf Handys (niedrige Höhe): Chart maximieren, Nav 1-zeilig scrollbar ──
+ * Greift nur bei kleiner Viewport-Höhe (Handy quer); Tablet/Desktop (Höhe > 500px)
+ * bleiben unverändert. Ziel: nutzbares Monitoring im Landscape statt verschenkter Fläche. */
+@media (orientation: landscape) and (max-height: 500px) {
+    .container {
+        margin: 0;
+        width: 100%;
+        border-radius: 0;
+        border: none;
+    }
+    .top-nav-bar {
+        padding: 3px 6px;
+        gap: 3px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .top-nav-bar::-webkit-scrollbar { height: 3px; }
+    .top-nav-bar .nav-left,
+    .top-nav-bar .nav-center,
+    .top-nav-bar .nav-right { flex: 0 0 auto; }
+    .top-nav-bar button, .top-nav-bar a {
+        padding: 3px 8px;
+        font-size: 11px;
+        white-space: nowrap;
+    }
+    .top-nav-bar a.nav-main {
+        padding: 3px 9px;
+        font-size: 11px;
+    }
+    .top-nav-bar .date-label {
+        min-width: 64px;
+        font-size: 11px;
+    }
+    .top-nav-bar .nav-separator {
+        height: 16px;
+        margin: 0 2px;
+    }
+    .chart-area {
+        padding: 4px 6px;
+        gap: 4px;
+    }
+    .nav-summary {
+        font-size: 10px;
+    }
+    /* Statuszeile/Chips im Landscape kompakt, kein Umbruch der Chart-Fläche */
+    .status-bar { gap: 4px; }
+    .status-chip { padding: 2px 8px; font-size: 11px; }
+}

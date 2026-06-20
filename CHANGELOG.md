@@ -25,6 +25,26 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## v1.4.0 — 2026-06-20
+
+### Features
+- **Einheitliche Perioden-Extremwerte (`GET /api/period_extremes`):** Neuer read-only Endpoint (`routes/visualization.py`) liefert für `period=tag|monat|jahr|gesamt` konsistente Extremwerte (Peak-Leistung, größter/kleinster Ertrag, Netzspannung L-L, Netzfrequenz, cos φ) inkl. Datum/Uhrzeit. Geteilter Frontend-Formatter `static/js/extremes.js` bindet sie in Monitoring- und Analyse-Tooltips (Tag/Monat/Jahr/Gesamt) sowie die Statistik-Tabelle ein — konsistente Gleichschaltung gleicher Größen über alle Ansichten.
+- **Leistungsfaktor-Aggregation:** `data_1min` führt jetzt `PF_Netz`/`PF_Inv` als avg/min/max mit (`collector/aggregate/min1.py`, Schema/Migration). cos φ damit über den Tag-Tooltip auswertbar.
+- **Seiten-Schublade + Kalender-Navigation:** Neue ausklappbare Seitennavigation links (`static/js/nav-ui.js` + `static/css/nav-ui.css`); Zeit-Navigation bleibt oben. Datum-Labels öffnen einen Kalender (Tag/Monat/Jahr = Tageswahl, Gesamt = Monatswahl). Auf kleinen/Querformat-Displays ersetzt die Schublade die Inline-Links (Desktop unverändert).
+
+### Fixes
+- **Peak-Leistung Monat/Jahr/Gesamt korrigiert:** Bisher wurde `P_AC_Inv_max` (nur F1-Wechselrichter, HW-Limit ~12 kW) als System-Peak gezeigt. Neu: `daily_data.P_PV_total_max` = zeitgleicher Anlagen-Peak (DC1+DC2+F2+F3) aus data_1min (`collector/aggregate/daily.py`, Schema/Migration, Bestandsdaten gebackfillt).
+
+### UI
+- **Tooltips/Statistik:** Netzspannung/Frequenz/cos φ jetzt mit Datum/Uhrzeit; Extremwert-Zitate ohne Prozentvergleich („Größter/Kleinster Ertrag … im Monat"). Peak-Marker im Tag-Chart mit weißem Label-Hintergrund. Balkendiagramme ohne Hover-Ausblendung und ohne Einblend-Animation. Keine gemischten bunten/grauen Icons mehr in den Extremwert-Zeilen. Verbraucher-Legende um Klima/Gefriertruhe/Lüftung ergänzt.
+- **Primärenergie:** Aktualitätshinweis mit Datenstand und Verfallstimer (3 Monate); Marker am Menüpunkt, wenn die manuell gepflegte Seite veraltet ist.
+
+### Diagnos
+- **RAW-Datenlücken verfallen in der Mail:** `integrity:gaps:raw_data` wird in der Sunset-Mail auf max. `warn` gedeckelt, einmal gemeldet und danach unterdrückt (kein 7-Tage-Reminder); Lücken bleiben in der Ausfallaufstellung sichtbar (`automation/engine/diagnos_alert_state.py`).
+- **Daylight-aware Gap-Scan:** Lücken bei Dunkelheit/Dämmerung (WR-Standby am Tagesende) treiben die Alarmschwere nicht mehr, bleiben aber gelistet (`diagnos/integrity.py`, `solar_geometry.sun_position`).
+
+---
+
 ## v1.3.5 — 2026-05-03
 
 ### Features

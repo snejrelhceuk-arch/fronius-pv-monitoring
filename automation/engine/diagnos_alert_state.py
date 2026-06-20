@@ -59,6 +59,23 @@ REMINDER_S = REMINDER_DAYS * 86400
 # Severities, die als "Befund" gelten. 'ok' wird ignoriert / heilt den State.
 _BAD_SEVERITIES = {'warn', 'crit', 'fail'}
 
+# RAW-Datenlücken sind betrieblich normal (Collector-Pausen, kurze Aussetzer).
+# Daher: in der Mail nur als WARN (nie crit/fail), und nach einmaliger Meldung
+# verfallen sie (kein 7-Tage-Reminder). Die Lücken bleiben in der separaten
+# Ausfall-/Gap-Aufstellung der Mail weiterhin sichtbar — nur der wiederkehrende
+# Alarm verschwindet.
+_RAW_GAP_CHECK = 'integrity:gaps:raw_data'
+_EXPIRING_CHECKS = {_RAW_GAP_CHECK}
+
+
+def _effective_severity(check: dict) -> str:
+    """Mail-wirksame Severity. RAW-Gaps werden auf höchstens 'warn' gedeckelt."""
+    sev = (check.get('severity') or '').lower()
+    if check.get('check') == _RAW_GAP_CHECK and sev in ('crit', 'fail'):
+        return 'warn'
+    return sev
+
+
 
 def _round_or_none(value, step: float):
     """Diskretisiere einen Wert auf step-Buckets, None bleibt None."""
@@ -79,6 +96,11 @@ def _fingerprint_fields(check: dict) -> tuple:
     """
     name = str(check.get('check') or '')
     sev = check.get('severity') or ''
+
+    # RAW-Datenlücken: bewusst grober Fingerprint (nur effektive Severity), damit
+    # täglich wandernde Lücken nicht jeden Tag als "changed" neu alarmieren.
+    if name == _RAW_GAP_CHECK:
+        return (_effective_severity(check),)
 
     # Gap-Scans: Anzahl + maximale Lückenlänge identifizieren neue Lücken
     if name.startswith('integrity:gaps:'):
@@ -200,6 +222,9 @@ def filter_reportable(
                 summary['healed'] += 1
             continue
 
+        # Mail-wirksame Severity (RAW-Gaps gedeckelt auf warn).
+        eff_sev = _effective_severity(check)
+
         fp = compute_fingerprint(check)
         prev = state.get(name) or {}
         prev_fp = prev.get('fingerprint')
@@ -210,7 +235,8 @@ def filter_reportable(
         elif prev_fp != fp:
             reason = 'changed'
         elif (now_ts - prev_last) >= reminder_s:
-            reason = 'reminder'
+            # Verfallende Checks (RAW-Gaps): kein wiederkehrender Reminder.
+            reason = None if name in _EXPIRING_CHECKS else 'reminder'
         else:
             reason = None
 
@@ -218,15 +244,19 @@ def filter_reportable(
             summary['suppressed'] += 1
             continue
 
-        # Annotiere den Grund, damit die Mail das transparent zeigen kann.
+        # Annotiere den Grund + die mail-wirksame Severity, damit die Mail das
+        # transparent (und für RAW-Gaps als warn) anzeigt.
         annotated = dict(check)
         annotated['_alert_reason'] = reason
+        if eff_sev != sev:
+            annotated['severity'] = eff_sev
+            annotated['severity_original'] = sev
         reportable.append(annotated)
         summary[reason] += 1
 
         new_state[name] = {
             'fingerprint': fp,
-            'severity': sev,
+            'severity': eff_sev,
             'first_seen_ts': prev.get('first_seen_ts') or now_ts,
             'last_reported_ts': now_ts,
         }

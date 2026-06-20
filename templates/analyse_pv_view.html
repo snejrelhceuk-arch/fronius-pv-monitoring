@@ -11,6 +11,9 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
     <title>PV-Übersicht — PV-Anlage</title>
     <link rel="stylesheet" href="/static/css/analyse-dark.css?v=20260302">
+    <link rel="stylesheet" href="/static/css/nav-ui.css">
+    <script src="/static/js/nav-context.js"></script>
+    <script src="/static/js/nav-ui.js"></script>
     <style>
         /* PV-Analyse spezifisch */
         .header-row {
@@ -169,6 +172,45 @@
             </table>
         </div>
 
+        {% if pv_grenzwerte %}
+        <div class="section">
+            <div class="section-title">PV-Anlage-Grenzwerte — jährliche Extremwerte</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Jahr</th>
+                        <th>Ertrag (größter / kleinster Monat)</th>
+                        <th>Peak-Leistung</th>
+                        <th>Netzspannung (L-L)</th>
+                        <th>Netzfrequenz</th>
+                        <th>cos φ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for g in pv_grenzwerte %}
+                    <tr>
+                        <td><strong>{{ g.year }}</strong></td>
+                        <td>
+                            {% if g.yield_max %}<strong>{{ ("%.0f"|format(g.yield_max.kwh))|replace('.', ',') }} kWh</strong> <span style="opacity:0.6">({{ g.yield_max.label }})</span>{% else %}–{% endif %}
+                            {% if g.yield_min %}<br><span style="opacity:0.85">{{ ("%.0f"|format(g.yield_min.kwh))|replace('.', ',') }} kWh ({{ g.yield_min.label }})</span>{% endif %}
+                        </td>
+                        <td>{% if g.power %}<strong>{{ ("%.2f"|format(g.power.kw))|replace('.', ',') }} kW</strong> <span style="opacity:0.6">({{ g.power.label }})</span>{% else %}–{% endif %}</td>
+                        <td>{% if g.voltage %}<strong>{{ ("%.1f"|format(g.voltage.min))|replace('.', ',') }} V</strong>{% if g.voltage.min_label %} <span style="opacity:0.6">({{ g.voltage.min_label }})</span>{% endif %}<br><strong>{{ ("%.1f"|format(g.voltage.max))|replace('.', ',') }} V</strong>{% if g.voltage.max_label %} <span style="opacity:0.6">({{ g.voltage.max_label }})</span>{% endif %}{% else %}–{% endif %}</td>
+                        <td>{% if g.frequency %}<strong>{{ ("%.3f"|format(g.frequency.min))|replace('.', ',') }} Hz</strong>{% if g.frequency.min_label %} <span style="opacity:0.6">({{ g.frequency.min_label }})</span>{% endif %}<br><strong>{{ ("%.3f"|format(g.frequency.max))|replace('.', ',') }} Hz</strong>{% if g.frequency.max_label %} <span style="opacity:0.6">({{ g.frequency.max_label }})</span>{% endif %}{% else %}–{% endif %}</td>
+                        <td>{% if g.powerfactor %}<strong>{{ ("%.2f"|format(g.powerfactor.min))|replace('.', ',') }}</strong>{% if g.powerfactor.min_label %} <span style="opacity:0.6">({{ g.powerfactor.min_label }})</span>{% endif %}<br><strong>{{ ("%.2f"|format(g.powerfactor.max))|replace('.', ',') }}</strong>{% if g.powerfactor.max_label %} <span style="opacity:0.6">({{ g.powerfactor.max_label }})</span>{% endif %}{% else %}–{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <p style="font-size:12px;color:rgba(255,255,255,0.55);margin-top:8px;">
+                Konsistent mit den Gesamt-Tooltips. Spannung als Leiter-Leiter-Wert (L-N ×&nbsp;√3).
+                Datum/Uhrzeit der Spannung/Frequenz/cos φ nur soweit feinaufgelöste Daten vorliegen
+                (≤ 90 Tage; ältere Jahre als Monatsaggregat ohne genauen Zeitpunkt). cos φ erst ab
+                Aktivierung der PF-Aggregation.
+            </p>
+        </div>
+        {% endif %}
+
         <div class="footer-note">
             <h4>PV-Berechnungsgrundlagen:</h4>
             <ul style="margin: 10px 0; padding-left: 20px;">
@@ -184,5 +226,8 @@
     </div>
 
     {% include 'info_overlay.html' %}
+    <script>
+        if (window.PVNavUI) PVNavUI.initDrawer({ title: 'Navigation' });
+    </script>
 </body>
 </html>

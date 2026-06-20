@@ -261,6 +261,13 @@ HEIZKOSTEN_ERSPARNIS = {
 # Heizperiode: Monate in denen Heizkosten anfallen
 HEIZPERIODE_MONATE = {10, 11, 12, 1, 2, 3}  # Okt–Mär (6 Monate)
 
+# --- Primärenergie-Übersicht (manuell gepflegte statische Seite) ---
+# Es gibt keine stabile, frei automatisierbare Quartalsquelle für die
+# Primärenergie-Importdaten → Seite wird manuell gepflegt. Datenstand setzen
+# und Verfallstimer: nach STALE_MONTHS erscheint ein Aktualitäts-Hinweis.
+PRIMAERENERGIE_STAND = '2026-06-20'   # Datum der letzten manuellen Pflege (YYYY-MM-DD)
+PRIMAERENERGIE_STALE_MONTHS = 3       # Hinweis nach 3 Monaten (Quartal)
+
 # --- E-Mail-Benachrichtigungen ---
 # Einmalige Meldung bei kritischen Events (Deduplizierung: 1× pro Event-Typ pro Tag)
 NOTIFICATION_EMAIL = load_local_setting('PV_NOTIFICATION_EMAIL', 'alerts@example.invalid')

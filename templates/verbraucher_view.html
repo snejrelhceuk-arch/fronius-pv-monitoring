@@ -12,7 +12,10 @@
     <title>Verbraucher — PV-Anlage</title>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <script src="/static/js/nav-context.js"></script>
+    <script src="/static/js/extremes.js"></script>
+    <script src="/static/js/nav-ui.js"></script>
     <link rel="stylesheet" href="/static/css/monitoring.css">
+    <link rel="stylesheet" href="/static/css/nav-ui.css">
     <style>
         /* Verbraucher-spezifische Farben */
         .status-chip.wp { background: rgba(20,184,166,0.2); }
@@ -68,6 +71,7 @@
                     <button onclick="navigate(1)">&#9654;</button>
                 </div>
                 <button class="btn-jetzt" id="btnHeute" onclick="navigateToday()">&#9201; Heute</button>
+                <button class="date-label" id="gesamtCalBtn" style="display:none;">📅 Monat</button>
             </div>
             <div class="nav-right"></div>
         </div>
@@ -85,14 +89,16 @@
         // ═══════════════════════════════════════
         // STATE
         // ═══════════════════════════════════════
-        const COLORS = { wp: '#14b8a6', heizpatrone: '#E65100', wattpilot: '#1565C0', haushalt: '#9e9e9e' };
-        const NAMES  = { wp: 'Wärmepumpe', heizpatrone: 'Heizpatrone', wattpilot: 'E-Auto', haushalt: 'Sonstige' };
+        const COLORS = { wp: '#14b8a6', heizpatrone: '#E65100', wattpilot: '#1565C0', klima: '#7E57C2', gefrier: '#00ACC1', lueftung: '#9CCC65', haushalt: '#9e9e9e' };
+        const NAMES  = { wp: 'Wärmepumpe', heizpatrone: 'Heizpatrone', wattpilot: 'E-Auto', klima: 'Klima', gefrier: 'Gefriertruhe', lueftung: 'Lüftung', haushalt: 'Sonstige' };
 
         let currentView = 'tag';
         let currentDate = new Date();
         let currentYear = currentDate.getFullYear();
         let currentMonth = currentDate.getMonth() + 1;
         let chart = null;
+        let periodExtremes = null;
+        let tagExtremes = null;
 
         const MONTHS_DE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
                            'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
@@ -136,8 +142,10 @@
             } else if (currentView === 'monat') {
                 currentYear = navState.context.year || currentYear;
                 currentMonth = navState.context.month || currentMonth;
+                syncAnchors('month');
             } else if (currentView === 'jahr') {
                 currentYear = navState.context.year || currentYear;
+                syncAnchors('year');
             }
         }
 
@@ -175,19 +183,34 @@
             } else {
                 btnHeute.style.display = 'none';
             }
+            const gc = document.getElementById('gesamtCalBtn');
+            if (gc) gc.style.display = (currentView === 'gesamt') ? '' : 'none';
 
             updateContextLinks();
+        }
+
+        // Hält currentDate/currentYear/currentMonth konsistent zu EINEM Zeitpunkt,
+        // damit ein Auflösungswechsel (Tag<->Monat<->Jahr) den Zeitraum behält.
+        function syncAnchors(source) {
+            const a = { date: currentDate, year: currentYear, month: currentMonth };
+            PVNavContext.syncAnchorFrom(a, source);
+            currentDate = a.date;
+            currentYear = a.year;
+            currentMonth = a.month;
         }
 
         function navigate(delta) {
             if (currentView === 'tag') {
                 currentDate.setDate(currentDate.getDate() + delta);
+                syncAnchors('date');
             } else if (currentView === 'monat') {
                 currentMonth += delta;
                 if (currentMonth > 12) { currentMonth = 1; currentYear++; }
                 if (currentMonth < 1) { currentMonth = 12; currentYear--; }
+                syncAnchors('month');
             } else if (currentView === 'jahr') {
                 currentYear += delta;
+                syncAnchors('year');
             }
             updateNavUI();
             loadData();
@@ -231,6 +254,16 @@
                 if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
                 const data = await resp.json();
 
+                // Perioden-Extremwerte (konsistent mit Monitoring/Erzeuger)
+                if (currentView !== 'tag' && window.PVExtremes) {
+                    periodExtremes = await PVExtremes.fetchFor(currentView, { year: currentYear, month: currentMonth });
+                    tagExtremes = null;
+                } else if (window.PVExtremes) {
+                    const ex = await PVExtremes.fetchFor('tag', { date: formatDateISO(currentDate) });
+                    tagExtremes = ex ? ex.overall : null;
+                    periodExtremes = null;
+                }
+
                 document.getElementById('chartLoading').style.display = 'none';
                 document.getElementById('verbraucherChart').style.display = 'block';
                 document.getElementById('summaryGrid').style.display = 'flex';
@@ -267,6 +300,9 @@
             const pctHP   = (totals.heizpatrone / gesamt * 100).toFixed(0);
             const pctWatt = (totals.wattpilot   / gesamt * 100).toFixed(0);
             const pctHH   = (totals.haushalt    / gesamt * 100).toFixed(0);
+            const pctKli  = ((totals.klima    || 0) / gesamt * 100).toFixed(0);
+            const pctGef  = ((totals.gefrier  || 0) / gesamt * 100).toFixed(0);
+            const pctLue  = ((totals.lueftung || 0) / gesamt * 100).toFixed(0);
             const showAverages = currentView !== 'tag' && averageSummary && averageSummary.values;
 
             function averageLine(key) {
@@ -295,6 +331,27 @@
                     <span class="pct">${pctWatt}%</span>
                     ${averageLine('wattpilot')}
                 </div>
+                ${(totals.klima > 0) ? `
+                <div class="status-chip klima">
+                    <span class="label">Klima</span>
+                    <span class="val">${formatEnergy(totals.klima)}</span>
+                    <span class="pct">${pctKli}%</span>
+                    ${averageLine('klima')}
+                </div>` : ''}
+                ${(totals.gefrier > 0) ? `
+                <div class="status-chip gefrier">
+                    <span class="label">Gefrier</span>
+                    <span class="val">${formatEnergy(totals.gefrier)}</span>
+                    <span class="pct">${pctGef}%</span>
+                    ${averageLine('gefrier')}
+                </div>` : ''}
+                ${(totals.lueftung > 0) ? `
+                <div class="status-chip lueftung">
+                    <span class="label">Lüftung</span>
+                    <span class="val">${formatEnergy(totals.lueftung)}</span>
+                    <span class="pct">${pctLue}%</span>
+                    ${averageLine('lueftung')}
+                </div>` : ''}
                 <div class="status-chip haushalt">
                     <span class="label">Sonstige</span>
                     <span class="val">${formatEnergy(totals.haushalt)}</span>
@@ -337,6 +394,26 @@
             const wattData = allTimes.map(t => byTime[t] ? byTime[t].p_wattpilot    : null);
             const hhData   = allTimes.map(t => byTime[t] ? byTime[t].p_haushalt     : null);
 
+            // Peak-Leistung (genau 1 Marker) – Maximum des Gesamtverbrauchs, inkl. Uhrzeit.
+            const gesamtData = allTimes.map(t => byTime[t] ? byTime[t].p_gesamt : null);
+            let peakIdx = -1, peakVal = -Infinity;
+            gesamtData.forEach((v, i) => { if (Number.isFinite(v) && v > peakVal) { peakVal = v; peakIdx = i; } });
+            const narrow = window.innerWidth < 560;
+            const peakMarkPoint = (peakIdx >= 0 && peakVal > 0) ? {
+                symbol: 'pin', symbolSize: narrow ? 16 : 20, symbolOffset: [0, -2],
+                itemStyle: { color: COLORS.haushalt, borderColor: 'rgba(255,255,255,0.7)', borderWidth: 1 },
+                label: {
+                    show: true, position: 'top', color: COLORS.haushalt, fontSize: narrow ? 9 : 11, fontWeight: 'normal',
+                    backgroundColor: 'rgba(255,255,255,0.92)', padding: [2, 4], borderRadius: 3,
+                    formatter: () => narrow ? `▲${(peakVal/1000).toFixed(1)}` : `Peak ${(peakVal/1000).toFixed(2)} kW`
+                },
+                data: [{ coord: [allTimes[peakIdx], peakVal], value: peakVal }],
+                tooltip: {
+                    show: true, trigger: 'item',
+                    formatter: () => `<b>Peak-Verbrauch</b><br/>${(peakVal/1000).toFixed(2)} kW<br/>${allTimes[peakIdx]} Uhr`
+                }
+            } : null;
+
             const option = {
                 tooltip: {
                     trigger: 'axis',
@@ -352,6 +429,10 @@
                         html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.haushalt};border-radius:2px;margin-right:5px;"></span>Sonstige: <strong>${d.p_haushalt.toFixed(0)} W</strong><br/>`;
                         html += `<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>`;
                         html += `<strong>Gesamt: ${d.p_gesamt.toFixed(0)} W</strong>`;
+                        if (tagExtremes && window.PVExtremes) {
+                            const tl = PVExtremes.tagLines(tagExtremes);
+                            if (tl) html += `<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>` + tl;
+                        }
                         return html;
                     }
                 },
@@ -424,7 +505,8 @@
                         lineStyle: { width: 2 },
                         smooth: true,
                         symbol: 'none',
-                        areaStyle: { color: COLORS.haushalt, opacity: 0.15 }
+                        areaStyle: { color: COLORS.haushalt, opacity: 0.15 },
+                        markPoint: peakMarkPoint || undefined
                     }
                 ]
             };
@@ -481,10 +563,57 @@
                 const key = currentView === 'monat' ? (i + 1) : (currentView === 'jahr' ? (i + 1) : l);
                 return byKey[key] ? byKey[key].w_wattpilot : null;
             });
+            const klimaData = labels.map((l, i) => {
+                const key = currentView === 'monat' ? (i + 1) : (currentView === 'jahr' ? (i + 1) : l);
+                return byKey[key] ? byKey[key].w_klima : null;
+            });
+            const gefrierData = labels.map((l, i) => {
+                const key = currentView === 'monat' ? (i + 1) : (currentView === 'jahr' ? (i + 1) : l);
+                return byKey[key] ? byKey[key].w_gefrier : null;
+            });
+            const lueftungData = labels.map((l, i) => {
+                const key = currentView === 'monat' ? (i + 1) : (currentView === 'jahr' ? (i + 1) : l);
+                return byKey[key] ? byKey[key].w_lueftung : null;
+            });
             const hhData   = labels.map((l, i) => {
                 const key = currentView === 'monat' ? (i + 1) : (currentView === 'jahr' ? (i + 1) : l);
                 return byKey[key] ? byKey[key].w_haushalt : null;
             });
+
+            // Rekord-/Extremwert-Relation über alle Balken der aktuellen Auflösung.
+            const MON_FULL = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+            const citeFmt = (e) => {
+                if (currentView === 'jahr') return `${formatEnergy(e.value)} im ${MON_FULL[e.idx]}`;
+                if (currentView === 'gesamt') return `${formatEnergy(e.value)} in ${labels[e.idx]}`;
+                return `${formatEnergy(e.value)} am ${e.idx + 1}.`;
+            };
+            const ranking = labels.map((l, i) => {
+                const key = currentView === 'monat' ? (i + 1) : (currentView === 'jahr' ? (i + 1) : l);
+                const d = byKey[key];
+                return { idx: i, value: (d && Number.isFinite(d.w_gesamt)) ? d.w_gesamt : null };
+            }).filter(x => x.value != null && x.value > 0);
+            const rkDesc = [...ranking].sort((a, b) => b.value - a.value);
+            const rkAsc = [...ranking].sort((a, b) => a.value - b.value);
+            const recMax = rkDesc[0] || null, secMax = rkDesc[1] || null;
+            const recMin = rkAsc[0] || null, secMin = rkAsc[1] || null;
+            function buildRecordRelation(idx, cur) {
+                if (!Number.isFinite(cur) || ranking.length < 2 || !recMax || !recMin) return '';
+                let s = `<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>`;
+                if (recMax.idx === idx) {
+                    s += `Größter Verbrauch`;
+                    if (secMax) s += `<br/><span style="opacity:.7">${citeFmt(secMax)}</span>`;
+                } else {
+                    s += `<span style="opacity:.85">Größter Verbrauch: ${citeFmt(recMax)}</span>`;
+                }
+                s += '<br/>';
+                if (recMin.idx === idx) {
+                    s += `Kleinster Verbrauch`;
+                    if (secMin) s += `<br/><span style="opacity:.7">${citeFmt(secMin)}</span>`;
+                } else {
+                    s += `<span style="opacity:.85">Kleinster Verbrauch: ${citeFmt(recMin)}</span>`;
+                }
+                return s;
+            }
 
             const option = {
                 tooltip: {
@@ -515,15 +644,23 @@
                         html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.wp};border-radius:2px;margin-right:5px;"></span>WP: <strong>${formatEnergy(d.w_wp)}</strong><br/>`;
                         html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.heizpatrone};border-radius:2px;margin-right:5px;"></span>HP (Überschuss): <strong>${formatEnergy(d.w_heizpatrone)}</strong><br/>`;
                         html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.wattpilot};border-radius:2px;margin-right:5px;"></span>E-Auto: <strong>${formatEnergy(d.w_wattpilot)}</strong><br/>`;
+                        if (d.w_klima) html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.klima};border-radius:2px;margin-right:5px;"></span>Klima: <strong>${formatEnergy(d.w_klima)}</strong><br/>`;
+                        if (d.w_gefrier) html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.gefrier};border-radius:2px;margin-right:5px;"></span>Gefriertruhe: <strong>${formatEnergy(d.w_gefrier)}</strong><br/>`;
+                        if (d.w_lueftung) html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.lueftung};border-radius:2px;margin-right:5px;"></span>Lüftung: <strong>${formatEnergy(d.w_lueftung)}</strong><br/>`;
                         html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.haushalt};border-radius:2px;margin-right:5px;"></span>Sonstige: <strong>${formatEnergy(d.w_haushalt)}</strong><br/>`;
                         html += `<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>`;
                         html += `<strong>Gesamt: ${formatEnergy(d.w_gesamt)}</strong>`;
+                        html += buildRecordRelation(idx, d.w_gesamt);
+                        if (periodExtremes && periodExtremes.by_key && window.PVExtremes) {
+                            html += PVExtremes.lines(periodExtremes.by_key[String(key)], { period: currentView });
+                        }
                         return html;
                     }
                 },
                 legend: {
-                    data: ['Wärmepumpe', 'Heizpatrone', 'E-Auto', 'Sonstige'],
-                    bottom: 10
+                    data: ['Wärmepumpe', 'Heizpatrone', 'E-Auto', 'Klima', 'Gefriertruhe', 'Lüftung', 'Sonstige'],
+                    bottom: 10,
+                    ...(isMobile() ? { textStyle: { fontSize: 9 }, itemWidth: 12, itemHeight: 8, itemGap: 6 } : {})
                 },
                 grid: {
                     left: '3%', right: '4%',
@@ -545,6 +682,7 @@
                     nameLocation: 'end',
                     axisLabel: { formatter: '{value}' }
                 },
+                animation: false,
                 series: [
                     {
                         name: 'Wärmepumpe',
@@ -552,7 +690,7 @@
                         stack: 'verbrauch',
                         data: wpData,
                         itemStyle: { color: COLORS.wp },
-                        emphasis: { focus: 'series' }
+                        emphasis: { disabled: true }
                     },
                     {
                         name: 'Heizpatrone',
@@ -560,7 +698,7 @@
                         stack: 'verbrauch',
                         data: hpData,
                         itemStyle: { color: COLORS.heizpatrone },
-                        emphasis: { focus: 'series' }
+                        emphasis: { disabled: true }
                     },
                     {
                         name: 'E-Auto',
@@ -568,7 +706,31 @@
                         stack: 'verbrauch',
                         data: wattData,
                         itemStyle: { color: COLORS.wattpilot },
-                        emphasis: { focus: 'series' }
+                        emphasis: { disabled: true }
+                    },
+                    {
+                        name: 'Klima',
+                        type: 'bar',
+                        stack: 'verbrauch',
+                        data: klimaData,
+                        itemStyle: { color: COLORS.klima },
+                        emphasis: { disabled: true }
+                    },
+                    {
+                        name: 'Gefriertruhe',
+                        type: 'bar',
+                        stack: 'verbrauch',
+                        data: gefrierData,
+                        itemStyle: { color: COLORS.gefrier },
+                        emphasis: { disabled: true }
+                    },
+                    {
+                        name: 'Lüftung',
+                        type: 'bar',
+                        stack: 'verbrauch',
+                        data: lueftungData,
+                        itemStyle: { color: COLORS.lueftung },
+                        emphasis: { disabled: true }
                     },
                     {
                         name: 'Sonstige',
@@ -576,7 +738,7 @@
                         stack: 'verbrauch',
                         data: hhData,
                         itemStyle: { color: COLORS.haushalt },
-                        emphasis: { focus: 'series' }
+                        emphasis: { disabled: true }
                     }
                 ]
             };
@@ -611,7 +773,23 @@
         // ═══════════════════════════════════════
         updateNavUI();
         loadData();
-    </script>
+        // Seiten-Schublade + Kalender-Picker (Zeit-Navi bleibt oben)
+        if (window.PVNavUI) {
+            PVNavUI.initDrawer({ title: 'Navigation' });
+            const isoDay = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            PVNavUI.attachCalendar(document.getElementById('tagDateDisplay'), 'day',
+                () => isoDay(currentDate),
+                v => { currentDate = new Date(`${v}T12:00:00`); syncAnchors('date'); updateNavUI(); loadData(); });
+            PVNavUI.attachCalendar(document.getElementById('monatDateDisplay'), 'day',
+                () => isoDay(new Date(currentYear, currentMonth - 1, 1)),
+                v => { const d = new Date(`${v}T12:00:00`); currentYear = d.getFullYear(); currentMonth = d.getMonth() + 1; syncAnchors('month'); updateNavUI(); loadData(); });
+            PVNavUI.attachCalendar(document.getElementById('jahrDateDisplay'), 'day',
+                () => isoDay(new Date(currentYear, 0, 1)),
+                v => { currentYear = new Date(`${v}T12:00:00`).getFullYear(); syncAnchors('year'); updateNavUI(); loadData(); });
+            PVNavUI.attachCalendar(document.getElementById('gesamtCalBtn'), 'month',
+                () => `${currentYear}-${String(currentMonth).padStart(2,'0')}`,
+                v => { const p = v.split('-'); currentYear = +p[0]; currentMonth = +p[1]; switchView('monat'); });
+        }    </script>
 
     {% include 'info_overlay.html' %}
 </body>
