@@ -59,7 +59,6 @@
                     <button onclick="navigate(1)">&#9654;</button>
                 </div>
                 <button class="btn-jetzt" id="btnHeute" onclick="navigateToday()">&#9201; Heute</button>
-                <button class="date-label" id="gesamtCalBtn" style="display:none;">📅 Monat</button>
             </div>
             <div class="nav-right"></div>
         </div>
@@ -244,9 +243,6 @@
                 // Gesamt: no navigation
                 btnHeute.style.display = 'none';
             }
-            const gc = document.getElementById('gesamtCalBtn');
-            if (gc) gc.style.display = (currentView === 'gesamt') ? '' : 'none';
-
             updateContextLinks();
             scheduleAutoRefresh();
         }
@@ -814,10 +810,6 @@
             PVNavUI.attachCalendar(document.getElementById('jahrDateDisplay'), 'day',
                 () => isoDay(new Date(currentYear, 0, 1)),
                 v => { currentYear = new Date(`${v}T12:00:00`).getFullYear(); syncAnchors('year'); updateNavUI(); loadData(); });
-            PVNavUI.attachCalendar(document.getElementById('gesamtCalBtn'), 'month',
-                () => `${currentYear}-${String(currentMonth).padStart(2,'0')}`,
-                v => { const p = v.split('-'); currentYear = +p[0]; currentMonth = +p[1]; switchView('monat'); },
-                { min: '2021-01' });
         }
 
         document.addEventListener('visibilitychange', function() {

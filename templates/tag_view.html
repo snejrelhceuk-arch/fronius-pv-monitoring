@@ -161,7 +161,6 @@
                     <button onclick="navigateYear(1)" id="btnNextYear">▶</button>
                 </div>
                 <button class="btn-jetzt" id="btnJetzt" onclick="navigateToNow()" style="display:none;">⏱ Jetzt</button>
-                <button class="date-label" id="gesamtCalBtn" style="display:none;">📅 Monat</button>
             </div>
             <div class="nav-right">
                 <span id="viewToggleNav" style="display:flex; gap:4px;">
@@ -420,11 +419,6 @@
                 PVNavUI.attachCalendar(document.getElementById('currentYearDisplay'), 'day',
                     () => isoDay(new Date(currentYear, 0, 1)),
                     v => { currentYear = new Date(`${v}T12:00:00`).getFullYear(); syncAnchors('year'); saveState(); loadYearData(); });
-                // Gesamt: Monat wählen → in Monatsansicht springen
-                PVNavUI.attachCalendar(document.getElementById('gesamtCalBtn'), 'month',
-                    () => `${currentYear}-${String(currentMonth).padStart(2,'0')}`,
-                    v => { const p = v.split('-'); currentYear = +p[0]; currentMonth = +p[1]; navigateToView('monat', true); },
-                    { min: '2021-01' });
             }
         });
 
@@ -630,8 +624,6 @@
                     btn.style.display = (v === currentPeriod) ? 'none' : '';
                 }
             });
-            const gc = document.getElementById('gesamtCalBtn');
-            if (gc) gc.style.display = (currentPeriod === 'gesamt') ? '' : 'none';
             // D: "Jetzt"-Button anzeigen wenn nicht auf heute
             updateJetztButton();
         }
@@ -704,7 +696,6 @@
                 document.getElementById('monatNavigation').style.display = 'none';
                 document.getElementById('jahrNavigation').style.display = 'none';
                 document.getElementById('viewToggleNav').style.display = 'flex';
-                const gc = document.getElementById('gesamtCalBtn'); if (gc) gc.style.display = 'none';
                 updateViewButtons();
                 saveState();
                 loadData();
@@ -745,7 +736,6 @@
                 document.getElementById('tagNavigation').style.display = 'none';
                 document.getElementById('monatNavigation').style.display = 'none';
                 document.getElementById('jahrNavigation').style.display = 'none';
-                const gc = document.getElementById('gesamtCalBtn'); if (gc) gc.style.display = '';
                 
                 updateViewButtons();
                 saveState();
