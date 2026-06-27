@@ -168,7 +168,6 @@
         }
 
         function updateContextLinks() {
-            const query = buildNavQuery();
             const links = {
                 linkMonitoring: '/monitoring',
                 linkAnalyse: '/analyse',
@@ -179,7 +178,20 @@
                 linkAnalyseAmortisation: '/analyse/amortisation'
             };
 
-            PVNavContext.applyToLinks(links, PVNavContext.createContext(currentView, currentDate, currentYear, currentMonth));
+            const ctx = PVNavContext.createContext(currentView, currentDate, currentYear, currentMonth);
+            PVNavContext.applyToLinks(links, ctx);
+            // Zentraler Zeit-Navigations-Speicher (URL + localStorage), damit
+            // Seitenwechsel/Schubladen-Links den Zeitraum konsistent behalten.
+            if (PVNavContext.commit) PVNavContext.commit(ctx);
+        }
+
+        function setActiveViewButton() {
+            ['Tag', 'Monat', 'Jahr', 'Gesamt'].forEach(v => {
+                const el = document.getElementById('btnView' + v);
+                if (el) el.classList.remove('active');
+            });
+            const active = document.getElementById('btnView' + currentView.charAt(0).toUpperCase() + currentView.slice(1));
+            if (active) active.classList.add('active');
         }
 
         function applyStateFromUrl() {
@@ -226,6 +238,7 @@
             document.getElementById('monatNavigation').style.display = currentView === 'monat' ? 'flex' : 'none';
             document.getElementById('jahrNavigation').style.display = currentView === 'jahr' ? 'flex' : 'none';
 
+            setActiveViewButton();
             const btnHeute = document.getElementById('btnHeute');
 
             if (currentView === 'tag') {
@@ -565,6 +578,7 @@
                 ]
             };
 
+            if (window.PVChart) option.tooltip = PVChart.tooltipResponsive(option.tooltip);
             chart.setOption(option);
             window.addEventListener('resize', () => {
                 if (!chart) return;
@@ -582,7 +596,6 @@
                 });
             });
         }
-
         // ═══════════════════════════════════════
         // BAR-CHART (Monat/Jahr/Gesamt)
         // ═══════════════════════════════════════
@@ -764,6 +777,10 @@
                 ]
             };
 
+            if (window.PVChart) {
+                option.tooltip = PVChart.tooltipResponsive(option.tooltip);
+                option.xAxis.axisLabel = PVChart.xAxisLabel((option.xAxis.data || []).length);
+            }
             chart.setOption(option);
             if (currentView === 'gesamt') {
                 chart.on('click', function(params) {

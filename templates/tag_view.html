@@ -239,6 +239,13 @@
                     savedAt: Date.now()
                 };
                 localStorage.setItem('pvViewState', JSON.stringify(state));
+                // Zentraler Zeit-Navigations-Speicher (URL + localStorage),
+                // damit Seitenwechsel/Schubladen-Links den Zeitraum behalten.
+                if (!isEmbedMode && window.PVNavContext && PVNavContext.commit) {
+                    PVNavContext.commit(
+                        PVNavContext.createContext(currentPeriod, currentDate, currentYear, currentMonth)
+                    );
+                }
                 updateContextLinks();
             } catch (e) {
                 console.error('Fehler beim Speichern des States:', e);
@@ -1254,6 +1261,7 @@
                 ]
             };
             
+            if (window.PVChart && option.tooltip) option.tooltip = PVChart.tooltipResponsive(option.tooltip);
             chart.setOption(option);
             console.log('Forecast-Chart erstellt:', times.length, 'Stunden');
         }
@@ -1626,6 +1634,7 @@
             };
             
             console.log('Ertrag-Option gesetzt, yMax:', calcYMax());
+            if (window.PVChart && option.tooltip) option.tooltip = PVChart.tooltipResponsive(option.tooltip);
             chart.setOption(option);
         }
         
@@ -1853,6 +1862,7 @@
                 series: series
             };
             
+            if (window.PVChart && option.tooltip) option.tooltip = PVChart.tooltipResponsive(option.tooltip);
             chart.setOption(option);
         }
         
@@ -2456,6 +2466,7 @@
                 ]
             };
             
+            if (window.PVChart && option.tooltip) option.tooltip = PVChart.tooltipResponsive(option.tooltip);
             chart.setOption(option);
             chart.group = 'monthSync';
             
@@ -2679,6 +2690,7 @@
                 ]
             };
             
+            if (window.PVChart && option.tooltip) option.tooltip = PVChart.tooltipResponsive(option.tooltip);
             chart.setOption(option);
             
             // Drill-down: Klick navigiert zur nächsten Detailebene

@@ -118,6 +118,78 @@
         window.history.replaceState(null, '', nextUrl);
     }
 
+    // ── Zentraler Zeit-Navigations-Speicher ─────────────────────────────
+    // Eine Quelle der Wahrheit für period/date/year/month über alle Charts:
+    // commit() schreibt URL (replaceState) + localStorage; getState() liest
+    // URL zuerst, dann localStorage. Verfall nach MAX_AGE_MS (1 h Inaktivität).
+    const STORAGE_KEY = 'pvNavState';
+
+    function readStorage(nowMs) {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return null;
+            const obj = JSON.parse(raw);
+            if (!obj || !obj.context || !obj.savedAt) return null;
+            if (Math.abs(nowMs - obj.savedAt) > MAX_AGE_MS) return null;
+            if (!VALID_PERIODS.has(obj.context.period)) return null;
+            return obj.context;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // Liefert den aktuell gültigen Kontext { context, source } oder null.
+    // Priorität: URL-Query (frisch) > localStorage (frisch) > null (=> Default).
+    function getState(nowMs = Date.now()) {
+        const fromUrl = parse(window.location.search, nowMs);
+        if (fromUrl.hasContext && !fromUrl.isExpired) {
+            return { context: fromUrl.context, source: 'url' };
+        }
+        const fromStore = readStorage(nowMs);
+        if (fromStore) return { context: fromStore, source: 'storage' };
+        return null;
+    }
+
+    // Schreibt den Zeit-Navigations-Kontext zentral: localStorage + URL.
+    // Hält Schubladen-Links, Seitenwechsel und Reload konsistent.
+    function commit(context, opts = {}) {
+        const normalized = createContext(
+            context && context.period,
+            context && context.date ? new Date(`${context.date}T12:00:00`) : new Date(),
+            context && context.year,
+            context && context.month
+        );
+        const savedAt = Date.now();
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ context: normalized, savedAt }));
+        } catch (e) { /* localStorage evtl. nicht verfügbar */ }
+
+        if (opts.updateUrl !== false) {
+            try {
+                const url = new URL(window.location.href);
+                const preserve = new Set(opts.preserveKeys || ['embed']);
+                const params = new URLSearchParams();
+                // Nicht-Kontext-Parameter bewahren (z. B. embed).
+                url.searchParams.forEach((value, key) => {
+                    if (preserve.has(key) && !CONTEXT_KEYS.includes(key)) params.append(key, value);
+                });
+                // Kontext-Query anhängen.
+                new URLSearchParams(buildQuery(normalized, savedAt)).forEach((value, key) => {
+                    params.set(key, value);
+                });
+                const search = params.toString();
+                window.history.replaceState(null, '', `${url.pathname}${search ? `?${search}` : ''}${url.hash}`);
+            } catch (e) { /* ignore */ }
+        }
+        return normalized;
+    }
+
+    // Query-String (ohne '?') aus dem aktuell gültigen Kontext, sonst ''.
+    function currentQuery(nowMs = Date.now()) {
+        const st = getState(nowMs);
+        return st ? buildQuery(st.context, nowMs) : '';
+    }
+
     window.PVNavContext = {
         MAX_AGE_MS,
         buildQuery,
@@ -128,6 +200,9 @@
         formatDateISO,
         clampDayOfMonth,
         syncAnchorFrom,
+        commit,
+        getState,
+        currentQuery,
         contextKeys: CONTEXT_KEYS.slice(),
     };
 })();

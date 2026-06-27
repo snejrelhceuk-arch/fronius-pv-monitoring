@@ -45,16 +45,15 @@
 
     function navQuery() {
         try {
-            if (window.PVNavContext) {
-                var st = PVNavContext.parse(window.location.search);
-                if (st.hasContext && !st.isExpired) return '?' + PVNavContext.buildQuery(st.context);
+            if (window.PVNavContext && PVNavContext.currentQuery) {
+                var q = PVNavContext.currentQuery();
+                return q ? '?' + q : '';
             }
         } catch (e) { /* ignore */ }
         return '';
     }
 
     function buildPages(pages) {
-        var q = navQuery();
         var here = window.location.pathname.replace(/\/$/, '') || '/';
         var wrap = document.createElement('div');
         wrap.className = 'pv-pages';
@@ -74,7 +73,9 @@
             }
             var a = document.createElement('a');
             var base = p.href.replace(/\/$/, '') || '/';
-            a.href = p.href + (p.noctx ? '' : q);
+            a.dataset.base = p.href;
+            if (p.noctx) a.dataset.noctx = '1';
+            a.href = p.href;
             a.textContent = p.label;
             if (p.sub) a.classList.add('nav-subitem');
             if (p.stale && primaerStale()) {
@@ -85,6 +86,17 @@
             wrap.appendChild(a);
         });
         return wrap;
+    }
+
+    // Zeit-Kontext-Query bei jedem Öffnen frisch an die Seitenlinks hängen,
+    // damit der zuletzt gewählte Zeitraum über Seitenwechsel erhalten bleibt.
+    function refreshPageLinks(wrap) {
+        if (!wrap) return;
+        var q = navQuery();
+        wrap.querySelectorAll('a[data-base]').forEach(function (a) {
+            var base = a.dataset.base;
+            a.href = base + (a.dataset.noctx ? '' : q);
+        });
     }
 
     function initDrawer(opts) {
@@ -112,12 +124,17 @@
         close.innerHTML = '×';
         head.appendChild(close);
         drawer.appendChild(head);
-        drawer.appendChild(buildPages(opts.pages || DEFAULT_PAGES));
+        var pagesWrap = buildPages(opts.pages || DEFAULT_PAGES);
+        drawer.appendChild(pagesWrap);
 
         document.body.appendChild(backdrop);
         document.body.appendChild(drawer);
 
-        function open() { drawer.classList.add('open'); backdrop.classList.add('open'); }
+        function open() {
+            refreshPageLinks(pagesWrap);
+            drawer.classList.add('open');
+            backdrop.classList.add('open');
+        }
         function shut() { drawer.classList.remove('open'); backdrop.classList.remove('open'); }
         burger.addEventListener('click', open);
         close.addEventListener('click', shut);
@@ -186,4 +203,47 @@
     }
 
     window.PVNavUI = { initDrawer: initDrawer, attachCalendar: attachCalendar };
+
+    // ── Responsive Chart-Helfer (ECharts) ──────────────────────────────
+    // Gemeinsame Logik für dynamische X-Achsen-Beschriftung und tooltips,
+    // die auf kleinen Bildschirmen im Viewport bleiben und nicht überlaufen.
+    function isSmallScreen() {
+        return window.innerWidth <= 600
+            || (window.innerHeight <= 500 && window.matchMedia('(orientation: landscape)').matches);
+    }
+
+    // axisLabel-Konfiguration für Kategorie-X-Achsen. Desktop unverändert
+    // (alle Labels), kleine Screens dünnen automatisch aus + verbergen Overlap.
+    function xAxisLabel(labelCount, extra) {
+        var small = isSmallScreen();
+        var cfg = {
+            interval: small ? 'auto' : 0,
+            hideOverlap: true,
+            rotate: (small || labelCount > 15) ? 45 : 0,
+            fontSize: small ? 9 : 11
+        };
+        if (extra) Object.keys(extra).forEach(function (k) { cfg[k] = extra[k]; });
+        return cfg;
+    }
+
+    // Tooltip-Eigenschaften: im Container halten (confine) und auf kleinen
+    // Screens Größe begrenzen + ohne sichtbaren Scrollbalken scrollbar machen
+    // (Klasse pv-echarts-tip, Scrollbar in nav-ui.css ausgeblendet).
+    function tooltipResponsive(base) {
+        var cfg = base || {};
+        cfg.confine = true;
+        cfg.className = 'pv-echarts-tip';
+        if (isSmallScreen()) {
+            cfg.extraCssText = 'max-width:88vw;max-height:58vh;overflow-y:auto;white-space:normal;'
+                + (cfg.extraCssText || '');
+            cfg.textStyle = Object.assign({ fontSize: 11 }, cfg.textStyle || {});
+        }
+        return cfg;
+    }
+
+    window.PVChart = {
+        isSmallScreen: isSmallScreen,
+        xAxisLabel: xAxisLabel,
+        tooltipResponsive: tooltipResponsive
+    };
 })();

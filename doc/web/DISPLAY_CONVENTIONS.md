@@ -150,3 +150,37 @@ Zentrale JS-Funktion `formatValue(value, unit)` mit automatischer SI-Präfix-Ska
 | Sparklines | 💬 Offen | |
 | Responsive Genauigkeit | ❌ | Zu komplex |
 | Komma→Punkt Umstellung | ❌ | JSON-Kompatibilität |
+
+---
+
+## 7. Zeit-Navigation & Responsive Charts
+
+### Zentraler Navigationsspeicher (`static/js/nav-context.js`)
+
+Alle Charts mit Zeitraum-Auswahl (Monitoring, Analyse-Erzeuger, Analyse-Verbraucher)
+teilen **einen** Navigationszustand `{ period, date, year, month }`:
+
+- `PVNavContext.commit(context)` schreibt ihn nach localStorage (`pvNavState`) **und**
+  in die URL (`replaceState`). Jeder Wechsel von Zeitraum/Datum/Ansicht ruft `commit`.
+- `PVNavContext.getState()` liest ihn zurück (URL bevorzugt, sonst localStorage);
+  Verfall nach **1 Stunde** Inaktivität → danach Standard Tag/heute.
+- Die Seiten-Schublade (`static/js/nav-ui.js`) hängt den Zeitkontext beim Öffnen frisch
+  an alle Seitenlinks, sodass der gewählte Zeitrahmen über Seitenwechsel erhalten bleibt
+  (z. B. Monitoring/Gesamt → Analyse-Erzeuger öffnet ebenfalls Gesamt, Rücksprung Jahr
+  → Monitoring bleibt Jahr).
+
+### Kalender-Button
+
+Der Datums-/Monatsbutton zwischen den ◀▶-Navigatoren öffnet einen nativen Picker
+(`PVNavUI.attachCalendar`); die Auswahl ruft `commit` und lädt den gewählten Zeitraum.
+
+### Responsive (kleine Screens)
+
+`PVChart.xAxisLabel()` dünnt die X-Achsen-Beschriftung auf schmalen Screens automatisch
+aus (`interval:'auto'`, `hideOverlap`); `PVChart.tooltipResponsive()` hält Tooltips im
+sichtbaren Bereich (`confine`) und begrenzt sie bei Bedarf in der Größe (scrollbar ohne
+sichtbaren Scrollbalken, Klasse `pv-echarts-tip`). **Desktop/Tablet bleibt unverändert.**
+
+> **Deploy-Hinweis:** Template-Änderungen (`templates/*.html`) werden unter Gunicorn erst
+> nach Worker-Reload wirksam (`sudo kill -HUP $(cat /tmp/pv_web.pid)`), da Jinja im
+> Produktionsmodus cached. `static/*` (JS/CSS) wird dagegen frisch ausgeliefert.

@@ -144,3 +144,15 @@
     .top-nav a.nav-main,
     .top-nav a.nav-sub { display: none; }
 }
+
+/* ECharts-Tooltip auf kleinen Screens: scrollbar (ohne sichtbaren Balken),
+ * damit lange Tooltips im Viewport bleiben (siehe PVChart.tooltipResponsive). */
+.pv-echarts-tip {
+    scrollbar-width: none;          /* Firefox */
+    -ms-overflow-style: none;       /* alte Edge/IE */
+}
+.pv-echarts-tip::-webkit-scrollbar { /* WebKit/Blink */
+    width: 0;
+    height: 0;
+    display: none;
+}

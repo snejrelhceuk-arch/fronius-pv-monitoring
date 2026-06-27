@@ -108,7 +108,20 @@
                 linkAnalyseAmortisation: '/analyse/amortisation'
             };
 
-            PVNavContext.applyToLinks(links, PVNavContext.createContext(currentView, currentDate, currentYear, currentMonth));
+            const ctx = PVNavContext.createContext(currentView, currentDate, currentYear, currentMonth);
+            PVNavContext.applyToLinks(links, ctx);
+            // Zentraler Zeit-Navigations-Speicher (URL + localStorage), damit
+            // Seitenwechsel/Schubladen-Links den Zeitraum konsistent behalten.
+            if (PVNavContext.commit) PVNavContext.commit(ctx);
+        }
+
+        function setActiveViewButton() {
+            ['Tag', 'Monat', 'Jahr', 'Gesamt'].forEach(v => {
+                const el = document.getElementById('btnView' + v);
+                if (el) el.classList.remove('active');
+            });
+            const active = document.getElementById('btnView' + currentView.charAt(0).toUpperCase() + currentView.slice(1));
+            if (active) active.classList.add('active');
         }
 
         function applyStateFromUrl() {
@@ -154,6 +167,7 @@
             document.getElementById('monatNavigation').style.display = currentView === 'monat' ? 'flex' : 'none';
             document.getElementById('jahrNavigation').style.display = currentView === 'jahr' ? 'flex' : 'none';
 
+            setActiveViewButton();
             const btnHeute = document.getElementById('btnHeute');
 
             if (currentView === 'tag') {
@@ -443,12 +457,15 @@
                     type: 'category',
                     data: allTimes,
                     boundaryGap: false,
-                    axisLabel: {
-                        interval: function(idx) {
-                            return idx % 12 === 0;
-                        },
-                        fontSize: 11
-                    }
+                    axisLabel: (function() {
+                        const w = window.innerWidth;
+                        // Dynamisch: bei schmalen Fenstern weniger Labels
+                        const step = w < 500 ? 36 : w < 800 ? 24 : 12;
+                        return {
+                            interval: function(idx) { return idx % step === 0; },
+                            fontSize: w < 500 ? 9 : 11
+                        };
+                    })()
                 },
                 yAxis: {
                     type: 'value',
@@ -535,8 +552,23 @@
                 ]
             };
 
+            if (window.PVChart) option.tooltip = PVChart.tooltipResponsive(option.tooltip);
             chart.setOption(option);
-            window.addEventListener('resize', () => { if (chart) chart.resize(); });
+            window.addEventListener('resize', () => {
+                if (!chart) return;
+                chart.resize();
+                // X-Achsen-Labels dynamisch an neue Breite anpassen
+                const w = window.innerWidth;
+                const step = w < 500 ? 36 : w < 800 ? 24 : 12;
+                chart.setOption({
+                    xAxis: {
+                        axisLabel: {
+                            interval: function(idx) { return idx % step === 0; },
+                            fontSize: w < 500 ? 9 : 11
+                        }
+                    }
+                });
+            });
         }
 
         applyStateFromUrl();
@@ -767,6 +799,10 @@
                 ]
             };
 
+            if (window.PVChart) {
+                option.tooltip = PVChart.tooltipResponsive(option.tooltip);
+                option.xAxis.axisLabel = PVChart.xAxisLabel((option.xAxis.data || []).length);
+            }
             chart.setOption(option);
             if (currentView === 'gesamt') {
                 chart.on('click', function(params) {

@@ -5,7 +5,7 @@ role: B
 applyTo: "routes/**"
 tags: [web-api, blueprints, templates, formatting, read-only]
 status: stable
-last_review: 2026-06-20
+last_review: 2026-06-27
 
 ---
 
@@ -15,6 +15,8 @@ last_review: 2026-06-20
 Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly bereitstellen und Werte konsistent im Frontend darstellen.
 
 ## Changes
+- 2026-06-27 (b): Responsive-Feinschliff kleine Screens. Gemeinsame Helfer `PVChart.xAxisLabel`/`PVChart.tooltipResponsive` (`static/js/nav-ui.js`): X-Achsen-Labels dünnen auf schmalen Screens automatisch aus (`interval:'auto'`, `hideOverlap`), Tooltips bleiben im Viewport (`confine:true`) und werden bei Bedarf größenbegrenzt + ohne sichtbaren Scrollbalken scrollbar (Klasse `pv-echarts-tip`, Scrollbar-Ausblendung in `static/css/nav-ui.css`). Eingehängt in Balken-/Tages-Charts von `tag_view.html`, `erzeuger_view.html`, `verbraucher_view.html`; Verbraucher-Tageschart nutzt jetzt dieselbe breitenabhängige Label-Ausdünnung wie Erzeuger. Desktop/Tablet unverändert.
+- 2026-06-27: Zentraler Zeit-Navigationsspeicher. `static/js/nav-context.js` neu: `PVNavContext.commit/getState/currentQuery` als EINE Quelle der Wahrheit für `period/date/year/month` (localStorage `pvNavState` + URL via `replaceState`, Verfall nach 1 h). Jeder Chart-View (`tag_view`/`erzeuger_view`/`verbraucher_view`) committet bei jedem Navigationswechsel; die Seiten-Schublade (`static/js/nav-ui.js`) baut die Links beim Öffnen frisch aus `currentQuery()`. Behebt: Kalender-/Zeitraum-Verlust beim Seitenwechsel, Einstieg Erzeuger/Verbraucher aus Monitoring/Gesamt landet jetzt im Gesamt-Chart (vorher Tag), Rücksprung Jahr→Monitoring behält Jahr; aktive View-Buttons werden bei Direkteinstieg synchronisiert (`setActiveViewButton`).
 - 2026-06-20 (c): Doku-Hinweis geschärft: lokale Web-/Smoke-Tests laufen auf Port **8000** (nicht 5000), damit Route-Checks reproduzierbar sind.
 - 2026-06-20 (b): Extremwerte-Tooltips v3 + Peak-Fix + Navigation. (1) Peak-Leistung Monat/Jahr/Gesamt war falsch (`P_AC_Inv_max` = nur F1, ~12 kW HW-Limit): `routes/visualization.py:/api/period_extremes` nutzt jetzt `daily_data.P_PV_total_max` (zeitgleicher System-Peak, COALESCE-Fallback). (2) V/Frequenz/cos φ in allen Tooltips + Statistik-Tabelle MIT Datum/Uhrzeit (`_vf_pf_extremes`, data_1min ≤90 Tage, Fallback data_monthly). (3) `static/js/extremes.js` ohne bunte Icons, deutsche Komma-Zahlen, „Größter/Kleinster Tagesertrag/Monat"; Konkurrenz ohne Prozent. (4) Peak-Label weißer Hintergrund. (5) Balken ohne Hover-Fade + `animation:false`. (6) Verbraucher-Legende + Klima/Gefriertruhe/Lüftung. (7) Statistik-Tabelle via `routes/pages.py:_get_pv_grenzwerte_yearly` → `_extremes_gesamt`. (8) Seiten-Schublade + Kalender: `static/js/nav-ui.js` + `static/css/nav-ui.css` (Drawer für Seiten, Zeit oben; Tag/Monat/Jahr=Tageskalender, Gesamt=Monats-Overlay) in tag_view/erzeuger/verbraucher/analyse. (9) Primärenergie-Aktualitätshinweis (`config.PRIMAERENERGIE_STAND`, Verfallstimer 3 Monate) + Menü-Marker.
 - 2026-06-20: Extremwerte-Tooltips v2 + Chart-UX. Neuer Endpoint `routes/visualization.py:/api/period_extremes` (period=tag|monat|jahr|gesamt) liefert einheitliche Perioden-Extremwerte (Peak-Leistung, Ertrag best/schwach, Spannung L-L, Frequenz, cos φ) keyed per Tag/Monat/Jahr. Geteilter Formatter `static/js/extremes.js` (`PVExtremes.fetchFor/lines/tagLines`, mobil verkürzt) wird in `tag_view.html`, `erzeuger_view.html`, `verbraucher_view.html` in die Monat/Jahr/Gesamt-Tooltips eingehängt (konsistente Gleichschaltung Monitoring↔Analyse). Peak-Marker neu gestylt (kleiner, Label = Marker-Farbe, nicht fett/weiß). Balken-Charts: Hover-Fade (`emphasis.focus`) entfernt → `emphasis.disabled` + `animation:false`. „Konkurrent"-Anzeige ohne Prozent (nur Wert+Datum). cos φ historisch nur ≤7 Tage (raw_data); Monat-PF füllt sich nach PF-Aggregation in data_1min.
@@ -63,8 +65,10 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 
 ## Bekannte Fallstricke
 - Display-Formatter sind template-lokal; parallele Formatter in anderen Views koennen driften.
+- **Template-/Static-Deploy:** Unter Gunicorn (Prod) cached Jinja kompilierte Templates; `templates/*.html`-Änderungen werden erst nach Reload des Web-Workers wirksam (`sudo kill -HUP $(cat /tmp/pv_web.pid)` bzw. Restart `pv-web.service`). `static/*` (JS/CSS) liefert dagegen mit `Cache-Control: no-cache` + ETag frisch aus.
 - Forecast-Persistierung schreibt in DB-Tabellen (`forecast_daily`, `data_15min`) und ist damit eine kontrollierte Ausnahme vom read-only Zielbild.
 - Mirror-/CORS-Umgebungsvariablen beeinflussen Verhalten stark; lokale Abweichungen zuerst dort pruefen.
+- Zeit-Navigationszustand liegt zentral in `nav-context.js` (`pvNavState` + URL); Monitoring führt zusätzlich `pvViewState` nur für die Ertrag/Verbrauch-Unteransicht.
 
 ## Verwandte Cards
 - [`collector-aggregation-pipeline.card.md`](./collector-aggregation-pipeline.card.md)
