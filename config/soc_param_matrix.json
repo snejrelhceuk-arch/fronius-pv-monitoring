@@ -1,7 +1,7 @@
 {
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
-  "_updated": "2026-05-26",
+  "_updated": "2026-06-27",
   "regelkreise": {
     "soc_extern": {
       "_doc": "Toleranz für extern geänderte SOC-Werte (z.B. manuell via Fronius App). Wenn SOC_MIN oder SOC_MAX außerhalb der Automation geändert werden, respektiert die Engine die Werte für die konfigurierte Dauer.",
@@ -616,7 +616,7 @@
       "engine_zyklus": "fast"
     },
     "fussbodenheizung": {
-      "_doc": "Minimale nächtliche Schaltung der Fußbodenheizungs-Steckdose (Fritz!DECT, AIN 11657 0600249). Hintergrund: Im Sommer ist die HomeAssistant-Heizungssteuerung deaktiviert (Haus kühl halten), damit entfällt die nächtliche Bad-Fußboden-Erwärmung. Diese Regel schaltet die FBH-SD edge-getriggert genau 1× EIN zu fenster_start_h und 1× AUS im Nachlauf nach fenster_ende_h — kein Nachstellen (oszillationssicher, kein Konflikt mit HA). Die Erwärmung selbst ist nicht messbar; die FBH-Temperatur regelt eine eigene Thermostatik.",
+      "_doc": "Minimale nächtliche Schaltung der Fußbodenheizungs-Steckdose (Fritz!DECT, AIN siehe lokale Konfiguration). Hintergrund: Im Sommer ist die HomeAssistant-Heizungssteuerung deaktiviert (Haus kühl halten), damit entfällt die nächtliche Bad-Fußboden-Erwärmung. Diese Regel schaltet die FBH-SD edge-getriggert genau 1× EIN zu fenster_start_h und 1× AUS im Nachlauf nach fenster_ende_h — kein Nachstellen (oszillationssicher, kein Konflikt mit HA). Die Erwärmung selbst ist nicht messbar; die FBH-Temperatur regelt eine eigene Thermostatik.",
       "aktiv": true,
       "prioritaet": 2,
       "beschreibung": "FBH-Nachtschaltung EIN 03:00 / AUS 05:00 (Flanke, oszillationssicher)",

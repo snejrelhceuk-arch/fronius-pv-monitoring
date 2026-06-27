@@ -272,7 +272,7 @@ PRIMAERENERGIE_STALE_MONTHS = 3       # Hinweis nach 3 Monaten (Quartal)
 
 # --- E-Mail-Benachrichtigungen ---
 # Einmalige Meldung bei kritischen Events (Deduplizierung: 1× pro Event-Typ pro Tag)
-NOTIFICATION_EMAIL = 'navigator@hekabe.de'
+NOTIFICATION_EMAIL = load_local_setting('PV_NOTIFICATION_EMAIL', 'alerts@example.invalid')
 NOTIFICATION_SMTP_HOST = load_local_setting('PV_NOTIFICATION_SMTP_HOST', 'smtp.example.invalid')
 NOTIFICATION_SMTP_PORT = 465               # SSL (nicht 587/STARTTLS)
 NOTIFICATION_SMTP_USER = load_local_setting('PV_NOTIFICATION_SMTP_USER', 'alerts@example.invalid')

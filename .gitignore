@@ -85,6 +85,8 @@ logs/ww_restore.log
 # Home-Assistant-Heizungs-Konfigurationen (enthalten lokale/sensible Angaben)
 automation/HA-Heizung.yaml
 automation/HA-Heizung.verbessert.yaml
+# Einmal-Rekonstruktionsskript (enthält lokalen Pfad, nicht öffentlich)
+scripts/wattpilot_reconstruct_may22_27.py
 # Diagnos-Statusberichte (Laufzeit-Output, werden bei jedem Sunset neu erzeugt)
 logs/diagnos/
 ollama/Modelfile
