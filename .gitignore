@@ -82,6 +82,9 @@ ollama/.sync_state.json
 logs/schaltlog.txt
 logs/wp_netzbetreiber_leistung.csv
 logs/ww_restore.log
+# Home-Assistant-Heizungs-Konfigurationen (enthalten lokale/sensible Angaben)
+automation/HA-Heizung.yaml
+automation/HA-Heizung.verbessert.yaml
 # Diagnos-Statusberichte (Laufzeit-Output, werden bei jedem Sunset neu erzeugt)
 logs/diagnos/
 ollama/Modelfile
