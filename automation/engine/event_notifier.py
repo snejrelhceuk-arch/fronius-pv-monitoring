@@ -952,9 +952,16 @@ class EventNotifier:
             lines.append(f'  Fehlerstrang:        {consec} Polls in Folge')
 
         if reconnect:
-            rc_ok = 'OK' if reconnect.get('success') else 'FEHLER'
+            rc_success = reconnect.get('success')
+            collector_live = attachment.get('collector_live')
+            if rc_success:
+                rc_str = 'erfolgreich'
+            elif collector_live:
+                rc_str = 'Versuch fehlgeschlagen, WR liefern wieder'
+            else:
+                rc_str = 'fehlgeschlagen'
             lines.append(
-                f'  Letzter Reconnect:   {reconnect.get("trigger", "?")} → {rc_ok}'
+                f'  Letzter Reconnect:   {reconnect.get("trigger", "?")} → {rc_str}'
             )
 
         gap_checks = [
@@ -988,7 +995,10 @@ class EventNotifier:
         elif stale_bad_count > 0 and gap_shown == 0:
             lines.append('')
             lines.append(
-                f'  Keine NEUEN Integritätsabweichungen ({stale_bad_count} stabile unterdrueckt).'
+                '  Keine neuen Integritätsbefunde — bekannte, stabile Zustände werden'
+            )
+            lines.append(
+                '  nur protokolliert (Details: Statusdateien, s. u.).'
             )
 
         lines += [
@@ -1054,18 +1064,19 @@ class EventNotifier:
 
         zeilen += self._format_diagnos_summary(health_data, reportable_names)
         zeilen += self._format_integrity_summary(integrity_data, reportable_names)
+        zeilen += self._format_status_quellen(health_data, integrity_data)
 
         if alert_summary:
             zeilen += [
                 '',
                 'Diagnos-Filter (Diff zur letzten Mail)',
                 f'  neu={alert_summary.get("new", 0)}  '
-                f'changed={alert_summary.get("changed", 0)}  '
-                f'reminder={alert_summary.get("reminder", 0)}  '
-                f'unterdrueckt={alert_summary.get("suppressed", 0)}  '
+                f'geändert={alert_summary.get("changed", 0)}  '
+                f'erinnerung={alert_summary.get("reminder", 0)}  '
+                f'unterdrückt={alert_summary.get("suppressed", 0)}  '
                 f'geheilt={alert_summary.get("healed", 0)}',
-                '  (stabile Wiederholungen werden unterdrueckt; Reminder nach 7 Tagen,',
-                '   Heilung beim Rueckfall auf OK; Voll-Status: python3 -m diagnos.integrity)',
+                '  Bekannte, gleichbleibende Zustände werden nicht erneut gemeldet,',
+                '  sondern nur erinnert (nach 7 Tagen). „geheilt" = Rückkehr auf OK.',
             ]
 
         zeilen += [
@@ -1075,6 +1086,34 @@ class EventNotifier:
         ]
 
         return '\n'.join(zeilen)
+
+    def _format_status_quellen(
+        self,
+        health_data: Optional[dict],
+        integrity_data: Optional[dict],
+    ) -> list:
+        """Schreibt die Status-Markdown-Dateien und verweist in der Mail darauf.
+
+        Hält die Mail knapp: Details (jede Datenlücke mit Ursache, die
+        Host-Kennwerte) stehen in dauerhaft abrufbaren Dateien, hier nur Pfade.
+        """
+        lines = ['', 'Weiterführende Statusquellen']
+        try:
+            from diagnos import status_report
+            written = status_report.write_status_reports(integrity_data, health_data)
+            for name in ('RAW-Status.md', 'System-Status.md'):
+                info = written.get(name)
+                if info:
+                    kb = info['size'] / 1024.0
+                    lines.append(f'  {info["path"]}  ({kb:.1f} KB)')
+        except Exception:
+            lines.append('  (Statusdateien konnten nicht geschrieben werden)')
+        lines += [
+            '  Laufzeit-Logs: journalctl -u pv-web -u pv-automation -u pv-collector',
+            '  Voll-Status:   python3 -m diagnos.health --pretty | python3 -m diagnos.integrity --pretty',
+        ]
+        return lines
+
 
     def _sende_sunset_mail(self, koerper: str, severity_counts: Optional[dict] = None):
         """Sunset-Bericht per E-Mail senden.

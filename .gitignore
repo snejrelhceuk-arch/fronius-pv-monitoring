@@ -82,6 +82,8 @@ ollama/.sync_state.json
 logs/schaltlog.txt
 logs/wp_netzbetreiber_leistung.csv
 logs/ww_restore.log
+# Diagnos-Statusberichte (Laufzeit-Output, werden bei jedem Sunset neu erzeugt)
+logs/diagnos/
 ollama/Modelfile
 ollama/server_README.md
 scripts/windows/

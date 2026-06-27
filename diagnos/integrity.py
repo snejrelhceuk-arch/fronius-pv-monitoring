@@ -92,13 +92,7 @@ def check_fronius_attachment_state() -> dict:
     internal_api_ok = bool(internal_api) and all(bool(item.get('ok')) for item in internal_api.values())
     battery_api = internal_api.get('/api/config/batteries') or {}
     battery_api_ok = bool(battery_api.get('ok'))
-
-    severity = OK
-    if validation:
-        if not (modbus_ok and solar_api_ok and internal_api_ok and battery_api_ok):
-            severity = CRIT
-    else:
-        severity = WARN
+    validation_ok = bool(validation) and modbus_ok and solar_api_ok and internal_api_ok and battery_api_ok
 
     # --- Collector-Liveness aus neuen Feldern ---
     last_poll_ts = state.get('last_successful_poll_ts')
@@ -110,19 +104,45 @@ def check_fronius_attachment_state() -> dict:
     if last_poll_ts:
         poll_age_s = int(time.time()) - int(last_poll_ts)
         collector_live = poll_age_s <= 300  # 5 min Toleranz
+
+    # Aktuelle Liveness ist das primäre Kriterium: Wenn der Collector frisch
+    # pollt und keine Fehlerserie vorliegt, liefern die WR den ganzen Tag —
+    # eine ältere/unvollständige gespeicherte Vollprüfung ist dann höchstens
+    # ein Hinweis (WARN), niemals CRIT. So entsteht zum Sonnenuntergang keine
+    # Fehlmeldung, obwohl die Anlage durchgehend Daten geliefert hat.
+    collector_healthy_now = (collector_live is True) and consecutive_errors == 0
+
+    _sev_rank = {OK: 0, WARN: 1, CRIT: 2, FAIL: 3}
+
+    def _escalate(current: str, target: str) -> str:
+        return target if _sev_rank.get(target, 0) > _sev_rank.get(current, 0) else current
+
+    severity = OK
+    if validation and not validation_ok:
+        severity = WARN if collector_healthy_now else CRIT
+    elif not validation:
+        severity = OK if collector_healthy_now else WARN
+
+    if poll_age_s is not None:
         if poll_age_s > 300:
             severity = CRIT
         elif poll_age_s > 60:
-            severity = max(severity, WARN, key=lambda s: {OK: 0, WARN: 1, CRIT: 2, FAIL: 3}.get(s, 0))
+            severity = _escalate(severity, WARN)
 
     if consecutive_errors >= 5:
         severity = CRIT
     elif consecutive_errors >= 3:
-        severity = max(severity, WARN, key=lambda s: {OK: 0, WARN: 1, CRIT: 2, FAIL: 3}.get(s, 0))
+        severity = _escalate(severity, WARN)
 
-    # Assessment-Text
+    # Assessment-Text — führend ist der aktuelle Liefer-/Pollzustand.
     parts = []
-    if validation and modbus_ok and solar_api_ok and internal_api_ok and battery_api_ok:
+    if collector_healthy_now and validation_ok:
+        parts.append('WR liefern, Schnittstellen ok.')
+    elif collector_healthy_now and validation:
+        parts.append('WR liefern aktuell; letzte Vollprüfung unvollständig.')
+    elif collector_healthy_now:
+        parts.append('WR liefern aktuell; keine Vollprüfung gespeichert.')
+    elif validation_ok:
         parts.append('Schnittstellenprüfung erfolgreich.')
     elif validation:
         parts.append('Schnittstellenprüfung mit Fehlern.')
@@ -138,14 +158,23 @@ def check_fronius_attachment_state() -> dict:
     if consecutive_errors > 0:
         parts.append(f'{consecutive_errors} Fehler in Folge.')
 
+    # Reconnect: nur als aktuelles Problem werten, wenn er fehlschlug UND der
+    # Collector NICHT wieder liefert. Erfolgreiche oder bereits behobene
+    # Reconnects (z. B. nach WR-Firmware-Update) sind Info, kein Fehler.
     if reconnect.get('ts'):
         rc_age = int(time.time()) - int(reconnect['ts'])
         rc_ok = reconnect.get('success', False)
+        rc_trigger = reconnect.get('trigger', '?')
         if rc_age < 3600:
-            parts.append(
-                f'Reconnect vor {rc_age}s ({reconnect.get("trigger", "?")}): '
-                f'{"OK" if rc_ok else "FEHLGESCHLAGEN"}.'
-            )
+            if rc_ok:
+                parts.append(f'Reconnect vor {rc_age}s ({rc_trigger}): erfolgreich.')
+            elif collector_healthy_now:
+                parts.append(
+                    f'Reconnect vor {rc_age}s ({rc_trigger}): Versuch fehlgeschlagen, '
+                    f'WR liefern aber wieder.'
+                )
+            else:
+                parts.append(f'Reconnect vor {rc_age}s ({rc_trigger}): fehlgeschlagen.')
 
     return {
         'check': 'integrity:fronius_attachment_state',
@@ -455,6 +484,15 @@ def _gap_severity(category_counts: dict) -> str:
     return OK
 
 
+# Eine Lücke, deren Ende länger als diese Spanne zurückliegt, gilt als
+# "gesetzt": der Tag ist vorbei, die Aggregationen (1min→15min→daily→monthly)
+# haben den Stand übernommen. Solche historischen Lücken sind der Normalzustand
+# der Datenbank und treiben KEINE Alarmschwere mehr — sie bleiben aber in der
+# Lücken-/Ausfallliste (RAW-Status.md) dokumentiert. Nur frische Lücken
+# (innerhalb dieser Spanne) sind betrieblich behandelbar und alarmrelevant.
+GAP_SETTLE_S = 25 * 3600
+
+
 def _run_gap_scan(table: str, hours: int, min_gap_s: int, daylight_aware: bool = False) -> dict:
     conn = _db_readonly()
     if conn is None:
@@ -484,11 +522,14 @@ def _run_gap_scan(table: str, hours: int, min_gap_s: int, daylight_aware: bool =
         ).fetchall()
 
         category_counts = {'micro': 0, 'short': 0, 'medium': 0, 'long': 0}
-        # Severity-treibende Zählung (ohne erwartete Nacht-/EOD-Lücken)
+        # Severity-treibende Zählung (ohne erwartete Nacht-/EOD-Lücken und
+        # ohne bereits "gesetzte" historische Lücken).
         sev_counts = {'micro': 0, 'short': 0, 'medium': 0, 'long': 0}
         samples = []
         max_gap = 0.0
         night_gaps = 0
+        settled_gaps = 0
+        now_ts = time.time()
         for row in rows:
             start_ts = float(row[0])
             end_ts = float(row[1])
@@ -497,8 +538,13 @@ def _run_gap_scan(table: str, hours: int, min_gap_s: int, daylight_aware: bool =
             category_counts[gap_type] += 1
             max_gap = max(max_gap, gap_s)
             is_night = daylight_aware and _gap_in_darkness(start_ts, end_ts)
+            # "Gesetzt": Lücke liegt vollständig in der abgeschlossenen
+            # Vergangenheit (Aggregationen übernommen) → kein aktiver Fehler.
+            is_settled = end_ts < (now_ts - GAP_SETTLE_S)
             if is_night:
                 night_gaps += 1
+            elif is_settled:
+                settled_gaps += 1
             else:
                 sev_counts[gap_type] += 1
             if len(samples) < 5:
@@ -508,6 +554,7 @@ def _run_gap_scan(table: str, hours: int, min_gap_s: int, daylight_aware: bool =
                     'gap_s': round(gap_s, 1),
                     'class': gap_type,
                     'expected_night': is_night,
+                    'settled': is_settled,
                 })
 
         result = {
@@ -515,9 +562,11 @@ def _run_gap_scan(table: str, hours: int, min_gap_s: int, daylight_aware: bool =
             'window_hours': hours,
             'min_gap_s': min_gap_s,
             'gap_count': len(rows),
+            'fresh_gap_count': sum(sev_counts.values()),
+            'settled_gap_count': settled_gaps,
             'max_gap_s': round(max_gap, 1),
             'classes': category_counts,
-            'severity': _gap_severity(sev_counts if daylight_aware else category_counts),
+            'severity': _gap_severity(sev_counts),
             'samples': samples,
         }
         if daylight_aware:

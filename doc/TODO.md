@@ -79,6 +79,10 @@
 
 ## Diagnos (Schicht D)
 
+- [ ] **Echter Befund (offen):** `integrity:monthly_rollup` meldet ~48 kWh Abweichung zwischen `monthly_statistics` und der `daily_data`-Summe (CRIT, stabil). Ursache klären (Counter-Reset? Korrektur in `statistics_corrections`? Aggregations-Drift) und bereinigen — KEIN Fehlalarm, daher bewusst nicht unterdrückt.
+- [ ] Diagnos-Mailstruktur: weiteren Außenstehenden-Schliff prüfen (Wording/Reihenfolge), nachdem die neuen Statusdateien (`logs/diagnos/*.md`) im Betrieb beobachtet wurden.
+- [ ] RAW-Status-Ursachenheuristik erweitern: Stromausfall vs. stale process klarer trennen (Korrelation mit Service-Restart-Logs statt nur Boot-Zeit).
+- [ ] Optional: Netz-Anomalien (Schwankungen/Extremwerte) als eigene `logs/diagnos/Netz-Status.md`, sobald PAC4200/NQ produktiv.
 - [ ] Phase 3: Infrastruktur-/IO-Pruefungen (LAN, SSH, API, MEGA-BAS, RS485) — sinnvoll **parallel** zur PAC4200-Inbetriebnahme im Mai
 - [ ] Phase 4: Begrenzte Schutzaktionen mit Cooldown (nur falls noetig)
 - [ ] Phase 5: Langzeitspeicher Diagnos-Berichte auf Pi5-SSD
