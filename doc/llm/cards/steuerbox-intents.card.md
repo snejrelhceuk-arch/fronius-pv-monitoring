@@ -5,7 +5,7 @@ role: E
 applyTo: "steuerbox/**"
 tags: [intent, overrides, respekt, hard-guards, audit]
 status: stable
-last_review: 2026-06-06
+last_review: 2026-06-28
 ---
 
 # Steuerbox Intents
@@ -48,6 +48,7 @@ Schicht E nimmt Operator-Intents entgegen, validiert sie und schreibt sie als Ov
 ## Häufige Aufgaben
 - Neue Aktion einfuehren -> `config.py:STEUERBOX_ALLOWED_ACTIONS` + `steuerbox/validators.py:validate_action` + `automation/engine/operator_overrides.py:_map_override_to_actions`.
 - UI-Meta fuer neue Buttons -> `steuerbox/steuerbox_api.py:api_control_meta` erweitern.
+- **Klima-Regelkreis dauerhaft deaktivieren/aktivieren:** `GET/POST /api/ops/klima-regel-aktiv` (direkte Config-API, kein Intent — schreibt `regelkreise.klimaanlage.aktiv` in `soc_param_matrix.json` atomar). Endpoint in `steuerbox/steuerbox_api.py:api_klima_regel_aktiv_get/set`. Failover: read-only (403 auf POST).
 - Override-Lebenszyklus debuggen -> `GET /api/ops/status` und `GET /api/ops/audit` vergleichen.
 - HA-Ladewunsch anbinden -> `action='afternoon_charge_request'` mit optionalen Parametern (`target_soc_pct`, `pause_hp_until_target`, Startfenster 12-15h).
 - MQTT-Button in HA: Bridge subscribt `{state_prefix}/{node_id}/cmd/afternoon_charge_request` (payload `PRESS`/`ON`) und POSTet Intent lokal zu `HA_BRIDGE_STEUERBOX_BASE/api/ops/intent`.

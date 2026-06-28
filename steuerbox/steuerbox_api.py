@@ -3,14 +3,17 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 import socket
+from datetime import date
 from pathlib import Path
 
 from flask import Flask, abort, jsonify, render_template, request
 
 import config
-from automation.engine.param_matrix import DEFAULT_MATRIX_PATH, lade_matrix
+from automation.engine.param_matrix import DEFAULT_MATRIX_PATH, lade_matrix, validiere_matrix
 from automation.engine.operator_overrides import (
     WP_ABSENK_K,
     WP_HEIZ_MAX_C,
@@ -120,6 +123,37 @@ def _asset_version(relative_path: str) -> int:
         return 0
 
 
+def _set_regelkreis_aktiv(regelkreis: str, aktiv: bool) -> dict:
+    """Liest Matrix, setzt aktiv-Flag fuer einen Regelkreis, speichert atomar."""
+    try:
+        matrix = lade_matrix(DEFAULT_MATRIX_PATH)
+    except Exception as exc:
+        return {'ok': False, 'error': f'Matrix lesen fehlgeschlagen: {exc}'}
+
+    if regelkreis not in matrix.get('regelkreise', {}):
+        return {'ok': False, 'error': f'Regelkreis nicht gefunden: {regelkreis}'}
+
+    matrix['regelkreise'][regelkreis]['aktiv'] = aktiv
+    matrix['_updated'] = date.today().isoformat()
+
+    fehler = validiere_matrix(matrix)
+    if fehler:
+        return {'ok': False, 'error': f'Validierungsfehler: {fehler[0]}'}
+
+    tmp_path = DEFAULT_MATRIX_PATH + '.tmp'
+    try:
+        with open(tmp_path, 'w') as f:
+            json.dump(matrix, f, indent=2, ensure_ascii=False)
+            f.write('\n')
+        os.replace(tmp_path, DEFAULT_MATRIX_PATH)
+    except Exception as exc:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        return {'ok': False, 'error': f'Speichern fehlgeschlagen: {exc}'}
+
+    return {'ok': True, 'aktiv': aktiv}
+
+
 def _check_port_available(host: str, port: int) -> bool:
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -210,6 +244,28 @@ def api_status():
 def api_audit():
     limit = int(request.args.get('limit', 50))
     return jsonify(get_audit(limit=limit))
+
+
+@app.route('/api/ops/klima-regel-aktiv', methods=['GET'])
+def api_klima_regel_aktiv_get():
+    matrix = _load_matrix_safe()
+    aktiv = matrix.get('regelkreise', {}).get('klimaanlage', {}).get('aktiv', False)
+    return jsonify({'ok': True, 'aktiv': bool(aktiv)})
+
+
+@app.route('/api/ops/klima-regel-aktiv', methods=['POST'])
+def api_klima_regel_aktiv_set():
+    if is_failover():
+        abort(403, description='failover host is read-only')
+    payload = request.get_json(silent=True) or {}
+    aktiv = payload.get('aktiv')
+    if not isinstance(aktiv, bool):
+        abort(422, description='aktiv must be bool')
+    result = _set_regelkreis_aktiv('klimaanlage', aktiv)
+    if not result['ok']:
+        abort(500, description=result.get('error', 'unknown error'))
+    LOG.info('klima_regel_aktiv gesetzt: %s (von %s)', aktiv, request.remote_addr)
+    return jsonify(result)
 
 
 @app.route('/api/ops/health', methods=['GET'])

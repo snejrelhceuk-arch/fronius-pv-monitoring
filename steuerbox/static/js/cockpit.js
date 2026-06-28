@@ -261,12 +261,78 @@ async function init() {
   }
 
   controls.forEach(buildControl);
+  buildKlimaRegelControl();
   if (respektInput) {
     respektInput.addEventListener('input', refreshDurationHint);
     respektInput.addEventListener('change', refreshDurationHint);
   }
   refreshDurationHint();
   logLine('Schalter initial ohne aktive Auswahl (inkl. Parameter-Vorschau).');
+}
+
+// ── Klima-Regel-Aktiv Control (direkte Config-API, kein Intent-Mechanismus) ──
+
+function updateKlimaRegelButtons(aktiv) {
+  const container = document.getElementById('klima-regel-aktiv');
+  if (!container) return;
+  const buttons = container.querySelectorAll('.state-btn');
+  buttons.forEach((btn) => {
+    const selected = btn.dataset.value === String(aktiv);
+    btn.classList.toggle('selected', selected);
+    btn.classList.toggle('intent-on', selected && btn.dataset.flavor === 'on');
+    btn.classList.toggle('intent-off', selected && btn.dataset.flavor === 'off');
+    btn.classList.toggle('intent-other', selected && btn.dataset.flavor === 'other');
+  });
+}
+
+function buildKlimaRegelControl() {
+  const container = document.getElementById('klima-regel-aktiv');
+  if (!container) return;
+
+  const states = [
+    { label: 'INAKTIV', value: false, flavor: 'off' },
+    { label: 'AKTIV', value: true, flavor: 'on' },
+  ];
+
+  states.forEach((entry) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'state-btn';
+    button.dataset.value = String(entry.value);
+    button.dataset.flavor = entry.flavor;
+
+    const label = document.createElement('span');
+    label.className = 'state-btn-label';
+    label.textContent = entry.label;
+    button.appendChild(label);
+
+    button.addEventListener('click', async () => {
+      try {
+        const response = await fetch('/api/ops/klima-regel-aktiv', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ aktiv: entry.value }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.description || data.error || `HTTP ${response.status}`);
+        }
+        updateKlimaRegelButtons(data.aktiv);
+        logLine(`klima_regel_aktiv: ${data.aktiv ? 'aktiviert' : 'deaktiviert'}`);
+      } catch (err) {
+        logLine(`klima_regel_aktiv: Fehler ${err.message}`);
+      }
+    });
+
+    container.appendChild(button);
+  });
+
+  fetch('/api/ops/klima-regel-aktiv', { method: 'GET' })
+    .then((r) => r.json())
+    .then((data) => {
+      if (data && data.ok) updateKlimaRegelButtons(data.aktiv);
+    })
+    .catch((err) => logLine(`klima_regel_aktiv: Status nicht geladen: ${err.message}`));
 }
 
 init();

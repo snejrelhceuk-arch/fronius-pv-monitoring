@@ -2,7 +2,7 @@
 title: "Automation: RegelKlimaanlage (Klima-Thermoschutz)"
 domain: automation
 role: C
-last_review: 2026-06-14
+last_review: 2026-06-28
 status: stable
 code_anchor: automation/engine/regeln/geraete.py#L1577
 invariants:
