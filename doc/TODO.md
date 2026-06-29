@@ -20,17 +20,13 @@
 
 ### Software-Items
 
-- [ ] `AktorBatterie.verifiziere()` — HTTP-API Read-Back implementieren
-- [ ] Wattpilot-Automation Phase 2 Stubs in `aktor_wattpilot.py` anbinden (set_strom, pause, resume, set_modus_pv, stoppe_laden)
 - [ ] Dashboard-Erweiterung: Automation-Tab in Web-UI
 - [ ] HP-Status in tag_view integrieren (flow_view zeigt bereits HP EIN/AUS)
 
 ### Architektur
 
 - [ ] Wattpilot externe Pause-Erkennung in `AktorWattpilot.verifiziere()`
-- [ ] Batterie-Aktor: Modus-Wechsel-Erkennung (`auto`/`manual`/`hold`) in `verifiziere()`
 - [ ] State-Machine fuer HP-Phasen statt If-Kette (RegelHeizpatrone, 6 Phasen, ~1600 LOC → Phase-Objekte). **Vorbedingung:** Characterization-Test-Harness fuer die Phasenlogik (kein Test-Setup vorhanden → blinder Umbau des Produktiv-Schreibpfads zu riskant).
-- [ ] Klimaanlage-Startup-Pruefung: `_hp_startup_check()` auf Fritz!DECT-Geraete erweitern oder `_fritzdect_startup_check()`
 - [ ] pv-config: restliche ~36 inline-Magic-Numbers (Drain-/Probe-Konstanten, `HP_NENN_W` etc.) verhaltensneutral in `soc_param_matrix.json` heben (4 get_param-Defaults bereits freigelegt). Test-Harness empfohlen.
 
 ### Architektur-Refactor

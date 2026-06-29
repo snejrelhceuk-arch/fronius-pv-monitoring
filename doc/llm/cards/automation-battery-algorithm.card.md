@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/aktoren/aktor_batterie.py"
 tags: [batterie, soc, fronius, modbus]
 status: stable
-last_review: 2026-06-06
+last_review: 2026-06-29
 ---
 
 # Battery-Algorithm
@@ -28,6 +28,7 @@ Setzt SOC-Grenzen (`soc_min`, `soc_max`) und Lademodus an der Fronius GEN24 — 
 - Schreibpfad ausschließlich über `BatteryConfig.write`. Kein Modbus-Schreibzugriff im produktiven Pfad (GEN24 22 A HW-Limit macht `InWRte`/`OutWRte` wirkungslos).
 - Bei `Soll == Ist` liefert `BatteryConfig.write()` ein `_NoOpResult` (truthy, `.noop=True`) statt `None` — verhindert FEHLER-Cooldown im Aktor (`fronius_api.py:_NoOpResult`, Fix 2026-04-27).
 - Nach erfolgreichem Schreiben muss Engine den Zielwert registrieren (siehe `automation-engine.card.md` → ExternalRespect).
+- **Read-Back (`AktorBatterie.verifiziere`):** `set_soc_min`/`set_soc_max` vergleichen `BAT_M0_SOC_MIN`/`MAX` (Integer). `set_soc_mode` vergleicht `BAT_M0_SOC_MODE` (Modus-Wechsel-Erkennung, case-insensitiv) **best-effort** — unlesbarer Modus blockiert nicht, nur ein klarer Soll/Ist-Mismatch meldet `ok=False`. `grid_charge` hat keinen Read-Back.
 
 ## No-Gos
 - Keine Lade-/Entlade-Raten setzen (entfernt 2026-03-07).

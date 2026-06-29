@@ -297,6 +297,30 @@ class AktorBatterie(AktorBase):
         kommando = aktion.get('kommando', '')
         wert = aktion.get('wert')
 
+        # SOC-Mode-Verifikation (Modus-Wechsel-Erkennung): String-Read-Back,
+        # best-effort — ein unlesbarer Modus blockiert NICHT (kein False-Negativ).
+        # Nur ein klarer Soll/Ist-Mismatch meldet ok=False (Mode-Wechsel wirkungslos).
+        if kommando == 'set_soc_mode':
+            try:
+                time.sleep(0.5)
+                api = self._get_http_api()
+                if not api:
+                    return {'ok': True, 'grund': 'HTTP-API nicht verfügbar — best effort'}
+                api._cache_time = 0
+                ist = str(api.get_values().get('BAT_M0_SOC_MODE') or '').lower()
+                soll = str(wert or '').lower()
+                if not ist:
+                    return {'ok': True, 'grund': 'SOC_MODE nicht lesbar — best effort'}
+                ok = (ist == soll)
+                if not ok:
+                    LOG.warning(f"Verifikation set_soc_mode: SOLL={soll}, IST={ist}")
+                else:
+                    LOG.debug(f"Verifikation set_soc_mode: OK (IST={ist})")
+                return {'ok': ok, 'ist': ist, 'soll': soll}
+            except Exception as e:
+                LOG.warning(f"Verifikation set_soc_mode fehlgeschlagen: {e} — best effort")
+                return {'ok': True, 'grund': str(e)}
+
         # Mapping Kommando → Fronius-API-Schlüssel
         param_key = {
             'set_soc_min': 'BAT_M0_SOC_MIN',
@@ -304,7 +328,7 @@ class AktorBatterie(AktorBase):
         }.get(kommando)
 
         if not param_key:
-            # Kommandos ohne Read-Back (grid_charge, set_soc_mode)
+            # Kommandos ohne Read-Back (grid_charge)
             return {'ok': True, 'grund': f'Keine Verifikation für {kommando}'}
 
         try:
