@@ -19,22 +19,28 @@ SERIAL_PORT = '/dev/ttyACM0'
 BAUD_RATE = 19200
 SLAVE_ID = 1
 
-# Dimplex NWPM Holding-Register (FC=3)
-# Register 1–100: Werte in 0.1 °C (signed int16)
-# Register 5000+: Sollwerte in ganzen °C
-_REGS_TENTH = {
-    'aussen_temp':    1,
-    'vorlauf':        5,
-    'ruecklauf':      2,
-    'ruecklauf_soll': 53,
-    'ww_ist':         3,
-    'quelle_ein':     6,
-    'quelle_aus':     7,
+# ── Zentrale Dimplex-NWPM-Modbus-Register-Map (Holding-Register, FC=3) ──
+# Single-Source für Adressen + Skalierung + Schreibrechte. Register 1–100:
+# Werte in 0.1 °C (signed int16). Register 5000+: Sollwerte in ganzen °C.
+#   scale     — Anzeige = roh * scale (0.1 = Zehntelgrad-Register, 1.0 = Ganzzahl)
+#   writable  — über write_register() schreibbar (Whitelist, mit min/max)
+# Rolle C (Automation). KEINE Cross-Role-Nutzung: die A-Rolle (collector/)
+# hat ihre eigene Fronius-Register-Map (collector/quellen.py:MODELS).
+WP_REGISTERS = {
+    'aussen_temp':    {'addr': 1,    'scale': 0.1, 'writable': False, 'einheit': '°C'},
+    'ruecklauf':      {'addr': 2,    'scale': 0.1, 'writable': False, 'einheit': '°C'},
+    'ww_ist':         {'addr': 3,    'scale': 0.1, 'writable': False, 'einheit': '°C'},
+    'vorlauf':        {'addr': 5,    'scale': 0.1, 'writable': False, 'einheit': '°C'},
+    'quelle_ein':     {'addr': 6,    'scale': 0.1, 'writable': False, 'einheit': '°C'},
+    'quelle_aus':     {'addr': 7,    'scale': 0.1, 'writable': False, 'einheit': '°C'},
+    'ruecklauf_soll': {'addr': 53,   'scale': 0.1, 'writable': False, 'einheit': '°C'},
+    'heiz_soll':      {'addr': 5037, 'scale': 1.0, 'writable': True,  'min': 18, 'max': 60, 'einheit': '°C'},
+    'ww_soll':        {'addr': 5047, 'scale': 1.0, 'writable': True,  'min': 10, 'max': 85, 'einheit': '°C'},
 }
-_REGS_INT = {
-    'ww_soll': 5047,
-    'heiz_soll': 5037,
-}
+
+# Abgeleitete Lese-Sichten (Register werden einzeln gelesen → Reihenfolge irrelevant)
+_REGS_TENTH = {k: v['addr'] for k, v in WP_REGISTERS.items() if v['scale'] == 0.1}
+_REGS_INT = {k: v['addr'] for k, v in WP_REGISTERS.items() if v['scale'] == 1.0}
 
 
 def _signed16(raw):
@@ -108,10 +114,10 @@ def get_wp_status():
 
 # ── Schreib-Funktionen (ABCD: nur C-Rolle) ──────────────────
 
-# Zugelassene Schreib-Register (Whitelist — Sicherheit)
+# Zugelassene Schreib-Register (Whitelist — Sicherheit), abgeleitet aus WP_REGISTERS
 _WRITE_REGS = {
-    'ww_soll': {'addr': 5047, 'min': 10, 'max': 85, 'einheit': '°C'},
-    'heiz_soll': {'addr': 5037, 'min': 18, 'max': 60, 'einheit': '°C'},
+    k: {'addr': v['addr'], 'min': v['min'], 'max': v['max'], 'einheit': v['einheit']}
+    for k, v in WP_REGISTERS.items() if v['writable']
 }
 
 

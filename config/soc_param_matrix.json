@@ -338,6 +338,16 @@
           ],
           "einheit": "kWh",
           "beschreibung": "Oberes Clamp-Limit fuer prognostizierten Nachtverbrauch"
+        },
+        "auto_switch_min_soc_pct": {
+          "wert": 15,
+          "bereich": [
+            0,
+            100
+          ],
+          "einheit": "%",
+          "obs_feld": "batt_soc_pct",
+          "beschreibung": "Phase-2 Auto-Umschaltung: erst ab diesem SOC + Prognose 'gut' wird set_soc_mode=auto gesetzt"
         }
       },
       "score_gewicht": 55,
@@ -1154,6 +1164,15 @@
           "obs_feld": "grid_power_w",
           "aktor_kommando": "hp_aus",
           "beschreibung": "Schwellwert für integrierten positiven Netzbezug über aus_netzbezug_fenster_min. Bei Überschreitung schaltet die HP AUS. Schaltverluste (Wattpilot-Start, Lastwechsel) bleiben unter dieser Schwelle."
+        },
+        "ww_temp_watchdog_s": {
+          "wert": 300,
+          "bereich": [
+            60,
+            1800
+          ],
+          "einheit": "s",
+          "beschreibung": "Watchdog: HP AUS, wenn WW-Temperatur (Modbus) laenger als diese Zeit ungueltig/unbekannt bleibt"
         }
       },
       "score_gewicht": 40,
@@ -1446,6 +1465,24 @@
           ],
           "einheit": "K",
           "beschreibung": "WW-Soll-Absenkung relativ zum Standard (z.B. 7K: 57°C → 50°C)"
+        },
+        "wp_min_lauf_min": {
+          "wert": 15,
+          "bereich": [
+            0,
+            120
+          ],
+          "einheit": "min",
+          "beschreibung": "WP-Kompressorschutz: Mindestlaufzeit, bevor eine Sollwert-Ruecknahme erlaubt ist"
+        },
+        "cooldown_nach_ruecknahme_s": {
+          "wert": 3600,
+          "bereich": [
+            0,
+            21600
+          ],
+          "einheit": "s",
+          "beschreibung": "Cooldown nach Ruecknahme einer WP-Sollwert-Anhebung, bevor erneut angehoben wird"
         }
       },
       "score_gewicht": 47,
@@ -1524,6 +1561,24 @@
           ],
           "einheit": "K",
           "beschreibung": "Heiz-Soll-Absenkung relativ zum Standard (z.B. 7K: 37°C → 30°C)"
+        },
+        "wp_min_lauf_min": {
+          "wert": 15,
+          "bereich": [
+            0,
+            120
+          ],
+          "einheit": "min",
+          "beschreibung": "WP-Kompressorschutz: Mindestlaufzeit, bevor eine Sollwert-Ruecknahme erlaubt ist"
+        },
+        "cooldown_nach_ruecknahme_s": {
+          "wert": 3600,
+          "bereich": [
+            0,
+            21600
+          ],
+          "einheit": "s",
+          "beschreibung": "Cooldown nach Ruecknahme einer WP-Sollwert-Anhebung, bevor erneut angehoben wird"
         }
       },
       "score_gewicht": 46,
@@ -1583,6 +1638,24 @@
           ],
           "einheit": "h",
           "beschreibung": "Maximale Boost-Dauer. Danach Rücknahme."
+        },
+        "wp_min_lauf_min": {
+          "wert": 15,
+          "bereich": [
+            0,
+            120
+          ],
+          "einheit": "min",
+          "beschreibung": "WP-Kompressorschutz: Mindestlaufzeit, bevor eine Sollwert-Ruecknahme erlaubt ist"
+        },
+        "cooldown_nach_ruecknahme_s": {
+          "wert": 3600,
+          "bereich": [
+            0,
+            21600
+          ],
+          "einheit": "s",
+          "beschreibung": "Cooldown nach Ruecknahme einer WP-Sollwert-Anhebung, bevor erneut angehoben wird"
         }
       },
       "score_gewicht": 48,

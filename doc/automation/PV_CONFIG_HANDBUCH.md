@@ -1,7 +1,7 @@
 # PV-CONFIG Handbuch
 
 **Konfigurationsprogramm für die PV-Batterie-Automation**
-Version 2.0 — Stand: 29. Mai 2026
+Version 2.1 — Stand: 29. Juni 2026
 
 ---
 
@@ -291,6 +291,7 @@ läuft über SOC_MIN/SOC_MAX der Regelkreise.
 | surplus_sicherheitsfaktor | 1.3 | 1.0–2.0 | **(Deprecated, noch in Matrix.)** Vom Clear-Sky-Peak-Algorithmus abgelöst. |
 | wolken_schwer | 85% | 60–100% | **Bewölkungsschwelle.** Ab dieser Bewölkung wird SOC_MAX **sofort** angehoben (ohne auf Surplus zu warten). Verhindert, dass an trüben Tagen die Batterie halbleer in die Nacht geht. |
 | max_stunden_vor_sunset | 1.5 h | 0.5–3.0 h | **Deadline.** Spätestens X Stunden vor Sonnenuntergang wird SOC_MAX **in jedem Fall** angehoben. Sicherheitsnetz: Sorgt dafür, dass die Öffnung auch bei fehlenden Prognosedaten stattfindet. |
+| auto_switch_min_soc | 15% | 0–100% | **Phase-2 Auto-Umschaltung.** Wenn Ziel=100% gehalten wird UND die Prognose `gut` ist, schaltet die Regel von `manual` auf `auto`-Modus — aber erst ab diesem SOC. Verhindert verfrühte Auto-Umschaltung bei noch niedrigem Ladestand. |
 
 **Beispiel (sonniger Tag, 28. Feb):**
 ```
@@ -609,6 +610,7 @@ SOC_MAX auf 100% geht (Nachmittag) wird die Batterie-Entladung strenger bewertet
 | kurz_burst_sperre_s | 1800 s | 300–3600 s | **Sperrzeit nach Kurz-Burst-Limit erreicht (30 Min).** HP wird für diese Dauer blockiert wenn `kurz_burst_limit` Bursts hintereinander stattgefunden haben. Standard 1800s (30 Min) seit 2026-03-24; vorher 420s. |
 | extern_respekt | 1800 s | 900–7200 s | **Autoritätszeit (30 Min, 15 Min–2 h).** Bei manueller Einschaltung: Engine respektiert Nutzer-Entscheidung, nur Übertemp und SOC ≤ extern_aus_soc überstimmen. Bei manuellem Ausschalten: hp_ein für diese Dauer gesperrt. |
 | extern_aus_soc | 15% | 5–30% | **Autoritäts-Override bei niedrigem SOC.** Wird HP manuell eingeschaltet, überstimmt die Engine bei SOC ≤ diesem Wert und schaltet HP aus (Batterieschutz). |
+| ww_temp_watchdog_s | 300 s | 60–1800 s | **WW-Temp-Watchdog.** Bleibt die WW-Temperatur (WP-Modbus) länger als diese Zeit ungültig/unbekannt (z.B. Modbus-Ausfall), schaltet die HP sicherheitshalber AUS. |
 
 **Rechenbeispiel (sonniger Märztag, ≈ 45 kWh Prognose, 9h Sonne):**
 ```
@@ -781,6 +783,8 @@ wird. Die WP pausiert die WW-Bereitung, SOC wird geschont.
 | pv_restore_w | 3000 W | 1500–10000 W | PV-Rücknahme-Schwelle |
 | soc_restore_pct | 30 % | 10–80 % | SOC-Rücknahme-Schwelle |
 | max_verschiebung_h | 1 h | 0.5–6 h | Max. Verschiebungsdauer |
+| wp_min_lauf_min | 15 min | 0–120 min | WP-Kompressorschutz: Mindestlaufzeit, bevor eine Soll-Rücknahme erlaubt ist |
+| cooldown_nach_ruecknahme_s | 3600 s | 0–21600 s | Cooldown nach Rücknahme, bevor erneut angehoben wird |
 
 **Beispiel (trüber Vormittag, aber Aufklarung erwartet):**
 ```
@@ -814,7 +818,7 @@ Energiebilanz Heiz-Soll absenken um Kompressor-Starts zu vermeiden.
 - Rücknahme: PV `> pv_restore_w` ODER SOC `> soc_restore_pct` ODER Timeout `max_verschiebung_h`
 - Sunset-Ausnahme: < 2 h vor Sonnenuntergang → Forecast-Schwelle halbiert
 
-Wirkung: Statt der WW-Soll wird die **Heiz-Festwertsoll** (Reg 5037) abgesenkt. So vermeidet die Regel einen Kompressorstart aus der Batterie, wenn die Sonne in Kürze ohnehin Überschuss liefert. Parameter und Bereiche sind analog zu [4.14](#414-ww_verschiebung--ww-bereitung-verschieben-priorität-2).
+Wirkung: Statt der WW-Soll wird die **Heiz-Festwertsoll** (Reg 5037) abgesenkt. So vermeidet die Regel einen Kompressorstart aus der Batterie, wenn die Sonne in Kürze ohnehin Überschuss liefert. Parameter und Bereiche sind analog zu [4.14](#414-ww_verschiebung--ww-bereitung-verschieben-priorität-2) — inklusive `wp_min_lauf_min` (Kompressor-Mindestlaufzeit) und `cooldown_nach_ruecknahme_s`.
 
 ---
 
@@ -841,6 +845,8 @@ thermisch in Warmwasser puffern, statt einzuspeisen.
 | ww_max_c | 60 °C | 55–70 °C | WW-Sicherheitslimit |
 | boost_temp_c | 62 °C | 55–70 °C | Boost-Zieltemperatur |
 | max_boost_h | 2 h | 0.5–4 h | Max. Boost-Dauer |
+| wp_min_lauf_min | 15 min | 0–120 min | WP-Kompressorschutz: Mindestlaufzeit, bevor eine Soll-Rücknahme erlaubt ist |
+| cooldown_nach_ruecknahme_s | 3600 s | 0–21600 s | Cooldown nach Rücknahme, bevor erneut angehoben wird |
 
 **Beispiel (sonniger Mittag, Batterie voll):**
 ```
