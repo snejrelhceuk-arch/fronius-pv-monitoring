@@ -425,6 +425,36 @@ Die Score-Berechnung (`bewerte()`) und Aktionserzeugung (`erzeuge_aktionen()`)
 sind Methoden der **Regeln** (`Regel`-Basisklasse in `regeln/basis.py`),
 nicht der Aktoren.
 
+### Regel- & Aktor-Registry (Plugin-System)
+
+Regeln und Aktoren werden **nicht mehr im Code hartverdrahtet**, sondern
+deklarativ über `config/engine_registry.json` registriert. Loader:
+`automation/engine/registry.py` (`lade_regeln()` / `lade_aktoren()`).
+
+```json
+{
+  "regeln": [
+    { "name": "sls_schutz", "klasse": "automation.engine.regeln.schutz.RegelSlsSchutz", "aktiv": true },
+    ...
+  ],
+  "aktoren": [
+    { "name": "batterie", "klasse": "automation.engine.aktoren.aktor_batterie.AktorBatterie", "aktiv": true }
+  ]
+}
+```
+
+- **Reihenfolge** unter `regeln[]` = Auswertungsreihenfolge bei Score-Gleichstand.
+- **`"aktiv": false`** deaktiviert eine Regel/einen Aktor ohne Code-Änderung.
+- **`klasse`** ist der dotted Import-Pfad; die Klasse muss von `Regel`
+  bzw. `AktorBase` erben (wird beim Laden geprüft).
+- **Sicherheits-Fallback:** Fehlt die JSON oder ist sie strukturell defekt,
+  greifen die Code-Defaults (`DEFAULT_REGELN_SPEC` / `DEFAULT_AKTOREN_SPEC`
+  in `registry.py`). Die Produktion läuft dann unverändert weiter — eine
+  kaputte Registry darf nie still eine Schutz-Regel verschlucken.
+- **Single-Source:** Live-Engine (`engine.py`), Actuator (`actuator.py`) und
+  die Web-Vorausschau (`engine_vorausschau()`) nutzen denselben Loader →
+  kein Drift zwischen Live-Auswertung und Vorschau.
+
 ### Aktor-Plugins (Ist-Stand)
 
 | Plugin | Aktor | Steuerungskanal | Status |

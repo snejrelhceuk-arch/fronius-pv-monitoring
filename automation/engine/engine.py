@@ -30,28 +30,8 @@ from automation.engine.param_matrix import (
 from automation.engine.regeln.soc_extern import soc_extern_tracker
 from automation.engine.regeln.waermepumpe import reset_wp_extern_tracking
 
-from automation.engine.regeln import (          # noqa: E402
-    Regel,
-    # Entfernt (2026-03-07): RegelSocSchutz, RegelTempSchutz,
-    # RegelAbendEntladerate, RegelLaderateDynamisch
-    RegelSlsSchutz,
-    RegelKomfortReset,
-    RegelMorgenSocMin,
-    RegelNachmittagSocMax,
-    RegelZellausgleich,
-    RegelForecastPlausi,
-    RegelWattpilotBattSchutz,
-    RegelHeizpatrone,
-    RegelKlimaanlage,
-    RegelFussbodenheizungNacht,
-    RegelWwAbsenkung,
-    RegelHeizAbsenkung,
-    RegelWwVerschiebung,
-    RegelHeizVerschiebung,
-    RegelWwBoost,
-    RegelWpPflichtlauf,
-    RegelHeizBedarf,
-)
+from automation.engine.regeln import Regel  # noqa: E402  (Typ-Annotation)
+from automation.engine.registry import lade_regeln
 
 LOG = logging.getLogger('engine')
 
@@ -151,28 +131,14 @@ class Engine:
         LOG.info("Parametermatrix neu geladen")
 
     def _register_default_regeln(self):
-        """Alle SOC-Regeln registrieren."""
-        self._regeln = [
-            # Entfernt (2026-03-07): RegelSocSchutz(), RegelTempSchutz(),
-            # RegelAbendEntladerate(), RegelLaderateDynamisch()
-            RegelSlsSchutz(),
-            RegelKomfortReset(),
-            RegelMorgenSocMin(),
-            RegelNachmittagSocMax(),
-            RegelZellausgleich(),
-            RegelForecastPlausi(),
-            RegelWattpilotBattSchutz(),
-            RegelKlimaanlage(),
-            RegelHeizpatrone(),
-            RegelFussbodenheizungNacht(),
-            RegelWwVerschiebung(),
-            RegelHeizVerschiebung(),
-            RegelWwBoost(),
-            RegelWpPflichtlauf(),
-            RegelHeizBedarf(),
-            RegelWwAbsenkung(),
-            RegelHeizAbsenkung(),
-        ]
+        """Regeln aus der Plugin-Registry laden.
+
+        Single-Source: `config/engine_registry.json` (Reihenfolge =
+        Auswertungsreihenfolge bei Score-Gleichstand). Fehlt/defekt die
+        Registry, greifen die Code-Defaults in `registry.py` —
+        Produktion läuft unverändert weiter.
+        """
+        self._regeln = lade_regeln()
         LOG.info(f"Regeln registriert: {[r.name for r in self._regeln]}")
 
     def _restore_persistent_state(self):

@@ -571,28 +571,11 @@ def engine_vorausschau() -> list[dict]:
         from automation.engine.param_matrix import lade_matrix
         matrix = lade_matrix(DEFAULT_MATRIX_PATH)
 
-        from automation.engine.regeln import (
-            RegelSlsSchutz,
-            RegelKomfortReset,
-            RegelMorgenSocMin, RegelNachmittagSocMax, RegelZellausgleich,
-            RegelForecastPlausi, RegelWattpilotBattSchutz,
-            RegelHeizpatrone, RegelKlimaanlage,
-            RegelWwVerschiebung, RegelHeizVerschiebung,
-            RegelWwBoost, RegelWpPflichtlauf,
-            RegelHeizBedarf, RegelWwAbsenkung, RegelHeizAbsenkung,
-        )
-
-        regeln = [
-            RegelSlsSchutz(),
-            RegelKomfortReset(),
-            RegelMorgenSocMin(), RegelNachmittagSocMax(), RegelZellausgleich(),
-            RegelForecastPlausi(), RegelWattpilotBattSchutz(),
-            RegelKlimaanlage(),
-            RegelHeizpatrone(),
-            RegelWwVerschiebung(), RegelHeizVerschiebung(),
-            RegelWwBoost(), RegelWpPflichtlauf(),
-            RegelHeizBedarf(), RegelWwAbsenkung(), RegelHeizAbsenkung(),
-        ]
+        # Single-Source: identische Regel-Registry wie der Daemon (Reihenfolge
+        # + aktiv-Flags aus config/engine_registry.json). Verhindert Drift
+        # zwischen Live-Engine und Vorausschau.
+        from automation.engine.registry import lade_regeln
+        regeln = lade_regeln()
 
         vorschau = []
         for regel in regeln:

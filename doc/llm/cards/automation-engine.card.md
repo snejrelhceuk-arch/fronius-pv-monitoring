@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/**"
 tags: [engine, tick-loop, regeln, registry]
 status: stable
-last_review: 2026-06-14
+last_review: 2026-06-29
 ---
 
 # Automation-Engine
@@ -16,6 +16,7 @@ Zentrale Steuerschleife (Rolle C). Sammelt Beobachtungen, ruft Schutz-Checks, da
 ## Code-Anchor
 - **Hauptdatei:** `automation/engine/automation_daemon.py:AutomationDaemon`
 - **Engine-Kern:** `automation/engine/engine.py:Engine.zyklus`
+- **Plugin-Registry (Regeln + Aktoren):** `automation/engine/registry.py:lade_regeln`/`lade_aktoren`, deklarativ in `config/engine_registry.json`
 - **Zugehörige Configs:** `config/soc_param_matrix.json` (zentrale Parameter-Matrix)
 - **State (RAM):** `/dev/shm/automation_obs.db` (ObsState, Tier1, Operator-Overrides)
 - **State (Persist):** `data.db` Tabelle `automation_log` (Aktor-Resultate)
@@ -40,14 +41,17 @@ Zentrale Steuerschleife (Rolle C). Sammelt Beobachtungen, ruft Schutz-Checks, da
 - Keine Regeländerung ohne Score-/Aktor-Cascade-Berücksichtigung (sonst Doppelschaltungen).
 
 ## Häufige Aufgaben
-- Neue Regel hinzufügen → `automation/engine/engine.py:_register_default_regeln` + passendes Modul unter `automation/engine/regeln/` (z. B. `automation/engine/regeln/schutz.py`; Subklasse `Regel`, `bewerte()` und ggf. `erzeuge_aktionen()`).
+- Neue Regel hinzufügen → Regel-Modul unter `automation/engine/regeln/` anlegen (Subklasse `Regel`, `bewerte()` + ggf. `erzeuge_aktionen()`), dann Eintrag in `config/engine_registry.json` → `regeln[]` (`name`, `klasse`, `aktiv`) **an der gewünschten Reihenfolge-Position**. Die Engine lädt die Regeln daraus (`registry.py:lade_regeln`); `DEFAULT_REGELN_SPEC` in `registry.py` ist der Code-Fallback und muss synchron gehalten werden.
+- Regel/Aktor abschalten ohne Code → `"aktiv": false` im Registry-Eintrag.
+- Auswertungsreihenfolge ändern → Reihenfolge in `config/engine_registry.json` → `regeln[]` ändern (= Reihenfolge bei Score-Gleichstand).
 - Tick-Intervall ändern → `automation/engine/automation_daemon.py:AutomationDaemon.run` (Konstanten OBS_COLLECT/FAST/STRATEGIC).
 - Score-Logik einer Regel debuggen → `automation/engine/engine.py:Engine.zyklus` (Logging) + Regel-Klasse `bewerte()`.
 - Operator-Override verarbeiten → `automation/engine/operator_overrides.py:OperatorOverrideProcessor.process_pending`.
 - Aktiven Tages-Intent lesen → `automation/engine/operator_intents.py:read_active_afternoon_charge_intent`.
 
 ## Bekannte Fallstricke
-- 17 Regeln registriert (Stand 2026-06). Reihenfolge im Code = Auswertungsreihenfolge bei Score-Gleichstand.
+- 17 Regeln registriert (Stand 2026-06). Reihenfolge in `config/engine_registry.json` = Auswertungsreihenfolge bei Score-Gleichstand. Fehlt/defekt die Registry-JSON, fällt `registry.py` sicher auf `DEFAULT_REGELN_SPEC`/`DEFAULT_AKTOREN_SPEC` zurück (Produktion läuft unverändert) — eine kaputte JSON darf nie Schutz-Regeln still verschlucken.
+- `engine_vorausschau()` (Web-API, ohne Daemon) nutzt **dieselbe** `lade_regeln()`-Registry wie die Live-Engine (Single-Source, kein Drift mehr).
 - **FBH-Nachtschaltung** (`RegelFussbodenheizungNacht`, `geraete.py`): rein zeitbasierte, flankengetriggerte Schaltung der Fußbodenheizungs-Steckdose (Fritz!DECT) — genau 1× `fbh_ein` zu `fenster_start_h` und 1× `fbh_aus` im Nachlauf nach `fenster_ende_h`, je Kalendertag. Once-pro-Tag-Sperre über `_absenkung_done['fbh_ein'/'fbh_aus']` (erst nach Aktor-Erfolg via `meta_absenkung_tag`). Läuft im Schutz-Pass (Whitelist in `_ist_schutz`), kein Nachstellen → oszillationssicher und konfliktarm zur HomeAssistant-Heizung. Matrix: `regelkreise.fussbodenheizung`. Gedacht als Sommer-Regelmäßigkeit (HA-Automation dann aus); im Winter `aktiv:false` setzen, da HA die FBH verwaltet.
 - ExternalRespect-Hold (HP/WP, 30 min) wird per `extern_respekt_s` in der Matrix gesteuert — siehe `automation-regel-heizpatrone.card.md` und `automation-regel-wattpilot.card.md`.
 - `automation_log` ist die einzige aktive Persistenz-Tabelle für Aktor-Resultate. **`battery_control_log` wird nicht mehr geschrieben**; der frühere Lese-Fallback in `pv-config.py`/`routes/system/` wurde 2026-05-29 entfernt.

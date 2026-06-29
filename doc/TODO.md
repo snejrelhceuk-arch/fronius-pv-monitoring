@@ -1,7 +1,7 @@
 # Zentrale TODO-Liste — PV-System
 
-**Stand:** 2026-05-29  
-**Regel:** Alle offenen Aufgaben gehoeren in DIESE Datei. Keine verteilten TODOs in Subdirectories. Nur offene `- [ ]` Items + bewusst verworfene Strategien (`~~..~~ verworfen`) bleiben hier.
+**Stand:** 2026-06-29  
+**Regel:** Alle offenen Aufgaben gehoeren in DIESE Datei. Keine verteilten TODOs in Subdirectories. Ausschliesslich offene `- [ ]` ToDos — keine Audit-/Entwicklungsnotizen.
 
 ---
 
@@ -18,39 +18,35 @@
 
 ## Automation (Schicht C)
 
-### Kurz: Offene Software-Items
+### Software-Items
 
 - [ ] `AktorBatterie.verifiziere()` — HTTP-API Read-Back implementieren
 - [ ] Wattpilot-Automation Phase 2 Stubs in `aktor_wattpilot.py` anbinden (set_strom, pause, resume, set_modus_pv, stoppe_laden)
 - [ ] Dashboard-Erweiterung: Automation-Tab in Web-UI
 - [ ] HP-Status in tag_view integrieren (flow_view zeigt bereits HP EIN/AUS)
-- [ ] RegelHeizpatrone Refactoring: 903 LOC → Phase-Objekte (Wunsch, nicht dringend)
 
-### Architektur (aus Audits 2026-04 / 2026-06 konsolidiert)
+### Architektur
 
 - [ ] Wattpilot externe Pause-Erkennung in `AktorWattpilot.verifiziere()`
 - [ ] Batterie-Aktor: Modus-Wechsel-Erkennung (`auto`/`manual`/`hold`) in `verifiziere()`
-- [ ] Plugin-faehige Engine: Regel-/Aktor-Registrierung von Hardcode zu JSON-Registry (`engine.py` A1/A2; grosse Investition)
 - [ ] Zentrale Modbus-Register-Map extrahieren (aktuell auf collectors/aktoren verteilt)
-- [ ] State-Machine fuer HP-Phasen statt If-Kette (6 Phasen, ~1600 LOC)
-- [ ] `engine_vorausschau()` Code-Duplikation eliminieren: Regel-Liste wird in `engine.py` und `engine_vorausschau()` doppelt gepflegt (aktuell beide vollständig/synchron) — Single-Source erwägen. *(Teil »9 fehlende Regeln« aus DEEP-2026-06 K-02 ist erledigt: Vorausschau ist vollständig, Audit DEEP-2026-05-29 verifiziert.)*
-- [ ] Klimaanlage-Startup-Pruefung: `_hp_startup_check()` auf Fritz!DECT-Geraete erweitern oder `_fritzdect_startup_check()` (K-03)
+- [ ] State-Machine fuer HP-Phasen statt If-Kette (RegelHeizpatrone, 6 Phasen, ~1600 LOC → Phase-Objekte)
+- [ ] Klimaanlage-Startup-Pruefung: `_hp_startup_check()` auf Fritz!DECT-Geraete erweitern oder `_fritzdect_startup_check()`
 - [ ] pv-config Whiptail-UI: ~40 versteckte Parameter freilegen (Drain-, WP-Soll-, Absenkung-, Klima-Parameter)
 
-### Architektur-Refactor (Audit 2026-05-16)
+### Architektur-Refactor
 
 - [ ] **`pv-config.py` (2145 Z.) sektionieren**: Whiptail-UI-Skript. Kandidaten fuer Auslagerung: Matrix-Editor (~500 Z.) → `tools/pv_config/matrix_editor.py`, Diagnose-Reader (~300 Z.) → `tools/pv_config/diagnose.py`, Service-Steuerung (~200 Z.) → `tools/pv_config/service.py`. Kein Service-Impact (manuell aufgerufen), aber Aufruf-Pfade in OLLI/-Scripts pruefen.
 - [ ] `solar_geometry.py` (1979 Z.) und `solar_forecast.py` (1368 Z.) auf logische Sub-Module pruefen (Sonnengeometrie vs. Forecast-Cache vs. OpenMeteo-Client).
 - [ ] `automation/engine/event_notifier.py` (1126 Z.) in Schwellen-/Dedup-/Mail-Module zerlegen.
 
-### Tech-Debt (Audit-Befunde, niedrige Prio)
+### Tech-Debt (niedrige Prio)
 
 - [ ] ForecastCollector Sunrise/Sunset-Fallback: saisonale Tabelle statt festem 7/17
 - [ ] `tier1_checker._check_netz_ueberlast()`: `reduce_power`-Kommando mit explizitem Reduktionswert (proportional)
 - [ ] `HP_NENN_W=2000` aus Code in `soc_param_matrix.json` als `hp_nenn_w` (statt Hardcode)
 
-
-### Mittel: Warnungen & Benachrichtigungen
+### Warnungen & Benachrichtigungen
 
 - [ ] Passive Warnungen (Web-Dashboard): Inverter-Ausfall >10 min, Clear-Sky-Abweichung >40%, SOC-Spruenge >20%
 - [ ] Forecast-Empfehlung: "Guter Tag morgen → EV-Ladung auf Mittagszeit"
@@ -79,8 +75,8 @@
 
 ## Diagnos (Schicht D)
 
-- [ ] **Echter Befund (offen):** `integrity:monthly_rollup` meldet ~48 kWh Abweichung zwischen `monthly_statistics` und der `daily_data`-Summe (CRIT, stabil). Ursache klären (Counter-Reset? Korrektur in `statistics_corrections`? Aggregations-Drift) und bereinigen — KEIN Fehlalarm, daher bewusst nicht unterdrückt.
-- [ ] Diagnos-Mailstruktur: weiteren Außenstehenden-Schliff prüfen (Wording/Reihenfolge), nachdem die neuen Statusdateien (`logs/diagnos/*.md`) im Betrieb beobachtet wurden.
+- [ ] `integrity:monthly_rollup`: ~48 kWh Abweichung zwischen `monthly_statistics` und `daily_data`-Summe (CRIT, stabil) — Ursache klären (Counter-Reset / `statistics_corrections` / Aggregations-Drift) und bereinigen.
+- [ ] Diagnos-Mailstruktur: Wording/Reihenfolge nachschärfen, nachdem die Statusdateien (`logs/diagnos/*.md`) im Betrieb beobachtet wurden.
 - [ ] RAW-Status-Ursachenheuristik erweitern: Stromausfall vs. stale process klarer trennen (Korrelation mit Service-Restart-Logs statt nur Boot-Zeit).
 - [ ] Optional: Netz-Anomalien (Schwankungen/Extremwerte) als eigene `logs/diagnos/Netz-Status.md`, sobald PAC4200/NQ produktiv.
 - [ ] Phase 3: Infrastruktur-/IO-Pruefungen (LAN, SSH, API, MEGA-BAS, RS485) — sinnvoll **parallel** zur PAC4200-Inbetriebnahme im Mai

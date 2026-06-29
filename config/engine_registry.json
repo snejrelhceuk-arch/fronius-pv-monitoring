@@ -1,0 +1,30 @@
+{
+  "_doc": "Plugin-Registry der Automation-Engine (Rolle C). Single-Source für Regel- und Aktor-Registrierung. Die Reihenfolge unter 'regeln' ist die Auswertungsreihenfolge bei Score-Gleichstand. 'aktiv': false deaktiviert einen Eintrag ohne Code-Änderung. Fehlt/defekt diese Datei, nutzt die Engine die Code-Defaults in automation/engine/registry.py (Produktion läuft unverändert weiter). 'klasse' ist der dotted Import-Pfad; muss von Regel bzw. AktorBase erben.",
+  "_version": "1.0.0",
+  "_updated": "2026-06-29",
+  "regeln": [
+    { "name": "sls_schutz",           "klasse": "automation.engine.regeln.schutz.RegelSlsSchutz",                 "aktiv": true },
+    { "name": "komfort_reset",        "klasse": "automation.engine.regeln.soc_steuerung.RegelKomfortReset",       "aktiv": true },
+    { "name": "morgen_soc_min",       "klasse": "automation.engine.regeln.soc_steuerung.RegelMorgenSocMin",       "aktiv": true },
+    { "name": "nachmittag_soc_max",   "klasse": "automation.engine.regeln.soc_steuerung.RegelNachmittagSocMax",   "aktiv": true },
+    { "name": "zellausgleich",        "klasse": "automation.engine.regeln.optimierung.RegelZellausgleich",        "aktiv": true },
+    { "name": "forecast_plausi",      "klasse": "automation.engine.regeln.optimierung.RegelForecastPlausi",       "aktiv": true },
+    { "name": "wattpilot_battschutz", "klasse": "automation.engine.regeln.geraete.RegelWattpilotBattSchutz",      "aktiv": true },
+    { "name": "klimaanlage",          "klasse": "automation.engine.regeln.geraete.RegelKlimaanlage",              "aktiv": true },
+    { "name": "heizpatrone",          "klasse": "automation.engine.regeln.geraete.RegelHeizpatrone",              "aktiv": true },
+    { "name": "fbh_nacht",            "klasse": "automation.engine.regeln.geraete.RegelFussbodenheizungNacht",    "aktiv": true },
+    { "name": "ww_verschiebung",      "klasse": "automation.engine.regeln.waermepumpe.RegelWwVerschiebung",       "aktiv": true },
+    { "name": "heiz_verschiebung",    "klasse": "automation.engine.regeln.waermepumpe.RegelHeizVerschiebung",     "aktiv": true },
+    { "name": "ww_boost",             "klasse": "automation.engine.regeln.waermepumpe.RegelWwBoost",              "aktiv": true },
+    { "name": "wp_pflichtlauf",       "klasse": "automation.engine.regeln.waermepumpe.RegelWpPflichtlauf",        "aktiv": true },
+    { "name": "heiz_bedarf",          "klasse": "automation.engine.regeln.waermepumpe.RegelHeizBedarf",           "aktiv": true },
+    { "name": "ww_absenkung",         "klasse": "automation.engine.regeln.waermepumpe.RegelWwAbsenkung",          "aktiv": true },
+    { "name": "heiz_absenkung",       "klasse": "automation.engine.regeln.waermepumpe.RegelHeizAbsenkung",        "aktiv": true }
+  ],
+  "aktoren": [
+    { "name": "batterie",    "klasse": "automation.engine.aktoren.aktor_batterie.AktorBatterie",     "aktiv": true },
+    { "name": "wattpilot",   "klasse": "automation.engine.aktoren.aktor_wattpilot.AktorWattpilot",   "aktiv": true },
+    { "name": "fritzdect",   "klasse": "automation.engine.aktoren.aktor_fritzdect.AktorFritzDECT",   "aktiv": true },
+    { "name": "waermepumpe", "klasse": "automation.engine.aktoren.aktor_waermepumpe.AktorWaermepumpe", "aktiv": true }
+  ]
+}
