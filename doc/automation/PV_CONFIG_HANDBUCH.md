@@ -611,6 +611,7 @@ SOC_MAX auf 100% geht (Nachmittag) wird die Batterie-Entladung strenger bewertet
 | extern_respekt | 1800 s | 900–7200 s | **Autoritätszeit (30 Min, 15 Min–2 h).** Bei manueller Einschaltung: Engine respektiert Nutzer-Entscheidung, nur Übertemp und SOC ≤ extern_aus_soc überstimmen. Bei manuellem Ausschalten: hp_ein für diese Dauer gesperrt. |
 | extern_aus_soc | 15% | 5–30% | **Autoritäts-Override bei niedrigem SOC.** Wird HP manuell eingeschaltet, überstimmt die Engine bei SOC ≤ diesem Wert und schaltet HP aus (Batterieschutz). |
 | ww_temp_watchdog_s | 300 s | 60–1800 s | **WW-Temp-Watchdog.** Bleibt die WW-Temperatur (WP-Modbus) länger als diese Zeit ungültig/unbekannt (z.B. Modbus-Ausfall), schaltet die HP sicherheitshalber AUS. |
+| hp_nenn | 2000 W | 1000–3000 W | **Heizpatronen-Nennleistung.** Lastschätzung in Drain-/Schwellen-/Bedarfslogik (vorher Hardcode `HP_NENN_W`). |
 
 **Rechenbeispiel (sonniger Märztag, ≈ 45 kWh Prognose, 9h Sonne):**
 ```

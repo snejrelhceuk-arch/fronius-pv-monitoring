@@ -1173,6 +1173,15 @@
           ],
           "einheit": "s",
           "beschreibung": "Watchdog: HP AUS, wenn WW-Temperatur (Modbus) laenger als diese Zeit ungueltig/unbekannt bleibt"
+        },
+        "hp_nenn_w": {
+          "wert": 2000,
+          "bereich": [
+            1000,
+            3000
+          ],
+          "einheit": "W",
+          "beschreibung": "Nennleistung der Heizpatrone (Lastschätzung in Drain-/Schwellen-/Bedarfslogik)"
         }
       },
       "score_gewicht": 40,

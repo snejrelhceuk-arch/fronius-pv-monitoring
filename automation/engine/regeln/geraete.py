@@ -634,6 +634,8 @@ class RegelHeizpatrone(Regel):
           2. Drain-EIN (Phase 0) — wenn aktiv, Batterie morgens leeren
           3. Burst-EIN (Phase 1-3) — nur bei aktiv=True (Strategie).
         """
+        # hp_nenn_w aus Matrix (verhaltensneutral: Default = bisheriger Hardcode 2000 W)
+        self.HP_NENN_W = get_param(matrix, self.regelkreis, 'hp_nenn_w', 2000)
         now_h = datetime.now().hour + datetime.now().minute / 60
         sunset = obs.sunset or 17.0
         rest_h = max(0, sunset - now_h)
@@ -1086,6 +1088,8 @@ class RegelHeizpatrone(Regel):
 
     def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
         """HP ein-/ausschalten: AUS + Burst-Strategie."""
+        # hp_nenn_w aus Matrix (verhaltensneutral: Default = bisheriger Hardcode 2000 W)
+        self.HP_NENN_W = get_param(matrix, self.regelkreis, 'hp_nenn_w', 2000)
         now_h = datetime.now().hour + datetime.now().minute / 60
         sunset = obs.sunset or 17.0
         rest_h = max(0, sunset - now_h)
