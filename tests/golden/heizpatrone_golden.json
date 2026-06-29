@@ -1,0 +1,138 @@
+{
+  "aus_entladung|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "aus_entladung|aktiv=True": {
+    "aktionen": [],
+    "score": 0
+  },
+  "aus_hoher_netzbezug|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "aus_hoher_netzbezug|aktiv=True": {
+    "aktionen": [],
+    "score": 0
+  },
+  "aus_nachts|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "aus_nachts|aktiv=True": {
+    "aktionen": [],
+    "score": 0
+  },
+  "drain_blockiert_regen|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "drain_blockiert_regen|aktiv=True": {
+    "aktionen": [],
+    "score": 0
+  },
+  "drain_morgens_gut|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "drain_morgens_gut|aktiv=True": {
+    "aktionen": [],
+    "score": 0
+  },
+  "drain_soc_zu_niedrig|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "drain_soc_zu_niedrig|aktiv=True": {
+    "aktionen": [],
+    "score": 0
+  },
+  "ev_laedt_parallel|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "ev_laedt_parallel|aktiv=True": {
+    "aktionen": [],
+    "score": 0
+  },
+  "phase1_blockiert_soc|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "phase1_blockiert_soc|aktiv=True": {
+    "aktionen": [],
+    "score": 0
+  },
+  "phase1_burst|aktiv=False": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_ein",
+        "wert": null
+      }
+    ],
+    "score": 0
+  },
+  "phase1_burst|aktiv=True": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_ein",
+        "wert": null
+      }
+    ],
+    "score": 0
+  },
+  "phase1b_probe|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "phase1b_probe|aktiv=True": {
+    "aktionen": [],
+    "score": 0
+  },
+  "phase2_blockiert|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "phase2_blockiert|aktiv=True": {
+    "aktionen": [],
+    "score": 0
+  },
+  "phase2_burst|aktiv=False": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_ein",
+        "wert": null
+      }
+    ],
+    "score": 0
+  },
+  "phase2_burst|aktiv=True": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_ein",
+        "wert": null
+      }
+    ],
+    "score": 0
+  },
+  "phase4_abend|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "phase4_abend|aktiv=True": {
+    "aktionen": [],
+    "score": 0
+  },
+  "ww_zu_heiss|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "ww_zu_heiss|aktiv=True": {
+    "aktionen": [],
+    "score": 0
+  }
+}
