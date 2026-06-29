@@ -25,7 +25,6 @@
 
 ### Architektur
 
-- [ ] Wattpilot externe Pause-Erkennung in `AktorWattpilot.verifiziere()`
 - [ ] State-Machine fuer HP-Phasen statt If-Kette (RegelHeizpatrone, 6 Phasen, ~1600 LOC → Phase-Objekte). **Vorbedingung:** Characterization-Test-Harness fuer die Phasenlogik (kein Test-Setup vorhanden → blinder Umbau des Produktiv-Schreibpfads zu riskant).
 - [ ] pv-config: `HP_NENN_W` ist gehoben (`heizpatrone.hp_nenn_w`), zusammen mit 4 get_param-Defaults. Übrige Inline-Literale in `geraete.py` (z.B. 0.25-PV-Faktor, 8 kW-Ladelimit) sind bewusste Implementierungs-Koeffizienten und bleiben inline — nur klar operator-relevante Schwellen bei Bedarf nachziehen.
 

@@ -84,7 +84,13 @@ class AktorWattpilot(AktorBase):
         return getattr(self, methode)(params)
 
     def verifiziere(self, aktion: dict) -> dict:
-        """Read-Back: Aktuellen Status lesen und mit Soll vergleichen."""
+        """Read-Back: Aktuellen Status lesen und mit Soll vergleichen.
+
+        Erkennt zusätzlich eine *externe* Pause (frc=1, ohne dass die Engine
+        dieses Kommando als Pause abgesetzt hat — z.B. HA, App oder Taster) und
+        meldet sie als ``extern_pausiert``. Nutzt den ohnehin nötigen
+        Status-Read — kein zusätzliches Polling der Wattpilot-Schnittstelle.
+        """
         kommando = aktion.get('kommando', '')
         try:
             client = _get_client()
@@ -92,6 +98,13 @@ class AktorWattpilot(AktorBase):
             if not status.get('online'):
                 return {'ok': False, 'verifiziert': False,
                         'grund': f'WattPilot offline: {status.get("error_message")}'}
+
+            # Externe Pause: Gerät gestoppt (frc=1), obwohl die Engine bei
+            # diesem Kommando keine Pause wollte.
+            frc_now = status.get('force_state', 0)
+            extern_pausiert = (frc_now == 1 and kommando != 'pause_charging')
+            if extern_pausiert:
+                LOG.info("WattPilot extern pausiert erkannt (frc=1) bei Kommando '%s'", kommando)
 
             # Je nach Kommando passenden Wert prüfen
             if kommando in ('set_max_current', 'set_current', 'set_power',
@@ -101,36 +114,41 @@ class AktorWattpilot(AktorBase):
                        aktion.get('wert', ist))
                 return {'ok': True, 'verifiziert': True,
                         'ist': ist, 'soll': soll,
-                        'match': abs(ist - soll) <= 1}
+                        'match': abs(ist - soll) <= 1,
+                        'extern_pausiert': extern_pausiert}
 
             if kommando == 'pause_charging':
-                frc = status.get('force_state', 0)
                 return {'ok': True, 'verifiziert': True,
-                        'ist': frc, 'soll': 1, 'match': frc == 1}
+                        'ist': frc_now, 'soll': 1, 'match': frc_now == 1,
+                        'extern_pausiert': False}
 
             if kommando == 'resume_charging':
-                frc = status.get('force_state', 0)
                 return {'ok': True, 'verifiziert': True,
-                        'ist': frc, 'soll': 0, 'match': frc in (0, 2)}
+                        'ist': frc_now, 'soll': 0, 'match': frc_now in (0, 2),
+                        'extern_pausiert': extern_pausiert}
 
             if kommando == 'set_phase_mode':
                 psm = status.get('phase_mode_raw', 0)
                 soll = aktion.get('parameter', {}).get('psm', psm)
                 return {'ok': True, 'verifiziert': True,
-                        'ist': psm, 'soll': soll, 'match': psm == soll}
+                        'ist': psm, 'soll': soll, 'match': psm == soll,
+                        'extern_pausiert': extern_pausiert}
 
             if kommando == 'set_charge_mode_eco':
                 lmo = int(status.get('charge_mode_raw', 0) or 0)
                 return {'ok': True, 'verifiziert': True,
-                        'ist': lmo, 'soll': 4, 'match': lmo == 4}
+                        'ist': lmo, 'soll': 4, 'match': lmo == 4,
+                        'extern_pausiert': extern_pausiert}
 
             if kommando == 'set_charge_mode_default':
                 lmo = int(status.get('charge_mode_raw', 0) or 0)
                 return {'ok': True, 'verifiziert': True,
-                        'ist': lmo, 'soll': 3, 'match': lmo == 3}
+                        'ist': lmo, 'soll': 3, 'match': lmo == 3,
+                        'extern_pausiert': extern_pausiert}
 
             return {'ok': True, 'verifiziert': False,
-                    'grund': f'Kein Read-Back für {kommando}'}
+                    'grund': f'Kein Read-Back für {kommando}',
+                    'extern_pausiert': extern_pausiert}
 
         except Exception as e:
             return {'ok': False, 'verifiziert': False, 'grund': str(e)}
