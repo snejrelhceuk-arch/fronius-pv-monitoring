@@ -145,255 +145,29 @@ WMO_CODES = {
 }
 
 # API-Konfiguration
-OPEN_METEO_BASE = "https://api.open-meteo.com/v1"
-OPEN_METEO_ARCHIVE = "https://archive-api.open-meteo.com/v1"
-API_TIMEOUT = 15       # Sekunden
-API_MAX_RETRIES = 3
-API_BACKOFF_BASE = 2   # Sekunden, exponentiell
 
 # Cache-Konfiguration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CACHE_DB = os.path.join(BASE_DIR, 'solar_cache.db')
 DATA_DB = _DATA_DB_PATH  # tmpfs: /dev/shm/fronius_data.db
 CALIBRATION_FILE = os.path.join(BASE_DIR, 'config', 'solar_calibration.json')
 
 # Cache-TTL (Sekunden)
-CACHE_TTL_FORECAST = 3600      # 1 Stunde für aktuelle Prognose
 CACHE_TTL_DAILY = 14400        # 4 Stunden für Tagesprognose
-CACHE_TTL_HISTORICAL = 86400   # 24 Stunden für historische Daten
 
 # Logging
 LOG = logging.getLogger('solar_forecast')
 
-
-# ═══════════════════════════════════════════════════════════════
-# CACHE LAYER
-# ═══════════════════════════════════════════════════════════════
-
-class ForecastCache:
-    """SQLite-Cache für API-Antworten mit TTL."""
-
-    def __init__(self, db_path=CACHE_DB):
-        self.db_path = db_path
-        self._init_db()
-
-    def _init_db(self):
-        """Cache-Tabelle erstellen."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS cache (
-                    key TEXT PRIMARY KEY,
-                    data TEXT NOT NULL,
-                    created_at REAL NOT NULL,
-                    ttl_seconds INTEGER NOT NULL,
-                    source TEXT DEFAULT 'api'
-                )
-            """)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS forecast_log (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    ts REAL NOT NULL,
-                    date TEXT NOT NULL,
-                    predicted_kwh REAL,
-                    predicted_radiation_mj REAL,
-                    actual_kwh REAL,
-                    accuracy_pct REAL,
-                    source TEXT DEFAULT 'open-meteo'
-                )
-            """)
-
-    def get(self, key):
-        """Lese aus Cache. Gibt (data, is_fresh) zurück oder (None, False)."""
-        with sqlite3.connect(self.db_path) as conn:
-            row = conn.execute(
-                "SELECT data, created_at, ttl_seconds FROM cache WHERE key = ?",
-                (key,)
-            ).fetchone()
-        if row is None:
-            return None, False
-        data = json.loads(row[0])
-        age = time.time() - row[1]
-        is_fresh = age < row[2]
-        return data, is_fresh
-
-    def put(self, key, data, ttl_seconds, source='api'):
-        """Schreibe in Cache."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                INSERT OR REPLACE INTO cache (key, data, created_at, ttl_seconds, source)
-                VALUES (?, ?, ?, ?, ?)
-            """, (key, json.dumps(data, ensure_ascii=False), time.time(), ttl_seconds, source))
-
-    def log_forecast(self, date_str, predicted_kwh, predicted_radiation, actual_kwh=None):
-        """Logge Prognose für spätere Accuracy-Analyse."""
-        accuracy = None
-        if actual_kwh and predicted_kwh and predicted_kwh > 0:
-            accuracy = round(100 - abs(predicted_kwh - actual_kwh) / predicted_kwh * 100, 1)
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                INSERT INTO forecast_log (ts, date, predicted_kwh, predicted_radiation_mj, actual_kwh, accuracy_pct)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (time.time(), date_str, predicted_kwh, predicted_radiation, actual_kwh, accuracy))
-
-    def get_accuracy_stats(self, days=30):
-        """Accuracy-Statistik der letzten N Tage."""
-        with sqlite3.connect(self.db_path) as conn:
-            rows = conn.execute("""
-                SELECT date, predicted_kwh, actual_kwh, accuracy_pct
-                FROM forecast_log
-                WHERE actual_kwh IS NOT NULL AND accuracy_pct IS NOT NULL
-                ORDER BY ts DESC LIMIT ?
-            """, (days,)).fetchall()
-        if not rows:
-            return None
-        accuracies = [r[3] for r in rows]
-        return {
-            'count': len(rows),
-            'avg_accuracy': round(sum(accuracies) / len(accuracies), 1),
-            'min_accuracy': round(min(accuracies), 1),
-            'max_accuracy': round(max(accuracies), 1),
-            'recent': [{'date': r[0], 'predicted': r[1], 'actual': r[2], 'accuracy': r[3]} for r in rows[:7]]
-        }
-
-    def cleanup(self, max_age_seconds=604800):
-        """Lösche abgelaufene Cache-Einträge älter als max_age (default 7 Tage)."""
-        cutoff = time.time() - max_age_seconds
-        with sqlite3.connect(self.db_path) as conn:
-            deleted = conn.execute("DELETE FROM cache WHERE created_at < ?", (cutoff,)).rowcount
-        return deleted
+from solar_cache import ForecastCache, CACHE_DB  # noqa: F401 (Re-Export)
+from solar_openmeteo import (  # noqa: F401 (Re-Export + von SolarForecast genutzt)
+    OpenMeteoClient, OPEN_METEO_BASE, CACHE_TTL_FORECAST,
+)
 
 
-# ═══════════════════════════════════════════════════════════════
-# OPEN-METEO API CLIENT
-# ═══════════════════════════════════════════════════════════════
 
-class OpenMeteoClient:
-    """Fehlertoleranter Client für Open-Meteo API."""
 
-    HOURLY_PARAMS = [
-        'temperature_2m',
-        'windspeed_10m',
-        'cloud_cover',
-        'shortwave_radiation',
-        'direct_radiation',
-        'direct_normal_irradiance',
-        'diffuse_radiation',
-        'sunshine_duration',
-        'weather_code',
-        'is_day',
-        'precipitation',
-    ]
 
-    DAILY_PARAMS = [
-        'sunrise',
-        'sunset',
-        'daylight_duration',
-        'sunshine_duration',
-        'shortwave_radiation_sum',
-        'weather_code',
-        'temperature_2m_max',
-        'temperature_2m_min',
-        'precipitation_sum',
-        'precipitation_probability_max',
-    ]
 
-    def __init__(self, cache=None):
-        self.session = requests.Session()
-        self.session.headers.update({'Accept': 'application/json'})
-        self.cache = cache or ForecastCache()
-        self._last_error = None
-        self._api_healthy = True
 
-    def _api_call(self, url, params, cache_key, cache_ttl):
-        """API-Aufruf mit Cache-Fallback und Retry."""
-        # 1. Prüfe Cache (frische Daten)
-        cached, is_fresh = self.cache.get(cache_key)
-        if cached and is_fresh:
-            LOG.debug(f"Cache HIT (fresh): {cache_key}")
-            return cached
-
-        # 2. API-Aufruf mit Retry
-        last_error = None
-        for attempt in range(API_MAX_RETRIES):
-            try:
-                resp = self.session.get(url, params=params, timeout=API_TIMEOUT)
-                resp.raise_for_status()
-                data = resp.json()
-
-                if 'error' in data:
-                    raise ValueError(f"API-Fehler: {data.get('reason', 'unbekannt')}")
-
-                # Erfolg → Cache aktualisieren
-                self.cache.put(cache_key, data, cache_ttl)
-                self._api_healthy = True
-                self._last_error = None
-                LOG.debug(f"API OK: {cache_key} (Versuch {attempt+1})")
-                return data
-
-            except (requests.RequestException, ValueError, json.JSONDecodeError) as e:
-                last_error = str(e)
-                self._last_error = last_error
-                wait = API_BACKOFF_BASE ** attempt
-                LOG.warning(f"API-Fehler (Versuch {attempt+1}/{API_MAX_RETRIES}): {e}")
-                if attempt < API_MAX_RETRIES - 1:
-                    time.sleep(wait)
-
-        # 3. Fallback: Abgelaufener Cache
-        self._api_healthy = False
-        if cached:
-            LOG.warning(f"API nicht erreichbar — verwende Cache-Daten: {cache_key}")
-            return cached
-
-        # 4. Kein Cache, kein API
-        LOG.error(f"Kein Cache und API-Fehler: {last_error}")
-        return None
-
-    def fetch_forecast(self, forecast_days=7):
-        """Vollständige Prognose für N Tage.
-        
-        Open-Meteo 'best_match': nutzt automatisch das beste verfügbare Modell:
-          - Tag 0-2: DWD ICON-D2 (2.2km Auflösung) wenn verfügbar
-          - Tag 3-7: ICON-EU / GFS (globale Modelle)
-        Kein models-Parameter → best_match = optimale Mischung.
-        """
-        params = {
-            'latitude': LATITUDE,
-            'longitude': LONGITUDE,
-            'hourly': ','.join(self.HOURLY_PARAMS),
-            'daily': ','.join(self.DAILY_PARAMS),
-            'timezone': TIMEZONE,
-            'forecast_days': forecast_days,
-        }
-        cache_key = f"forecast_{forecast_days}d"
-        return self._api_call(
-            f"{OPEN_METEO_BASE}/forecast", params,
-            cache_key, CACHE_TTL_FORECAST
-        )
-
-    def fetch_historical(self, start_date, end_date):
-        """Historische Wetterdaten für Kalibrierung."""
-        params = {
-            'latitude': LATITUDE,
-            'longitude': LONGITUDE,
-            'daily': 'shortwave_radiation_sum,sunshine_duration,weather_code,'
-                     'temperature_2m_max,temperature_2m_min,precipitation_sum',
-            'timezone': TIMEZONE,
-            'start_date': start_date,
-            'end_date': end_date,
-        }
-        cache_key = f"hist_{start_date}_{end_date}"
-        return self._api_call(
-            f"{OPEN_METEO_ARCHIVE}/archive", params,
-            cache_key, CACHE_TTL_HISTORICAL
-        )
-
-    @property
-    def healthy(self):
-        return self._api_healthy
-
-    @property
-    def last_error(self):
-        return self._last_error
 
 
 # ═══════════════════════════════════════════════════════════════

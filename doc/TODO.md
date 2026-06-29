@@ -29,10 +29,6 @@
 - [ ] State-Machine fuer HP-Phasen statt If-Kette (RegelHeizpatrone, 6 Phasen, ~1600 LOC → Phase-Objekte). **Vorbedingung:** Characterization-Test-Harness fuer die Phasenlogik (kein Test-Setup vorhanden → blinder Umbau des Produktiv-Schreibpfads zu riskant).
 - [ ] pv-config: restliche ~36 inline-Magic-Numbers (Drain-/Probe-Konstanten, `HP_NENN_W` etc.) verhaltensneutral in `soc_param_matrix.json` heben (4 get_param-Defaults bereits freigelegt). Test-Harness empfohlen.
 
-### Architektur-Refactor
-
-- [ ] `solar_forecast.py` (1368 Z.): bereits sauber in 3 Klassen gegliedert (`ForecastCache`, `OpenMeteoClient`, `SolarForecast`). Extraktion von `ForecastCache` → `solar_cache.py` und `OpenMeteoClient` → `solar_openmeteo.py` (verbatim + Re-Export, 7 Importer bleiben unverändert) ist der nächste sichere Schritt. `solar_geometry.py` (1979 Z.) ist eine kohärente Geometrie-/Physik-Bibliothek (freie Funktionen) — Split nicht zwingend; ggf. CLI (`_cmd_*`) nach `tools/` auslagern.
-
 ### Tech-Debt (niedrige Prio)
 
 - [ ] ForecastCollector Sunrise/Sunset-Fallback: saisonale Tabelle statt festem 7/17
