@@ -31,7 +31,7 @@
 
 ### Architektur-Refactor
 
-- [ ] `solar_geometry.py` (1979 Z.) und `solar_forecast.py` (1368 Z.) auf logische Sub-Module pruefen (Sonnengeometrie vs. Forecast-Cache vs. OpenMeteo-Client).
+- [ ] `solar_forecast.py` (1368 Z.): bereits sauber in 3 Klassen gegliedert (`ForecastCache`, `OpenMeteoClient`, `SolarForecast`). Extraktion von `ForecastCache` → `solar_cache.py` und `OpenMeteoClient` → `solar_openmeteo.py` (verbatim + Re-Export, 7 Importer bleiben unverändert) ist der nächste sichere Schritt. `solar_geometry.py` (1979 Z.) ist eine kohärente Geometrie-/Physik-Bibliothek (freie Funktionen) — Split nicht zwingend; ggf. CLI (`_cmd_*`) nach `tools/` auslagern.
 
 ### Tech-Debt (niedrige Prio)
 
