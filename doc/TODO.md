@@ -25,7 +25,7 @@
 
 ### Architektur
 
-- [ ] State-Machine fuer HP-Phasen statt If-Kette (RegelHeizpatrone, 6 Phasen, ~1600 LOC → Phase-Objekte). **Vorbedingung:** Characterization-Test-Harness fuer die Phasenlogik (kein Test-Setup vorhanden → blinder Umbau des Produktiv-Schreibpfads zu riskant).
+- [ ] State-Machine fuer HP-Phasen statt If-Kette (RegelHeizpatrone, 6 Phasen → Phase-Objekte). **Sicherheitsnetz vorhanden:** `tests/test_heizpatrone_characterization.py` (28 Szenarien, golden-master) — Refactor inkrementell gegen das gruene Golden ausfuehren und die Szenario-Abdeckung dabei erweitern.
 - [ ] pv-config: `HP_NENN_W` ist gehoben (`heizpatrone.hp_nenn_w`), zusammen mit 4 get_param-Defaults. Übrige Inline-Literale in `geraete.py` (z.B. 0.25-PV-Faktor, 8 kW-Ladelimit) sind bewusste Implementierungs-Koeffizienten und bleiben inline — nur klar operator-relevante Schwellen bei Bedarf nachziehen.
 
 ### Tech-Debt (niedrige Prio)
