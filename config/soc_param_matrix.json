@@ -1,7 +1,7 @@
 {
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
-  "_updated": "2026-06-27",
+  "_updated": "2026-06-29",
   "regelkreise": {
     "soc_extern": {
       "_doc": "Toleranz für extern geänderte SOC-Werte (z.B. manuell via Fronius App). Wenn SOC_MIN oder SOC_MAX außerhalb der Automation geändert werden, respektiert die Engine die Werte für die konfigurierte Dauer.",
@@ -1161,7 +1161,7 @@
     },
     "klimaanlage": {
       "_doc": "Klimaanlage via Fritz!DECT als Thermoschutz im Heizhaus. Vor Sonnenaufgang nur mit Forecast 'gut' und Temp >= initial_temp_c. Nach Sonnenaufgang Start je nach Prognose: gut -> initial_temp_c_gut_nach_sunrise, sonst initial_temp_c_maessig. Laufender Betrieb temperaturgeführt mit Hysterese temp_hysterese_k. Sunset/SOC-Stop bleibt aktiv.",
-      "aktiv": true,
+      "aktiv": false,
       "prioritaet": 2,
       "beschreibung": "Klima-Thermoschutz: Vor-Sunrise 15°C+Forecast, nach Sunrise ab 20°C, Sunset-SOC-Stopp parametrierbar",
       "parameter": {

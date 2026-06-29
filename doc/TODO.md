@@ -21,7 +21,7 @@
 ### Kurz: Offene Software-Items
 
 - [ ] `AktorBatterie.verifiziere()` — HTTP-API Read-Back implementieren
-- [ ] WP-Automation Phase 2 Stubs in `aktor_wattpilot.py` anbinden (set_strom, pause, resume, set_modus_pv, stoppe_laden)
+- [ ] Wattpilot-Automation Phase 2 Stubs in `aktor_wattpilot.py` anbinden (set_strom, pause, resume, set_modus_pv, stoppe_laden)
 - [ ] Dashboard-Erweiterung: Automation-Tab in Web-UI
 - [ ] HP-Status in tag_view integrieren (flow_view zeigt bereits HP EIN/AUS)
 - [ ] RegelHeizpatrone Refactoring: 903 LOC → Phase-Objekte (Wunsch, nicht dringend)
