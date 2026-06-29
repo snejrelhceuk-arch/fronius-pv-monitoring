@@ -688,7 +688,7 @@ erfolgt jetzt ausschließlich über SOC_MIN/SOC_MAX via Fronius HTTP-API.
 | Modul | Funktion |
 |-------|----------|
 | `regeln/soc_extern.py` | SOC-Extern-Toleranz: Erkennt manuell geänderte SOC-Werte (Fronius App) und stellt 30-min Toleranzperiode bereit. Registrierung erfolgt nach Actuator-Erfolg (K2). |
-| `event_notifier.py` | Täglicher Sunset-Bericht per E-Mail, Alarm-Benachrichtigungen. Integriert in `automation_daemon.py` als Observer-Callback. |
+| `event_notifier.py` | Täglicher Sunset-Bericht per E-Mail, Alarm-Benachrichtigungen. Integriert in `automation_daemon.py` als Observer-Callback. Helfer ausgelagert nach `automation/engine/notify/` (dedup/thresholds/mail). |
 | `schaltlog.py` | Einheitliches Schalt-/Extern-Logging für alle Regeln → `automation_log` in Persist-DB. |
 
 ---

@@ -32,7 +32,6 @@
 ### Architektur-Refactor
 
 - [ ] `solar_geometry.py` (1979 Z.) und `solar_forecast.py` (1368 Z.) auf logische Sub-Module pruefen (Sonnengeometrie vs. Forecast-Cache vs. OpenMeteo-Client).
-- [ ] `automation/engine/event_notifier.py` (1126 Z.) in Schwellen-/Dedup-/Mail-Module zerlegen.
 
 ### Tech-Debt (niedrige Prio)
 

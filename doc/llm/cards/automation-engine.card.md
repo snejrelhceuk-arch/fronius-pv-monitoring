@@ -17,6 +17,7 @@ Zentrale Steuerschleife (Rolle C). Sammelt Beobachtungen, ruft Schutz-Checks, da
 - **Hauptdatei:** `automation/engine/automation_daemon.py:AutomationDaemon`
 - **Engine-Kern:** `automation/engine/engine.py:Engine.zyklus`
 - **Plugin-Registry (Regeln + Aktoren):** `automation/engine/registry.py:lade_regeln`/`lade_aktoren`, deklarativ in `config/engine_registry.json`
+- **Benachrichtigung (Sunset-Mail/Sofort-Alarme):** `automation/engine/event_notifier.py:EventNotifier`; Helfer-Paket `automation/engine/notify/` (`dedup.py`, `thresholds.py`, `mail.py`)
 - **Zugehörige Configs:** `config/soc_param_matrix.json` (zentrale Parameter-Matrix)
 - **State (RAM):** `/dev/shm/automation_obs.db` (ObsState, Tier1, Operator-Overrides)
 - **State (Persist):** `data.db` Tabelle `automation_log` (Aktor-Resultate)

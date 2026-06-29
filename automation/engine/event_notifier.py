@@ -29,10 +29,7 @@ Siehe: doc/AUTOMATION_ARCHITEKTUR.md
 
 from __future__ import annotations
 
-import json
 import logging
-import os
-import smtplib
 import socket
 import sqlite3
 import time
@@ -45,55 +42,14 @@ from automation.engine import credential_store
 from automation.engine import diagnos_alert_state
 from automation.engine.obs_state import ObsState
 from automation.engine.wattpilot_recovery import WattpilotRecoveryManager
+from automation.engine.notify import dedup, thresholds, mail
 from diagnos.health import run_all as run_diagnos_health
 from diagnos.integrity import run_all as run_diagnos_integrity
 
 LOG = logging.getLogger('event_notifier')
 
 
-# ═══════════════════════════════════════════════════════════
-# Persistenter Dedup-State
-# ═══════════════════════════════════════════════════════════
-# Sofortalarme und Live-Events werden 1× pro Kalendertag pro Key versandt.
-# Bisher lag der Versandzustand nur in einer In-Memory-Map. Folge: Bei
-# Daemon-Restart (deploy/reboot/crash) gingen die "schon gesendet"-Marker
-# verloren → Doppelmails möglich. Persistierung in einer kleinen JSON-
-# Datei vermeidet das. Heilung erfolgt automatisch bei Tageswechsel.
-
-_DEDUP_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    'config',
-    'event_notifier_dedup.json',
-)
-
-
-def _dedup_load(path: str = _DEDUP_PATH) -> dict[str, str]:
-    """Lade Dedup-Map (event_key → ISO-Datum). Defekte Dateien sind kein Fehler."""
-    try:
-        with open(path, encoding='utf-8') as f:
-            data = json.load(f)
-        if not isinstance(data, dict):
-            return {}
-        return {str(k): str(v) for k, v in data.items()}
-    except FileNotFoundError:
-        return {}
-    except (OSError, json.JSONDecodeError) as exc:
-        LOG.warning(f"Dedup-State nicht lesbar ({path}): {exc} → fresh start")
-        return {}
-
-
-def _dedup_save(state: dict[str, str], path: str = _DEDUP_PATH) -> None:
-    """Speichere Dedup-Map atomar. Tagesalte Einträge werden mitgenommen,
-    Aufräumen erfolgt im EventNotifier (entfernt Einträge < heute)."""
-    try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        tmp = path + '.tmp'
-        with open(tmp, 'w', encoding='utf-8') as f:
-            json.dump(state, f, indent=2, sort_keys=True)
-        os.replace(tmp, path)
-    except OSError as exc:
-        LOG.error(f"Dedup-State nicht schreibbar ({path}): {exc}")
-
+# Persistenter Dedup-State (1×/Tag pro Key) → automation/engine/notify/dedup.py
 
 class EventNotifier:
     """Einmalige E-Mail-Benachrichtigung bei kritischen Events.
@@ -109,7 +65,7 @@ class EventNotifier:
         # event_key → ISO-Datum des Versands. Wird beim Start aus
         # config/event_notifier_dedup.json geladen, alte Einträge (< heute)
         # werden gleich entrümpelt.
-        self._gesendet: dict[str, str] = _dedup_load()
+        self._gesendet: dict[str, str] = dedup.load()
         self._dedup_cleanup()
         self._email = getattr(app_config, 'NOTIFICATION_EMAIL', '')
         self._smtp_host = getattr(app_config, 'NOTIFICATION_SMTP_HOST', 'smtp.example.invalid')
@@ -127,12 +83,12 @@ class EventNotifier:
         before = len(self._gesendet)
         self._gesendet = {k: v for k, v in self._gesendet.items() if v == heute}
         if len(self._gesendet) != before:
-            _dedup_save(self._gesendet)
+            dedup.save(self._gesendet)
 
     def _dedup_mark(self, event_key: str) -> None:
         """Markiere einen Event-Key als heute versandt und persistiere."""
         self._gesendet[event_key] = date.today().isoformat()
-        _dedup_save(self._gesendet)
+        dedup.save(self._gesendet)
 
     def _dedup_already_sent(self, event_key: str) -> bool:
         """True, wenn der Key heute bereits markiert ist."""
@@ -168,26 +124,8 @@ class EventNotifier:
         return ausgeloest
 
     def _schwelle_verletzt(self, obs: ObsState, threshold: dict) -> bool:
-        """Prüfe ob ein ObsState-Feld eine Schwelle verletzt."""
-        feld = threshold.get('obs_feld', '')
-        op = threshold.get('op', '>=')
-        schwelle = threshold.get('schwelle', 0)
-
-        wert = getattr(obs, feld, None)
-        if wert is None:
-            return False
-
-        if op == '>=':
-            return wert >= schwelle
-        elif op == '<=':
-            return wert <= schwelle
-        elif op == '<':
-            return wert < schwelle
-        elif op == '>':
-            return wert > schwelle
-        elif op == '==':
-            return wert == schwelle
-        return False
+        """Prüfe ob ein ObsState-Feld eine Schwelle verletzt (→ notify.thresholds)."""
+        return thresholds.schwelle_verletzt(obs, threshold)
 
     def _sende_mail(self, event_key: str, threshold: dict, obs: ObsState):
         """E-Mail senden (best-effort, Fehler loggen aber nicht crashen)."""
@@ -234,23 +172,8 @@ class EventNotifier:
                           f"Bitte über pv-config → Benachrichtigungen setzen.")
                 return
 
-            if self._smtp_port == 465:
-                smtp = smtplib.SMTP_SSL(self._smtp_host, self._smtp_port, timeout=15)
-            else:
-                smtp = smtplib.SMTP(self._smtp_host, self._smtp_port, timeout=15)
-                if self._smtp_port == 587:
-                    smtp.starttls()
-
-            try:
-                if self._smtp_user and smtp_pass:
-                    smtp.login(self._smtp_user, smtp_pass)
-
-                smtp.sendmail(self._from, [self._email], msg.as_string())
-            finally:
-                try:
-                    smtp.quit()
-                except Exception:
-                    pass
+            mail.smtp_versand(self._smtp_host, self._smtp_port, self._smtp_user,
+                              smtp_pass, self._from, self._email, msg)
 
             LOG.info(f"Event-Mail gesendet: {event_key} → {self._email} "
                      f"({text}, {feld}={wert})")
@@ -712,22 +635,8 @@ class EventNotifier:
                 LOG.error(f"Sofort-Alarm FEHLGESCHLAGEN: {alarm_key} — SMTP-Passwort fehlt")
                 return False
 
-            if self._smtp_port == 465:
-                smtp = smtplib.SMTP_SSL(self._smtp_host, self._smtp_port, timeout=15)
-            else:
-                smtp = smtplib.SMTP(self._smtp_host, self._smtp_port, timeout=15)
-                if self._smtp_port == 587:
-                    smtp.starttls()
-
-            try:
-                if self._smtp_user and smtp_pass:
-                    smtp.login(self._smtp_user, smtp_pass)
-                smtp.sendmail(self._from, [self._email], msg.as_string())
-            finally:
-                try:
-                    smtp.quit()
-                except Exception:
-                    pass
+            mail.smtp_versand(self._smtp_host, self._smtp_port, self._smtp_user,
+                              smtp_pass, self._from, self._email, msg)
 
             self._dedup_mark(alarm_key)
             LOG.warning(f"Sofort-Alarm gesendet: {alarm_key} → {self._email}")
@@ -774,22 +683,8 @@ class EventNotifier:
                 LOG.error(f"Integrity-Alarm FEHLGESCHLAGEN: {alarm_key} — SMTP-Passwort fehlt")
                 return False
 
-            if self._smtp_port == 465:
-                smtp = smtplib.SMTP_SSL(self._smtp_host, self._smtp_port, timeout=15)
-            else:
-                smtp = smtplib.SMTP(self._smtp_host, self._smtp_port, timeout=15)
-                if self._smtp_port == 587:
-                    smtp.starttls()
-
-            try:
-                if self._smtp_user and smtp_pass:
-                    smtp.login(self._smtp_user, smtp_pass)
-                smtp.sendmail(self._from, [self._email], msg.as_string())
-            finally:
-                try:
-                    smtp.quit()
-                except Exception:
-                    pass
+            mail.smtp_versand(self._smtp_host, self._smtp_port, self._smtp_user,
+                              smtp_pass, self._from, self._email, msg)
 
             self._dedup_mark(alarm_key)
             LOG.warning(f"Integrity-Alarm gesendet: {alarm_key} → {self._email}")
@@ -1146,20 +1041,5 @@ class EventNotifier:
         if self._smtp_user and not smtp_pass:
             raise RuntimeError("SMTP-Passwort nicht gesetzt (credential_store)")
 
-        if self._smtp_port == 465:
-            smtp = smtplib.SMTP_SSL(self._smtp_host, self._smtp_port, timeout=15)
-        else:
-            smtp = smtplib.SMTP(self._smtp_host, self._smtp_port, timeout=15)
-            if self._smtp_port == 587:
-                smtp.starttls()
-
-        try:
-            if self._smtp_user and smtp_pass:
-                smtp.login(self._smtp_user, smtp_pass)
-
-            smtp.sendmail(self._from, [self._email], msg.as_string())
-        finally:
-            try:
-                smtp.quit()
-            except Exception:
-                pass
+        mail.smtp_versand(self._smtp_host, self._smtp_port, self._smtp_user,
+                          smtp_pass, self._from, self._email, msg)
