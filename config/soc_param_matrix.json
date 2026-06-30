@@ -1189,7 +1189,7 @@
     },
     "klimaanlage": {
       "_doc": "Klimaanlage via Fritz!DECT als Thermoschutz im Heizhaus. Vor Sonnenaufgang nur mit Forecast 'gut' und Temp >= initial_temp_c. Nach Sonnenaufgang Start je nach Prognose: gut -> initial_temp_c_gut_nach_sunrise, sonst initial_temp_c_maessig. Laufender Betrieb temperaturgeführt mit Hysterese temp_hysterese_k. Sunset/SOC-Stop bleibt aktiv.",
-      "aktiv": false,
+      "aktiv": true,
       "prioritaet": 2,
       "beschreibung": "Klima-Thermoschutz: Vor-Sunrise 15°C+Forecast, nach Sunrise ab 20°C, Sunset-SOC-Stopp parametrierbar",
       "parameter": {

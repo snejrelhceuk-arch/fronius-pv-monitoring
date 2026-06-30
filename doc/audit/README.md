@@ -6,6 +6,12 @@
 
 ## Berichte je Bereich
 
+### 2026-06-30 — Tiefpruefung Betrieb/LLM/Steuerbox
+
+- [deep-2026-06-30.md](deep-2026-06-30.md) — Tiefpruefung LLM-Doku, Collector, Automation, Diagnos/Steuerbox, Web-Monitoring und Pi-/OS-Betrieb; kritische Steuerbox-/Monitor-/Backup-Befunde im Lauf behoben.
+
+### 2026-05-29 — Rollen-/Doku-Audit
+
 | Bereich | Rolle | Bericht |
 |---|---|---|
 | Automation | C | [automation.md](automation.md) |

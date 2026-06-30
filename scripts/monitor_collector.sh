@@ -4,14 +4,15 @@
 
 # --- Role Guard: Auf Failover-Host nichts tun ---
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "${SCRIPT_DIR}/scripts/role_guard.sh" 2>/dev/null || exit 0
+BASE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+source "${BASE_DIR}/scripts/role_guard.sh" 2>/dev/null || exit 0
 
 LOG_FILE="/tmp/collector_monitor.log"
-WP_PROTOCOL_FILE="${SCRIPT_DIR}/logs/wp_netzbetreiber_leistung.csv"
+WP_PROTOCOL_FILE="${BASE_DIR}/logs/wp_netzbetreiber_leistung.csv"
 WP_PROTOCOL_MAX_AGE_S=600
-# Nur collector.py zählen, NICHT wattpilot_collector.py
-# Pattern: 'python3 ' gefolgt von optionalem Pfad + 'collector.py' (kein _ davor)
-PROCESS_COUNT=$(pgrep -fc "python3 (./)?collector\.py" || true)
+# Nur collector.py zählen, NICHT collector.wattpilot
+COLLECTOR_PATTERN="${BASE_DIR}/collector\.py"
+PROCESS_COUNT=$(pgrep -fc "$COLLECTOR_PATTERN" || true)
 
 timestamp() {
     date '+%Y-%m-%d %H:%M:%S'
@@ -20,15 +21,15 @@ timestamp() {
 # Prüfe Prozess-Anzahl
 if [ "$PROCESS_COUNT" -gt 1 ]; then
     echo "$(timestamp) ❌ ALARM: $PROCESS_COUNT collector.py Prozesse!" >> "$LOG_FILE"
-    ps aux | grep "[p]ython3.*[^_]collector.py" >> "$LOG_FILE"
+    pgrep -af "$COLLECTOR_PATTERN" >> "$LOG_FILE"
     
     # Stoppe nur collector.py (nicht wattpilot_collector.py) und lasse systemd neu starten
     echo "$(timestamp) → Stoppe collector.py Prozesse, systemd startet neu..." >> "$LOG_FILE"
-    pkill -9 -f "python3 (./)?collector\.py" || true
+    pkill -9 -f "$COLLECTOR_PATTERN" || true
     sleep 2
     
     # Prüfe ob systemd automatisch neugestartet hat
-    NEW_COUNT=$(pgrep -fc "python3 (./)?collector\.py" || true)
+    NEW_COUNT=$(pgrep -fc "$COLLECTOR_PATTERN" || true)
     if [ "$NEW_COUNT" -eq 1 ]; then
         echo "$(timestamp) ✓ Einzelner Prozess wiederhergestellt" >> "$LOG_FILE"
     else

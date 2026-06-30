@@ -2,7 +2,7 @@
 # Cron-Job: Überwacht pv-steuerbox.service und den HTTPS-Entry der Steuerbox
 # Empfohlen: */5 * * * * <BASE_DIR>/monitor_steuerbox.sh
 
-BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
+BASE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 # --- Role Guard: Auf Failover-Host nichts tun ---
 source "${BASE_DIR}/scripts/role_guard.sh" 2>/dev/null || exit 0

@@ -5,7 +5,7 @@ role: meta
 applyTo: "scripts/**"
 tags: [role-guard, failover, backup, publish-guard, sync]
 status: stable
-last_review: 2026-06-06
+last_review: 2026-06-30
 ---
 
 # System Ops-Guards
@@ -16,6 +16,7 @@ Systemweite Betriebsleitplanken fuer Multi-Host-Betrieb: `.role`-basiertes Verha
 ## Code-Anchor
 - **Python-Rollencheck:** `host_role.py:get_role`, `is_primary`, `is_failover`
 - **Shell-Rollencheck:** `scripts/role_guard.sh`
+- **Cron-Monitore:** `scripts/monitor_collector.sh`, `scripts/monitor_wattpilot.sh`, `scripts/monitor_steuerbox.sh`
 - **Terminal-Safe-Runner:** `scripts/terminal_safe_run.sh`
 - **Code-Sync Primary->Failover:** `scripts/sync_code_to_peer.sh`
 - **Failover-Quickstart (64bit-Rebuild):** `scripts/failover_postswap_quickstart.sh`, `scripts/install_failover_services.sh`, `scripts/failover_sync_db.sh`
@@ -36,6 +37,7 @@ Systemweite Betriebsleitplanken fuer Multi-Host-Betrieb: `.role`-basiertes Verha
 - GFS-Backups werden aus der RAM-DB per `sqlite3 .backup` erzeugt, nicht per blindem Datei-Copy im Laufbetrieb.
 - `.venv` ist erforderlich (nicht entfernen): Unter Debian 13 ist System-Python PEP-668-`EXTERNALLY-MANAGED`, und `gunicorn`/`pymodbus`/`minimalmodbus`/`paho-mqtt`/`websocket-client`/`websockets`/`wattpilot` fehlen systemweit. Writer/Protokoll-Services (`pv-web`/`pv-collector`/`pv-wattpilot`/`pv-steuerbox`) laufen aus `.venv`; reine Engine-/Aggregations-Jobs nutzen System-`/usr/bin/python3`. `.venv` ist lokal reproduzierbar (`requirements.txt`) und aus Git/Code-Sync ausgeschlossen.
 - Terminal-Schutzlogik lebt nur in `scripts/terminal_safe_run.sh`; VS-Code-Tasks nutzen dieses Script unveraendert weiter.
+- Cron-Monitore werden aus `scripts/` gestartet, berechnen aber den Repo-Root als Basis und sourcen `scripts/role_guard.sh` von dort.
 
 ## No-Gos
 - Keine Umgehung der Rollenpruefung bei neuen Cron-/Shell-Jobs.

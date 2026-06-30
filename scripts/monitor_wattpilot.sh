@@ -1,5 +1,5 @@
 #!/bin/bash
-# Cron-Job: Überwacht wattpilot_collector.py auf Duplikate und Ausfälle
+# Cron-Job: Überwacht den Wattpilot-Collector auf Duplikate und Ausfälle
 # Empfohlen: */5 * * * * /srv/pv-system/monitor_wattpilot.sh
 #
 # Prüft:
@@ -7,7 +7,7 @@
 #   2. Keine Duplikate (falls doch → kill + systemd-Restart)
 #   3. Frische Daten in DB (falls >5min alt → Warnung loggen)
 
-BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
+BASE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 # --- Role Guard: Auf Failover-Host nichts tun ---
 source "${BASE_DIR}/scripts/role_guard.sh" 2>/dev/null || exit 0
@@ -26,21 +26,22 @@ log_msg() {
 }
 
 # --- 1. Prozess-Check ---
-PROCESS_COUNT=$(pgrep -fc "python3.*wattpilot_collector.py")
+WATTPILOT_PATTERN="(-m collector\\.wattpilot|collector/wattpilot\\.py|wattpilot_collector\\.py)"
+PROCESS_COUNT=$(pgrep -fc "$WATTPILOT_PATTERN")
 
 if [ "$PROCESS_COUNT" -gt 1 ]; then
-    log_msg "❌ ALARM: $PROCESS_COUNT wattpilot_collector.py Prozesse!"
-    ps aux | grep "[w]attpilot_collector.py" >> "$LOG_FILE"
+    log_msg "❌ ALARM: $PROCESS_COUNT Wattpilot-Collector-Prozesse!"
+    pgrep -af "$WATTPILOT_PATTERN" >> "$LOG_FILE"
     
     # Alle stoppen, systemd startet einen einzelnen neu
     log_msg "→ Stoppe alle Wattpilot-Collector, systemd startet neu..."
-    pkill -9 -f "python3.*wattpilot_collector.py"
+    pkill -9 -f "$WATTPILOT_PATTERN"
     rm -f "${BASE_DIR}/wattpilot_collector.pid"
     sleep 2
     sudo systemctl restart "$SERVICE_NAME" 2>/dev/null
     
     sleep 5
-    NEW_COUNT=$(pgrep -fc "python3.*wattpilot_collector.py")
+    NEW_COUNT=$(pgrep -fc "$WATTPILOT_PATTERN")
     if [ "$NEW_COUNT" -eq 1 ]; then
         log_msg "✓ Einzelner Prozess wiederhergestellt"
     else
@@ -48,7 +49,7 @@ if [ "$PROCESS_COUNT" -gt 1 ]; then
     fi
     
 elif [ "$PROCESS_COUNT" -eq 0 ]; then
-    log_msg "⚠️  WARNUNG: Kein wattpilot_collector.py läuft!"
+    log_msg "⚠️  WARNUNG: Kein Wattpilot-Collector läuft!"
     
     # Stale PID-File aufräumen
     if [ -f "${BASE_DIR}/wattpilot_collector.pid" ]; then
@@ -64,7 +65,7 @@ elif [ "$PROCESS_COUNT" -eq 0 ]; then
     sudo systemctl restart "$SERVICE_NAME" 2>/dev/null
     
     sleep 5
-    NEW_COUNT=$(pgrep -fc "python3.*wattpilot_collector.py")
+    NEW_COUNT=$(pgrep -fc "$WATTPILOT_PATTERN")
     if [ "$NEW_COUNT" -ge 1 ]; then
         log_msg "✓ Wattpilot-Collector wiederhergestellt"
     else
