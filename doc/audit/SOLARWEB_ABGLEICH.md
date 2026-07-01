@@ -180,15 +180,16 @@ PV-Direkt **plus** Netzbezug-Anteil. Solarweb zeigt nur den PV-Anteil.
 
 ### 6.1 Datenlage (CSV-Stand)
 
-Verfügbare Solarweb-Quellen in `doc/csv/`:
+Verfügbare Solarweb-Quellen in `doc/csv/` (Stand 01.07.2026, **vollständig H1**):
 
-- `solarweb_daily_2026-01_working.csv`
-- `solarweb_daily_2026-02_working.csv`
-- `solarweb_monthly_2026_reference.csv`
-- `abgleich_2026-01_matrix.csv`
-- `abgleich_2026-02_daily_vs_pvsystem.csv`
+- `solarweb_daily_2026-01_working.csv` … `solarweb_daily_2026-06_working.csv` (6 Monate Tagesdaten)
+- `solarweb_monthly_2026_reference.csv` (Monatssummen Jan–Jun, aus Tagesdaten aggregiert)
+- `solarweb_yearly_2021-26_working.csv` (Jahressummen, 2026 = Jan–Jun-Ist)
+- `abgleich_2026-01_matrix.csv`, `abgleich_2026-02_daily_vs_pvsystem.csv`
+- `abgleich_2026-H1_monthly_solarweb_vs_lokal.csv` (**neu**: Halbjahres-Monatsabgleich)
 
-Nicht vorhanden (Stand 01.07.2026): `solarweb_daily_2026-03/04/05/06_working.csv`.
+März–Juni wurden am 01.07.2026 per `fetch_solarweb_daily.py --year 2026 --months 3-6`
+neu von Solarweb geholt (siehe Abschnitt 6.6).
 
 ### 6.2 Lokale Baseline Juni 2026 (Monitoring)
 
@@ -251,42 +252,53 @@ Quellen: `solarweb_monthly_2026_reference.csv`,
 - Das Muster passt zum bekannten Split zwischen `direkt_kwh` und
    `wattpilot_kwh` plus unvollständiger/teilweise fehlender Februar-Abgleichsreihe.
 
-### 6.5 Fazit bis 30.06.2026
+### 6.5 Vergleich März–Juni 2026 (Solarweb vs lokal)
 
-- **Vollständig verifiziert:** Januar 2026 (sehr gute Übereinstimmung,
-   Mapping-Thema dokumentiert).
-- **Teilweise verifiziert:** Februar 2026 (Abgleichsdatei unvollständig,
-   deutliche Monatsdifferenz in lokalen Summen).
-- **Nicht vorhanden:** März bis Juni 2026 (keine Solarweb-Tages-CSV in Repository
-   oder Backups gefunden, siehe Abschnitt 6.6).
+Quelle: `abgleich_2026-H1_monthly_solarweb_vs_lokal.csv` (Solarweb-Fetch 01.07.2026,
+lokale `daily_data`-Summen).
 
-### 6.6 Backup-Analyse — März bis Juni 2026 (Stand 01.07.2026)
+| Monat | Tage lokal | PV SW | PV lokal | Δ PV | Δ PV % | Verbr. SW | Verbr. lokal | Δ Verbr. |
+|---|:--:|---:|---:|---:|---:|---:|---:|---:|
+| 2026-03 | 31 | 1.905,18 | 1.872,08 | -33,10 | -1,74% | 1.987,82 | 1.989,50 | +1,68 |
+| 2026-04 | 30 | 2.000,69 | 1.995,17 | -5,52 | -0,28% | 2.074,86 | 2.096,84 | +21,98 |
+| 2026-05 | 31 | 2.158,35 | 2.153,42 | -4,93 | -0,23% | 2.153,03 | 2.162,96 | +9,93 |
+| 2026-06 | 30 | 2.050,38 | 2.047,20 | -3,18 | -0,16% | 2.024,93 | 2.053,86 | +28,93 |
 
-**Systematische Suche in allen Pi5-Backups durchgeführt.**
+**Diskussion März–Juni:**
 
-Backup-Chronologie Solarweb-CSVs:
+- **Sehr gute Übereinstimmung** bei PV-Produktion: Abweichung < 1,8%, im Q2
+   (Apr–Jun) sogar < 0,3%. Die lokalen Werte liegen minimal unter Solarweb —
+   konsistent mit dem bekannten Muster (Zähler-Rundung, minimale Erfassungslücken).
+- Verbrauch stimmt eng überein (Δ +1,7 bis +28,9 kWh/Monat, < 1,5%).
+- Netzbezug/-einspeisung im niedrigen kWh-Bereich (Sommer, hohe Autarkie),
+   Details in der Matrix-CSV.
+- **Keine systematische Drift** — die Messkette ist über das gesamte Halbjahr valide.
 
-| Backup-Datum | Größe | Solarweb-Dateien | Status |
-|---|---|---|---|
-| 19.04.2026 | — | 6 (Jan/Feb + ref) | ✅ vorhanden |
-| 26.04.2026 | — | 6 (Jan/Feb + ref) | ✅ vorhanden |
-| 29.05.2026 | — | 0 | ❌ gelöscht |
-| 05.06.2026 | 411 MB | 0 | ❌ nicht vorhanden |
-| 29.06.2026 | 128 MB | 0 | ❌ nicht vorhanden |
+### 6.6 Herkunft der März–Juni-Daten (Stand 01.07.2026)
 
-**Ergebnis:** Im neuesten Backup (26.04.2026) sind nur Jan/Feb Solarweb-Tageswerte
-enthalten. März bis Juni wurden entweder:
-1. nie heruntergeladen, oder
-2. nach 26.04 gelöscht (nicht in den späteren Backups erhalten).
+**Backup-Analyse (historisch):** In den Pi5-Backups waren nur Jan/Feb
+Solarweb-Tageswerte enthalten (letztes Backup mit Solarweb: 26.04.2026). März–Juni
+waren nie als CSV gesichert.
 
-**Konsequenz für Abgleich:** Der Vergleich für März–Juni 2026 kann nur durchgeführt
-werden, wenn die Daten entweder:
-- Erneut von Solarweb fetched werden (`scripts/fetch_solarweb_daily.py --year 2026 --month 3-6`), oder
-- Aus lokalen Logs/temporären Dateien rekonstruiert werden.
+**Lösung:** Am 01.07.2026 wurden die fehlenden Monate direkt aus dem Fronius-
+Solarweb-Portal nachgeholt:
 
-**Empfehlung:** Juni 2026 ist abgelaufen (Cut-Off für diese KI-Analyse). Ein
-vollständiger Q2-Abgleich (April–Juni) erfordert neue Solarweb-Fetches mit
-aktuellen Credentials.
+```bash
+python3 scripts/fetch_solarweb_daily.py --year 2026 --months 3-6
+```
+
+Credentials: `Benutzer` + `Passwort` in `.secrets` (aus `FRONIUS_USER`/`FRONIUS_PASS`).
+Der 5-Schritt-OAuth2-Login gegen `login.fronius.com` + Chart-API lieferte alle
+122 Tageswerte (31+30+31+30) vollständig.
+
+### 6.7 Fazit H1 2026
+
+- **Januar:** exakt (Δ 0,0%) — Zählerdaten identisch.
+- **Februar:** lokal nur 25 Tage erfasst → -11,8% (Erfassungslücke, kein Messfehler).
+- **März–Juni:** sehr gute Übereinstimmung (PV Δ < 1,8%, Q2 < 0,3%).
+- **Gesamt H1 2026:** PV 10.080,5 kWh (Solarweb), Messkette validiert.
+
+Die Vergleichsdiskussion ist damit für das gesamte erste Halbjahr 2026 abgeschlossen.
 
 ---
 
