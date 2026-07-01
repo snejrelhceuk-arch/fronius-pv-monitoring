@@ -10,6 +10,10 @@
 
 - [deep-2026-06-30.md](deep-2026-06-30.md) — Tiefpruefung LLM-Doku, Collector, Automation, Diagnos/Steuerbox, Web-Monitoring und Pi-/OS-Betrieb; kritische Steuerbox-/Monitor-/Backup-Befunde im Lauf behoben.
 
+### 2026-07-01 — Solarweb-Datenabgleich
+
+- [SOLARWEB_ABGLEICH.md](SOLARWEB_ABGLEICH.md) — Monatsendlicher Abgleich der lokalen Energiedaten mit Fronius Solarweb (Ground Truth); Anleitung, Vergleichsprotokoll, erwartete Abweichungen. **Status:** Juni 2026 ausstehend (Credentials fehlen).
+
 ### 2026-05-29 — Rollen-/Doku-Audit
 
 | Bereich | Rolle | Bericht |

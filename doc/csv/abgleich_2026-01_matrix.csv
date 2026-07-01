@@ -1,0 +1,10 @@
+kennzahl;solarweb_monat_2026-01;lokal_monthly_statistics_2026-01;lokal_daily_data_sum_2026-01;delta_solarweb_vs_monthly;delta_solarweb_vs_daily
+produktion_kwh;960.18;960.18;960.18;0.00;0.00
+netzbezug_kwh;1101.47;1101.47;1101.47;0.00;0.00
+einspeisung_kwh;8.55;8.55;8.55;0.00;0.00
+in_batt_kwh;186.15;186.15;186.15;0.00;0.00
+out_batt_kwh;177.02;177.02;177.02;0.00;0.00
+verbrauch_kwh;2043.97;2043.97;2043.97;0.00;0.00
+wattpilot_kwh;450.92;0.00;n/a;450.92;n/a
+direkt_kwh;314.56;765.48;765.48;-450.92;-450.92
+direkt_plus_wattpilot_kwh;765.48;765.48;n/a;0.00;n/a

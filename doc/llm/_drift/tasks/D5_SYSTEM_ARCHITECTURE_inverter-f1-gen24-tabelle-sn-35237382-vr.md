@@ -1,6 +1,6 @@
 # Drift-Task D5 — doc/system/SYSTEM_ARCHITECTURE.md
 
-**Erkannt:** 2026-06-30
+**Erkannt:** 2026-07-01
 **Klasse:** D5
 **Scope:** `doc/system/SYSTEM_ARCHITECTURE.md`
 
