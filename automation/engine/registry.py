@@ -39,6 +39,7 @@ DEFAULT_REGISTRY_PATH = os.path.join(_PROJECT_ROOT, 'config', 'engine_registry.j
 
 DEFAULT_REGELN_SPEC: list[tuple[str, str, bool]] = [
     ('sls_schutz',           'automation.engine.regeln.schutz.RegelSlsSchutz', True),
+    ('einspeise_schutz',     'automation.engine.regeln.einspeise_schutz.RegelEinspeiseSchutz', True),
     ('komfort_reset',        'automation.engine.regeln.soc_steuerung.RegelKomfortReset', True),
     ('morgen_soc_min',       'automation.engine.regeln.soc_steuerung.RegelMorgenSocMin', True),
     ('nachmittag_soc_max',   'automation.engine.regeln.soc_steuerung.RegelNachmittagSocMax', True),

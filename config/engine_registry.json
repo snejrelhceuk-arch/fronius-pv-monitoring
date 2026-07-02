@@ -4,6 +4,7 @@
   "_updated": "2026-06-29",
   "regeln": [
     { "name": "sls_schutz",           "klasse": "automation.engine.regeln.schutz.RegelSlsSchutz",                 "aktiv": true },
+    { "name": "einspeise_schutz",     "klasse": "automation.engine.regeln.einspeise_schutz.RegelEinspeiseSchutz", "aktiv": true },
     { "name": "komfort_reset",        "klasse": "automation.engine.regeln.soc_steuerung.RegelKomfortReset",       "aktiv": true },
     { "name": "morgen_soc_min",       "klasse": "automation.engine.regeln.soc_steuerung.RegelMorgenSocMin",       "aktiv": true },
     { "name": "nachmittag_soc_max",   "klasse": "automation.engine.regeln.soc_steuerung.RegelNachmittagSocMax",   "aktiv": true },

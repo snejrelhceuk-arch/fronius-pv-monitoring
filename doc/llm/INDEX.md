@@ -17,6 +17,7 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 | **automation: Wattpilot/EV-Lader, Ladestrom, SOC-Schutz bei Ladung** | [`automation-regel-wattpilot.card.md`](./cards/automation-regel-wattpilot.card.md) | stable |
 | **automation: Fußbodenheizung-Nachtschaltung, FBH-SD, FritzDECT-Zeitschaltung** | [`automation-engine.card.md`](./cards/automation-engine.card.md) | stable || **automation: Prioritäten, ExternalRespect, Matrix-Konzept** | [`automation-steuerungsphilosophie.card.md`](./cards/automation-steuerungsphilosophie.card.md) | stable |
 | **automation: Tier-1, SLS, No-Op-Schutz, Watchdog** | [`automation-schutzregeln.card.md`](./cards/automation-schutzregeln.card.md) | stable |
+| **automation: Netzeinspeisung, Nulleinspeisung, Einspeise-Guard, SOC_MAX-Öffnung** | [`automation-einspeise-schutz.card.md`](./cards/automation-einspeise-schutz.card.md) | stable |
 | **automation: ObsState, RAM-DB, Configs, automation_log** | [`automation-state.card.md`](./cards/automation-state.card.md) | stable |
 | **collector: DB-Schema, Tabellen, Retention** | [`collector-db-schema.card.md`](./cards/collector-db-schema.card.md) | stable |
 | **collector: Feldnamen, Einheiten, Vorzeichen, `W_AC_Inv` ≠ PV** | [`collector-feldnamen-referenz.card.md`](./cards/collector-feldnamen-referenz.card.md) | stable |
@@ -41,6 +42,7 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 - [`automation-regel-wattpilot.card.md`](./cards/automation-regel-wattpilot.card.md) — Wallbox, SOC-Schutz, WS
 - [`automation-steuerungsphilosophie.card.md`](./cards/automation-steuerungsphilosophie.card.md) — Prioritäten + Matrix
 - [`automation-schutzregeln.card.md`](./cards/automation-schutzregeln.card.md) — Tier-1, SLS, No-Op
+- [`automation-einspeise-schutz.card.md`](./cards/automation-einspeise-schutz.card.md) — Nulleinspeisungs-Guard (Einspeisung erkennen/warnen/SOC_MAX öffnen)
 - [`automation-state.card.md`](./cards/automation-state.card.md) — RAM-DB, Persist, Configs
 
 ### collector (Schicht A)

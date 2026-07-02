@@ -32,10 +32,38 @@ LOG = logging.getLogger('engine')
 NACHTLAST_FENSTER_H = 3.0
 NACHTLAST_GRID_TRIGGER_W = 300
 
+# engine_flag des Einspeise-Schutzes: solange in der Zukunft, hält der Guard
+# SOC_MAX bewusst auf 100 % — die Morgenregel darf dann NICHT auf 75 % deckeln.
+_GUARD_SOC_OPEN_FLAG = 'einspeise_guard_soc_open_bis'
+
 
 def _jetzt_h() -> float:
     now = datetime.now()
     return now.hour + now.minute / 60.0
+
+
+def _einspeise_guard_haelt_soc_offen() -> bool:
+    """True, wenn der Einspeise-Schutz SOC_MAX aktuell offen hält (RAM-DB-Flag)."""
+    try:
+        conn = sqlite3.connect(
+            f'file:{obs_state_ram_db()}?mode=ro', uri=True, timeout=2.0
+        )
+        try:
+            row = conn.execute(
+                "SELECT value FROM engine_flags WHERE key=?",
+                (_GUARD_SOC_OPEN_FLAG,),
+            ).fetchone()
+        finally:
+            conn.close()
+        return bool(row) and float(row[0]) > time.time()
+    except Exception:
+        return False
+
+
+def obs_state_ram_db() -> str:
+    """RAM-DB-Pfad (indirekt, damit Tests den Pfad patchen können)."""
+    from automation.engine.obs_state import RAM_DB_PATH
+    return RAM_DB_PATH
 
 
 def _nachtlast_oeffnung_noetig(obs: ObsState, matrix: dict) -> bool:
@@ -374,13 +402,17 @@ class RegelMorgenSocMin(Regel):
         })
 
         if obs.soc_max is None or obs.soc_max != komfort_max:
-            aktionen.append({
-                'tier': 2, 'aktor': 'batterie',
-                'kommando': 'set_soc_max', 'wert': komfort_max,
-                'grund': (f'Morgen-SOC_MAX-Begrenzung: '
-                          f'{obs.soc_max or "?"}%→{komfort_max}% '
-                          f'(LFP-Schonung)'),
-            })
+            if _einspeise_guard_haelt_soc_offen():
+                LOG.info("morgen_soc_min: SOC_MAX-Deckelung ausgesetzt — "
+                         "Einspeise-Schutz hält SOC_MAX offen (Nulleinspeisung)")
+            else:
+                aktionen.append({
+                    'tier': 2, 'aktor': 'batterie',
+                    'kommando': 'set_soc_max', 'wert': komfort_max,
+                    'grund': (f'Morgen-SOC_MAX-Begrenzung: '
+                              f'{obs.soc_max or "?"}%→{komfort_max}% '
+                              f'(LFP-Schonung)'),
+                })
 
         # Hinweis: registriere_aktion() erfolgt NACH Actuator-Erfolg in engine.py (K2)
 

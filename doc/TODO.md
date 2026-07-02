@@ -39,6 +39,14 @@
 - [ ] Forecast-Empfehlung: "Guter Tag morgen → EV-Ladung auf Mittagszeit"
 - [ ] Wochenvorschau in Web-Ansicht
 
+### Einspeise-Schutz (Nulleinspeisung) — Nachgang Zwischenfall 2026-07-02
+
+- [ ] **Fronius-Support informieren:** Entwurf `doc/system/FRONIUS_SUPPORT_EINSPEISUNG_2026-07-02.md` prüfen und über Solar.web/Fronius Technical Support senden (Ursache: F3 ignoriert Soft-Limit-Curtailment).
+- [ ] **`automation_log`-Persistenz reparieren:** Aktor schreibt nach `data.db`, aber Persist-Sync/Restore überschreibt `data.db` mit RAM-`fronius_data.db` (dort `automation_log` seit 2026-05-29 eingefroren) → Aktor-Inserts verpuffen. Forensik-Lücke; Live-Log läuft nur über `logs/schaltlog.txt`.
+- [ ] **Einspeise-Schutz Stufe 2/3 nach Review scharfschalten:** `dumpload_aktiv`/`provokation_aktiv` in `config/soc_param_matrix.json` (Konflikt mit Geräteregeln bzw. AUS-Phase-Risiko vorab bewerten).
+- [ ] **Dashboard-Sichtbarkeit:** ObsState-Feld `einspeis_heute_kwh` + Web-Anzeige/EVENT_THRESHOLDS für Einspeisung (aktuell nur Guard-intern + Mail/Log).
+- [ ] **Baseline pflegen:** `einspeise_schutz.baseline_einspeis_kwh` periodisch aus `daily_data.W_Exp_Netz_total` (rollierend) nachziehen bzw. dynamisch berechnen.
+
 ### Hardware: MEGA-BAS HAT
 
 - [ ] Phase 0: I2C aktivieren, SMmegabas installieren, Board-Erkennung
