@@ -51,7 +51,8 @@
 
 - [ ] **F1-Soft-Standby via SunSpec Model 123 `Conn`** (Disconnect/Connect, update-sicher) evaluieren — Schreibpfad zum GEN24 neu + risikobehaftet (Batterie-WR), erst nach Einzelvalidierung, gated, nie autonom.
 - [ ] **F2-Standby via eigenem Modbus (Model 123 `Conn`)** implementieren — F2 hat eigene IP + Modbus TCP:502 + Solar-API (verifiziert 2026-07-02, analog F1). Gated, Einzelvalidierung.
-- [ ] **F3-Digitalzugang ermitteln** (IP/Protokoll noch unbekannt) — Web-Recherche + LAN-Scan + ggf. reverse-engineering am Gerät. Bis dahin **Relais/Schütz auf F3** (MEGA-BAS, s.u.).
+- [x] **F3-Digitalzugang ermittelt** (2026-07-02): eigene IP im LAN, Modbus TCP:502 + Solar-API v1, SunSpec Model 123 `Conn` vorhanden (analog F1/F2). CustomName „F3", DT=111, UID 1029499.
+- [ ] **F3-IP in `.infra.local`** (`PV_TERTIARY_INVERTER_API`) + Collector-Monitoring aufnehmen; danach **F3-Standby via eigenem Modbus** (Model 123 `Conn`) implementieren — gated, Einzelvalidierung.
 - [ ] **Read-only WR-Link-Health-Check:** Fronius interne Config-API (Soft-Limit=0 W + Multi-WR-Limiting gesetzt?) + Runaway-Frühsignatur (F3 hoch trotz Einspeisung + Batt voll/gedeckelt + F1/F2 abgeregelt) → alarmieren, kein Aktor.
 - [ ] **Reset-Sequenz** (F3 aus → F2 aus → F1 Conn-Reset → +3 min F2 → F3) erst nach vorhandener Relais-HW/F3-Zugang implementieren + jeden Schritt einzeln verifizieren.
 

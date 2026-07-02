@@ -13,9 +13,9 @@ Zwei getrennte Ebenen sauber unterscheiden:
 |---|---|---|
 | **F1** (GEN24 12.0) | Modbus TCP + interne HTTP-API | **Ja** — SunSpec Model 123 `Conn` + HTTP (SOC produktiv) |
 | **F2** (Fronius, DT=1, „Running", ~12 kW) | **eigene IP**, Modbus TCP **:502 offen**, Solar-API v1 erreichbar | **Ja — analog zu F1** (SunSpec Model 123 `Conn`), verifiziert 2026-07-02 |
-| **F3** | vorhanden im LAN, Zugang aber **noch nicht ermittelt** | **noch offen** — Zugänge/Protokoll recherchieren (Web + ggf. reverse-engineering am Gerät) |
+| **F3** (Fronius, DT=111, „F3", ~5,9 kW) | **eigene IP** (im LAN gefunden), Modbus TCP **:502 offen**, Solar-API v1 | **Ja — analog zu F1/F2** (SunSpec Model 123 `Conn`), verifiziert 2026-07-02 |
 
-**Korrektur zur ersten Analyse:** F2 ist **nicht** nur ein SmartMeter — der SmartMeter (Unit 3) misst nur; der **F2-Wechselrichter selbst hat eine eigene Modbus-/Solar-API-Schnittstelle** und ist damit direkt steuerbar. Für **F3** ist der Zugang noch zu ermitteln; bis dahin bleibt für F3 der **Relais/Schütz-Fallback** die abgesicherte Option.
+**Korrektur zur ersten Analyse:** F2/F3 sind **nicht** nur SmartMeter — die SmartMeter (Unit 3/6 am GEN24) messen nur; die **F2-/F3-Wechselrichter selbst haben eigene Modbus-/Solar-API-Endpunkte** und sind direkt steuerbar. Damit sind **alle drei WR digital fernsteuerbar**; der Relais/Schütz-Fallback ist nur noch ultimative HW-Absicherung.
 
 ## Steuerbarkeit je WR
 
@@ -32,17 +32,18 @@ SunSpec **Model 123 (Controls)** ist im Register-Map vorhanden (`collector/quell
 - **Standby/Ende-Standby** über SunSpec **Model 123 `Conn`** auf F2s eigenem Modbus — analog zu F1. Zusätzlich Solar-API vorhanden.
 - Schreibpfad ist **neu** und noch nicht implementiert; erst nach Einzelvalidierung, gated, nie autonom ohne Freigabe.
 
-### F3 — Zugang noch zu ermitteln
-- Physisch im LAN vorhanden, aber IP/Protokoll noch **nicht konfiguriert/bekannt** (`.infra.local` kennt nur F2 = `PV_SECONDARY_INVERTER_API`).
-- Vorgehen: Fronius-/Geräte-Doku im Web, Netz-Scan im LAN, ggf. reverse-engineering direkt am F3.
-- **Bis F3 digital erreichbar ist: Relais/Schütz auf F3s AC-Ausgang** (abgesicherter Fallback, HW-Projekt, siehe MEGA-BAS-HAT in `doc/TODO.md`).
+### F3 — digital steuerbar (gefunden 2026-07-02)
+- Eigene IP im LAN (via Ping-Sweep + Solar-API-Probe identifiziert; **IP in `.infra.local` hinterlegen**, z. B. `PV_TERTIARY_INVERTER_API`). Solar-API v1 (Compatibility 1.8-1), `GetInverterInfo` → CustomName „F3" (`&#70;&#51;`), DT=111, PVPower ~5,9 kW, UID 1029499.
+- **Modbus TCP :502 offen**, SunSpec-Marker OK; Modelle `[1, 103, 120, 121, 122, 123, 160]` → **Model 123 (Controls) vorhanden** → `Conn` = Standby/Ende-Standby, exakt wie F1/F2.
+- **Kein reverse-engineering nötig** — es war lediglich eine bislang nicht konfigurierte IP. Relais/Schütz nur noch als ultimativer HW-Fallback.
+- Schreibpfad neu → erst nach Einzelvalidierung, gated, nie autonom.
 
 ## Reset-Strategie
 
 Die vom Nutzer skizzierte Reihenfolge (von den kleinen WR her) bleibt richtig, weil ein F1-Neustart die Regelung für F2/F3 kurz aufhebt und diese sonst hochziehen:
 
 ```
-a) F3 trennen          → Relais/Schütz F3 = AUS  (bis F3-Digitalzugang ermittelt)
+a) F3 trennen          → SunSpec Conn=0 auf F3s eigenem Modbus (:502) (oder Relais)
 b) F2 trennen          → SunSpec Conn=0 auf F2s eigenem Modbus (oder Relais)
 c) F1 neu starten      → SunSpec Conn=Disconnect, warten, Conn=Connect
                          (Hard-Reset nur mit Relais F1)
@@ -62,12 +63,12 @@ Read-only-Monitoring (implementierbar, ungefährlich), Vorschlag:
 
 ## Update-Sicherheit
 
-- **Nur Standard-SunSpec** (Model 123 `Conn`) für F1-Standby verwenden — überlebt Firmware-Updates. Die interne undokumentierte API kann nach Updates ihre Auth/Endpunkte ändern (siehe Hardening-Doku 2026-04-03).
-- Relais-Steuerung ist **inhärent update-sicher** (Hardware, unabhängig von Fronius-Firmware) — Hauptargument für den Relais-Weg bei F2/F3.
+- **Nur Standard-SunSpec** (Model 123 `Conn`) für WR-Standby verwenden — überlebt Firmware-Updates. Die interne undokumentierte API kann nach Updates ihre Auth/Endpunkte ändern (siehe Hardening-Doku 2026-04-03).
+- Relais-Steuerung ist **inhärent update-sicher** (Hardware, unabhängig von Fronius-Firmware) — ultimativer HW-Fallback, falls ein WR-Endpunkt nach einem Update ausfällt.
 
 ## Fazit / Empfehlung
 
-1. **F2/F3 sind nur per Relais/Schütz abschaltbar** — die Relais-Karte ist damit Kern der Lösung, nicht Notnagel. Hardware-Projekt (MEGA-BAS-HAT ist bereits in `doc/TODO.md` gelistet → dort andocken).
-2. **F1-Soft-Standby** (SunSpec `Conn`) ist digital machbar und update-sicher, aber ein Schreibpfad zum GEN24 ist neu und risikobehaftet (Batterie-WR) → erst nach separater Validierung, gated, nie autonom ohne Freigabe.
-3. **Kein autonomer WR-Reset** wird jetzt scharfgeschaltet. Vorbedingungen: Relais-Hardware + Einzelvalidierung jedes Schritts.
-4. Nächster ungefährlicher Schritt: Read-only-Health-Check (Punkt oben) + Fronius-Support-Klärung (F3-Curtailment, `FRONIUS_SUPPORT_EINSPEISUNG_2026-07-02.md`).
+1. **Alle drei WR (F1/F2/F3) sind digital fernsteuerbar** — jeder über seinen eigenen Modbus-TCP-Endpunkt (SunSpec Model 123 `Conn` = Standby/Ende-Standby). F3 = eigene IP (in `.infra.local` hinterlegen), verifiziert 2026-07-02. Relais/Schütz nur noch ultimativer HW-Fallback (MEGA-BAS-HAT, `doc/TODO.md`).
+2. **Schreibpfad ist neu und risikobehaftet** (F1 = Batterie-WR) → erst nach separater Einzelvalidierung + Read-Back, gated, nie autonom ohne Freigabe.
+3. **Kein autonomer WR-Reset** wird jetzt scharfgeschaltet. Reset-Sequenz (F3→F2→F1→+3 min F2→F3) je Schritt einzeln verifizieren.
+4. Nächster ungefährlicher Schritt: F3-IP in `.infra.local` + `collector/quellen.py`/Collector aufnehmen (Monitoring), Read-only-WR-Link-Health-Check, Fronius-Support-Klärung (F3-Curtailment).
