@@ -58,7 +58,7 @@ Zwischenfall **2026-07-02**: Morgenregel deckelte SOC_MAX auf 75 % (LFP-Schonung
 - **Wattpilot-ECO-Lastwechsel** (bei leichter Bewölkung, EV-Ladung bis ~15 kW) erzeugen wechselnd Einspeisung/Bezug — das ist **kein** Fehler. Der Netto-Detektor rechnet Import gegen → solche Swings mitteln sich weg (verifiziert 2026-07-02: 35 Fehlalarme vor Umstellung von Kumulativ-Trigger auf Netto-Fenster).
 - Batterie bereits voll (SOC_MAX=100, SOC≈100) → Stufe 1 wirkungslos; ohne Dump-Load warnt der Guard nur (korrekt: echter WR-Fehler → Mensch/Fronius-Support/WR-Reset).
 - `obs.grid_power_w` Vorzeichen: **negativ = Einspeisung** (siehe `collector-feldnamen-referenz.card.md`).
-- Der Guard behebt **nicht** die Fronius-seitige Ursache (F3 ohne Curtailment) — dafür Support-Report `doc/system/FRONIUS_SUPPORT_EINSPEISUNG_2026-07-02.md` und die geplante WR-Fernsteuerung (Task A, siehe `doc/TODO.md`).
+- Der Guard behebt **nicht** die Fronius-seitige Ursache (F3 ohne Curtailment) — dafür Support-Report `doc/system/FRONIUS_SUPPORT_EINSPEISUNG_2026-07-02.md` und die geplante WR-Fernsteuerung `doc/system/WR_FERNSTEUERUNG.md`.
 - Provokation (Stufe 3) ist **deaktiviert** (User-Entscheid 2026-07-02): Netzwerkfehler ausgeschlossen (F2-Steuerung lief), Verbraucher-Toggle ist der falsche Hebel — Ersatz = WR-Fernsteuerung.
 
 ## Verwandte Cards

@@ -45,7 +45,25 @@
 - [ ] **`automation_log`-Persistenz reparieren:** Aktor schreibt nach `data.db`, aber Persist-Sync/Restore überschreibt `data.db` mit RAM-`fronius_data.db` (dort `automation_log` seit 2026-05-29 eingefroren) → Aktor-Inserts verpuffen. Forensik-Lücke; Live-Log läuft nur über `logs/schaltlog.txt`.
 - [ ] **Einspeise-Schutz Stufe 2/3 nach Review scharfschalten:** `dumpload_aktiv`/`provokation_aktiv` in `config/soc_param_matrix.json` (Konflikt mit Geräteregeln bzw. AUS-Phase-Risiko vorab bewerten).
 - [ ] **Dashboard-Sichtbarkeit:** ObsState-Feld `einspeis_heute_kwh` + Web-Anzeige/EVENT_THRESHOLDS für Einspeisung (aktuell nur Guard-intern + Mail/Log).
-- [ ] **Baseline pflegen:** `einspeise_schutz.baseline_einspeis_kwh` periodisch aus `daily_data.W_Exp_Netz_total` (rollierend) nachziehen bzw. dynamisch berechnen.
+- [ ] **Schwellen pflegen:** `einspeise_schutz.netto_warn_kwh`/`netto_akt_kwh` (30-min-Netto) periodisch gegen die rollierende 90-Tage-Verteilung der max Netto-Einspeisung/30 min prüfen (aktuell Normalmax 0,35 kWh, Vorfall 0,75 kWh).
+
+### Task A — WR-Fernsteuerung (Design: `doc/system/WR_FERNSTEUERUNG.md`)
+
+- [ ] **F2/F3 nur per Relais/Schütz abschaltbar** (kein digitaler Befehlskanal — nur SmartMeter Unit 3/6). Relais-Karte (MEGA-BAS-HAT, s.u.) + Schütze auf AC-Ausgang F2/F3 spezifizieren/verbauen.
+- [ ] **F1-Soft-Standby via SunSpec Model 123 `Conn`** (Disconnect/Connect, update-sicher) evaluieren — Schreibpfad zum GEN24 neu + risikobehaftet (Batterie-WR), erst nach Einzelvalidierung, gated, nie autonom.
+- [ ] **Read-only WR-Link-Health-Check:** Fronius interne Config-API (Soft-Limit=0 W + Multi-WR-Limiting gesetzt?) + Runaway-Frühsignatur (F3 hoch trotz Einspeisung + Batt voll/gedeckelt + F1/F2 abgeregelt) → alarmieren, kein Aktor.
+- [ ] **Reset-Sequenz** (F3 aus → F2 aus → F1 Conn-Reset → +3 min F2 → F3) erst nach vorhandener Relais-HW implementieren + jeden Schritt einzeln verifizieren.
+- [ ] Vor Ort klären: sind F2/F3 eigenständige Fronius-WR mit eigener LAN-IP (dann eigener Solar-API/Modbus-Kanal möglich)?
+
+### Task C — Tagesdaten-Haltbarkeit / DB-Split (Design: `doc/system/TAGESDATEN_HALTBARKEIT.md`)
+
+- [ ] **STATS-DB auf SD** (`data_stats.db`) + Tabelle `data_5min_permanent` (5-min-Downsample, permanent) — Schema in `db_init.py`.
+- [ ] **Archiv-Job 1×/Tag** (nach daily-Aggregation): gestrigen Tag `data_1min`→`data_5min_permanent` (idempotent). Seltenes SD-Schreiben.
+- [ ] **Backfill JETZT** der noch vorhandenen 90 Tage (ab 2026-04-03) BEVOR sie rollierend verfallen — zeitkritisch.
+- [ ] **Web-Tag-Chart** um STATS-Fallback erweitern (`routes/`): jung=data_1min (1-min), alt=data_5min_permanent (5-min).
+- [ ] **Backup/Failover-Sync** um STATS-DB ergänzen (Pi5 + `scripts/failover_sync_db.sh`), additiv.
+- [ ] Erst danach `DATA_1MIN_RETENTION_DAYS` senken (RAM entlasten).
+- [ ] **Pi4-Failover On-Host verifizieren** (update-/neustart-/process-verified-sicher) via `scripts/failover_health_check.sh` auf dem Failover-Host — bewusster, verifizierter SSH-Schritt (nicht autonom).
 
 ### Hardware: MEGA-BAS HAT
 
