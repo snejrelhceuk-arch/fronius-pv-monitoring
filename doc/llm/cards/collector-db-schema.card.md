@@ -5,12 +5,13 @@ role: A
 applyTo: "db_init.py"
 tags: [db, schema, raw-data, aggregat]
 status: stable
-last_review: 2026-06-20
+last_review: 2026-07-02
 ---
 
 # DB-Schema
 
 ## Changes
+- 2026-07-02: **STATS-DB** `data_stats.db` (SD, permanent) mit `data_5min_permanent` (5-min-Downsample, Schema = `data_1min`) eingeführt — hält Tag-Chart-Daten dauerhaft (RAM-DB bleibt bei 90 T). Producer/Backfill `tools/build_stats_db.py`; Tages-Archiv `scripts/stats_archive_daily.sh` (Cron 00:20). Web hängt sie read-only an (`db_utils.get_db_connection` ATTACH `stats`, `config.STATS_DB_PATH`); Tag-Endpunkte via `routes/helpers.py:tag_table()`. **Kein** `db_init.py`-Pflichttabellen-Eintrag (eigene DB, entkoppelt).
 - 2026-06-20 (b): `daily_data` um `P_PV_total_max` (REAL) erweitert — zeitgleicher System-Peak (DC1+DC2+F2+F3), nicht F1-only. Quelle `db_schema_v4_tech.sql`; Migration `db_init.py` (ALTER TABLE idempotent). Producer: `collector/aggregate/daily.py`.
 - 2026-06-20: `data_1min` um Leistungsfaktor-Spalten erweitert: `PF_Netz_avg/min/max`, `PF_Inv_avg/min/max` (REAL). Quelle `db_schema_1min.sql`; Migration via `db_init.py` (ALTER TABLE, idempotent). Producer: `collector/aggregate/min1.py`.
 

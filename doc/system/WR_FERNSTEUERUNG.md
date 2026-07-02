@@ -1,46 +1,49 @@
 # WR-Fernsteuerung — Möglichkeiten, Grenzen, Reset-Strategie
 
-> **Status: ANALYSE/DESIGN (2026-07-02).** Kein autonomer Hardware-Eingriff implementiert.
+> **Status: ANALYSE (2026-07-02, korrigiert).** Kein autonomer Hardware-Eingriff implementiert.
 > Antwort auf Task A: „Neustart/Standby der 3 WR möglich?"
 
-## Kernbefund (topologisch belegt)
+## Kernbefund (verifiziert 2026-07-02)
 
-Aus `collector/quellen.py` (Modbus-Unit-Map) und `doc/collector/COLLECTOR_HARDENING.md`:
+Zwei getrennte Ebenen sauber unterscheiden:
+1. **Messung** über die Modbus-Kette des GEN24 (`collector/quellen.py`): Unit 1 = Inverter (F1), Unit 2 = `PRIM_SM_F1` (Netz), Unit 3 = `SEC_SM_F2`, Unit 4 = `SEC_SM_WP`, Unit 6 = `SEC_SM_F3`. **`P_F2`/`P_F3` sind SmartMeter-Messwerte** — über diese Kette gibt es KEINEN Befehlskanal zu F2/F3.
+2. **Steuerung** über die **eigenen Netzwerk-Endpunkte** der Wechselrichter (jeder WR hat eine eigene IP):
 
-| „WR" | Modbus-Unit | Rolle in unserem System | Direkt steuerbar von uns? |
-|---|---|---|---|
-| **F1** | Unit 1 = `INVERTER` (GEN24 12.0) | Hybrid-WR + Batterie + **SmartMeter-Master** | **Ja** — SunSpec + HTTP |
-| Netz | Unit 2 = `PRIM_SM_F1` | Zähler am Netzübergabepunkt (Modell 203) | — (Messung) |
-| **F2** | Unit 3 = `SEC_SM_F2` | **SmartMeter** vor dem F2-Wechselrichter (Modell 203) | **Nein** — nur Messung |
-| WP | Unit 4 = `SEC_SM_WP` | SmartMeter Wärmepumpe (Modell 203) | — (Messung) |
-| **F3** | Unit 6 = `SEC_SM_F3` | **SmartMeter** vor dem F3-Wechselrichter (Modell 203) | **Nein** — nur Messung |
+| WR | Eigener Netzwerk-Zugang | Direkt steuerbar? |
+|---|---|---|
+| **F1** (GEN24 12.0) | Modbus TCP + interne HTTP-API | **Ja** — SunSpec Model 123 `Conn` + HTTP (SOC produktiv) |
+| **F2** (Fronius, DT=1, „Running", ~12 kW) | **eigene IP**, Modbus TCP **:502 offen**, Solar-API v1 erreichbar | **Ja — analog zu F1** (SunSpec Model 123 `Conn`), verifiziert 2026-07-02 |
+| **F3** | vorhanden im LAN, Zugang aber **noch nicht ermittelt** | **noch offen** — Zugänge/Protokoll recherchieren (Web + ggf. reverse-engineering am Gerät) |
 
-**Entscheidend:** `P_F2`/`P_F3` sind **Messwerte sekundärer SmartMeter**, nicht die Wechselrichter selbst. Die F2-/F3-Wechselrichter sind eigenständige Geräte, deren **Produktion wir nur messen**. Die Abregelung von F2/F3 macht der GEN24 (F1) intern über „Mehrere Wechselrichter limitieren" (Fronius Dynamic Power Reduction) — **wir haben keinen digitalen Befehlskanal zu F2/F3.**
-
-→ Das ändert die vom Nutzer skizzierte Reset-Reihenfolge grundlegend: **F3 und F2 können softwareseitig NICHT deaktiviert werden.** Für einen erzwungenen Standby von F2/F3 ist zwingend **Hardware (Relais/Schütz) auf deren AC-Ausgang** nötig — nicht als „letztes Mittel", sondern als **einziger** uns möglicher Weg.
+**Korrektur zur ersten Analyse:** F2 ist **nicht** nur ein SmartMeter — der SmartMeter (Unit 3) misst nur; der **F2-Wechselrichter selbst hat eine eigene Modbus-/Solar-API-Schnittstelle** und ist damit direkt steuerbar. Für **F3** ist der Zugang noch zu ermitteln; bis dahin bleibt für F3 der **Relais/Schütz-Fallback** die abgesicherte Option.
 
 ## Steuerbarkeit je WR
 
 ### F1 (GEN24) — digital steuerbar
 SunSpec **Model 123 (Controls)** ist im Register-Map vorhanden (`collector/quellen.py:168`), aktuell nur **gelesen**. Relevante Register:
-- `Conn` (enum16, offset 2): **Connect/Disconnect** → **erzwungener Standby (0) und Ende-Standby (1)**. Standard-SunSpec → **update-sicher** (überlebt Firmware-Updates besser als die undokumentierte interne API). Mit `Conn_WinTms`/`Conn_RvrtTms` (Zeitfenster/Timeout).
-- `WMaxLimPct` + `WMaxLim_Ena`: Leistungsdrosselung in % — **No-Go** (AGENTS.md #3: keine SW-Ratenlimits; GEN24-HW-Limit ist die Wahrheit). **Nicht** verwenden.
+- `Conn` (enum16, offset 2): **Connect/Disconnect** → **erzwungener Standby (0) und Ende-Standby (1)**. Standard-SunSpec → **update-sicher**. Mit `Conn_WinTms`/`Conn_RvrtTms` (Zeitfenster/Timeout).
+- `WMaxLimPct` + `WMaxLim_Ena`: Leistungsdrosselung in % — **No-Go** (AGENTS.md #3). **Nicht** verwenden.
 - Zusätzlich HTTP-Config-API (`fronius_api.py`) für Batterie (SOC) — bereits produktiv.
 
-**Ein echter Power-Cycle (Hard-Reset) des GEN24 ist digital nicht möglich** — nur `Conn`-Disconnect (Soft-Standby). Ein Hard-Reset bräuchte ebenfalls ein Relais in der Versorgung (bei einem Batterie-WR riskant → nur mit Bedacht).
+**Ein echter Power-Cycle (Hard-Reset) des GEN24 ist digital nicht möglich** — nur `Conn`-Disconnect (Soft-Standby). Ein Hard-Reset bräuchte ein Relais in der Versorgung (Batterie-WR → riskant, nur mit Bedacht).
 
-### F2 / F3 — NICHT digital steuerbar
-- Kein SunSpec-Control-Model, kein erreichbarer Befehlspfad über die aktuelle Modbus-Kette.
-- **Erzwungener Standby nur per Relais/Schütz** auf dem AC-Ausgang des jeweiligen WR.
-- Offene Frage (Hardware-Aufnahme nötig): Sind F2/F3 eigenständige Fronius-WR mit eigener IP/LAN-Anbindung? Falls ja, wäre deren **eigene** Solar-API/Modbus-Schnittstelle ein möglicher Kanal — **zu ermitteln vor Ort** (nicht aus den Daten ableitbar).
+### F2 — digital steuerbar (eigener Endpunkt, verifiziert)
+- Eigene IP: **Ping OK, HTTP :80 offen, Modbus TCP :502 offen**, Solar-API v1 (`/solar_api/v1/`, Compatibility 1.8-0), `GetInverterInfo` → CustomName „F2", DT=1, InverterState „Running", PVPower ~12,4 kW.
+- **Standby/Ende-Standby** über SunSpec **Model 123 `Conn`** auf F2s eigenem Modbus — analog zu F1. Zusätzlich Solar-API vorhanden.
+- Schreibpfad ist **neu** und noch nicht implementiert; erst nach Einzelvalidierung, gated, nie autonom ohne Freigabe.
 
-## Reset-Strategie (überarbeitet)
+### F3 — Zugang noch zu ermitteln
+- Physisch im LAN vorhanden, aber IP/Protokoll noch **nicht konfiguriert/bekannt** (`.infra.local` kennt nur F2 = `PV_SECONDARY_INVERTER_API`).
+- Vorgehen: Fronius-/Geräte-Doku im Web, Netz-Scan im LAN, ggf. reverse-engineering direkt am F3.
+- **Bis F3 digital erreichbar ist: Relais/Schütz auf F3s AC-Ausgang** (abgesicherter Fallback, HW-Projekt, siehe MEGA-BAS-HAT in `doc/TODO.md`).
 
-Die vom Nutzer gewünschte Reihenfolge (von den kleinen WR her) bleibt richtig, weil ein F1-Neustart die Regelung für F2/F3 kurz aufhebt und diese sonst hochziehen. Umsetzbar aber **nur mit Relais**:
+## Reset-Strategie
+
+Die vom Nutzer skizzierte Reihenfolge (von den kleinen WR her) bleibt richtig, weil ein F1-Neustart die Regelung für F2/F3 kurz aufhebt und diese sonst hochziehen:
 
 ```
-a) F3 trennen          → Relais/Schütz F3 = AUS
-b) F2 trennen          → Relais/Schütz F2 = AUS
+a) F3 trennen          → Relais/Schütz F3 = AUS  (bis F3-Digitalzugang ermittelt)
+b) F2 trennen          → SunSpec Conn=0 auf F2s eigenem Modbus (oder Relais)
 c) F1 neu starten      → SunSpec Conn=Disconnect, warten, Conn=Connect
                          (Hard-Reset nur mit Relais F1)
 d) +3 min: F2 zu       → Relais F2 = EIN  (GEN24-Limiting greift erst wieder,

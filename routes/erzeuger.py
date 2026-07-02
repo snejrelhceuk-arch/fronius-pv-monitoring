@@ -7,7 +7,7 @@ import re
 import logging
 from datetime import datetime
 from flask import Blueprint, jsonify, request
-from routes.helpers import get_db_connection, api_error_response, validate_year_month, plausible_counter_delta
+from routes.helpers import get_db_connection, api_error_response, validate_year_month, plausible_counter_delta, tag_table
 
 bp = Blueprint('erzeuger', __name__)
 
@@ -39,7 +39,7 @@ def api_erzeuger_tag():
                   AND datetime(ts, 'unixepoch', 'localtime') < date(?, '+1 day', 'start of day')
             """, (date_param, date_param))
             count_1min = cursor.fetchone()[0]
-            table = 'data_1min' if count_1min > 0 else 'data_15min'
+            table = tag_table(cursor, date_param)
             where = "WHERE datetime(ts, 'unixepoch', 'localtime') >= date(?, 'start of day') AND datetime(ts, 'unixepoch', 'localtime') < date(?, '+1 day', 'start of day')"
             where_params = (date_param, date_param)
         else:

@@ -112,3 +112,6 @@ config/systemd/pv-wattpilot.service
 config/systemd/pv-steuerbox.service
 config/systemd/pv-shutdown-persist.service
 OLLI/
+data_stats.db
+data_stats.db-shm
+data_stats.db-wal

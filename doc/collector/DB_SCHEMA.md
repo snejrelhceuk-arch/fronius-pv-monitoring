@@ -8,6 +8,7 @@
 
 - **Primäre DB**: `/dev/shm/fronius_data.db` (tmpfs/RAM) — Echtzeit-R/W ohne Disk-I/O
 - **Persist-Kopie**: `data.db` im Projektverzeichnis — zeitbasiert via `db_init.persist_to_disk()`
+- **STATS-DB (permanent, SD)**: `data_stats.db` — Tabelle `data_5min_permanent` (5-min-Downsample, Schema = `data_1min`). Hält Tag-Chart-Daten **dauerhaft** (ab 2026-01-01), damit die 90-Tage-Retention der RAM-DB die Tagesdarstellung nicht begrenzt. Backfill/Producer `tools/build_stats_db.py`, Tages-Archiv `scripts/stats_archive_daily.sh` (Cron 00:20, Sync Pi5+Failover). Web hängt sie **read-only** an (`config.STATS_DB_PATH`).
 - **Forecast-Cache**: `solar_cache.db` — API-Antworten mit TTL (separat, nicht tmpfs)
 - **Modus**: WAL (Write-Ahead Log), NORMAL sync, 64 MB Cache
 
@@ -17,6 +18,7 @@
 |---------|--------|-----------|--------------|
 | `raw_data` | ~180k | 7 Tage | 3s-Rohdaten (Modbus/API) |
 | `data_1min` | ~52k | 90 Tage | 1-min-Aggregate (Tag-Chart) |
+| `data_5min_permanent` | ~52k+ | **permanent** (eigene `data_stats.db`, SD) | 5-min-Tagesdaten ab 2026-01-01 (Tag-Chart-Fallback für Tage > 90 T) |
 | `data_15min` | ~3.500 | 90 Tage | 15-min-Aggregate |
 | `hourly_data` | ~870 | 365 Tage | Stunden-Aggregate |
 | `daily_data` | ~44 | 10 Jahre | Tages-Aggregate |

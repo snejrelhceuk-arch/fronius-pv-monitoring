@@ -49,21 +49,25 @@
 
 ### Task A — WR-Fernsteuerung (Design: `doc/system/WR_FERNSTEUERUNG.md`)
 
-- [ ] **F2/F3 nur per Relais/Schütz abschaltbar** (kein digitaler Befehlskanal — nur SmartMeter Unit 3/6). Relais-Karte (MEGA-BAS-HAT, s.u.) + Schütze auf AC-Ausgang F2/F3 spezifizieren/verbauen.
 - [ ] **F1-Soft-Standby via SunSpec Model 123 `Conn`** (Disconnect/Connect, update-sicher) evaluieren — Schreibpfad zum GEN24 neu + risikobehaftet (Batterie-WR), erst nach Einzelvalidierung, gated, nie autonom.
+- [ ] **F2-Standby via eigenem Modbus (Model 123 `Conn`)** implementieren — F2 hat eigene IP + Modbus TCP:502 + Solar-API (verifiziert 2026-07-02, analog F1). Gated, Einzelvalidierung.
+- [ ] **F3-Digitalzugang ermitteln** (IP/Protokoll noch unbekannt) — Web-Recherche + LAN-Scan + ggf. reverse-engineering am Gerät. Bis dahin **Relais/Schütz auf F3** (MEGA-BAS, s.u.).
 - [ ] **Read-only WR-Link-Health-Check:** Fronius interne Config-API (Soft-Limit=0 W + Multi-WR-Limiting gesetzt?) + Runaway-Frühsignatur (F3 hoch trotz Einspeisung + Batt voll/gedeckelt + F1/F2 abgeregelt) → alarmieren, kein Aktor.
-- [ ] **Reset-Sequenz** (F3 aus → F2 aus → F1 Conn-Reset → +3 min F2 → F3) erst nach vorhandener Relais-HW implementieren + jeden Schritt einzeln verifizieren.
-- [ ] Vor Ort klären: sind F2/F3 eigenständige Fronius-WR mit eigener LAN-IP (dann eigener Solar-API/Modbus-Kanal möglich)?
+- [ ] **Reset-Sequenz** (F3 aus → F2 aus → F1 Conn-Reset → +3 min F2 → F3) erst nach vorhandener Relais-HW/F3-Zugang implementieren + jeden Schritt einzeln verifizieren.
 
-### Task C — Tagesdaten-Haltbarkeit / DB-Split (Design: `doc/system/TAGESDATEN_HALTBARKEIT.md`)
+### Task C — Tagesdaten-Haltbarkeit / STATS-DB (IST: `doc/system/TAGESDATEN_HALTBARKEIT.md`)
 
-- [ ] **STATS-DB auf SD** (`data_stats.db`) + Tabelle `data_5min_permanent` (5-min-Downsample, permanent) — Schema in `db_init.py`.
-- [ ] **Archiv-Job 1×/Tag** (nach daily-Aggregation): gestrigen Tag `data_1min`→`data_5min_permanent` (idempotent). Seltenes SD-Schreiben.
-- [ ] **Backfill JETZT** der noch vorhandenen 90 Tage (ab 2026-04-03) BEVOR sie rollierend verfallen — zeitkritisch.
-- [ ] **Web-Tag-Chart** um STATS-Fallback erweitern (`routes/`): jung=data_1min (1-min), alt=data_5min_permanent (5-min).
-- [ ] **Backup/Failover-Sync** um STATS-DB ergänzen (Pi5 + `scripts/failover_sync_db.sh`), additiv.
-- [ ] Erst danach `DATA_1MIN_RETENTION_DAYS` senken (RAM entlasten).
-- [ ] **Pi4-Failover On-Host verifizieren** (update-/neustart-/process-verified-sicher) via `scripts/failover_health_check.sh` auf dem Failover-Host — bewusster, verifizierter SSH-Schritt (nicht autonom).
+- [x] STATS-DB `data_stats.db` + `data_5min_permanent` (`tools/build_stats_db.py`). — 2026-07-02
+- [x] Backfill Jan 1 – Jul 2 aus Pi5-Backups (51 692 Buckets). — 2026-07-02
+- [x] Tages-Archiv-Cron `scripts/stats_archive_daily.sh` (00:20) + Sync Pi5/Failover. — 2026-07-02
+- [x] Web-Tag-Chart STATS-Fallback (`db_utils` ATTACH + `routes/helpers.py:tag_table`). — 2026-07-02
+- [ ] Optional: `DATA_1MIN_RETENTION_DAYS` senken (RAM entlasten) — jetzt möglich, bewusst offen gelassen.
+- [ ] STATS-DB in die reguläre GFS-Backup-Kette aufnehmen (nicht nur täglicher Direkt-Sync).
+
+### Task Pi4-Failover — Einsatzbereitschaft (Status: `doc/system/FAILOVER_STATUS.md`)
+
+- [ ] **venv offline provisionieren** (Failover hat KEIN Internet) — `.venv` vom Primary klonen (identische HW aarch64/Py3.13.5) + Pfade patchen; danach App-Import verifizieren.
+- [ ] `pv-failover-health.service` reparieren (schlug fehl — venv/Script) + Code-Sync (`sync_code_to_peer.sh`) auf aktuellen Stand.
 
 ### Hardware: MEGA-BAS HAT
 

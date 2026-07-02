@@ -91,6 +91,30 @@ def get_db_connection():
         return None
 
 
+def tag_table(cursor, date_param):
+    """Beste Tabelle für eine Tagesansicht (5-min-Charts).
+
+    Reihenfolge: data_1min (feinstes, ≤90 T) → data_15min → stats.data_5min_permanent
+    (permanente 5-min-STATS-DB auf SD, via ATTACH read-only angehängt). So bleiben
+    Tag-Charts auch für Tage älter als die 90-Tage-Retention verfügbar.
+
+    Gibt einen Tabellennamen zurück (Default 'data_1min' wenn nirgends Daten →
+    Endpoint liefert leere Serie). Die STATS-Tabelle hat das data_1min-Schema,
+    die bestehenden SELECTs funktionieren unverändert per `FROM {table}`.
+    """
+    _win = ("datetime(ts,'unixepoch','localtime') >= date(?, 'start of day') "
+            "AND datetime(ts,'unixepoch','localtime') < date(?, '+1 day','start of day')")
+    for tbl in ('data_1min', 'data_15min', 'stats.data_5min_permanent'):
+        try:
+            cursor.execute(f"SELECT 1 FROM {tbl} WHERE {_win} LIMIT 1",
+                           (date_param, date_param))
+            if cursor.fetchone():
+                return tbl
+        except Exception:
+            continue  # z.B. STATS-DB nicht angehängt → nächste Option
+    return 'data_1min'
+
+
 # ─── Solar-Prognose (Lazy Singleton) ────────────────────
 _forecast_instance = None
 

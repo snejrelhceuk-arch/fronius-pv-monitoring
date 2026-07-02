@@ -1,9 +1,24 @@
-# Tagesdaten-Haltbarkeit & DB-Aufteilung (RAW / STATS)
+# Tagesdaten-Haltbarkeit & permanente 5-min-STATS-DB (IST-Zustand)
 
-> **Status: DIAGNOSE + DESIGN (2026-07-02).** Antwort auf Task C.
-> Kein Eingriff in die (stabile) Produktions-Pipeline ohne Freigabe.
+> **Status: UMGESETZT (2026-07-02).** Task C. Beschreibt den IST-Zustand.
 
-## Diagnose: Warum keine Tagesdarstellung vor April?
+## IST-Zustand (Kurzfassung)
+
+- **Tag-Charts sind für den gesamten produktiven Zeitraum (ab 2026-01-01) verfügbar.**
+- Quelle der Wahrheit für alte Tage: **`data_stats.db`** (SD, permanent), Tabelle
+  **`data_5min_permanent`** (5-min-Downsample, Schema = `data_1min`).
+- Die Web-API hängt `data_stats.db` **read-only** an (`db_utils.get_db_connection` →
+  `ATTACH … AS stats`, `config.STATS_DB_PATH`). Die Tag-Endpunkte wählen die Tabelle
+  über `routes/helpers.py:tag_table()`: `data_1min` (≤90 T) → `data_15min` →
+  `stats.data_5min_permanent`.
+- **Backfill** aus GFS-/Pi5-Backups: Jan 1 – Jul 2 (51 692 5-min-Zeilen; 5 Tage mit
+  Lücken durch Collector-Ausfälle — bewusst toleriert). Werkzeug: `tools/build_stats_db.py`.
+- **Fortschreibung:** Cron `20 0 * * *` → `scripts/stats_archive_daily.sh` archiviert den
+  Vortag aus der RAM-DB und synct `data_stats.db` nach Pi5 + Failover.
+- Die **RAM-DB bleibt klein** (unverändert 90 T Retention); die STATS-DB liegt auf SD
+  und wird nur 1×/Tag beschrieben.
+
+## Diagnose: Warum keine Tagesdarstellung vor April? (Ursprungsbefund)
 
 **Belegt aus Code + Daten:**
 - Tag-Chart-Quelle ist `data_1min` (1-min-Raster).
@@ -49,21 +64,18 @@ würde der aktive Speicher über Jahre stark wachsen → Ziel „RAM klein" verl
 4. **Web-Tag-Chart (Rolle B, read-only):** liest ≤ (Retention) Tage aus `data_1min` (1-min, feinsten), ältere Tage aus `data_5min_permanent` (5-min). Ein Fallback-Select, kein Schema-Bruch.
 5. **Backup/Failsafe:** STATS-DB wird **parallel** zu den bestehenden Verfahren nach Pi5 (`PI5_BACKUP_*`) und zum Failover (`scripts/failover_sync_db.sh`) gesynct — additiv, ohne die bestehende `data.db`-Kette zu ändern.
 
-**Migrationsschritte (empfohlen, gated):**
-- S1: STATS-DB + Schema `data_5min_permanent` anlegen (`db_init.py`), Producer `collector/aggregate/`.
-- S2: Archiv-Job + einmaliger Backfill der aktuell noch vorhandenen 90 Tage (bevor sie verfallen!) → sichert den heutigen Bestand ab 2026-04-03 dauerhaft.
-- S3: Web-Endpunkt Tag-Chart um STATS-Fallback erweitern (`routes/`).
-- S4: Backup/Failover-Sync um STATS-DB ergänzen.
-- S5: erst danach `DATA_1MIN_RETENTION_DAYS` senken (RAM entlasten).
+**Umsetzung (IST, 2026-07-02):**
+- S1 ✅ STATS-DB `data_stats.db` + `data_5min_permanent` (Schema=`data_1min`) via `tools/build_stats_db.py` (`_ensure_target`, WAL).
+- S2 ✅ Backfill Jan 1 – Jul 2 aus Pi5-Backups (Feb-08-Snapshot `data_1min_old`+`data_1min`, monatlich 2026-04/2026-06, Live) → 51 692 Buckets. Täglicher Archiv-Job `scripts/stats_archive_daily.sh` (Cron `20 0 * * *`).
+- S3 ✅ Web-Fallback: `db_utils.get_db_connection` ATTACH read-only, `routes/helpers.py:tag_table()`; verdrahtet in `routes/erzeuger.py`, `routes/verbraucher.py`, `routes/visualization.py` (Tag-Endpunkte).
+- S4 ✅ Sync nach Pi5 + Failover im Archiv-Job (rsync, best-effort).
+- S5 ⏳ optional: `DATA_1MIN_RETENTION_DAYS` senken (RAM entlasten) — bewusst offen, aktuell 90 T (siehe `doc/TODO.md`).
 
-**Wichtig:** S2-Backfill zeitkritisch — jeder Tag Verzögerung verliert einen weiteren Tag der ältesten 1-min-Daten (rollierend). Rekonstruktion in die Vergangenheit (vor 2026-04-03) ist bewusst **nicht** vorgesehen (User-Entscheid).
+Rekonstruktion in die Vergangenheit (vor 2026-01-01) ist bewusst **nicht** vorgesehen (System erst ab 1.1.26 produktiv). Verbleibende Lücken (5 Tage) durch damalige Collector-Ausfälle sind toleriert.
 
-## Pi4-Failover — Einsatzbereitschaft
+## Pi4-Failover — Einsatzbereitschaft (IST 2026-07-02)
 
-Werkzeuge vorhanden: `scripts/failover_health_check.sh` (ping+API+Mirror-Age),
-`scripts/failover_activate.sh`, `scripts/failover_set_mode.sh`, `routes/system/failover.py`.
-Der Health-Check läuft **vom Failover Richtung Primary** — eine belastbare Aussage zu
-„update-/neustart-/process-verified-sicher" erfordert eine **On-Host-Prüfung auf dem
-Failover** (SSH, bewusst und verifiziert). Das ist eine Aktion auf einem zweiten
-Produktionshost und wurde hier **nicht autonom** ausgeführt. Als eigener, verifizierter
-Schritt in `doc/TODO.md` aufgenommen.
+- **Erreichbar** (passwortloses SSH), **DB-Mirror aktuell** (`pv-mirror-sync`, data.db frisch), `.role=failover`, gleiche HW/Python (aarch64 / 3.13.5).
+- **`data_stats.db` liegt auf dem Failover** (per Archiv-Job gesynct) → serviert nach Aktivierung ebenfalls die Tag-Charts.
+- Werkzeuge: `scripts/failover_health_check.sh`, `failover_activate.sh`, `failover_set_mode.sh`, `routes/system/failover.py`.
+- Weitere Einrichtungsschritte (venv-Provisionierung offline, Code-Sync) siehe eigener Abschnitt in `doc/TODO.md` bzw. `doc/system/FAILOVER_STATUS.md`.

@@ -10,7 +10,7 @@ Netzfrequenz-Min/Max inkl. Zeitstempel aus data_1min.
 import logging
 from datetime import datetime
 from flask import Blueprint, jsonify, request
-from routes.helpers import get_db_connection, api_error_response, validate_year_month, plausible_counter_delta
+from routes.helpers import get_db_connection, api_error_response, validate_year_month, plausible_counter_delta, tag_table
 
 bp = Blueprint('visualization', __name__)
 
@@ -434,8 +434,8 @@ def api_tag_visualization():
             """, (date_param, date_param))
             count_1min = cursor.fetchone()[0]
 
-            table = 'data_1min' if count_1min > 0 else 'data_15min'
-            energy_col = 'W_AC_Inv_delta' if table == 'data_1min' else 'W_PV_total_delta'
+            table = tag_table(cursor, date_param)
+            energy_col = 'W_PV_total_delta' if table == 'data_15min' else 'W_AC_Inv_delta'
 
             where = "datetime(ts, 'unixepoch', 'localtime') >= date(?, 'start of day') AND datetime(ts, 'unixepoch', 'localtime') < date(?, '+1 day', 'start of day')"
             query = _build_tag_query(table, energy_col, where)

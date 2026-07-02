@@ -10,6 +10,7 @@ SECRETS_FILE = os.path.join(BASE_DIR, '.secrets')
 INFRA_FILE = os.path.join(BASE_DIR, '.infra.local')
 DB_PATH = '/dev/shm/fronius_data.db'          # Primäre DB im RAM (tmpfs)
 DB_PERSIST_PATH = os.path.join(BASE_DIR, 'data.db')  # Persist-Kopie auf SD-Card (Pi4)
+STATS_DB_PATH = os.path.join(BASE_DIR, 'data_stats.db')  # Permanente 5-min-Tagesdaten (SD), read-only von Web angehaengt
 PID_FILE = os.path.join(BASE_DIR, 'collector.pid')
 
 
