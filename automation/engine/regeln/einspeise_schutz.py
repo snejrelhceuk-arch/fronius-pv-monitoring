@@ -261,8 +261,15 @@ class RegelEinspeiseSchutz(Regel):
         kumul_warn_hit = kumul_kwh is not None and kumul_kwh >= baseline * warn_faktor
         kumul_akt_hit = kumul_kwh is not None and kumul_kwh >= baseline * akt_faktor
 
-        act = sust_akt_hit or kumul_akt_hit
-        warn = act or sust_warn_hit or kumul_warn_hit
+        # ACT-Alarm (Log + Mail): live anhaltender Export ODER Tages-Kumulativ.
+        act_alert = sust_akt_hit or kumul_akt_hit
+        warn = act_alert or sust_warn_hit or kumul_warn_hit
+
+        # ACT-REAKTION (Hardware): NUR wenn aktuell tatsächlich anhaltend Export
+        # fließt. Ein hohes Tages-Kumulativ allein (z. B. abends, Export längst
+        # vorbei) darf SOC_MAX NICHT öffnen — sonst Konflikt mit Komfort-Reset/
+        # Nacht-SOC-Management. Reaktion nur, wenn es etwas zu absorbieren gibt.
+        act_reaktion = act_alert and sustained_ok
 
         self._status = {
             'export_now': export_now, 'integral_kwh': integral_kwh,
@@ -272,14 +279,15 @@ class RegelEinspeiseSchutz(Regel):
         if not warn:
             return 0
 
-        level = 'act' if act else 'warn'
+        level = 'act' if act_alert else 'warn'
         kumul_str = f"{kumul_kwh:.3f} kWh" if kumul_kwh is not None else "n/a"
         text = (f"Einspeisung {level.upper()}: aktuell {export_now:.0f} W, "
                 f"Ø {mittel_w:.0f} W / {samples}·Tick ({integral_kwh:.3f} kWh), "
                 f"heute {kumul_str} (Baseline {baseline:.2f} kWh, "
                 f"WARN≥{baseline*warn_faktor:.2f}/ACT≥{baseline*akt_faktor:.2f}); "
                 f"SOC {obs.batt_soc_pct}% SOC_MAX {obs.soc_max}% "
-                f"F1={obs.pv_f1_w} F2={obs.pv_f2_w} F3={obs.pv_f3_w} W")
+                f"F1={obs.pv_f1_w} F2={obs.pv_f2_w} F3={obs.pv_f3_w} W"
+                f"{'' if act_reaktion else '  [nur Alarm — keine Reaktion]'}")
 
         # Logging gedrosselt (bei anhaltendem Event nicht jede Minute)
         now = time.time()
@@ -290,11 +298,11 @@ class RegelEinspeiseSchutz(Regel):
         self._sende_warnung(matrix, level, f'[PV-Nulleinspeisung] {level.upper()}',
                             self._mail_body(obs, text))
 
-        if not act:
+        if not act_reaktion:
             return 0
 
-        # ACT: Guard-Flag setzen (Morgenregel nicht gegen die Öffnung arbeiten
-        # lassen) und Reaktions-Score liefern.
+        # ACT mit Live-Export: Guard-Flag setzen (Morgenregel nicht gegen die
+        # Öffnung arbeiten lassen) und Reaktions-Score liefern.
         cooldown_min = int(get_param(matrix, self.regelkreis, 'soc_open_cooldown_min', 120))
         self._schreibe_guard_flag(now + cooldown_min * 60)
         return int(get_score_gewicht(matrix, self.regelkreis) * 1.5)
