@@ -88,60 +88,36 @@
       "engine_zyklus": "fast"
     },
     "einspeise_schutz": {
-      "_doc": "Nulleinspeisungs-Schutz: erkennt anhaltende Netzeinspeisung (Sustained-Integral + Tages-Kumulativ), warnt (Log + Mail) und reagiert. Stufe 1 (bewährt): SOC_MAX->100% + SOC_MODE auto (öffnet Batterie-Puffer; genau diese Aktion beendete den Zwischenfall 2026-07-02 um 14:29). Stufe 2/3 (dumpload/provokation) opt-in. Steuerung ausschliesslich via SOC_MIN/SOC_MAX (No-Go: keine Ratenlimits).",
+      "_doc": "Nulleinspeisungs-Schutz: erkennt anhaltende Netzeinspeisung über eine zeit-integrierte NETTO-Einspeisung (Import wird gegengerechnet -> alternierende Wattpilot-ECO-Lastwechsel mitteln sich weg). Warnt (Log + Mail, 1x/Level/Tag persistent) und reagiert. Stufe 1 (bewährt): SOC_MAX->100% + SOC_MODE auto (öffnet Batterie-Puffer; beendete den Zwischenfall 2026-07-02 um 14:29). Stufe 2/3 (dumpload/provokation) opt-in. Steuerung ausschliesslich via SOC_MIN/SOC_MAX (No-Go: keine Ratenlimits). Kalibrierung: 90-Tage-Analyse -> max Netto/30min pro Tag <=0.35 kWh (normal), nur 2026-07-02 = 0.75 kWh.",
       "aktiv": true,
       "prioritaet": 1,
-      "beschreibung": "Nulleinspeisungs-Schutz — Einspeisung erkennen, warnen, SOC_MAX öffnen",
+      "beschreibung": "Nulleinspeisungs-Schutz — anhaltende Netto-Einspeisung erkennen, warnen, SOC_MAX öffnen",
       "parameter": {
-        "baseline_einspeis_kwh": {
-          "wert": 0.9,
-          "bereich": [0.2, 5.0],
-          "einheit": "kWh",
-          "obs_feld": "grid_power_w",
-          "beschreibung": "Normale Tages-Einspeisung (30-Tage-Basis ~0.46-1.28, Ø 0.83). Referenz für WARN/ACT-Faktoren."
-        },
-        "warn_faktor": {
-          "wert": 1.5,
-          "bereich": [1.1, 3.0],
-          "einheit": "x",
-          "beschreibung": "WARN wenn Tages-Kumulativ >= baseline * warn_faktor (User-Vorgabe: +50%)."
-        },
-        "akt_faktor": {
-          "wert": 2.0,
-          "bereich": [1.2, 5.0],
-          "einheit": "x",
-          "beschreibung": "ACT (Reaktion) wenn Tages-Kumulativ >= baseline * akt_faktor (User-Vorgabe: +100%)."
-        },
-        "sustained_fenster_min": {
-          "wert": 5,
-          "bereich": [2, 15],
+        "netto_fenster_min": {
+          "wert": 30,
+          "bereich": [10, 60],
           "einheit": "min",
-          "beschreibung": "Fenster (Anzahl 60-s-Ticks) für das Einspeise-Energie-Integral (Echtzeit-Trigger, unabhängig vom Tages-Kumulativ)."
+          "obs_feld": "grid_power_w",
+          "beschreibung": "Fensterbreite für die zeit-integrierte Netto-Einspeisung. 30 min trennt den Zwischenfall (0.75 kWh) am saubersten von normalen ECO-Tagen (<=0.35 kWh)."
         },
-        "sustained_veto_w": {
+        "netto_warn_kwh": {
+          "wert": 0.40,
+          "bereich": [0.1, 2.0],
+          "einheit": "kWh",
+          "beschreibung": "WARN wenn Netto-Einspeisung im Fenster >= Wert. Über dem 3-Monats-Normalmaximum (0.35 kWh) -> nur echte Vorfälle warnen."
+        },
+        "netto_akt_kwh": {
+          "wert": 0.55,
+          "bereich": [0.15, 2.5],
+          "einheit": "kWh",
+          "beschreibung": "ACT (Reaktion) wenn Netto-Einspeisung im Fenster >= Wert. Zwischen Normalmax (0.35) und Zwischenfall (0.75) -> nur der Vorfall reagiert."
+        },
+        "reaktion_min_export_w": {
           "wert": 150,
-          "bereich": [50, 500],
+          "bereich": [50, 1000],
           "einheit": "W",
           "obs_feld": "grid_power_w",
-          "beschreibung": "Momentan-Export muss diese Schwelle überschreiten, sonst keine Sustained-Auswertung (Transienten-Veto)."
-        },
-        "sustained_warn_kwh": {
-          "wert": 0.04,
-          "bereich": [0.01, 0.3],
-          "einheit": "kWh",
-          "beschreibung": "WARN wenn Export-Integral im Fenster >= Wert (0.04 kWh/5min ~ Ø 480 W)."
-        },
-        "sustained_akt_kwh": {
-          "wert": 0.06,
-          "bereich": [0.02, 0.4],
-          "einheit": "kWh",
-          "beschreibung": "ACT wenn Export-Integral im Fenster >= Wert (0.06 kWh/5min ~ Ø 720 W). Zwischenfall 2026-07-02 lag bei ~0.074 kWh/5min."
-        },
-        "sustained_min_hit_pct": {
-          "wert": 0.8,
-          "bereich": [0.5, 1.0],
-          "einheit": "x",
-          "beschreibung": "Mindestanteil der Fenster-Samples über sustained_veto_w, damit als 'anhaltend' gewertet wird. Filtert einzelne Curtailment-Transienten (kurze -10-kW-Spitzen)."
+          "beschreibung": "Hardware-Reaktion (SOC_MAX öffnen) nur wenn AKTUELL mindestens so viel eingespeist wird (sonst nur Alarm)."
         },
         "soc_open_cooldown_min": {
           "wert": 120,
@@ -149,17 +125,11 @@
           "einheit": "min",
           "beschreibung": "Wie lange der Guard SOC_MAX offen hält bzw. die Morgen-Deckelung (75%) unterdrückt (engine_flag einspeise_guard_soc_open_bis)."
         },
-        "warn_cooldown_min": {
-          "wert": 60,
-          "bereich": [10, 240],
-          "einheit": "min",
-          "beschreibung": "Mindestabstand zwischen Warn-Mails desselben Levels (Anti-Spam bei anhaltendem Event)."
-        },
         "kumul_cache_s": {
           "wert": 120,
           "bereich": [30, 600],
           "einheit": "s",
-          "beschreibung": "TTL des DB-Reads für das Tages-Einspeise-Kumulativ (data_1min.W_Einspeis)."
+          "beschreibung": "TTL des DB-Reads für das Tages-Einspeise-Kumulativ (data_1min.W_Einspeis, nur Kontext im Mail-/Log-Text, KEIN Trigger)."
         },
         "dumpload_aktiv": {
           "wert": false,
@@ -181,13 +151,13 @@
         },
         "provokation_aktiv": {
           "wert": false,
-          "beschreibung": "Stufe 3: Provokation — eingeschaltete Verbraucher AUS->EIN, um hängenden Regelkreis (SmartMeter/WR) anzustoßen. Opt-in (AUS-Phase erhöht Einspeisung kurz) — nur nach Diskussion aktivieren."
+          "beschreibung": "Stufe 3: Provokation — eingeschaltete Verbraucher AUS->EIN. DEAKTIVIERT (User-Entscheid 2026-07-02: Netzwerkfehler ausgeschlossen, da F2-Steuerung lief; Provokation an Verbrauchern ist der falsche Hebel). Ersetzt durch geplante WR-Fernsteuerung (siehe Card)."
         },
         "provokation_min_abstand_min": {
           "wert": 30,
           "bereich": [5, 180],
           "einheit": "min",
-          "beschreibung": "Mindestabstand zwischen zwei Provokations-Zyklen."
+          "beschreibung": "Mindestabstand zwischen zwei Provokations-Zyklen (nur relevant wenn provokation_aktiv)."
         }
       },
       "score_gewicht": 90,

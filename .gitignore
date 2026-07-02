@@ -37,6 +37,7 @@ config/battery_bms_checkpoints.json
 config/fritz_config.json
 config/fronius_attachment_state.json
 config/event_notifier_dedup.json
+config/einspeise_guard_dedup.json
 config/diagnos_alert_state.json
 config/nq_alert_state.json
 

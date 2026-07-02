@@ -38,6 +38,7 @@ Card: doc/llm/cards/automation-einspeise-schutz.card.md
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import sqlite3
@@ -58,6 +59,8 @@ LOG = logging.getLogger('engine')
 
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 EINSPEISE_LOG_PATH = os.path.join(_PROJECT_ROOT, 'logs', 'einspeise_guard.log')
+# Persistenter Mail-Dedup (1x/Level/Kalendertag) — überlebt Daemon-Restart.
+EINSPEISE_DEDUP_PATH = os.path.join(_PROJECT_ROOT, 'config', 'einspeise_guard_dedup.json')
 
 # engine_flag-Schlüssel: solange in der Zukunft, unterdrückt die Morgenregel
 # ihre SOC_MAX=75%-Deckelung (verhindert Oszillation gegen die Guard-Öffnung).
@@ -67,20 +70,26 @@ GUARD_SOC_OPEN_FLAG = 'einspeise_guard_soc_open_bis'
 class RegelEinspeiseSchutz(Regel):
     """Schutzregel gegen anhaltende Netzeinspeisung (Nulleinspeisungs-Vertrag).
 
-    Sensorik:
-      - Momentan-Export     = max(0, -grid_power_w)
-      - Sustained-Integral  = Σ(Export_W) der letzten `sustained_fenster_min`
-                              Ticks (≈ Min bei 60-s-Tick) / 60000 → kWh
-      - Tages-Kumulativ      = Σ(data_1min.W_Einspeis) seit lokaler Mitternacht
+    Detektor (seit 2026-07-02, Runde 2): **zeit-integrierte NETTO-Einspeisung**
+    über ein langes Fenster (`netto_fenster_min`, Default 30 min).
 
-    Auslöse-Logik (ODER-verknüpft):
-      WARN  wenn  kumul ≥ baseline·warn_faktor   ODER  integral ≥ sustained_warn_kwh
-      ACT   wenn  kumul ≥ baseline·akt_faktor    ODER  integral ≥ sustained_akt_kwh
+      netto_kWh = ∫(-grid_power_w) dt  über das Fenster
 
-      WARN = nur Logging + Warn-Mail (keine Hardware-Aktion).
-      ACT  = Logging + Warn-Mail + Reaktions-Leiter.
+    Import wird gegengerechnet. Damit mitteln sich **alternierende Lastwechsel**
+    (Wattpilot-ECO: ständig wechselnd Einspeisung/Bezug) weg — nur eine
+    **anhaltende, einseitige** Einspeisung (ungesteuerter WR) summiert sich auf.
+
+    Kalibrierung (90-Tage-Analyse data_1min): max. Netto-Einspeisung/30 min pro
+    Tag lag an 94 von 95 Tagen ≤ 0,35 kWh; nur der Zwischenfall 2026-07-02 lag
+    bei 0,75 kWh. Schwellen daher deutlich darüber → nur echte Vorfälle triggern.
+
+    Auslöse-Logik:
+      WARN  wenn  netto_kWh ≥ `netto_warn_kwh`  (nur Logging + Warn-Mail)
+      ACT   wenn  netto_kWh ≥ `netto_akt_kwh`   (+ Reaktions-Leiter)
+      Reaktion (Hardware) zusätzlich nur bei aktuell fließendem Live-Export.
 
     Score: ACT → int(score_gewicht·1.5); WARN/none → 0 (Mail als Seiteneffekt).
+    Mail-Dedup: **1× pro Level und Kalendertag** (persistent) → kein Spam.
 
     Name enthält 'schutz' → Engine führt die Regel im Schutz-Pass IMMER aus,
     unabhängig von Optimierungs-Gewinnern.
@@ -95,36 +104,55 @@ class RegelEinspeiseSchutz(Regel):
 
     def __init__(self):
         super().__init__()
-        # Export-Historie (positive Wattwerte = Einspeisung), 1 Sample/Tick.
-        # maxlen erlaubt Fenster-Tuning bis 15 Min via Matrix.
-        self._export_history: deque = deque(maxlen=15)
-        # Tages-Kumulativ-Cache (DB-Read gedrosselt)
+        # Grid-Historie (ts, grid_power_w) für die zeit-integrierte Netto-Bilanz.
+        # maxlen deckt ein 30-min-Fenster bei ~45-60 s Tick locker ab.
+        self._grid_history: deque = deque(maxlen=80)
+        # Tages-Kumulativ-Cache (DB-Read gedrosselt, nur Kontext im Mail-Text)
         self._kumul_cache: dict = {'ts': 0.0, 'kwh': None}
-        # Warn-Mail-Drosselung: {dedup_key: letzter_versand_ts}
-        self._letzte_warnung: dict[str, float] = {}
+        # Persistenter Mail-Dedup {level: 'YYYY-MM-DD'} — überlebt Restart.
+        self._dedup: dict = self._load_dedup()
         # Log-Drosselung (nur alle 60 s ins File/LOG bei anhaltendem Event)
         self._letztes_event_log: float = 0.0
+        # Provokations-Drosselung
+        self._letzte_provokation: float = 0.0
         # Übergabe bewerte()→erzeuge_aktionen()
         self._status: dict = {}
 
     # ── Sensorik ─────────────────────────────────────────────
 
-    def _pflege_history(self, obs: ObsState) -> None:
-        """Export-Historie fortschreiben — MUSS 1×/Tick laufen."""
+    def _pflege_history(self, obs: ObsState, now: float) -> None:
+        """Grid-Historie (ts, grid_w) fortschreiben — MUSS 1×/Tick laufen."""
         gw = obs.grid_power_w
         if gw is not None:
-            self._export_history.append(max(0.0, -float(gw)))
+            self._grid_history.append((now, float(gw)))
 
-    def _export_integral_kwh(self, fenster_min: int) -> tuple[float, float, int]:
-        """Energie-Integral der Einspeisung über die letzten `fenster_min` Ticks.
+    def _netto_export_kwh(self, fenster_min: int, now: float) -> tuple[float, float, bool]:
+        """Zeit-integrierte NETTO-Einspeisung über die letzten `fenster_min` Min.
 
-        Returns: (energie_kwh, mittel_w, samples). Energie = Σ(W)·60s/3600/1000.
+        netto_kWh = ∫(-grid_power_w) dt. Import (positives grid_power_w) wird
+        GEGENGERECHNET → alternierende Lastwechsel (Wattpilot-ECO) mitteln sich
+        weg, nur anhaltende einseitige Einspeisung summiert sich auf.
+
+        Returns: (netto_kwh, span_s, ready). ready = Fenster ausreichend gefüllt
+        (Zeitspanne ≥ 80 % der Fensterbreite) → verhindert Fehlalarm durch kurze
+        Hochleistungs-Bursts, solange das Fenster noch leer ist.
         """
-        recent = list(self._export_history)[-fenster_min:]
-        if not recent:
-            return 0.0, 0.0, 0
-        summe = sum(recent)
-        return summe / 60000.0, summe / len(recent), len(recent)
+        window_s = fenster_min * 60.0
+        while self._grid_history and (now - self._grid_history[0][0]) > window_s:
+            self._grid_history.popleft()
+        pts = list(self._grid_history)
+        if len(pts) < 3:
+            return 0.0, 0.0, False
+        netto_wh = 0.0
+        for i in range(1, len(pts)):
+            dt = pts[i][0] - pts[i - 1][0]
+            if dt <= 0:
+                continue
+            dt = min(dt, 120.0)  # Collector-Lücken deckeln
+            netto_wh += (-pts[i - 1][1]) * dt / 3600.0
+        span_s = pts[-1][0] - pts[0][0]
+        ready = span_s >= window_s * 0.8
+        return netto_wh / 1000.0, span_s, ready
 
     def _kumul_einspeis_kwh(self, matrix: dict) -> Optional[float]:
         """Heutige Netzeinspeisung [kWh] aus data_1min.W_Einspeis (gecached).
@@ -185,18 +213,37 @@ class RegelEinspeiseSchutz(Regel):
         except Exception as e:
             LOG.debug("einspeise_schutz: Event-Log-Write fehlgeschlagen: %s", e)
 
+    def _load_dedup(self) -> dict:
+        """Persistenten Mail-Dedup laden ({level: 'YYYY-MM-DD'})."""
+        try:
+            if os.path.exists(EINSPEISE_DEDUP_PATH):
+                with open(EINSPEISE_DEDUP_PATH, encoding='utf-8') as f:
+                    d = json.load(f)
+                    return d if isinstance(d, dict) else {}
+        except Exception:
+            pass
+        return {}
+
+    def _save_dedup(self) -> None:
+        try:
+            os.makedirs(os.path.dirname(EINSPEISE_DEDUP_PATH), exist_ok=True)
+            with open(EINSPEISE_DEDUP_PATH, 'w', encoding='utf-8') as f:
+                json.dump(self._dedup, f)
+        except Exception as e:
+            LOG.debug("einspeise_schutz: Dedup-Save fehlgeschlagen: %s", e)
+
     def _sende_warnung(self, matrix: dict, level: str, betreff: str,
                        koerper: str) -> None:
-        """Warn-Mail (best-effort). Drosselung: max. 1× pro `warn_cooldown_min`."""
-        cooldown_s = int(get_param(matrix, self.regelkreis, 'warn_cooldown_min', 60)) * 60
-        dedup_key = level
-        now = time.time()
-        if (now - self._letzte_warnung.get(dedup_key, 0)) < cooldown_s:
+        """Warn-Mail (best-effort). Dedup: max. 1× pro Level und Kalendertag,
+        persistent über Datei → Daemon-Restarts erzeugen keine Doppelmails."""
+        heute = date.today().isoformat()
+        if self._dedup.get(level) == heute:
             return
 
         empfaenger = getattr(app_config, 'NOTIFICATION_EMAIL', '')
         if not empfaenger:
-            self._letzte_warnung[dedup_key] = now  # kein Mail-Ziel → nicht spammen
+            self._dedup[level] = heute  # kein Mail-Ziel → nicht erneut versuchen
+            self._save_dedup()
             return
 
         try:
@@ -220,7 +267,8 @@ class RegelEinspeiseSchutz(Regel):
             mail.smtp_versand(smtp_host, smtp_port, smtp_user, smtp_pass,
                               absender, empfaenger, msg)
             LOG.info("einspeise_schutz: Warn-Mail (%s) gesendet → %s", level, empfaenger)
-            self._letzte_warnung[dedup_key] = now
+            self._dedup[level] = heute
+            self._save_dedup()
         except Exception as e:
             LOG.error("einspeise_schutz: Warn-Mail fehlgeschlagen: %s", e)
 
@@ -230,67 +278,49 @@ class RegelEinspeiseSchutz(Regel):
         if not ist_aktiv(matrix, self.regelkreis):
             return 0
 
+        now = time.time()
         # Historie IMMER fortschreiben (auch wenn kein Alarm)
-        self._pflege_history(obs)
+        self._pflege_history(obs, now)
 
-        baseline = float(get_param(matrix, self.regelkreis, 'baseline_einspeis_kwh', 0.9))
-        warn_faktor = float(get_param(matrix, self.regelkreis, 'warn_faktor', 1.5))
-        akt_faktor = float(get_param(matrix, self.regelkreis, 'akt_faktor', 2.0))
-        fenster_min = int(get_param(matrix, self.regelkreis, 'sustained_fenster_min', 5))
-        veto_w = float(get_param(matrix, self.regelkreis, 'sustained_veto_w', 150))
-        sust_warn = float(get_param(matrix, self.regelkreis, 'sustained_warn_kwh', 0.04))
-        sust_akt = float(get_param(matrix, self.regelkreis, 'sustained_akt_kwh', 0.06))
+        fenster_min = int(get_param(matrix, self.regelkreis, 'netto_fenster_min', 30))
+        warn_kwh = float(get_param(matrix, self.regelkreis, 'netto_warn_kwh', 0.40))
+        akt_kwh = float(get_param(matrix, self.regelkreis, 'netto_akt_kwh', 0.55))
+        min_export_w = float(get_param(matrix, self.regelkreis, 'reaktion_min_export_w', 150))
 
         export_now = max(0.0, -float(obs.grid_power_w or 0))
-        integral_kwh, mittel_w, samples = self._export_integral_kwh(fenster_min)
+        netto_kwh, span_s, ready = self._netto_export_kwh(fenster_min, now)
         kumul_kwh = self._kumul_einspeis_kwh(matrix)
 
-        # Sustained nur werten, wenn aktuell Export fließt, das Fenster gefüllt
-        # ist UND die Einspeisung über das Fenster ANHÄLT (nicht ein einzelner
-        # Curtailment-Transient). "Anhalten" = ein Mindestanteil der Samples
-        # liegt über dem Veto → filtert kurze -10-kW-Spitzen zuverlässig weg.
-        recent = list(self._export_history)[-fenster_min:]
-        hits = sum(1 for s in recent if s >= veto_w)
-        min_hit_pct = float(get_param(matrix, self.regelkreis, 'sustained_min_hit_pct', 0.8))
-        min_hits = max(1, int(-(-fenster_min * min_hit_pct // 1)))  # ceil
-        sustained_ok = (export_now >= veto_w and samples >= fenster_min
-                        and hits >= min_hits)
-        sust_warn_hit = sustained_ok and integral_kwh >= sust_warn
-        sust_akt_hit = sustained_ok and integral_kwh >= sust_akt
-
-        kumul_warn_hit = kumul_kwh is not None and kumul_kwh >= baseline * warn_faktor
-        kumul_akt_hit = kumul_kwh is not None and kumul_kwh >= baseline * akt_faktor
-
-        # ACT-Alarm (Log + Mail): live anhaltender Export ODER Tages-Kumulativ.
-        act_alert = sust_akt_hit or kumul_akt_hit
-        warn = act_alert or sust_warn_hit or kumul_warn_hit
-
-        # ACT-REAKTION (Hardware): NUR wenn aktuell tatsächlich anhaltend Export
-        # fließt. Ein hohes Tages-Kumulativ allein (z. B. abends, Export längst
-        # vorbei) darf SOC_MAX NICHT öffnen — sonst Konflikt mit Komfort-Reset/
-        # Nacht-SOC-Management. Reaktion nur, wenn es etwas zu absorbieren gibt.
-        act_reaktion = act_alert and sustained_ok
-
         self._status = {
-            'export_now': export_now, 'integral_kwh': integral_kwh,
-            'mittel_w': mittel_w, 'kumul_kwh': kumul_kwh, 'baseline': baseline,
+            'export_now': export_now, 'netto_kwh': netto_kwh,
+            'span_min': span_s / 60.0, 'kumul_kwh': kumul_kwh,
         }
 
+        # Fenster muss ausreichend gefüllt sein → kein Fehlalarm durch kurze
+        # Hochleistungs-Bursts (ECO-Lastwechsel) bei noch leerem Fenster.
+        if not ready:
+            return 0
+
+        act = netto_kwh >= akt_kwh
+        warn = act or netto_kwh >= warn_kwh
         if not warn:
             return 0
 
-        level = 'act' if act_alert else 'warn'
+        # Reaktion (Hardware) nur bei ACT UND aktuell fließendem Live-Export —
+        # ein anhaltendes Netto von einem längst beendeten Event soll SOC_MAX
+        # nicht öffnen (Konflikt mit Komfort-/Nacht-SOC).
+        act_reaktion = act and export_now >= min_export_w
+
+        level = 'act' if act else 'warn'
         kumul_str = f"{kumul_kwh:.3f} kWh" if kumul_kwh is not None else "n/a"
-        text = (f"Einspeisung {level.upper()}: aktuell {export_now:.0f} W, "
-                f"Ø {mittel_w:.0f} W / {samples}·Tick ({integral_kwh:.3f} kWh), "
-                f"heute {kumul_str} (Baseline {baseline:.2f} kWh, "
-                f"WARN≥{baseline*warn_faktor:.2f}/ACT≥{baseline*akt_faktor:.2f}); "
+        text = (f"Einspeisung {level.upper()}: Netto-Einspeisung {netto_kwh:.3f} kWh "
+                f"/ {span_s/60:.0f} min (WARN≥{warn_kwh:.2f}/ACT≥{akt_kwh:.2f}); "
+                f"aktuell {export_now:.0f} W, heute {kumul_str}; "
                 f"SOC {obs.batt_soc_pct}% SOC_MAX {obs.soc_max}% "
                 f"F1={obs.pv_f1_w} F2={obs.pv_f2_w} F3={obs.pv_f3_w} W"
-                f"{'' if act_reaktion else '  [nur Alarm — keine Reaktion]'}")
+                f"{'' if act_reaktion else ('  [nur Alarm — kein Live-Export]' if act else '')}")
 
         # Logging gedrosselt (bei anhaltendem Event nicht jede Minute)
-        now = time.time()
         if (now - self._letztes_event_log) > 55:
             self._log_event(level, text)
             self._letztes_event_log = now
@@ -328,8 +358,8 @@ class RegelEinspeiseSchutz(Regel):
 
     def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
         st = self._status or {}
-        grund_basis = (f"Einspeise-Schutz: Ø {st.get('mittel_w', 0):.0f} W anhaltend, "
-                       f"heute {st.get('kumul_kwh') if st.get('kumul_kwh') is None else round(st['kumul_kwh'], 3)} kWh")
+        grund_basis = (f"Einspeise-Schutz: Netto {st.get('netto_kwh', 0):.3f} kWh/"
+                       f"{st.get('span_min', 0):.0f}min, aktuell {st.get('export_now', 0):.0f} W")
 
         aktionen: list[dict] = []
 
@@ -385,9 +415,9 @@ class RegelEinspeiseSchutz(Regel):
         """
         abstand_s = int(get_param(matrix, self.regelkreis, 'provokation_min_abstand_min', 30)) * 60
         now = time.time()
-        if (now - self._letzte_warnung.get('provokation', 0)) < abstand_s:
+        if (now - self._letzte_provokation) < abstand_s:
             return []
-        self._letzte_warnung['provokation'] = now
+        self._letzte_provokation = now
 
         aktionen: list[dict] = []
         if obs.heizpatrone_aktiv:

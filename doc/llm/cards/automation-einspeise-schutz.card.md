@@ -28,10 +28,11 @@ Zwischenfall **2026-07-02**: Morgenregel deckelte SOC_MAX auf 75 % (LFP-Schonung
 - **Outputs:** `set_soc_max=100` + `set_soc_mode=auto` (Aktor `batterie`); opt-in `hp_ein`/`klima_ein` bzw. Provokation (Aktor `fritzdect`); engine_flag `einspeise_guard_soc_open_bis` (RAM-DB); Warn-Mail; Event-Log.
 
 ## Auslöse-Logik
-- **Sustained-Integral:** Σ(Export_W) der letzten `sustained_fenster_min` Ticks / 60000 → kWh. Nur gewertet, wenn Momentan-Export ≥ `sustained_veto_w` **und** ≥ `sustained_min_hit_pct` der Fenster-Samples über Veto liegen (filtert einzelne Curtailment-Transienten wie −15 kW-Spitzen).
-- **Tages-Kumulativ:** heutige Einspeisung vs. `baseline_einspeis_kwh`.
-- **WARN** wenn Kumulativ ≥ Baseline·`warn_faktor` (Default +50 %) ODER Sustained ≥ `sustained_warn_kwh` → nur Log + Mail.
-- **ACT** wenn Kumulativ ≥ Baseline·`akt_faktor` (Default +100 %) ODER Sustained ≥ `sustained_akt_kwh` → Log + Mail + Reaktions-Leiter (Score = `score_gewicht`·1.5).
+- **Detektor = zeit-integrierte NETTO-Einspeisung** über `netto_fenster_min` (Default 30 min): `netto_kWh = ∫(−grid_power_w) dt`. Import wird gegengerechnet → **alternierende Lastwechsel (Wattpilot-ECO: wechselnd Einspeisung/Bezug) mitteln sich weg**; nur anhaltende, einseitige Einspeisung (ungesteuerter WR) summiert sich auf. Das Fenster muss zu ≥80 % gefüllt sein (`ready`), sonst kein Alarm (verhindert Fehlalarm durch kurze Hochleistungs-Bursts).
+- **Kalibrierung (90-Tage-Analyse `data_1min`):** max. Netto-Einspeisung/30 min pro Tag lag an 94 von 95 Tagen ≤ 0,35 kWh; nur der Zwischenfall 2026-07-02 bei 0,75 kWh. Schwellen darüber → **nur echte Vorfälle triggern**.
+- **WARN** wenn `netto_kwh ≥ netto_warn_kwh` (0,40) → nur Log + Mail.
+- **ACT** wenn `netto_kwh ≥ netto_akt_kwh` (0,55) → Log + Mail + Reaktion. Hardware-Reaktion zusätzlich nur bei aktuell fließendem Live-Export (`reaktion_min_export_w`).
+- **Mail-Dedup:** persistent **1× pro Level und Kalendertag** (`config/einspeise_guard_dedup.json`) → überlebt Daemon-Restart, kein Spam. Der Tages-Kumulativwert (`data_1min.W_Einspeis`) dient nur als Kontext im Mail-/Log-Text, **nicht** als Trigger.
 
 ## Reaktions-Leiter (ACT)
 1. **Stufe 1 (Default, bewährt):** `SOC_MAX→100 %` + `SOC_MODE→auto`. Öffnet den Batterie-Puffer; setzt `einspeise_guard_soc_open_bis` für `soc_open_cooldown_min`, damit die Morgenregel nicht sofort auf 75 % zurückdeckelt.
@@ -54,9 +55,11 @@ Zwischenfall **2026-07-02**: Morgenregel deckelte SOC_MAX auf 75 % (LFP-Schonung
 - Guard abschalten → `engine_registry.json` Eintrag `"aktiv": false` oder Matrix `aktiv:false`.
 
 ## Bekannte Fallstricke
-- Batterie bereits voll (SOC_MAX=100, SOC≈100) → Stufe 1 wirkungslos; ohne Dump-Load warnt der Guard nur (korrekt: echter WR-Fehler → Mensch/Fronius-Support).
+- **Wattpilot-ECO-Lastwechsel** (bei leichter Bewölkung, EV-Ladung bis ~15 kW) erzeugen wechselnd Einspeisung/Bezug — das ist **kein** Fehler. Der Netto-Detektor rechnet Import gegen → solche Swings mitteln sich weg (verifiziert 2026-07-02: 35 Fehlalarme vor Umstellung von Kumulativ-Trigger auf Netto-Fenster).
+- Batterie bereits voll (SOC_MAX=100, SOC≈100) → Stufe 1 wirkungslos; ohne Dump-Load warnt der Guard nur (korrekt: echter WR-Fehler → Mensch/Fronius-Support/WR-Reset).
 - `obs.grid_power_w` Vorzeichen: **negativ = Einspeisung** (siehe `collector-feldnamen-referenz.card.md`).
-- Der Guard behebt **nicht** die Fronius-seitige Ursache (F3 ohne Curtailment) — dafür Support-Report `doc/system/FRONIUS_SUPPORT_EINSPEISUNG_2026-07-02.md`.
+- Der Guard behebt **nicht** die Fronius-seitige Ursache (F3 ohne Curtailment) — dafür Support-Report `doc/system/FRONIUS_SUPPORT_EINSPEISUNG_2026-07-02.md` und die geplante WR-Fernsteuerung (Task A, siehe `doc/TODO.md`).
+- Provokation (Stufe 3) ist **deaktiviert** (User-Entscheid 2026-07-02): Netzwerkfehler ausgeschlossen (F2-Steuerung lief), Verbraucher-Toggle ist der falsche Hebel — Ersatz = WR-Fernsteuerung.
 
 ## Verwandte Cards
 - [`automation-battery-algorithm.card.md`](./automation-battery-algorithm.card.md) — SOC-Schreibpfad
