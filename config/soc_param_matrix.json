@@ -1,7 +1,7 @@
 {
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
-  "_updated": "2026-07-02",
+  "_updated": "2026-07-05",
   "regelkreise": {
     "soc_extern": {
       "_doc": "Toleranz für extern geänderte SOC-Werte (z.B. manuell via Fronius App). Wenn SOC_MIN oder SOC_MAX außerhalb der Automation geändert werden, respektiert die Engine die Werte für die konfigurierte Dauer.",
@@ -95,39 +95,57 @@
       "parameter": {
         "netto_fenster_min": {
           "wert": 30,
-          "bereich": [10, 60],
+          "bereich": [
+            10,
+            60
+          ],
           "einheit": "min",
           "obs_feld": "grid_power_w",
           "beschreibung": "Fensterbreite für die zeit-integrierte Netto-Einspeisung. 30 min trennt den Zwischenfall (0.75 kWh) am saubersten von normalen ECO-Tagen (<=0.35 kWh)."
         },
         "netto_warn_kwh": {
-          "wert": 0.40,
-          "bereich": [0.1, 2.0],
+          "wert": 0.4,
+          "bereich": [
+            0.1,
+            2.0
+          ],
           "einheit": "kWh",
           "beschreibung": "WARN wenn Netto-Einspeisung im Fenster >= Wert. Über dem 3-Monats-Normalmaximum (0.35 kWh) -> nur echte Vorfälle warnen."
         },
         "netto_akt_kwh": {
           "wert": 0.55,
-          "bereich": [0.15, 2.5],
+          "bereich": [
+            0.15,
+            2.5
+          ],
           "einheit": "kWh",
           "beschreibung": "ACT (Reaktion) wenn Netto-Einspeisung im Fenster >= Wert. Zwischen Normalmax (0.35) und Zwischenfall (0.75) -> nur der Vorfall reagiert."
         },
         "reaktion_min_export_w": {
           "wert": 150,
-          "bereich": [50, 1000],
+          "bereich": [
+            50,
+            1000
+          ],
           "einheit": "W",
           "obs_feld": "grid_power_w",
           "beschreibung": "Hardware-Reaktion (SOC_MAX öffnen) nur wenn AKTUELL mindestens so viel eingespeist wird (sonst nur Alarm)."
         },
         "soc_open_cooldown_min": {
           "wert": 120,
-          "bereich": [15, 360],
+          "bereich": [
+            15,
+            360
+          ],
           "einheit": "min",
           "beschreibung": "Wie lange der Guard SOC_MAX offen hält bzw. die Morgen-Deckelung (75%) unterdrückt (engine_flag einspeise_guard_soc_open_bis)."
         },
         "kumul_cache_s": {
           "wert": 120,
-          "bereich": [30, 600],
+          "bereich": [
+            30,
+            600
+          ],
           "einheit": "s",
           "beschreibung": "TTL des DB-Reads für das Tages-Einspeise-Kumulativ (data_1min.W_Einspeis, nur Kontext im Mail-/Log-Text, KEIN Trigger)."
         },
@@ -137,14 +155,20 @@
         },
         "dumpload_soc_min_pct": {
           "wert": 95,
-          "bereich": [80, 100],
+          "bereich": [
+            80,
+            100
+          ],
           "einheit": "%",
           "obs_feld": "batt_soc_pct",
           "beschreibung": "Dump-Load erst ab diesem SOC (Batterie faktisch voll -> Puffer-Öffnung wirkungslos)."
         },
         "dumpload_ww_temp_max_c": {
           "wert": 75,
-          "bereich": [50, 85],
+          "bereich": [
+            50,
+            85
+          ],
           "einheit": "°C",
           "obs_feld": "ww_temp_c",
           "beschreibung": "HP-Dump-Load nur wenn WW-Speicher unter dieser Temperatur."
@@ -155,7 +179,10 @@
         },
         "provokation_min_abstand_min": {
           "wert": 30,
-          "bereich": [5, 180],
+          "bereich": [
+            5,
+            180
+          ],
           "einheit": "min",
           "beschreibung": "Mindestabstand zwischen zwei Provokations-Zyklen (nur relevant wenn provokation_aktiv)."
         }

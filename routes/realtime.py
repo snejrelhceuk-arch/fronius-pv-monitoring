@@ -15,6 +15,30 @@ from routes.helpers import get_db_connection, ram_db_lock, api_error_response
 bp = Blueprint('realtime', __name__)
 
 
+def _resolve_sm_power(cursor, latest_row, field_name, now_ts, row_ts, max_age_s=900, fallback_window_s=7200):
+    """Resolve SM power with fallback to latest recent non-null sample."""
+    value = latest_row.get(field_name)
+    if value is not None and (now_ts - row_ts) <= max_age_s:
+        return float(value), row_ts, 'latest'
+
+    min_ts = now_ts - fallback_window_s
+    cursor.execute(
+        f"""
+        SELECT ts, {field_name}
+        FROM raw_data
+        WHERE ts >= ? AND {field_name} IS NOT NULL
+        ORDER BY ts DESC
+        LIMIT 1
+        """,
+        (min_ts,),
+    )
+    fallback = cursor.fetchone()
+    if fallback:
+        return float(fallback[1] or 0), float(fallback[0] or row_ts), 'fallback'
+
+    return float(value or 0), row_ts, 'latest'
+
+
 @bp.route('/api/zoom')
 def api_zoom():
     """Adaptive Auflösung basierend auf Zeitbereich - ALLE Spalten"""
@@ -630,14 +654,36 @@ def api_flow_realtime():
         latest = dict(row)
         ts = latest.get('ts', 0)
 
-        if now - ts > 120:
-            return jsonify({"error": "Daten zu alt"}), 404
+        stale_data = (now - ts) > 120
+
+        conn3 = get_db_connection()
+        c3 = None
+        if conn3:
+            try:
+                conn3.row_factory = sqlite3.Row
+                c3 = conn3.cursor()
+            except Exception:
+                c3 = None
 
         # Daten extrahieren
         p_dc1 = latest.get('P_DC1', 0) or 0
         p_dc2 = latest.get('P_DC2', 0) or 0
-        p_f2 = latest.get('P_F2', 0) or 0
-        p_f3 = latest.get('P_F3', 0) or 0
+        if c3:
+            p_f2_raw, p_f2_ts, p_f2_source = _resolve_sm_power(c3, latest, 'P_F2', now, ts)
+            p_f3_raw, p_f3_ts, p_f3_source = _resolve_sm_power(c3, latest, 'P_F3', now, ts)
+        else:
+            p_f2_raw = float(latest.get('P_F2', 0) or 0)
+            p_f3_raw = float(latest.get('P_F3', 0) or 0)
+            p_f2_ts = ts
+            p_f3_ts = ts
+            p_f2_source = 'latest'
+            p_f3_source = 'latest'
+
+        if conn3:
+            conn3.close()
+
+        p_f2 = max(0.0, p_f2_raw)
+        p_f3 = max(0.0, p_f3_raw)
         p_netz = latest.get('P_Netz', 0) or 0
         i_batt = latest.get('I_Batt_API', 0) or 0
         u_batt = latest.get('U_Batt_API', 0) or 0
@@ -734,13 +780,18 @@ def api_flow_realtime():
         result = {
             'timestamp': ts,
             'age_seconds': now - ts,
+            'stale_data': stale_data,
             'producers': {
                 'f1': f1,
                 'f2': f2,
                 'f3': f3,
                 'pv_total': pv_gesamt,
                 'pv_today_kwh': pv_today_kwh,
-                'autarkie_today': autarkie_today
+                'autarkie_today': autarkie_today,
+                'f2_source': p_f2_source,
+                'f3_source': p_f3_source,
+                'f2_age_seconds': max(0, round(now - p_f2_ts)),
+                'f3_age_seconds': max(0, round(now - p_f3_ts)),
             },
             'battery': {
                 'power': p_akku,

@@ -1,0 +1,13 @@
+# Drift-Task D2 — doc/llm/cards/automation-regel-wattpilot.card.md
+
+**Erkannt:** 2026-07-08
+**Klasse:** D2
+**Scope:** `doc/llm/cards/automation-regel-wattpilot.card.md`
+
+## Befund
+`last_review`=2026-06-06 (Alter 32d) — applyTo-Dateien danach geaendert: automation/engine/aktoren/aktor_wattpilot.py
+
+## Aktion
+- Card pruefen, anpassen, `last_review` auf heute setzen.
+- Pre-commit-Hook validiert die Korrektur.
+- Wenn Befund obsolet: Task-Datei manuell loeschen oder `--cleanup` laufen lassen.

@@ -5,7 +5,7 @@ role: B
 applyTo: "routes/**"
 tags: [web-api, blueprints, templates, formatting, read-only]
 status: stable
-last_review: 2026-06-27
+last_review: 2026-07-08
 
 ---
 
@@ -15,6 +15,7 @@ last_review: 2026-06-27
 Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly bereitstellen und Werte konsistent im Frontend darstellen.
 
 ## Changes
+- 2026-07-08: Flow-Haertung bei F1/Netz-SM-Ausfall. `routes/realtime.py:/api/flow_realtime` und `routes/system/ha.py:/api/ha/flow` liefern F2/F3 explizit aus den letzten verfuegbaren Sekundaer-SM-Werten (`P_F2`/`P_F3`, Fallback auf juengsten gueltigen Rohdatensatz), clippen Erzeuger auf >=0 fuer die Produktionsblasen und fallen bei stale `raw_data` nicht mehr hart auf Fehler, sondern markieren den Zustand als `stale_data`.
 - 2026-06-27 (b): Responsive-Feinschliff kleine Screens. Gemeinsame Helfer `PVChart.xAxisLabel`/`PVChart.tooltipResponsive` (`static/js/nav-ui.js`): X-Achsen-Labels dünnen auf schmalen Screens automatisch aus (`interval:'auto'`, `hideOverlap`), Tooltips bleiben im Viewport (`confine:true`) und werden bei Bedarf größenbegrenzt + ohne sichtbaren Scrollbalken scrollbar (Klasse `pv-echarts-tip`, Scrollbar-Ausblendung in `static/css/nav-ui.css`). Eingehängt in Balken-/Tages-Charts von `tag_view.html`, `erzeuger_view.html`, `verbraucher_view.html`; Verbraucher-Tageschart nutzt jetzt dieselbe breitenabhängige Label-Ausdünnung wie Erzeuger. Desktop/Tablet unverändert.
 - 2026-06-27: Zentraler Zeit-Navigationsspeicher. `static/js/nav-context.js` neu: `PVNavContext.commit/getState/currentQuery` als EINE Quelle der Wahrheit für `period/date/year/month` (localStorage `pvNavState` + URL via `replaceState`, Verfall nach 1 h). Jeder Chart-View (`tag_view`/`erzeuger_view`/`verbraucher_view`) committet bei jedem Navigationswechsel; die Seiten-Schublade (`static/js/nav-ui.js`) baut die Links beim Öffnen frisch aus `currentQuery()`. Behebt: Kalender-/Zeitraum-Verlust beim Seitenwechsel, Einstieg Erzeuger/Verbraucher aus Monitoring/Gesamt landet jetzt im Gesamt-Chart (vorher Tag), Rücksprung Jahr→Monitoring behält Jahr; aktive View-Buttons werden bei Direkteinstieg synchronisiert (`setActiveViewButton`).
 - 2026-06-20 (c): Doku-Hinweis geschärft: lokale Web-/Smoke-Tests laufen auf Port **8000** (nicht 5000), damit Route-Checks reproduzierbar sind.

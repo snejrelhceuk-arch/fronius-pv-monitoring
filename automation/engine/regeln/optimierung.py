@@ -278,6 +278,9 @@ class RegelZellausgleich(Regel):
         # selbst (5–100 % hardwired). Kein manuelles 5/100 %-Setzen nötig —
         # der WR lädt bei Überschuss auf 100 % und balanciert die Zellen.
         # KomfortReset stellt abends wieder auf manual 25–75 % zurück.
+        if (obs.soc_mode or '').lower() == 'auto':
+            return []
+
         aktionen = [
             {
                 'tier': 2, 'aktor': 'batterie',

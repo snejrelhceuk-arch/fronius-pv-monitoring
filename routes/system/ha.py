@@ -24,6 +24,30 @@ _ha_cache = {
 }
 
 
+def _resolve_sm_power(cursor, latest_row, field_name, now_ts, row_ts, max_age_s=900, fallback_window_s=7200):
+    """Resolve SM power with fallback to latest recent non-null sample."""
+    value = latest_row.get(field_name)
+    if value is not None and (now_ts - row_ts) <= max_age_s:
+        return float(value), row_ts, 'latest'
+
+    min_ts = now_ts - fallback_window_s
+    cursor.execute(
+        f"""
+        SELECT ts, {field_name}
+        FROM raw_data
+        WHERE ts >= ? AND {field_name} IS NOT NULL
+        ORDER BY ts DESC
+        LIMIT 1
+        """,
+        (min_ts,),
+    )
+    fallback = cursor.fetchone()
+    if fallback:
+        return float(fallback[1] or 0), float(fallback[0] or row_ts), 'fallback'
+
+    return float(value or 0), row_ts, 'latest'
+
+
 def _read_ha_flow_payload(now: float) -> dict:
     """Kompakte HA-Flow-Daten aus raw_data + Neben-Tabellen lesen."""
     conn = get_db_connection()
@@ -40,8 +64,10 @@ def _read_ha_flow_payload(now: float) -> dict:
 
         latest = dict(row)
         ts = float(latest.get('ts', 0) or 0)
-        if now - ts > 120:
-            raise RuntimeError('raw_data zu alt')
+        stale_data = (now - ts) > 120
+
+        p_f2_raw, p_f2_ts, p_f2_source = _resolve_sm_power(c, latest, 'P_F2', now, ts)
+        p_f3_raw, p_f3_ts, p_f3_source = _resolve_sm_power(c, latest, 'P_F3', now, ts)
 
         wattpilot_power = 0
         c.execute(
@@ -83,8 +109,8 @@ def _read_ha_flow_payload(now: float) -> dict:
 
     p_dc1 = latest.get('P_DC1', 0) or 0
     p_dc2 = latest.get('P_DC2', 0) or 0
-    p_f2 = latest.get('P_F2', 0) or 0
-    p_f3 = latest.get('P_F3', 0) or 0
+    p_f2 = max(0.0, p_f2_raw)
+    p_f3 = max(0.0, p_f3_raw)
     p_netz = latest.get('P_Netz', 0) or 0
     i_batt = latest.get('I_Batt_API', 0) or 0
     u_batt = latest.get('U_Batt_API', 0) or 0
@@ -107,7 +133,14 @@ def _read_ha_flow_payload(now: float) -> dict:
         'timestamp': datetime.now().isoformat(),
         'last_update_ts': ts,
         'age_s': round(now - ts),
+        'stale_data': stale_data,
         'pv_total_w': pv_total_w,
+        'pv_f2_w': f2,
+        'pv_f3_w': f3,
+        'pv_f2_source': p_f2_source,
+        'pv_f3_source': p_f3_source,
+        'pv_f2_age_s': max(0, round(now - p_f2_ts)),
+        'pv_f3_age_s': max(0, round(now - p_f3_ts)),
         'grid_power_w': grid_power_w,
         'battery_power_w': battery_power_w,
         'battery_soc_pct': round(soc_batt, 1),

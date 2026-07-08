@@ -5,13 +5,16 @@ role: C
 applyTo: "automation/engine/aktoren/aktor_batterie.py"
 tags: [batterie, soc, fronius, modbus]
 status: stable
-last_review: 2026-06-29
+last_review: 2026-07-08
 ---
 
 # Battery-Algorithm
 
 ## Zweck
 Setzt SOC-Grenzen (`soc_min`, `soc_max`) und Lademodus an der Fronius GEN24 — der einzige Hardware-Eingriff in die Batterie. Erfolgt über die Fronius-HTTP-Config-API (nicht Modbus).
+
+## Changes
+- 2026-07-08: `RegelZellausgleich` ( `automation/engine/regeln/optimierung.py` ) erzeugt `set_soc_mode=auto` nur noch wenn `obs.soc_mode != auto`; dadurch entfallen periodische redundante Auto-Schreibungen im strategic-Zyklus.
 
 ## Code-Anchor
 - **Aktor:** `automation/engine/aktoren/aktor_batterie.py:AktorBatterie.ausfuehren`

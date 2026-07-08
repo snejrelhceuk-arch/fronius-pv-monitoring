@@ -180,7 +180,7 @@ WATTPILOT_AUTO_RECOVERY_STATE_FILE = os.path.join(BASE_DIR, 'config', 'wattpilot
 # --- Datenerfassung ---
 POLL_INTERVAL = 3          # Sekunden zwischen Modbus-Abfragen
 BUFFER_MAXLEN = 400        # RAM-Buffer Größe (~20min bei 3s Polling)
-FLUSH_INTERVAL = 60        # Sekunden zwischen DB-Writes
+FLUSH_INTERVAL = 15        # Sekunden zwischen DB-Writes (reaktivere Anzeige)
 
 # --- WP Leistungsnachweis (Netzbetreiber) ---
 # Dauerhafte Protokolldatei mit minutlichen Maximalwerten der WP-Leistung.

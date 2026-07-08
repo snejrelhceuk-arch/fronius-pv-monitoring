@@ -1,18 +1,20 @@
 {
-  "ghi_factor": 3.278,
-  "model": "simple",
+  "ghi_factor": 3.191,
+  "model": "multi",
   "model_coeffs": {
-    "factor": 3.278
+    "a": 0.136,
+    "b": 3.09,
+    "c": 28.3
   },
-  "calibrated_at": "2026-06-28 05:00",
+  "calibrated_at": "2026-07-05 05:00",
   "data_points": 90,
-  "r_squared": 0.271,
-  "r_squared_multi": 0,
-  "avg_error_pct": 21.6,
+  "r_squared": 0.329,
+  "r_squared_multi": 0.451,
+  "avg_error_pct": 18.9,
   "monthly_factors": {
-    "3": 5.381,
-    "4": 3.761,
+    "4": 3.692,
     "5": 3.204,
-    "6": 2.899
+    "6": 2.899,
+    "7": 3.607
   }
 }
