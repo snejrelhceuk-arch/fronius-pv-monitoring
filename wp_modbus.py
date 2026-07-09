@@ -6,10 +6,17 @@ Serielle Schnittstelle: /dev/ttyACM0, 19200 Baud, 8N1, Slave-ID 1.
 Cache-TTL: 10 Sekunden.
 
 ABCD: Nur von C-Rolle (Automation) genutzt. B (Web) liest via obs_state.
+
+Transport-Backend (config.WP_BACKEND_MODE):
+  local  — direktes RS485/tty auf diesem Host (Bridge-Host Pi4-Tech).
+  remote — HTTP an die Pi4-Tech Bridge (Primary ohne WP-Hardware).
+Die öffentlichen Signaturen get_wp_status()/write_register() bleiben unverändert.
 """
 import logging
 import time
 import threading
+
+import config
 
 _WP_CACHE = {'ts': 0, 'data': None}
 _WP_CACHE_TTL = 10
@@ -47,8 +54,46 @@ def _signed16(raw):
     return raw - 0x10000 if raw >= 0x8000 else raw
 
 
-def _poll():
-    """Alle WP-Register lesen, dict zurückgeben."""
+def _remote_headers():
+    headers = {'Content-Type': 'application/json'}
+    token = config.WP_REMOTE_TOKEN
+    if token:
+        headers['Authorization'] = f'Bearer {token}'
+    return headers
+
+
+def _poll_remote():
+    """WP-Status über die Pi4-Tech Bridge (HTTP) lesen. Fail-safe → None."""
+    if not config.WP_REMOTE_BASE_URL:
+        logging.error("WP remote: PV_WP_REMOTE_BASE_URL nicht gesetzt")
+        return None
+    try:
+        import requests
+    except ImportError:
+        logging.error("WP remote: requests nicht installiert")
+        return None
+    url = f"{config.WP_REMOTE_BASE_URL}/api/wp/status"
+    try:
+        resp = requests.get(url, headers=_remote_headers(),
+                            timeout=config.WP_REMOTE_TIMEOUT_S)
+    except Exception as e:
+        logging.warning("WP remote status Verbindungsfehler: %s", e)
+        return None
+    if resp.status_code != 200:
+        logging.warning("WP remote status HTTP %s", resp.status_code)
+        return None
+    try:
+        payload = resp.json()
+    except Exception as e:
+        logging.warning("WP remote status JSON-Fehler: %s", e)
+        return None
+    if isinstance(payload, dict) and 'data' in payload:
+        return payload['data']
+    return payload
+
+
+def _poll_local():
+    """Alle WP-Register über RS485/tty lesen, dict zurückgeben."""
     try:
         from pymodbus.client import ModbusSerialClient
     except ImportError:
@@ -93,6 +138,13 @@ def _poll():
         return None
     finally:
         client.close()
+
+
+def _poll():
+    """Dispatcher: liest WP-Status je nach Backend (local/remote)."""
+    if config.WP_BACKEND_MODE == 'remote':
+        return _poll_remote()
+    return _poll_local()
 
 
 def get_wp_status():
@@ -143,6 +195,46 @@ def write_register(name: str, value: int) -> bool:
                        name, value, reg['min'], reg['max'], reg['einheit'])
         return False
 
+    if config.WP_BACKEND_MODE == 'remote':
+        return _write_register_remote(name, value)
+    return _write_register_local(reg, name, value)
+
+
+def _write_register_remote(name: str, value: int) -> bool:
+    """Schreibbefehl an die Pi4-Tech Bridge (HTTP). Fail-safe → False."""
+    if not config.WP_REMOTE_BASE_URL:
+        logging.error("WP remote write: PV_WP_REMOTE_BASE_URL nicht gesetzt")
+        return False
+    try:
+        import requests
+    except ImportError:
+        logging.error("WP remote write: requests nicht installiert")
+        return False
+    url = f"{config.WP_REMOTE_BASE_URL}/api/wp/write"
+    try:
+        resp = requests.post(url, json={'name': name, 'value': int(value)},
+                             headers=_remote_headers(),
+                             timeout=config.WP_REMOTE_TIMEOUT_S)
+    except Exception as e:
+        logging.error("WP remote write Verbindungsfehler: %s", e)
+        return False
+    if resp.status_code != 200:
+        logging.error("WP remote write HTTP %s: %s", resp.status_code, resp.text[:200])
+        return False
+    try:
+        ok = bool(resp.json().get('ok'))
+    except Exception as e:
+        logging.error("WP remote write JSON-Fehler: %s", e)
+        return False
+    if ok:
+        logging.info("WP remote write: %s=%d OK (Bridge)", name, value)
+        with _WP_LOCK:
+            _WP_CACHE['ts'] = 0
+    return ok
+
+
+def _write_register_local(reg: dict, name: str, value: int) -> bool:
+    """Einzelnes WP-Register lokal über RS485/tty schreiben."""
     try:
         from pymodbus.client import ModbusSerialClient
     except ImportError:

@@ -35,3 +35,25 @@ PV_NOTIFICATION_EMAIL=alerts@example.invalid
 PV_NOTIFICATION_SMTP_HOST=smtp.example.invalid
 PV_NOTIFICATION_SMTP_USER=alerts@example.invalid
 PV_NOTIFICATION_FROM=alerts@example.invalid
+
+# ── Wärmepumpe (WP) Modbus-Transport (REFORMATION) ──────────────────────────
+# local  = direktes RS485/tty auf diesem Host (nur Pi4-Tech / Bridge-Host).
+# remote = HTTP an die Pi4-Tech Bridge (Primary/Failover ohne WP-Hardware).
+# PV_WP_BACKEND_MODE=local
+# PV_WP_REMOTE_BASE_URL=http://192.0.2.181:8091
+# PV_WP_REMOTE_TIMEOUT_S=5
+# Token: bevorzugt in .secrets als PV_WP_REMOTE_TOKEN ablegen (nicht hier).
+# PV_WP_REMOTE_TOKEN=
+
+# Bridge-seitig (nur Pi4-Tech):
+# PV_WP_BRIDGE_BIND=0.0.0.0
+# PV_WP_BRIDGE_PORT=8091
+# PV_WP_BRIDGE_TOKEN=            # default: = PV_WP_REMOTE_TOKEN; besser in .secrets
+# PV_WP_BRIDGE_RATE_LIMIT_PER_MIN=60
+# PV_WP_BRIDGE_WRITE_LIMIT_PER_MIN=12
+
+# ── Host-Rollen NACH REFORMATION (Zielbild) ─────────────────────────────────
+#   Pi5-Primary  192.0.2.204  (admin) — Vollsystem A-E, WP via Bridge (remote)
+#   Pi5-F&B      192.0.2.195  (admin) — Failover read-only + Backup + Ticker
+#   Pi4-Kueche   192.0.2.105  (jk)    — Kiosk + Longterm-Backup (GFS monthly/yearly)
+#   Pi4-Tech     192.0.2.181  (admin) — WP/HW-Bridge (WP_BACKEND_MODE=local)

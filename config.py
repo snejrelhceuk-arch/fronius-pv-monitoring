@@ -150,6 +150,25 @@ FAILOVER_IP = load_local_setting('PV_FAILOVER_IP', '192.0.2.105')
 FAILOVER_USER = load_local_setting('PV_FAILOVER_USER', 'failover-user')
 FAILOVER_PV_BASE = load_local_setting('PV_FAILOVER_PV_BASE', '/srv/pv-system')
 
+# --- Wärmepumpe (WP) Modbus-Transport ---
+# Rolle C spricht die WP (Dimplex) an. Backend 'local' = direktes RS485/tty auf
+# diesem Host (Bridge-Host Pi4-Tech). Backend 'remote' = HTTP an die Pi4-Tech
+# Bridge (Primary/Pi5 ohne eigene WP-Hardware). Signaturen in wp_modbus.py bleiben.
+WP_BACKEND_MODE = load_local_setting('PV_WP_BACKEND_MODE', 'local').strip().lower()
+WP_REMOTE_BASE_URL = load_local_setting('PV_WP_REMOTE_BASE_URL', '').rstrip('/')
+WP_REMOTE_TIMEOUT_S = float(load_local_setting('PV_WP_REMOTE_TIMEOUT_S', '5') or 5)
+WP_REMOTE_TOKEN = load_secret('PV_WP_REMOTE_TOKEN') or load_local_setting('PV_WP_REMOTE_TOKEN', '')
+# Bridge (serverseitig, nur auf Pi4-Tech relevant)
+WP_BRIDGE_BIND = load_local_setting('PV_WP_BRIDGE_BIND', '0.0.0.0')
+WP_BRIDGE_PORT = int(load_local_setting('PV_WP_BRIDGE_PORT', '8091'))
+WP_BRIDGE_TOKEN = (
+    load_secret('PV_WP_BRIDGE_TOKEN')
+    or load_local_setting('PV_WP_BRIDGE_TOKEN', '')
+    or WP_REMOTE_TOKEN
+)
+WP_BRIDGE_RATE_LIMIT_PER_MIN = int(load_local_setting('PV_WP_BRIDGE_RATE_LIMIT_PER_MIN', '60'))
+WP_BRIDGE_WRITE_LIMIT_PER_MIN = int(load_local_setting('PV_WP_BRIDGE_WRITE_LIMIT_PER_MIN', '12'))
+
 # --- Wattpilot (Wallbox) ---
 WATTPILOT_IP = load_local_setting('PV_WATTPILOT_IP', '192.0.2.176')
 WATTPILOT_TIMEOUT = 10             # WebSocket Timeout (Sek.)
