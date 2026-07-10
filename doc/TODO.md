@@ -5,6 +5,21 @@
 
 ---
 
+## REFORMATION (Pi5-Umzug, 2026-07-11)
+
+Erledigt: Produktion auf **Pi5-Primary** (`.204`, A–E), **Pi5-FB** (`.195`, Failover+Backup+Ticker),
+**Pi4-Tech** (`.181`, WP/HW-Bridge, bereinigt), Steuerbox-nginx-Proxy + Cert, UFW auf Primary,
+Flow-„Safe"-Badge auf neuen Failover korrigiert, Kiosk touch-freundlich, HW-Doku/Info-Buttons,
+Longterm-Offload-Skript, Einmal-Skripte entfernt (Snapshot auf Pi5-FB).
+
+- [ ] **Pi4-Küche (`.105`) anbinden:** SSH-Key `admin@Pi5-Primary` beim Küche-User (jk) autorisieren,
+  dann Kiosk-Autostart (`install_kiosk_autostart.sh`, `PV_KIOSK_URL=http://192.0.2.204:8000`) +
+  `install_longterm_offload.sh` auf Pi5-FB aktivieren (Offload-Ziel `PV_KUECHE_HOST`).
+- [ ] **Pi4-Tech PAC4200:** RAM-Collector für PAC4200-Messdaten (temporär im Hauptspeicher) umsetzen.
+- [ ] **SMTP-Passwort** auf Pi5-FB für `pv-failover-health`-Alarm-Mails provisionieren (Betreiber, Secret).
+
+---
+
 ## Sicherheit & Haertung
 
 - [ ] Team-Remediation: frische Klone bzw. `git fetch --all` + `git reset --hard origin/main` auf Pi4-Failover und Pi5-Backup ausfuehren (Nachgang zur Git-History-Bereinigung 2026-05-04)

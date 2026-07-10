@@ -8,6 +8,7 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Changed
+- **REFORMATION — Produktion auf Pi5 (2026-07-11):** Vier-Host-Topologie. **Pi5-Primary** (`.204`) = Vollsystem A–E, WP via Pi4-Tech-Bridge (`WP_BACKEND_MODE=remote`). **Pi5-FB** (`.195`) = Failover (read-only) + Backup-Empfänger + Ticker. **Pi4-Küche** (`.105`) = Kiosk-Display + Longterm-GFS (monthly/yearly). **Pi4-Tech** (`.181`) = WP/HW-Bridge (RS485), keine Engine. Repariert/nachgezogen: Steuerbox-nginx-TLS-Proxy (`:11933`→`:11934`) + Cert auf dem neuen Primary; UFW installiert/aktiv (`22`/`8000`/`11933` LAN); Pi4-Tech bereinigt (nur `pv-wp-bridge`, Crontab geleert); Flow-Badge „Safe" (`/api/failover_status`) auf neuen Failover Pi5-FB korrigiert (`down`≠`stale`, `host`-Feld); Kiosk-Browser touch-freundlich (maximiert statt Vollbild, `PV_KIOSK_FULLSCREEN`); HW-Info-Buttons + Kern-Doku auf 4-Pi-Topologie aktualisiert; Großvater-Longterm-Offload (`scripts/backup_longterm_offload.sh`) für Pi5-FB→Pi4-Küche. Einmal-/Rekonstruktions-Skripte aus der Produktion entfernt (Snapshot auf Pi5-FB gesichert).
 - **Wattpilot Hardware-Tausch (2026-05-27):** Neuer Wattpilot Flex Home 22kW ersetzt bisheriges Go-Modell. `PV_WATTPILOT_IP` auf die neue lokale Wallbox-Adresse aktualisiert.
 
 ### Fixes
