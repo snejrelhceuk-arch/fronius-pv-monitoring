@@ -47,33 +47,46 @@ def api_failover_status():
     ssh_target = f'{failover_user}@{failover_ip}'
 
     try:
-        # SSH: Marker-Timestamp lesen (stat -c %Y = modtime als epoch)
+        # SSH: Marker-Timestamp lesen (stat -c %Y = modtime als epoch).
+        # Der Remote-Teil endet dank `|| echo 0` immer mit RC 0 — der
+        # ssh-Return-Code spiegelt daher rein die Erreichbarkeit wider
+        # (0 = verbunden, != 0 = Auth-/Verbindungsfehler).
         proc = subprocess.run(
-            ['ssh', '-o', 'ConnectTimeout=3', '-o', 'StrictHostKeyChecking=accept-new',
+            ['ssh', '-o', 'ConnectTimeout=3', '-o', 'BatchMode=yes',
+             '-o', 'StrictHostKeyChecking=accept-new',
              ssh_target, f'stat -c %Y "{marker}" 2>/dev/null || echo 0'],
             capture_output=True, text=True, timeout=6
         )
-        marker_ts = int(proc.stdout.strip() or '0')
-        age_sec = int(now - marker_ts) if marker_ts > 0 else -1
 
-        if age_sec < 0:
-            result = {'status': 'stale', 'age': None,
-                      'detail': 'Sync-Marker nicht gefunden'}
-        elif age_sec <= 900:   # ≤ 15 Min
-            result = {'status': 'live', 'age': age_sec,
-                      'detail': f'Mirror OK ({age_sec // 60} Min)'}
-        elif age_sec <= 1800:  # ≤ 30 Min
-            result = {'status': 'stale', 'age': age_sec,
-                      'detail': f'Mirror veraltet ({age_sec // 60} Min)'}
+        if proc.returncode != 0:
+            # SSH-Verbindung selbst fehlgeschlagen → Host down (nicht "stale").
+            result = {'status': 'down', 'age': None, 'host': ssh_target,
+                      'detail': f'Failover-Host nicht erreichbar (ssh rc={proc.returncode})'}
         else:
-            result = {'status': 'stale', 'age': age_sec,
-                      'detail': f'Mirror zu alt ({age_sec // 60} Min)'}
+            try:
+                marker_ts = int((proc.stdout or '').strip() or '0')
+            except ValueError:
+                marker_ts = 0
+            age_sec = int(now - marker_ts) if marker_ts > 0 else -1
+
+            if age_sec < 0:
+                result = {'status': 'stale', 'age': None, 'host': ssh_target,
+                          'detail': 'Host erreichbar, aber Sync-Marker fehlt (kein Mirror-Lauf)'}
+            elif age_sec <= 900:   # ≤ 15 Min
+                result = {'status': 'live', 'age': age_sec, 'host': ssh_target,
+                          'detail': f'Mirror OK ({age_sec // 60} Min)'}
+            elif age_sec <= 1800:  # ≤ 30 Min
+                result = {'status': 'stale', 'age': age_sec, 'host': ssh_target,
+                          'detail': f'Mirror veraltet ({age_sec // 60} Min)'}
+            else:
+                result = {'status': 'stale', 'age': age_sec, 'host': ssh_target,
+                          'detail': f'Mirror zu alt ({age_sec // 60} Min)'}
 
     except subprocess.TimeoutExpired:
-        result = {'status': 'down', 'age': None,
+        result = {'status': 'down', 'age': None, 'host': ssh_target,
                   'detail': 'SSH-Timeout (Failover-Host nicht erreichbar)'}
     except Exception as e:
-        result = {'status': 'down', 'age': None,
+        result = {'status': 'down', 'age': None, 'host': ssh_target,
                   'detail': f'Fehler: {e}'}
 
     _failover_cache.update(ts=now, result=result)

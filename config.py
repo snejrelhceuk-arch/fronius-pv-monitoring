@@ -146,7 +146,7 @@ HA_BRIDGE_MQTT_PASSWORD = (
 HA_BRIDGE_MQTT_KEEPALIVE_S = int(load_local_setting('PV_HA_BRIDGE_MQTT_KEEPALIVE_S', '60'))
 
 # --- Failover-Host ---
-FAILOVER_IP = load_local_setting('PV_FAILOVER_IP', '192.0.2.105')
+FAILOVER_IP = load_local_setting('PV_FAILOVER_IP', '192.0.2.195')
 FAILOVER_USER = load_local_setting('PV_FAILOVER_USER', 'failover-user')
 FAILOVER_PV_BASE = load_local_setting('PV_FAILOVER_PV_BASE', '/srv/pv-system')
 
