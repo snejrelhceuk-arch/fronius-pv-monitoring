@@ -6,10 +6,15 @@
 # Zweck: Auf einem Host mit Bildschirm (z. B. Pi4-Failover) beim
 # Boot/Login automatisch das PV-Dashboard anzeigen.
 #
-# Startet das App-Fenster im Vollbild (--start-fullscreen). Kein harter
-# Kiosk-Lockdown — F11/onboard etc. bleiben nutzbar. Chromium mit nativem
-# Wayland-Backend + V3D-GPU laeuft auf dem Pi4 deutlich ruckelfreier
-# (Ticker!) als Firefox.
+# Startet das App-Fenster standardmaessig MAXIMIERT (nicht echtes Vollbild),
+# damit die labwc-Titelleiste (Schliessen-Button) und das Panel per
+# Touch erreichbar bleiben — ein Touch-Display hat keine Tastatur fuer
+# F11/ESC. Echtes Vollbild optional via PV_KIOSK_FULLSCREEN=1.
+# Chromium mit nativem Wayland-Backend + V3D-GPU laeuft auf dem Pi4
+# deutlich ruckelfreier (Ticker!) als Firefox.
+#
+# PV_KIOSK_FULLSCREEN=1  -> --start-fullscreen (nur mit Tastatur/onboard verlassbar)
+# PV_KIOSK_FULLSCREEN=0  -> --start-maximized  (Default, touch-bedienbar)
 #
 # --password-store=basic: verhindert, dass Chromium beim Start den
 # Gnome-Keyring/Secret-Service entsperren will (sonst Passwort-Dialog
@@ -42,6 +47,13 @@ done
 PROFILE_DIR="${HOME}/.config/pv-kiosk-chromium"
 mkdir -p "$PROFILE_DIR"
 
+# Fenstermodus: Default = maximiert (touch-bedienbar), Vollbild nur auf Wunsch.
+if [ "${PV_KIOSK_FULLSCREEN:-0}" = "1" ]; then
+    WINDOW_FLAG="--start-fullscreen"
+else
+    WINDOW_FLAG="--start-maximized"
+fi
+
 if [ -n "$BROWSER" ]; then
     # Auf das Web-API warten, bevor der Browser oeffnet (max ~60 s)
     for _ in $(seq 1 30); do
@@ -65,10 +77,15 @@ if [ -n "$BROWSER" ]; then
         --disable-session-crashed-bubble \
         --disable-infobars \
         --no-first-run \
-        --start-fullscreen \
+        "$WINDOW_FLAG" \
         --user-data-dir="$PROFILE_DIR" \
         --app="$URL"
 else
-    # Fallback: Firefox, falls kein Chromium vorhanden
-    exec firefox --kiosk "$URL"
+    # Fallback: Firefox — im Fenstermodus (kein --kiosk), sonst ohne Tastatur
+    # nicht verlassbar. Vollbild optional via PV_KIOSK_FULLSCREEN=1.
+    if [ "${PV_KIOSK_FULLSCREEN:-0}" = "1" ]; then
+        exec firefox --kiosk "$URL"
+    else
+        exec firefox "$URL"
+    fi
 fi

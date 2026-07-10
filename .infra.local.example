@@ -57,3 +57,13 @@ PV_NOTIFICATION_FROM=alerts@example.invalid
 #   Pi5-F&B      192.0.2.195  (admin) — Failover read-only + Backup + Ticker
 #   Pi4-Kueche   192.0.2.105  (jk)    — Kiosk + Longterm-Backup (GFS monthly/yearly)
 #   Pi4-Tech     192.0.2.181  (admin) — WP/HW-Bridge (WP_BACKEND_MODE=local)
+
+# ── Longterm-Backup-Offload (Grossvater monthly/yearly -> Pi4-Kueche) ────────
+# Nur auf dem Backup-Host (Pi5-FB) relevant. Fail-safe: leer/unerreichbar -> Skip.
+# PV_KUECHE_HOST=<user>@192.0.2.105
+# PV_KUECHE_ARCHIVE_BASE=pv-longterm-archive   # relativ zum Remote-Home
+
+# ── Kiosk (Pi4-Kueche) ──────────────────────────────────────────────────────
+# Dashboard-URL des Kiosk-Browsers zeigt auf den Primary (.204):
+# PV_KIOSK_URL=http://192.0.2.204:8000
+# PV_KIOSK_FULLSCREEN=0   # 0 = maximiert/touch-bedienbar (Default), 1 = echtes Vollbild

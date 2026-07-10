@@ -27,9 +27,14 @@
 
 ## Hosts (knapp)
 
-- **Pi4 Primary** `192.0.2.181` (admin) — Produktion. UFW aktiv (seit 2026-05-03).
-- **Pi4 Failover** `192.0.2.105` (jk) — UFW aktiv. `.role`-Datei steuert aktive Services.
-- **Pi5 Backup** `192.0.2.195` (admin) — UFW aktiv. Hält Workspace-Klone als Archiv.
+Nach der **REFORMATION** (Umzug der Produktion auf Pi5, 2026-07-11) gilt die Vier-Host-Topologie:
+
+- **Pi5-Primary** `192.0.2.204` (admin) — Produktion, Vollsystem A–E. Pi 5 Rev 1.0 · Cortex-A76 4×2,4 GHz · 4 GB RAM · microSD 64 GB · Debian 12 · Py 3.11. WP-Zugriff via Pi4-Tech-Bridge (`WP_BACKEND_MODE=remote`). UFW aktiv.
+- **Pi5-FB** `192.0.2.195` (admin) — Failover (read-only) + Backup-Empfänger + Dashboard-Ticker. Pi 5 Rev 1.0 · Cortex-A76 4×2,4 GHz · 8 GB RAM · NVMe 512 GB · Debian 12 · Py 3.11 · `.role=failover`. UFW aktiv.
+- **Pi4-Küche** `192.0.2.105` (jk) — Kiosk-Display (Touch) + Longterm-GFS (monthly/yearly). Pi 4 · Cortex-A72 4×1,8 GHz · 8 GB RAM · SD 128 GB · Debian 13. UFW aktiv.
+- **Pi4-Tech** `192.0.2.181` (admin) — WP/HW-Bridge (RS485, `WP_BACKEND_MODE=local`), **keine** Engine; künftig PAC4200-RAM-Collector. Pi 4 Rev 1.5 · Cortex-A72 4×1,8 GHz · 4 GB RAM · microSD 64 GB · Debian 13. UFW aktiv.
+
+Rollen werden über die `.role`-Datei (gitignored) gesteuert, nicht über divergenten Code.
 
 ## Lade-Hierarchie für deine Aufgabe
 
