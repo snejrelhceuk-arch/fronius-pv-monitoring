@@ -203,7 +203,8 @@ def analyse():
                COALESCE(netz_bezug_kwh, 0),
                COALESCE(netz_einspeisung_kwh, 0),
                COALESCE(gesamt_verbrauch_kwh, 0),
-               sonnenstunden
+               sonnenstunden,
+               COALESCE(heizpatrone_kwh, 0)
         FROM monthly_statistics
         WHERE year >= 2021
         ORDER BY year, month
@@ -218,6 +219,7 @@ def analyse():
         solar, direkt, wattpilot, heizpatrone = row[2], row[3], row[4], row[5]
         batt_entl, batt_lad, netz_bezug, netz_einsp, gesamt_verbr = row[6], row[7], row[8], row[9], row[10]
         sonnenstd = row[11]
+        heizpatrone_el = row[12]  # gemessener Heizpatrone-Verbrauch (heizpatrone_kwh)
 
         # Strompreis für diesen Monat
         strompreis = get_strompreis_fuer_monat(year, month)
@@ -234,6 +236,7 @@ def analyse():
                 'direkt': 0,
                 'wattpilot': 0,
                 'heizpatrone': 0,
+                'heizpatrone_el': 0,  # gemessene Heizpatrone (heizpatrone_kwh)
                 'batt_entl': 0,
                 'batt_lad': 0,
                 'netz_bezug': 0,
@@ -251,6 +254,7 @@ def analyse():
         years_data[year]['direkt'] += direkt
         years_data[year]['wattpilot'] += wattpilot
         years_data[year]['heizpatrone'] += heizpatrone
+        years_data[year]['heizpatrone_el'] += heizpatrone_el
         years_data[year]['batt_entl'] += batt_entl
         years_data[year]['batt_lad'] += batt_lad
         years_data[year]['netz_bezug'] += netz_bezug
@@ -354,7 +358,8 @@ def analyse():
     kum_brutto_ersparnis_pv = 0
 
     for year in sorted(years_data.keys()):
-        invest_jahr_pv = invest_pv_2022 if year == 2022 else (invest_pv_2024 if year == 2024 else 0)
+        # Erstinvestition auf 2021 gebucht (PV-Produktion startete 05.11.2021)
+        invest_jahr_pv = invest_pv_2022 if year == 2021 else (invest_pv_2024 if year == 2024 else 0)
         kum_invest_pv += invest_jahr_pv
         kum_solar += years_data[year]['solar']
 
@@ -372,7 +377,7 @@ def analyse():
         eur_kwh_real = kum_invest_pv / kum_solar if kum_solar > 0 else 0
 
         # EUR/kWh PV-Anlage (25J): Prognose mit 18.000 kWh/Jahr ab 2026
-        jahre_seit_start = year - 2022 + 1
+        jahre_seit_start = year - 2021 + 1
         jahre_verbleibend = 25 - jahre_seit_start
         solar_prognose_25j = kum_solar + (jahre_verbleibend * 18000)
         eur_kwh_25j = kum_invest_pv / solar_prognose_25j if solar_prognose_25j > 0 else 0
@@ -409,9 +414,9 @@ def analyse():
     kum_ersparnis_haushalt = 0
 
     for year in sorted(years_data.keys()):
-        # Investitionen in diesem Jahr
+        # Investitionen in diesem Jahr (Erstinvest 2021: PV-Start 05.11.2021)
         invest_jahr_haushalt = 0
-        if year == 2022:
+        if year == 2021:
             invest_jahr_haushalt = invest_pv_2022 + invest_wp_2022
         elif year == 2024:
             invest_jahr_haushalt = invest_pv_2024
@@ -459,6 +464,90 @@ def analyse():
             amort_haushalt_jahr = amort_haushalt_data[-1]['year']
     else:
         amort_haushalt_jahr = None
+
+    # ========================================
+    # ENERGIEKOSTEN NACH TYP (Heizen, Mobilität, Haushalt)
+    # ========================================
+    # Kosten = verbrauchte kWh × eur_kwh_real (PV-Gestehungskosten, 1. Spalte).
+    # Primärenergie wird aus den GEMESSENEN elektrischen kWh zurückgerechnet:
+    #   Heizen:    thermisch = WP_el × SCOP + Heizpatrone_el;  Holz = thermisch / η_Holz
+    #   Mobilität: Benzin   = (E-Auto_kWh / 15 × 100) / 100 × 6 l × 10 kWh/l
+    #   Haushalt:  keine Hebelung (Strom = Endenergie, primär = elektrisch)
+    # Rückwirkend: WP_el = WP_BASIS-Schätzung, wo waermepumpe_kwh (=0) fehlt.
+    # Zukünftig:   WP_el = gemessenes waermepumpe_kwh.
+    scop = config.SCOP_WAERMEPUMPE
+    eta_holz = config.WIRKUNGSGRAD_HOLZKESSEL
+    bev_100km = config.BEV_VERBRAUCH_KWH_100KM
+    verbrenner_l = config.VERBRENNER_L_100KM
+    kraftstoff_kwh_l = config.KRAFTSTOFF_KWH_PRO_L
+
+    energy_costs_data = []
+    kum_heiz_kosten = 0
+    kum_mob_kosten = 0
+    kum_haus_kosten = 0
+
+    for year in sorted(years_data.keys()):
+        data = years_data[year]
+
+        # eur_kwh_real aus PV-Amortisation (Gestehungskosten je kWh)
+        pv_row = next((d for d in amort_pv_data if d['year'] == year), None)
+        eur_kwh_real = pv_row['eur_kwh_real'] if pv_row else 0
+
+        # HEIZEN — gemessenes waermepumpe_kwh, sonst WP_BASIS-Schätzung (rückwirkend)
+        wp_measured = data['heizpatrone']  # DB-Spalte waermepumpe_kwh (ab 2026 gemessen)
+        wp_electric = wp_measured if wp_measured > 0 else wp_basis.get(year, 0)
+        heizpatrone_electric = data['heizpatrone_el']  # gemessen (heizpatrone_kwh)
+        heating_kwh_electric = wp_electric + heizpatrone_electric
+        heating_kwh_thermal = wp_electric * scop + heizpatrone_electric  # Heizpatrone COP≈1
+        heating_kwh_primary = heating_kwh_thermal / eta_holz if eta_holz > 0 else 0
+        heating_cost_year = heating_kwh_electric * eur_kwh_real
+        kum_heiz_kosten += heating_cost_year
+        heating_cost_per_kwh_primary = heating_cost_year / heating_kwh_primary if heating_kwh_primary > 0 else 0
+
+        # MOBILITÄT — gemessenes Wattpilot-Laden
+        mobility_kwh_electric = data['wattpilot']
+        mobility_km = (mobility_kwh_electric / bev_100km) * 100 if mobility_kwh_electric > 0 else 0
+        mobility_kwh_primary = (mobility_km / 100.0) * verbrenner_l * kraftstoff_kwh_l
+        mobility_cost_year = mobility_kwh_electric * eur_kwh_real
+        kum_mob_kosten += mobility_cost_year
+        mobility_cost_per_kwh_primary = mobility_cost_year / mobility_kwh_primary if mobility_kwh_primary > 0 else 0
+
+        # HAUSHALT — Rest des Gesamtverbrauchs (keine Primärenergie-Hebelung)
+        household_kwh = max(0, data['gesamt_verbr'] - heating_kwh_electric - mobility_kwh_electric)
+        household_cost_year = household_kwh * eur_kwh_real
+        kum_haus_kosten += household_cost_year
+        household_cost_per_kwh = eur_kwh_real  # Strom ist Endenergie
+
+        # PRIMÄRENERGIE gesamt (real) — Kosten pro kWh ersetzter Primärenergie
+        total_primary_energy = heating_kwh_primary + mobility_kwh_primary + household_kwh
+        total_cost_year = heating_cost_year + mobility_cost_year + household_cost_year
+        total_primary_cost_per_kwh = total_cost_year / total_primary_energy if total_primary_energy > 0 else 0
+
+        energy_costs_data.append({
+            'year': year,
+            'eur_kwh_real': eur_kwh_real,
+            # Heizen
+            'heating_kwh_electric': heating_kwh_electric,
+            'heating_kwh_primary': heating_kwh_primary,
+            'heating_cost_year': heating_cost_year,
+            'heating_cost_kum': kum_heiz_kosten,
+            'heating_cost_per_kwh_primary': heating_cost_per_kwh_primary,
+            # Mobilität
+            'mobility_kwh_electric': mobility_kwh_electric,
+            'mobility_kwh_primary': mobility_kwh_primary,
+            'mobility_cost_year': mobility_cost_year,
+            'mobility_cost_kum': kum_mob_kosten,
+            'mobility_cost_per_kwh_primary': mobility_cost_per_kwh_primary,
+            # Haushalt
+            'household_kwh': household_kwh,
+            'household_cost_year': household_cost_year,
+            'household_cost_kum': kum_haus_kosten,
+            'household_cost_per_kwh': household_cost_per_kwh,
+            # Primärenergie gesamt
+            'total_primary_energy': total_primary_energy,
+            'total_cost_year': total_cost_year,
+            'total_primary_cost_per_kwh': total_primary_cost_per_kwh,
+        })
 
     # ========================================
     # GESAMTSUMMEN für Templates
@@ -547,6 +636,7 @@ def analyse():
                              yearly_data=list(years_data.values()),
                              amort_pv_data=amort_pv_data,
                              amort_haushalt_data=amort_haushalt_data,
+                             energy_costs_data=energy_costs_data,
                              totals=totals,
                              amort_pv_jahr=amort_pv_jahr,
                              amort_haushalt_jahr=amort_haushalt_jahr,

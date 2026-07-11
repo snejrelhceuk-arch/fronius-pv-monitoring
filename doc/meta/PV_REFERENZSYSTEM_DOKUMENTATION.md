@@ -601,6 +601,55 @@ Nicht alle WP- und E-Auto-Energie kommt von PV. Ein Teil wird vom Netz bezogen:
 
 **Gesamt 2024-2025:** 5.434 € Benzin-Ersparnis (brutto, vor anteiligen Netzkosten)
 
+### Energiekosten nach Typ (reale Primärenergie-Kosten)
+
+**Frage:** Was kostet eine kWh *nutzbarer* Energie wirklich — unter Berücksichtigung
+der Primärenergie, die die PV-Anlage ersetzt?
+
+**Hintergrund:** Die reine PV-Gestehungskostenzahl (`€/kWh (real)` = Investition /
+kumulierte Produktion) ist irreführend, weil eine PV-kWh das Vielfache an fossiler/
+holzbasierter Primärenergie ersetzt. Erst der Primärenergie-Bezug macht die Kosten
+vergleichbar.
+
+**Datenausrichtung:** Rückwirkend aus vorhandenen Daten zurückgerechnet (WP-Basis-
+Schätzung `config.WP_BASIS`, gemessene Heizpatrone/Wattpilot). Ab 2026 aus dem
+gemessenen WP-Zähler (`waermepumpe_kwh`). Die Tabelle wächst jährlich um eine Zeile
+und wird täglich (1×) aus `monthly_statistics` aktualisiert.
+
+**Modell (Konstanten in `config.py`):**
+
+- **Heizen:** thermisch = WP<sub>el</sub> × SCOP (3,7) + Heizpatrone<sub>el</sub>;
+  Holz-Primärenergie = thermisch / η<sub>Holz</sub> (0,5). Beispiel: 6.000 kWh Strom
+  ersetzen ~28.000 kWh Holz.
+- **Mobilität:** E-Auto (15 kWh/100 km) → Benzin-Primärenergie = 6 l/100 km × 10 kWh/l.
+  Beispiel: 5.000 kWh Strom ersetzen ~20.000 kWh Benzin.
+- **Haushalt:** Rest des Gesamtverbrauchs, keine Primärenergie-Hebelung (Strom = Endenergie).
+- **Kosten je Energieart:** verbrauchte kWh × `€/kWh (real)`. „Gesamt" = kumuliert seit
+  Beginn, „€/Jahr" = laufendes Jahr.
+- **Primärenergie €/kWh (real):** Gesamtkosten / ersetzte Primärenergie (Holz + Benzin +
+  Haushaltsstrom) — die real vergleichbare kWh-Kostenbasis.
+
+**Investitionsbuchung:** Die Erstinvestition (24.000 € PV, bzw. + 12.000 € WP für die
+Haushaltssicht) wird auf **2021** gebucht, da die PV-Produktion am **05.11.2021** startete.
+Dadurch trägt bereits die erste erzeugte kWh die volle Investition — `€/kWh (real)` 2021
+ist entsprechend hoch (≈ 47,9 €/kWh bei 501 kWh Startproduktion) und fällt danach steil.
+
+**Ergebnis (reale Primärenergie-Kosten sinken mit fortschreitender Amortisation):**
+
+| Jahr | €/kWh (real, el.) | Primärenergie €/kWh |
+|------|-------------------|---------------------|
+| 2021 | 47,94 € | 47,94 € (nur Haushalt, keine WP/E-Auto) |
+| 2022 | 2,46 € | 0,95 € |
+| 2023 | 1,23 € | 0,43 € |
+| 2024 | 1,01 € | 0,34 € |
+| 2025 | 0,67 € | **0,24 €** |
+| 2026 | 0,55 € | **0,18 €** |
+
+**Interpretation:** Die ~55–67 ct/kWh der reinen PV-Sicht relativieren sich
+primärenergetisch auf ~18–24 ct/kWh, weil jede PV-kWh das 4–5-fache an Holz/Benzin
+ersetzt. 2021 ist der teure Startpunkt (Vollinvest / Minimalproduktion), danach fällt
+der Wert kontinuierlich.
+
 ### Gesamtersparnis 2022-2025
 
 **Zusammenfassung aller Spareffekte (netto nach anteiligen Netzkosten):**

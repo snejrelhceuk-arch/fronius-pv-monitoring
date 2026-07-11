@@ -65,7 +65,6 @@
                         <th>Netz-Kosten</th>
                         <th>Kum. Ersparnis</th>
                         <th>Fortschritt</th>
-                        <th>€/kWh (real)</th>
                         <th>€/kWh (25J)</th>
                     </tr>
                 </thead>
@@ -78,7 +77,6 @@
                         <td><strong>{{ "{:,.2f}".format(year.netz_kosten) }} €</strong></td>
                         <td><strong>{{ "{:,.0f}".format(year.kum_ersparnis) }} €</strong></td>
                         <td><strong>{{ "%.1f"|format(year.fortschritt) }}%</strong></td>
-                        <td><strong>{{ "%.3f"|format(year.eur_kwh_real) }} €</strong></td>
                         <td><strong>{{ "%.3f"|format(year.eur_kwh_25j) }} €</strong></td>
                     </tr>
                     {% endfor %}
@@ -91,7 +89,6 @@
                         <td>{{ "{:,.2f}".format(totals.kosten_strom) }} €</td>
                         <td>{{ "{:,.0f}".format(amort_pv_data[-1].kum_ersparnis) }} €</td>
                         <td>{{ "%.1f"|format(amort_pv_data[-1].fortschritt) }}%</td>
-                        <td>{{ "%.3f"|format(amort_pv_data[-1].eur_kwh_real) }} €</td>
                         <td>{{ "%.3f"|format(amort_pv_data[-1].eur_kwh_25j) }} €</td>
                     </tr>
                 </tfoot>
@@ -100,8 +97,8 @@
                 <p><strong>Brutto-Ersparnis:</strong> Solar-Erzeugung × Strompreis (Nulleinspeiser)</p>
                 <p><strong>Kum. Ersparnis:</strong> Aufaddierte Brutto-Ersparnisse seit Beginn</p>
                 <p><strong>Fortschritt:</strong> Kum. Ersparnis / Investition × 100</p>
-                <p><strong>€/kWh (real):</strong> Investition / kumulierte Solar-Produktion</p>
                 <p><strong>€/kWh (25J):</strong> Investition / Prognose 25 Jahre (mit 18.000 kWh/Jahr ab 2026)</p>
+                <p><strong>€/kWh (real):</strong> siehe Tabelle „Energiekosten nach Typ" unten (1. Spalte)</p>
                 {% if amort_pv_jahr %}<p><strong>Prognose:</strong> Amortisation ca. {{ amort_pv_jahr }} (Ø letzte 2 Jahre)</p>{% endif %}
             </div>
         </div>
@@ -163,6 +160,84 @@
                 <p><strong>Heizung:</strong> Eingesparte Brennstoffkosten, nur Okt–Mär (2022: 250€, 2023: 500€, ab 2024: 450€ pro Heizmonat)</p>
                 <p><strong>Benzin:</strong> E-Auto statt Verbrenner (15 kWh/100km → 10 €/100km gespart)</p>
                 {% if amort_haushalt_jahr %}<p><strong>Prognose:</strong> Amortisation ca. {{ amort_haushalt_jahr }} (Ø letzte 2 Jahre)</p>{% endif %}
+            </div>
+        </div>
+
+        <!-- Energiekosten nach Typ: Heizen, Mobilität, Haushalt -->
+        <div class="section">
+            <div class="section-title">Energiekosten nach Typ (reale Primärenergie-Kosten)</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th rowspan="2">Jahr</th>
+                        <th rowspan="2">€/kWh (real)</th>
+                        <th colspan="3">Heizen (WP + Heizpatrone → Holz)</th>
+                        <th colspan="3">Mobilität (E-Auto → Benzin)</th>
+                        <th colspan="3">Haushalt (Strom)</th>
+                        <th rowspan="2">Primärenergie<br>€/kWh (real)</th>
+                    </tr>
+                    <tr>
+                        <th>Gesamt €</th>
+                        <th>€/Jahr</th>
+                        <th>€/kWh prim.</th>
+                        <th>Gesamt €</th>
+                        <th>€/Jahr</th>
+                        <th>€/kWh prim.</th>
+                        <th>Gesamt €</th>
+                        <th>€/Jahr</th>
+                        <th>€/kWh</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for year in energy_costs_data %}
+                    <tr>
+                        <td><strong>{{ year.year }}</strong></td>
+                        <td><strong>{{ "%.3f"|format(year.eur_kwh_real) }} €</strong></td>
+                        <!-- Heizen -->
+                        <td>{{ "{:,.0f}".format(year.heating_cost_kum) }} €</td>
+                        <td>{{ "{:,.0f}".format(year.heating_cost_year) }} €</td>
+                        <td>{{ "%.3f"|format(year.heating_cost_per_kwh_primary) }} €</td>
+                        <!-- Mobilität -->
+                        <td>{{ "{:,.0f}".format(year.mobility_cost_kum) }} €</td>
+                        <td>{{ "{:,.0f}".format(year.mobility_cost_year) }} €</td>
+                        <td>{{ "%.3f"|format(year.mobility_cost_per_kwh_primary) }} €</td>
+                        <!-- Haushalt -->
+                        <td>{{ "{:,.0f}".format(year.household_cost_kum) }} €</td>
+                        <td>{{ "{:,.0f}".format(year.household_cost_year) }} €</td>
+                        <td>{{ "%.3f"|format(year.household_cost_per_kwh) }} €</td>
+                        <!-- Primärenergie gesamt -->
+                        <td><strong>{{ "%.3f"|format(year.total_primary_cost_per_kwh) }} €</strong></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    {% if energy_costs_data %}
+                    {% set last = energy_costs_data[-1] %}
+                    <tr>
+                        <td>Gesamt</td>
+                        <td>{{ "%.3f"|format(last.eur_kwh_real) }} €</td>
+                        <td>{{ "{:,.0f}".format(last.heating_cost_kum) }} €</td>
+                        <td>—</td>
+                        <td>{{ "%.3f"|format(last.heating_cost_per_kwh_primary) }} €</td>
+                        <td>{{ "{:,.0f}".format(last.mobility_cost_kum) }} €</td>
+                        <td>—</td>
+                        <td>{{ "%.3f"|format(last.mobility_cost_per_kwh_primary) }} €</td>
+                        <td>{{ "{:,.0f}".format(last.household_cost_kum) }} €</td>
+                        <td>—</td>
+                        <td>{{ "%.3f"|format(last.household_cost_per_kwh) }} €</td>
+                        <td><strong>{{ "%.3f"|format(last.total_primary_cost_per_kwh) }} €</strong></td>
+                    </tr>
+                    {% endif %}
+                </tfoot>
+            </table>
+            <div style="margin-top: 15px; font-size: 12px; color: rgba(255,255,255,0.45);">
+                <p><strong>€/kWh (real):</strong> PV-Gestehungskosten = Investition / kumulierte Solar-Produktion (aus PV-Amortisation entnommen)</p>
+                <p><strong>Kosten:</strong> je Energieart = verbrauchte kWh × €/kWh (real). „Gesamt" = kumuliert seit Beginn, „€/Jahr" = dieses Jahr</p>
+                <p><strong>Heizen:</strong> gemessene WP- + Heizpatrone-kWh. Thermisch = WP × SCOP 3,7 + Heizpatrone. Holz-Primärenergie = thermisch / 50 % (Holzkessel-Wirkungsgrad)</p>
+                <p><strong>Mobilität:</strong> gemessene E-Auto-kWh (15 kWh/100 km). Benzin-Primärenergie = 6 l/100 km × 10 kWh/l</p>
+                <p><strong>Haushalt:</strong> Rest des Gesamtverbrauchs (Strom = Endenergie, keine Primärenergie-Hebelung)</p>
+                <p><strong>Primärenergie €/kWh (real):</strong> Gesamtkosten / ersetzte Primärenergie (Holz + Benzin + Haushaltsstrom) — die real vergleichbare kWh-Kostenbasis</p>
+                <p><em>Rückwirkend aus vorhandenen Daten (WP-Basis-Schätzung), ab 2026 aus gemessenem WP-Zähler. Tabelle wächst jährlich um eine Zeile, tägliche Aktualisierung.</em></p>
             </div>
         </div>
     </div>

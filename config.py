@@ -283,6 +283,15 @@ HEIZKOSTEN_ERSPARNIS = {
 # Heizperiode: Monate in denen Heizkosten anfallen
 HEIZPERIODE_MONATE = {10, 11, 12, 1, 2, 3}  # Okt–Mär (6 Monate)
 
+# --- Primärenergie-Modell (Rückrechnung der ersetzten Primärenergie) ---
+# Aus gemessener elektrischer Energie wird die früher benötigte Primärenergie
+# (Holz, Benzin) zurückgerechnet → zeigt die reale kWh-Hebelung der PV-Anlage.
+SCOP_WAERMEPUMPE = 3.7            # Jahresarbeitszahl WP (thermisch/elektrisch)
+WIRKUNGSGRAD_HOLZKESSEL = 0.5    # alter Holzkessel: 50 % Wirkungsgrad
+BEV_VERBRAUCH_KWH_100KM = 15.0   # E-Auto Verbrauch (kWh/100 km)
+VERBRENNER_L_100KM = 6.0         # Verbrenner-Referenz (l/100 km)
+KRAFTSTOFF_KWH_PRO_L = 10.0      # Energiegehalt Kraftstoff (kWh/l)
+
 # --- Primärenergie-Übersicht (manuell gepflegte statische Seite) ---
 # Es gibt keine stabile, frei automatisierbare Quartalsquelle für die
 # Primärenergie-Importdaten → Seite wird manuell gepflegt. Datenstand setzen
