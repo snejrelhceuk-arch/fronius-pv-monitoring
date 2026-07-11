@@ -161,9 +161,9 @@ def analyse():
     nav_query = urlencode(nav_context)
 
     # Investitionen & Finanzdaten aus config.py
-    invest_pv_2022 = config.INVEST_PV_2022
+    invest_pv_2021 = config.INVEST_PV_2021
     invest_pv_2024 = config.INVEST_PV_2024
-    invest_wp_2022 = config.INVEST_WP_2022
+    invest_wp_2021 = config.INVEST_WP_2021
 
     gesamt_invest_pv = config.GESAMT_INVEST_PV
     gesamt_invest_haushalt = config.GESAMT_INVEST_HAUSHALT
@@ -358,8 +358,8 @@ def analyse():
     kum_brutto_ersparnis_pv = 0
 
     for year in sorted(years_data.keys()):
-        # Historisch korrekt: Investition 2022 + Erweiterung 2024
-        invest_jahr_pv = invest_pv_2022 if year == 2022 else (invest_pv_2024 if year == 2024 else 0)
+        # Historisch korrekt: Investition 2021 (Baujahr) + Erweiterung 2024
+        invest_jahr_pv = invest_pv_2021 if year == 2021 else (invest_pv_2024 if year == 2024 else 0)
         kum_invest_pv += invest_jahr_pv
         kum_solar += years_data[year]['solar']
 
@@ -377,7 +377,7 @@ def analyse():
         eur_kwh_real = kum_invest_pv / kum_solar if kum_solar > 0 else 0
 
         # EUR/kWh PV-Anlage (25J): Prognose mit 18.000 kWh/Jahr ab 2026
-        jahre_seit_start = year - 2022 + 1
+        jahre_seit_start = year - 2021 + 1
         jahre_verbleibend = 25 - jahre_seit_start
         solar_prognose_25j = kum_solar + (jahre_verbleibend * 18000)
         eur_kwh_25j = kum_invest_pv / solar_prognose_25j if solar_prognose_25j > 0 else 0
@@ -414,10 +414,10 @@ def analyse():
     kum_ersparnis_haushalt = 0
 
     for year in sorted(years_data.keys()):
-        # Investitionen in diesem Jahr (historisch: 2022 + 2024)
+        # Investitionen in diesem Jahr (historisch: 2021 + 2024)
         invest_jahr_haushalt = 0
-        if year == 2022:
-            invest_jahr_haushalt = invest_pv_2022 + invest_wp_2022
+        if year == 2021:
+            invest_jahr_haushalt = invest_pv_2021 + invest_wp_2021
         elif year == 2024:
             invest_jahr_haushalt = invest_pv_2024
 
@@ -493,7 +493,7 @@ def analyse():
         data = years_data[year]
 
         # eur_kwh_real EIGENSTÄNDIG berechnen: Investition auf 2021 (Produktionsstart)
-        invest_jahr_ent = invest_pv_2022 if year == 2021 else (invest_pv_2024 if year == 2024 else 0)
+        invest_jahr_ent = invest_pv_2021 if year == 2021 else (invest_pv_2024 if year == 2024 else 0)
         kum_invest_ent += invest_jahr_ent
         kum_solar_ent += data['solar']
         eur_kwh_real = kum_invest_ent / kum_solar_ent if kum_solar_ent > 0 else 0
@@ -633,9 +633,9 @@ def analyse():
 
     try:
         return render_template(template,
-                             invest_pv_2022=invest_pv_2022,
+                             invest_pv_2021=invest_pv_2021,
                              invest_pv_2024=invest_pv_2024,
-                             invest_wp_2022=invest_wp_2022,
+                             invest_wp_2021=invest_wp_2021,
                              gesamt_invest_pv=gesamt_invest_pv,
                              gesamt_invest_haushalt=gesamt_invest_haushalt,
                              yearly_data=list(years_data.values()),
