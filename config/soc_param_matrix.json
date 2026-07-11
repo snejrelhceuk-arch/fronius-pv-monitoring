@@ -1,7 +1,7 @@
 {
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
-  "_updated": "2026-07-05",
+  "_updated": "2026-07-09",
   "regelkreise": {
     "soc_extern": {
       "_doc": "Toleranz für extern geänderte SOC-Werte (z.B. manuell via Fronius App). Wenn SOC_MIN oder SOC_MAX außerhalb der Automation geändert werden, respektiert die Engine die Werte für die konfigurierte Dauer.",
@@ -538,7 +538,7 @@
     },
     "zellausgleich": {
       "_doc": "Monatlicher Vollzyklus für BYD-Zellbalancing",
-      "aktiv": true,
+      "aktiv": false,
       "prioritaet": 3,
       "beschreibung": "Prognosegesteuert: Am ersten guten Sonnentag vollständig laden",
       "parameter": {

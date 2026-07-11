@@ -1,11 +1,11 @@
 # Drift-Task D5 — doc/system/SYSTEM_ARCHITECTURE.md
 
-**Erkannt:** 2026-07-08
+**Erkannt:** 2026-07-09
 **Klasse:** D5
 **Scope:** `doc/system/SYSTEM_ARCHITECTURE.md`
 
 ## Befund
-Inverter F1 (GEN24): Tabelle SN=35237382/Vr=1.40.8-1 — Snapshot SN=35237382/Vr=1.40.9-1
+Inverter F1 (GEN24): Tabelle SN=35237382/Vr=1.40.8-1 — Snapshot SN=35237382/Vr=1.41.10-1
 
 ## Aktion
 - Card pruefen, anpassen, `last_review` auf heute setzen.
