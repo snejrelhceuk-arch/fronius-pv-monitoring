@@ -493,7 +493,14 @@ def analyse():
         data = years_data[year]
 
         # eur_kwh_real EIGENSTÄNDIG berechnen: Investition auf 2021 (Produktionsstart)
-        invest_jahr_ent = invest_pv_2021 if year == 2021 else (invest_pv_2024 if year == 2024 else 0)
+        # 2021: PV (24k) + WP (12k) = 36k total
+        if year == 2021:
+            invest_jahr_ent = invest_pv_2021 + invest_wp_2021
+        elif year == 2024:
+            invest_jahr_ent = invest_pv_2024
+        else:
+            invest_jahr_ent = 0
+        
         kum_invest_ent += invest_jahr_ent
         kum_solar_ent += data['solar']
         eur_kwh_real = kum_invest_ent / kum_solar_ent if kum_solar_ent > 0 else 0
@@ -517,11 +524,24 @@ def analyse():
         kum_mob_kosten += mobility_cost_year
         mobility_cost_per_kwh_primary = mobility_cost_year / mobility_kwh_primary if mobility_kwh_primary > 0 else 0
 
-        # HAUSHALT — Rest des Gesamtverbrauchs (keine Primärenergie-Hebelung)
-        household_kwh = max(0, data['gesamt_verbr'] - heating_kwh_electric - mobility_kwh_electric)
-        household_cost_year = household_kwh * eur_kwh_real
+        # HAUSHALT — Spezial-Behandlung für 2021: Solar + Netzstrom mit unterschiedlichen Preisen
+        if year == 2021:
+            # 2021: Heizen & Mobilität noch nicht unterstützt (0 kWh)
+            # Haushalt = Solar-Produktion (501 kWh zu Invest-Preis) + Netzbezug (1168 kWh zu Strompreis)
+            household_kwh_solar = data['solar']  # 501 kWh zu eur_kwh_real
+            household_kwh_netz = data['netz_bezug']  # 1168 kWh zu strompreis_jahr (0,30€/kWh)
+            household_kwh = household_kwh_solar + household_kwh_netz
+            # Kosten: Solar zu Investitions-Preis + Netz zu tatsächlichem Strompreis
+            strompreis_2021 = 0.30  # tatsächlicher Strompreis 2021 (€/kWh)
+            household_cost_year = (household_kwh_solar * eur_kwh_real) + (household_kwh_netz * strompreis_2021)
+            household_cost_per_kwh = household_cost_year / household_kwh if household_kwh > 0 else 0
+        else:
+            # Normalfall (2022+): Haushalt = Rest des Gesamtverbrauchs nach Heiz & Mob
+            household_kwh = max(0, data['gesamt_verbr'] - heating_kwh_electric - mobility_kwh_electric)
+            household_cost_year = household_kwh * eur_kwh_real
+            household_cost_per_kwh = eur_kwh_real  # Strom ist Endenergie
+        
         kum_haus_kosten += household_cost_year
-        household_cost_per_kwh = eur_kwh_real  # Strom ist Endenergie
 
         # PRIMÄRENERGIE gesamt (real) — Kosten pro kWh ersetzter Primärenergie
         total_primary_energy = heating_kwh_primary + mobility_kwh_primary + household_kwh
