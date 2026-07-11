@@ -31,6 +31,24 @@ import socket as _socket
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
+# ─── Deutsche Formatierungsfilter ───────────────────────────────────
+def de_currency(value, decimals=2):
+    """Format a number as German currency: . for thousands, , for decimal."""
+    if value is None:
+        return "0,00 €"
+    formatted = f"{float(value):,.{decimals}f}".replace(',', '\x00').replace('.', ',').replace('\x00', '.')
+    return f"{formatted} €"
+
+def de_number(value, decimals=0):
+    """Format a number in German style: . for thousands, , for decimal."""
+    if value is None:
+        return "0"
+    formatted = f"{float(value):,.{decimals}f}".replace(',', '\x00').replace('.', ',').replace('\x00', '.')
+    return formatted
+
+app.jinja_env.filters['de_currency'] = de_currency
+app.jinja_env.filters['de_number'] = de_number
+
 @app.route('/favicon.ico')
 def favicon():
     return send_from_directory(os.path.join(app.root_path, 'static'), 'favicon.ico', mimetype='image/x-icon')

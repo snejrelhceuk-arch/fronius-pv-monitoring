@@ -252,6 +252,8 @@ INVEST_PV_2021 = 24000           # EUR (PV-Anlage + Batterie, Baujahr 2021, in B
 INVEST_PV_2024 = 8000            # EUR (Erweiterung 13kWp + Optimierer)
 INVEST_BATT_2026 = 3000          # EUR (2. BYD HVS Tower, parallel)
 INVEST_WP_2021 = 12000           # EUR (Wärmepumpe, Baujahr 2021)
+INVEST_HEIZUNG_2021 = 12000      # EUR (Heizungsinvestition als Nutzenergie-Block, ab 2021)
+INVEST_WALLBOX_2024 = 2000       # EUR (Wallbox/Wallboxen, ab 2024)
 GESAMT_INVEST_PV = INVEST_PV_2021 + INVEST_PV_2024 + INVEST_BATT_2026  # 35.000 EUR
 GESAMT_INVEST_HAUSHALT = GESAMT_INVEST_PV + INVEST_WP_2021  # 47.000 EUR
 
@@ -272,12 +274,12 @@ WP_BASIS = {
 # Pro Heizmonat: Jahresbudget / 6. Sommermonaten (Apr–Sep): 0 EUR.
 # Basis: ca. 1.500 EUR/Jahr Heizkosten vor 2022
 HEIZKOSTEN_ERSPARNIS = {
-    2021: 1500,    # 100% Basis (nur Nov+Dec vorhanden → 2 × 250 = 500 EUR)
+    2021: 750,     # Nur Nov+Dez, also 750 EUR für die Heizperiode
     2022: 1500,    # 100% Basis
     2023: 3000,    # 200% (Energiekrise)
-    2024: 2700,    # 180%
-    2025: 2700,    # 180%
-    2026: 2700,    # 180% (nur Jan+Feb bisher → 2 × 450 = 900 EUR)
+    2024: 2250,    # 150%
+    2025: 2250,    # 150%
+    2026: 2250,    # 150% (aktuelle Basis, später ggf. anpassen)
 }
 
 # Heizperiode: Monate in denen Heizkosten anfallen

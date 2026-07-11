@@ -68,6 +68,168 @@ def _get_nav_context(args):
     return ctx
 
 
+def _build_energy_costs_data(years_data, invest_pv_2021, invest_pv_2024, invest_batt_2026=0, invest_heating_2021=None,
+                             invest_wallbox_2024=0, scop=3.7, eta_holz=0.5, bev_100km=15.0, verbrenner_l=6.0,
+                             kraftstoff_kwh_l=10.0, wp_basis=None, heizkosten_ersparnis=None, invest_wp_2021=None):
+    """Kostensystematik nach Nutzenergie: PV-Preis aus PV-Investition / PV-Erzeugung, zusätzliche Investitionen für Heizung und Mobilität als gewichtete Nutzenergie-Kosten."""
+    
+    # Benzinpreise pro Jahr (€/Liter)
+    benzinpreise = {
+        2021: 1.52,
+        2022: 1.86,
+        2023: 1.79,
+        2024: 1.79,
+        2025: 1.69,
+        2026: 1.91,
+    }
+    
+    energy_costs_data = []
+    kum_heiz_kosten = 0.0
+    kum_mob_kosten = 0.0
+    kum_haus_kosten = 0.0
+    kum_heiz_invest = 0.0
+    kum_mob_invest = 0.0
+    kum_heiz_useful = 0.0
+    kum_mob_useful = 0.0
+    kum_haus_useful = 0.0
+    kum_pv_invest = 0.0
+    kum_pv_generated = 0.0
+
+    for year in sorted(years_data.keys()):
+        data = years_data[year]
+
+        if year == 2021:
+            pv_invest_year = invest_pv_2021
+            heating_invest_year = invest_heating_2021 if invest_heating_2021 is not None else invest_wp_2021
+            mobility_invest_year = 0
+        elif year == 2024:
+            pv_invest_year = invest_pv_2024
+            heating_invest_year = 0
+            mobility_invest_year = invest_wallbox_2024
+        elif year == 2026:
+            pv_invest_year = invest_batt_2026
+            heating_invest_year = 0
+            mobility_invest_year = 0
+        else:
+            pv_invest_year = 0
+            heating_invest_year = 0
+            mobility_invest_year = 0
+
+        kum_pv_invest += pv_invest_year
+        kum_heiz_invest += heating_invest_year
+        kum_mob_invest += mobility_invest_year
+
+        pv_generated = max(0, data.get('solar', 0))
+        kum_pv_generated += pv_generated
+        if kum_pv_generated > 0:
+            eur_kwh_real = kum_pv_invest / kum_pv_generated
+        elif kum_pv_invest > 0:
+            eur_kwh_real = kum_pv_invest / 6000.0
+        else:
+            eur_kwh_real = 0.0
+
+        wp_measured = data.get('heizpatrone', 0)
+        wp_electric = wp_measured if wp_measured > 0 else (wp_basis.get(year, 0) if wp_basis else 0)
+        if year == 2021 and wp_electric <= 0:
+            wp_electric = 1500
+
+        heizpatrone_electric = data.get('heizpatrone_el', 0)
+        if heizpatrone_electric <= 0 and year >= 2022 and wp_electric <= 0:
+            heizpatrone_electric = 3000
+
+        heating_kwh_electric = wp_electric + heizpatrone_electric
+        heating_kwh_useful = wp_electric * scop + heizpatrone_electric
+        heating_savings_year = 0.0
+        if heizkosten_ersparnis:
+            heiz_budget = heizkosten_ersparnis.get(year, 0)
+            heating_savings_year = heiz_budget
+
+        heating_cost_year = heating_savings_year
+        kum_heiz_kosten += heating_cost_year
+        kum_heiz_useful += heating_kwh_useful
+        heating_cost_per_kwh_nutzenergie = (heating_savings_year / heating_kwh_useful) if heating_kwh_useful > 0 else 0
+        heating_cost_per_kwh_net = eur_kwh_real - heating_cost_per_kwh_nutzenergie
+
+        mobility_kwh_electric = data.get('wattpilot', 0)
+        mobility_kwh_useful = mobility_kwh_electric
+        mobility_cost_year = mobility_kwh_electric * eur_kwh_real
+        kum_mob_kosten += mobility_cost_year
+        kum_mob_useful += mobility_kwh_useful
+        
+        # Nutzenergie Mobilität: Benzinkosten pro kWh elektrisch
+        # Formel: (Verbrenner L/100km × Benzinpreis €/L) / E-Auto kWh/100km
+        # Beispiel 2024: (6 × 1.79) / 15 = 0.716 €/kWh
+        # Nur für Jahre ab 2024 (E-Auto-Nutzung)
+        if year >= 2024 and mobility_kwh_useful > 0:
+            benzinpreis_jahr = benzinpreise.get(year, 1.80)  # Fallback
+            verbrenner_kosten_100km = verbrenner_l * benzinpreis_jahr
+            mobility_cost_per_kwh_nutzenergie = verbrenner_kosten_100km / bev_100km
+        else:
+            mobility_cost_per_kwh_nutzenergie = 0.0
+        mobility_cost_per_kwh_net = eur_kwh_real - mobility_cost_per_kwh_nutzenergie
+
+        if year == 2021:
+            household_kwh_solar = pv_generated
+            household_kwh_netz = data.get('netz_bezug', 0)
+            household_kwh = household_kwh_solar + household_kwh_netz
+            strompreis_2021 = 0.30
+            household_cost_year = (household_kwh_solar * eur_kwh_real) + (household_kwh_netz * strompreis_2021)
+        else:
+            household_kwh = max(0, data.get('gesamt_verbr', 0) - heating_kwh_electric - mobility_kwh_electric)
+            household_cost_year = household_kwh * eur_kwh_real
+
+        kum_haus_kosten += household_cost_year
+        kum_haus_useful += household_kwh
+        household_cost_per_kwh = eur_kwh_real
+
+        # Gewichtete Gesamtkosten: gewichteter Durchschnitt der Netto-Werte (Spalte 3, 5, 6)
+        total_cost_year = heating_cost_year + mobility_cost_year + household_cost_year
+        
+        if mobility_kwh_useful > 0:
+            # Mit Mobilität (ab 2024)
+            total_useful_energy = heating_kwh_useful + mobility_kwh_useful + household_kwh
+            total_net_cost_per_kwh = (
+                (heating_cost_per_kwh_net * heating_kwh_useful) +
+                (mobility_cost_per_kwh_net * mobility_kwh_useful) +
+                (household_cost_per_kwh * household_kwh)
+            ) / total_useful_energy if total_useful_energy > 0 else 0
+        else:
+            # Ohne Mobilität (2021-2023)
+            total_useful_energy = heating_kwh_useful + household_kwh
+            total_net_cost_per_kwh = (
+                (heating_cost_per_kwh_net * heating_kwh_useful) +
+                (household_cost_per_kwh * household_kwh)
+            ) / total_useful_energy if total_useful_energy > 0 else 0
+
+        energy_costs_data.append({
+            'year': year,
+            'eur_kwh_real': eur_kwh_real,
+            'heating_kwh_electric': heating_kwh_electric,
+            'heating_kwh_useful': heating_kwh_useful,
+            'heating_cost_year': heating_cost_year,
+            'heating_cost_kum': kum_heiz_kosten,
+            'heating_cost_per_kwh_useful': heating_cost_per_kwh_net,
+            'heating_cost_per_kwh_nutzenergie': heating_cost_per_kwh_nutzenergie,
+            'heating_cost_per_kwh_net': heating_cost_per_kwh_net,
+            'heating_investment': heating_invest_year,
+            'mobility_kwh_electric': mobility_kwh_electric,
+            'mobility_kwh_useful': mobility_kwh_useful,
+            'mobility_cost_year': mobility_cost_year,
+            'mobility_cost_kum': kum_mob_kosten,
+            'mobility_cost_per_kwh_nutzenergie': mobility_cost_per_kwh_nutzenergie,
+            'mobility_cost_per_kwh_net': mobility_cost_per_kwh_net,
+            'mobility_investment': mobility_invest_year,
+            'household_kwh': household_kwh,
+            'household_cost_year': household_cost_year,
+            'household_cost_kum': kum_haus_kosten,
+            'household_cost_per_kwh': household_cost_per_kwh,
+            'total_cost_year': total_cost_year,
+            'total_net_cost_per_kwh_useful': total_net_cost_per_kwh,
+        })
+
+    return energy_costs_data
+
+
 @bp.route('/')
 def index():
     """Startseite: Redirect zu Flow-Chart"""
@@ -468,111 +630,30 @@ def analyse():
     # ========================================
     # ENERGIEKOSTEN NACH TYP (Heizen, Mobilität, Haushalt)
     # ========================================
-    # Kosten = verbrauchte kWh × eur_kwh_real (PV-Gestehungskosten, 1. Spalte).
-    # Primärenergie wird aus den GEMESSENEN elektrischen kWh zurückgerechnet:
-    #   Heizen:    thermisch = WP_el × SCOP + Heizpatrone_el;  Holz = thermisch / η_Holz
-    #   Mobilität: Benzin   = (E-Auto_kWh / 15 × 100) / 100 × 6 l × 10 kWh/l
-    #   Haushalt:  keine Hebelung (Strom = Endenergie, primär = elektrisch)
-    # Rückwirkend: WP_el = WP_BASIS-Schätzung, wo waermepumpe_kwh (=0) fehlt.
-    # Zukünftig:   WP_el = gemessenes waermepumpe_kwh.
     scop = config.SCOP_WAERMEPUMPE
     eta_holz = config.WIRKUNGSGRAD_HOLZKESSEL
     bev_100km = config.BEV_VERBRAUCH_KWH_100KM
     verbrenner_l = config.VERBRENNER_L_100KM
     kraftstoff_kwh_l = config.KRAFTSTOFF_KWH_PRO_L
+    invest_heating_2021 = getattr(config, 'INVEST_HEIZUNG_2021', invest_wp_2021)
+    invest_wallbox_2024 = getattr(config, 'INVEST_WALLBOX_2024', 2000)
+    invest_batt_2026 = getattr(config, 'INVEST_BATT_2026', 3000)
 
-    energy_costs_data = []
-    kum_heiz_kosten = 0
-    kum_mob_kosten = 0
-    kum_haus_kosten = 0
-    # Separate Amortisation für Energiekosten-Tabelle: Invest auf 2021 (Produktionsstart)
-    kum_invest_ent = 0
-    kum_solar_ent = 0
-
-    for year in sorted(years_data.keys()):
-        data = years_data[year]
-
-        # eur_kwh_real EIGENSTÄNDIG berechnen: Investition auf 2021 (Produktionsstart)
-        # 2021: PV (24k) + WP (12k) = 36k total
-        if year == 2021:
-            invest_jahr_ent = invest_pv_2021 + invest_wp_2021
-        elif year == 2024:
-            invest_jahr_ent = invest_pv_2024
-        else:
-            invest_jahr_ent = 0
-        
-        kum_invest_ent += invest_jahr_ent
-        kum_solar_ent += data['solar']
-        eur_kwh_real = kum_invest_ent / kum_solar_ent if kum_solar_ent > 0 else 0
-
-        # HEIZEN — gemessenes waermepumpe_kwh, sonst WP_BASIS-Schätzung (rückwirkend)
-        wp_measured = data['heizpatrone']  # DB-Spalte waermepumpe_kwh (ab 2026 gemessen)
-        wp_electric = wp_measured if wp_measured > 0 else wp_basis.get(year, 0)
-        heizpatrone_electric = data['heizpatrone_el']  # gemessen (heizpatrone_kwh)
-        heating_kwh_electric = wp_electric + heizpatrone_electric
-        heating_kwh_thermal = wp_electric * scop + heizpatrone_electric  # Heizpatrone COP≈1
-        heating_kwh_primary = heating_kwh_thermal / eta_holz if eta_holz > 0 else 0
-        heating_cost_year = heating_kwh_electric * eur_kwh_real
-        kum_heiz_kosten += heating_cost_year
-        heating_cost_per_kwh_primary = heating_cost_year / heating_kwh_primary if heating_kwh_primary > 0 else 0
-
-        # MOBILITÄT — gemessenes Wattpilot-Laden
-        mobility_kwh_electric = data['wattpilot']
-        mobility_km = (mobility_kwh_electric / bev_100km) * 100 if mobility_kwh_electric > 0 else 0
-        mobility_kwh_primary = (mobility_km / 100.0) * verbrenner_l * kraftstoff_kwh_l
-        mobility_cost_year = mobility_kwh_electric * eur_kwh_real
-        kum_mob_kosten += mobility_cost_year
-        mobility_cost_per_kwh_primary = mobility_cost_year / mobility_kwh_primary if mobility_kwh_primary > 0 else 0
-
-        # HAUSHALT — Spezial-Behandlung für 2021: Solar + Netzstrom mit unterschiedlichen Preisen
-        if year == 2021:
-            # 2021: Heizen & Mobilität noch nicht unterstützt (0 kWh)
-            # Haushalt = Solar-Produktion (501 kWh zu Invest-Preis) + Netzbezug (1168 kWh zu Strompreis)
-            household_kwh_solar = data['solar']  # 501 kWh zu eur_kwh_real
-            household_kwh_netz = data['netz_bezug']  # 1168 kWh zu strompreis_jahr (0,30€/kWh)
-            household_kwh = household_kwh_solar + household_kwh_netz
-            # Kosten: Solar zu Investitions-Preis + Netz zu tatsächlichem Strompreis
-            strompreis_2021 = 0.30  # tatsächlicher Strompreis 2021 (€/kWh)
-            household_cost_year = (household_kwh_solar * eur_kwh_real) + (household_kwh_netz * strompreis_2021)
-            household_cost_per_kwh = household_cost_year / household_kwh if household_kwh > 0 else 0
-        else:
-            # Normalfall (2022+): Haushalt = Rest des Gesamtverbrauchs nach Heiz & Mob
-            household_kwh = max(0, data['gesamt_verbr'] - heating_kwh_electric - mobility_kwh_electric)
-            household_cost_year = household_kwh * eur_kwh_real
-            household_cost_per_kwh = eur_kwh_real  # Strom ist Endenergie
-        
-        kum_haus_kosten += household_cost_year
-
-        # PRIMÄRENERGIE gesamt (real) — Kosten pro kWh ersetzter Primärenergie
-        total_primary_energy = heating_kwh_primary + mobility_kwh_primary + household_kwh
-        total_cost_year = heating_cost_year + mobility_cost_year + household_cost_year
-        total_primary_cost_per_kwh = total_cost_year / total_primary_energy if total_primary_energy > 0 else 0
-
-        energy_costs_data.append({
-            'year': year,
-            'eur_kwh_real': eur_kwh_real,
-            # Heizen
-            'heating_kwh_electric': heating_kwh_electric,
-            'heating_kwh_primary': heating_kwh_primary,
-            'heating_cost_year': heating_cost_year,
-            'heating_cost_kum': kum_heiz_kosten,
-            'heating_cost_per_kwh_primary': heating_cost_per_kwh_primary,
-            # Mobilität
-            'mobility_kwh_electric': mobility_kwh_electric,
-            'mobility_kwh_primary': mobility_kwh_primary,
-            'mobility_cost_year': mobility_cost_year,
-            'mobility_cost_kum': kum_mob_kosten,
-            'mobility_cost_per_kwh_primary': mobility_cost_per_kwh_primary,
-            # Haushalt
-            'household_kwh': household_kwh,
-            'household_cost_year': household_cost_year,
-            'household_cost_kum': kum_haus_kosten,
-            'household_cost_per_kwh': household_cost_per_kwh,
-            # Primärenergie gesamt
-            'total_primary_energy': total_primary_energy,
-            'total_cost_year': total_cost_year,
-            'total_primary_cost_per_kwh': total_primary_cost_per_kwh,
-        })
+    energy_costs_data = _build_energy_costs_data(
+        years_data,
+        invest_pv_2021=invest_pv_2021,
+        invest_pv_2024=invest_pv_2024,
+        invest_batt_2026=invest_batt_2026,
+        invest_heating_2021=invest_heating_2021,
+        invest_wallbox_2024=invest_wallbox_2024,
+        scop=scop,
+        eta_holz=eta_holz,
+        bev_100km=bev_100km,
+        verbrenner_l=verbrenner_l,
+        kraftstoff_kwh_l=kraftstoff_kwh_l,
+        wp_basis=wp_basis,
+        heizkosten_ersparnis=heizkosten_ersparnis,
+    )
 
     # ========================================
     # GESAMTSUMMEN für Templates
