@@ -358,8 +358,8 @@ def analyse():
     kum_brutto_ersparnis_pv = 0
 
     for year in sorted(years_data.keys()):
-        # Erstinvestition auf 2021 gebucht (PV-Produktion startete 05.11.2021)
-        invest_jahr_pv = invest_pv_2022 if year == 2021 else (invest_pv_2024 if year == 2024 else 0)
+        # Historisch korrekt: Investition 2022 + Erweiterung 2024
+        invest_jahr_pv = invest_pv_2022 if year == 2022 else (invest_pv_2024 if year == 2024 else 0)
         kum_invest_pv += invest_jahr_pv
         kum_solar += years_data[year]['solar']
 
@@ -377,7 +377,7 @@ def analyse():
         eur_kwh_real = kum_invest_pv / kum_solar if kum_solar > 0 else 0
 
         # EUR/kWh PV-Anlage (25J): Prognose mit 18.000 kWh/Jahr ab 2026
-        jahre_seit_start = year - 2021 + 1
+        jahre_seit_start = year - 2022 + 1
         jahre_verbleibend = 25 - jahre_seit_start
         solar_prognose_25j = kum_solar + (jahre_verbleibend * 18000)
         eur_kwh_25j = kum_invest_pv / solar_prognose_25j if solar_prognose_25j > 0 else 0
@@ -414,9 +414,9 @@ def analyse():
     kum_ersparnis_haushalt = 0
 
     for year in sorted(years_data.keys()):
-        # Investitionen in diesem Jahr (Erstinvest 2021: PV-Start 05.11.2021)
+        # Investitionen in diesem Jahr (historisch: 2022 + 2024)
         invest_jahr_haushalt = 0
-        if year == 2021:
+        if year == 2022:
             invest_jahr_haushalt = invest_pv_2022 + invest_wp_2022
         elif year == 2024:
             invest_jahr_haushalt = invest_pv_2024
@@ -485,13 +485,18 @@ def analyse():
     kum_heiz_kosten = 0
     kum_mob_kosten = 0
     kum_haus_kosten = 0
+    # Separate Amortisation für Energiekosten-Tabelle: Invest auf 2021 (Produktionsstart)
+    kum_invest_ent = 0
+    kum_solar_ent = 0
 
     for year in sorted(years_data.keys()):
         data = years_data[year]
 
-        # eur_kwh_real aus PV-Amortisation (Gestehungskosten je kWh)
-        pv_row = next((d for d in amort_pv_data if d['year'] == year), None)
-        eur_kwh_real = pv_row['eur_kwh_real'] if pv_row else 0
+        # eur_kwh_real EIGENSTÄNDIG berechnen: Investition auf 2021 (Produktionsstart)
+        invest_jahr_ent = invest_pv_2022 if year == 2021 else (invest_pv_2024 if year == 2024 else 0)
+        kum_invest_ent += invest_jahr_ent
+        kum_solar_ent += data['solar']
+        eur_kwh_real = kum_invest_ent / kum_solar_ent if kum_solar_ent > 0 else 0
 
         # HEIZEN — gemessenes waermepumpe_kwh, sonst WP_BASIS-Schätzung (rückwirkend)
         wp_measured = data['heizpatrone']  # DB-Spalte waermepumpe_kwh (ab 2026 gemessen)
