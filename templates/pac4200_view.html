@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico?v={{ favicon_version }}">
+    <title>PAC4200 - PV-System</title>
+    <script src="/static/js/nav-context.js"></script>
+    <script src="/static/js/nav-ui.js"></script>
+    <link rel="stylesheet" href="/static/css/nav-ui.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0f172a; color: #e2e8f0;
+            min-height: 100vh; display: flex; flex-direction: column;
+        }
+        .top-nav {
+            display: flex; align-items: center; flex-wrap: wrap;
+            padding: 8px 16px; background: rgba(15,23,42,0.95);
+            border-bottom: 1px solid rgba(255,255,255,0.08); gap: 12px;
+        }
+        .top-nav a {
+            color: rgba(255,255,255,0.6); text-decoration: none;
+            padding: 6px 12px; border-radius: 6px; font-size: 13px; transition: all .2s;
+        }
+        .top-nav a:hover { color:#fff; background: rgba(255,255,255,0.1); }
+        .top-nav a.active { color:#fff; background: rgba(0,175,0,0.25); border:1px solid rgba(0,175,0,0.4); }
+        .wrap { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px 12px; gap:16px; }
+
+        /* --- PAC4200 Gerätenachbildung --- */
+        .device {
+            width: 460px; max-width: 97vw; background: linear-gradient(#3a3f45,#25282c);
+            border-radius: 12px; padding: 22px 22px 26px; box-shadow: 0 14px 46px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.08);
+            border: 1px solid #14161a;
+        }
+        .brand { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; }
+        .brand .siemens { font-weight:700; letter-spacing:.5px; color:#d7dde3; font-size:13px; }
+        .brand .model { font-size:11px; color:#9aa4ad; letter-spacing:1px; }
+
+        .lcd {
+            background: #b9d18a; color:#1c2416; border-radius:4px; padding:16px 18px;
+            font-family: 'DejaVu Sans Mono','Consolas',monospace; min-height: 300px;
+            box-shadow: inset 0 0 0 2px #2b2f26, inset 0 0 18px rgba(0,0,0,.25);
+            position: relative; transition: background .3s;
+        }
+        .lcd.off { background:#5b6b52; color:#233; }
+        .lcd .lcd-head { display:flex; justify-content:space-between; font-size:11px; border-bottom:1px solid rgba(0,0,0,.35); padding-bottom:5px; margin-bottom:8px; }
+        .lcd .title { font-weight:700; font-size:14px; }
+        .lcd-row { display:flex; justify-content:space-between; align-items:baseline; padding:4px 0; font-size:17px; }
+        .lcd-row.menu-row { padding:2px 0; font-size:15px; }
+        .lcd-row.menu-row.sel { background: rgba(0,0,0,.14); font-weight:700; border-radius:3px; }
+        .lcd-row .lbl { opacity:.85; }
+        .lcd-row .val { font-weight:700; font-variant-numeric: tabular-nums; }
+        .lcd-row .unit { font-size:11px; opacity:.7; margin-left:4px; }
+        .lcd-empty { text-align:center; padding:40px 0; font-size:14px; opacity:.8; }
+        .pager { position:absolute; right:8px; bottom:6px; font-size:10px; opacity:.6; }
+
+        /* Tastenreihe */
+        .keys { display:grid; grid-template-columns: repeat(4,1fr); gap:8px; margin-top:14px; }
+        .key {
+            background: linear-gradient(#4a4f56,#2c3035); color:#e6ebf0; border:1px solid #16181c;
+            border-radius:6px; padding:12px 0; font-size:16px; cursor:pointer; user-select:none;
+            box-shadow: 0 2px 0 #16181c, inset 0 1px 0 rgba(255,255,255,.12); transition: transform .05s;
+        }
+        .key small { display:block; font-size:9px; color:#9aa4ad; margin-top:2px; }
+        .key:hover { background: linear-gradient(#565c64,#33373d); }
+        .key:active { transform: translateY(2px); box-shadow: 0 0 0 #16181c, inset 0 1px 0 rgba(255,255,255,.12); }
+
+        .status { font-size:12px; color:#94a3b8; display:flex; gap:10px; align-items:center; }
+        .dot { width:9px; height:9px; border-radius:50%; background:#64748b; display:inline-block; }
+        .dot.ok { background:#22c55e; box-shadow:0 0 8px #22c55e; }
+        .dot.err { background:#ef4444; box-shadow:0 0 8px #ef4444; }
+        .hint { font-size:11px; color:#64748b; }
+    </style>
+</head>
+<body>
+    <nav class="top-nav">
+        <span style="font-size:13px;color:rgba(255,255,255,0.55);font-weight:600;letter-spacing:.3px;">SENTRON PAC4200 · Live</span>
+    </nav>
+
+    <div class="wrap">
+        <div class="device">
+            <div class="brand">
+                <span class="siemens">SIEMENS</span>
+                <span class="model">SENTRON PAC4200</span>
+            </div>
+            <div class="lcd off" id="lcd">
+                <div class="lcd-head">
+                    <span id="lcdTitle">— — —</span>
+                    <span id="lcdClock"></span>
+                </div>
+                <div id="lcdBody"><div class="lcd-empty">Verbindung…</div></div>
+                <span class="pager" id="lcdPager"></span>
+            </div>
+            <div class="keys">
+                <div class="key" id="keyF1"><b>F1</b><small>ESC</small></div>
+                <div class="key" id="keyF2"><b>F2</b><small>▲ +</small></div>
+                <div class="key" id="keyF3"><b>F3</b><small>▼ −</small></div>
+                <div class="key" id="keyF4"><b>F4</b><small>Menü/OK</small></div>
+            </div>
+        </div>
+        <div class="status">
+            <span class="dot" id="dot"></span>
+            <span id="statusText">Verbinde…</span>
+        </div>
+        <div class="hint">Navigation: Tasten ▲ ▼ oder Pfeiltasten · read-only (kein Schreibzugriff auf das Gerät)</div>
+    </div>
+
+<script>
+(() => {
+    if (window.PVNavUI) PVNavUI.initDrawer();
+    let screens = [];
+    let idx = 0;
+    let lastOk = false;
+    let menuOpen = false;
+    let menuIdx = 0;
+
+    const $ = id => document.getElementById(id);
+    const fmt = v => (v === null || v === undefined) ? '---' : (typeof v === 'number' ? v.toLocaleString('de-DE') : v);
+
+    function render() {
+        const lcd = $('lcd');
+        if (!screens.length) {
+            lcd.classList.add('off');
+            $('lcdTitle').textContent = '— — —';
+            $('lcdBody').innerHTML = '<div class="lcd-empty">PAC4200 nicht erreichbar</div>';
+            $('lcdPager').textContent = '';
+            return;
+        }
+        lcd.classList.remove('off');
+        if (idx < 0) idx = screens.length - 1;
+        if (idx >= screens.length) idx = 0;
+        if (menuOpen) {
+            if (menuIdx < 0) menuIdx = screens.length - 1;
+            if (menuIdx >= screens.length) menuIdx = 0;
+            $('lcdTitle').textContent = 'Menü';
+            $('lcdBody').innerHTML = screens.map((s, i) =>
+                `<div class="lcd-row menu-row${i === menuIdx ? ' sel' : ''}">`
+                + `<span class="lbl">${i === menuIdx ? '▶ ' : '\u00a0\u00a0'}${s.title}</span></div>`
+            ).join('');
+            $('lcdPager').textContent = `${menuIdx + 1}/${screens.length}`;
+            return;
+        }
+        const s = screens[idx];
+        $('lcdTitle').textContent = s.title;
+        $('lcdBody').innerHTML = s.lines.map(ln =>
+            `<div class="lcd-row"><span class="lbl">${ln.label}</span>`
+            + `<span><span class="val">${fmt(ln.value)}</span>`
+            + `<span class="unit">${ln.unit || ''}</span></span></div>`
+        ).join('');
+        $('lcdPager').textContent = `${idx + 1}/${screens.length}`;
+    }
+
+    async function poll() {
+        try {
+            const r = await fetch('/api/pac4200/live', { cache: 'no-store' });
+            const j = await r.json();
+            if (j.ok && Array.isArray(j.screens) && j.screens.length) {
+                screens = j.screens;
+                lastOk = true;
+                $('dot').className = 'dot ok';
+                $('statusText').textContent = `PAC4200 @ ${j.host} · aktualisiert ${new Date().toLocaleTimeString('de-DE')}`;
+            } else {
+                lastOk = false;
+                $('dot').className = 'dot err';
+                $('statusText').textContent = j.error || 'PAC4200 nicht erreichbar';
+                if (!j.screens || !j.screens.length) screens = [];
+            }
+        } catch (e) {
+            lastOk = false;
+            $('dot').className = 'dot err';
+            $('statusText').textContent = 'Netzwerkfehler: ' + e.message;
+        }
+        $('lcdClock').textContent = new Date().toLocaleTimeString('de-DE');
+        render();
+    }
+
+    $('keyF1').onclick = () => { if (menuOpen) menuOpen = false; else idx = 0; render(); };
+    $('keyF2').onclick = () => { if (menuOpen) menuIdx--; else idx--; render(); };
+    $('keyF3').onclick = () => { if (menuOpen) menuIdx++; else idx++; render(); };
+    $('keyF4').onclick = () => { if (menuOpen) { idx = menuIdx; menuOpen = false; } else { menuOpen = true; menuIdx = idx; } render(); };
+    document.addEventListener('keydown', e => {
+        const k = e.key;
+        if (k === 'F1' || k === 'Escape') { $('keyF1').onclick(); e.preventDefault(); }
+        else if (k === 'F2' || k === 'ArrowUp') { $('keyF2').onclick(); e.preventDefault(); }
+        else if (k === 'F3' || k === 'ArrowDown') { $('keyF3').onclick(); e.preventDefault(); }
+        else if (k === 'F4' || k === 'Enter') { $('keyF4').onclick(); e.preventDefault(); }
+    });
+
+    poll();
+    setInterval(poll, 2000);
+})();
+</script>
+</body>
+</html>

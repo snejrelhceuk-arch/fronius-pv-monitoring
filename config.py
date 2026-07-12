@@ -89,6 +89,11 @@ FRONIUS_API_BASE = f'http://{INVERTER_IP}/solar_api/v1'
 WEB_API_HOST = '0.0.0.0'
 WEB_API_PORT = 8000
 
+# --- Netzqualität PAC4200 (Rolle N, read-only Modbus TCP am PCC) ---
+PAC_IP = load_local_setting('PV_PAC_IP', '192.0.2.111')
+PAC_MODBUS_PORT = 502
+PAC_UNIT_ID = 1
+
 # --- Steuerbox (Operator-Intent-API, Schicht E) ---
 STEUERBOX_HOST = load_local_setting('PV_STEUERBOX_HOST', '0.0.0.0')
 STEUERBOX_PORT = int(load_local_setting('PV_STEUERBOX_PORT', '11933'))

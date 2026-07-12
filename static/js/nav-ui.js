@@ -40,6 +40,7 @@
         { href: '/analyse/primaerenergie', label: '🌍 Primärenergie', sub: true, stale: true },
         { sep: true },
         { href: '/netzqualitaet', label: 'Netzqualität' },
+        { href: '/pac4200', label: 'PAC4200', sub: true },
         { href: '/maschinenraum', label: 'Maschinenraum' },
     ];
 

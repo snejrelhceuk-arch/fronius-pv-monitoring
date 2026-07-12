@@ -855,15 +855,22 @@
                               letter-spacing="0.2">Maschinenraum</text>
                     </g>
 
-                    <!-- Sub-Buttons: Echtzeit + NQ (nur sichtbar nach Klick auf Maschinenraum) -->
-                    <g id="btn-echtzeit" class="mr-subbtn" transform="translate(200, 360)" style="display:none; cursor:pointer;">
+                    <!-- Sub-Buttons: Echtzeit + PAC4200 + NQ (nur sichtbar nach Klick auf Maschinenraum) -->
+                    <g id="btn-echtzeit" class="mr-subbtn" transform="translate(200, 354)" style="display:none; cursor:pointer;">
                         <rect x="-45" y="-12" width="90" height="24" rx="6"
                               fill="rgba(34,197,94,0.18)" stroke="rgba(34,197,94,0.55)" stroke-width="1"/>
                         <text x="0" y="4" text-anchor="middle"
                               fill="rgba(187,247,208,0.95)" font-size="10" font-weight="600"
                               letter-spacing="0.2">Echtzeit</text>
                     </g>
-                    <g id="btn-nq" class="mr-subbtn" transform="translate(200, 390)" style="display:none; cursor:pointer;">
+                    <g id="btn-pac" class="mr-subbtn" transform="translate(200, 381)" style="display:none; cursor:pointer;">
+                        <rect x="-45" y="-12" width="90" height="24" rx="6"
+                              fill="rgba(20,184,166,0.18)" stroke="rgba(45,212,191,0.6)" stroke-width="1"/>
+                        <text x="0" y="4" text-anchor="middle"
+                              fill="rgba(153,246,228,0.95)" font-size="10" font-weight="600"
+                              letter-spacing="0.2">PAC4200</text>
+                    </g>
+                    <g id="btn-nq" class="mr-subbtn" transform="translate(200, 408)" style="display:none; cursor:pointer;">
                         <rect x="-45" y="-12" width="90" height="24" rx="6"
                               fill="rgba(99,102,241,0.18)" stroke="rgba(129,140,248,0.6)" stroke-width="1"/>
                         <text x="0" y="4" text-anchor="middle"
@@ -2129,6 +2136,7 @@
         const tickerText = document.getElementById('ticker-text');
         const tickerSubText = document.getElementById('ticker-subtext');
         const btnEchtzeit = document.getElementById('btn-echtzeit');
+        const btnPAC      = document.getElementById('btn-pac');
         const btnNQ       = document.getElementById('btn-nq');
         let timerInterval = null;
 
@@ -2136,6 +2144,10 @@
         btnEchtzeit.addEventListener('click', function(ev) {
             ev.stopPropagation();
             window.location.href = '/maschinenraum';
+        });
+        btnPAC.addEventListener('click', function(ev) {
+            ev.stopPropagation();
+            window.location.href = '/pac4200';
         });
         btnNQ.addEventListener('click', function(ev) {
             ev.stopPropagation();
@@ -2189,6 +2201,7 @@
             if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
             infoWrap.classList.remove('visible');
             btnEchtzeit.style.display = 'none';
+            btnPAC.style.display = 'none';
             btnNQ.style.display = 'none';
             resetBtn();
             if (typeof adjustSvgViewBox === 'function') adjustSvgViewBox(false);
@@ -2199,6 +2212,7 @@
             if (timerInterval) { hideInfo(); return; }
             infoWrap.classList.add('visible');
             btnEchtzeit.style.display = '';
+            btnPAC.style.display = '';
             btnNQ.style.display = '';
             btnBg.setAttribute('fill', 'rgba(99,102,241,0.28)');
             btnBg.setAttribute('stroke', 'rgba(129,140,248,0.75)');
