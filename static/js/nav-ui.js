@@ -40,7 +40,8 @@
         { href: '/analyse/primaerenergie', label: '🌍 Primärenergie', sub: true, stale: true },
         { sep: true },
         { href: '/netzqualitaet', label: 'Netzqualität' },
-        { href: '/pac4200', label: 'PAC4200', sub: true },
+        { href: '/netzqualitaet/live', label: 'NQ Live (PAC4200)', sub: true },
+        { href: '/pac4200', label: 'PAC4200 Gerät', sub: true },
         { href: '/maschinenraum', label: 'Maschinenraum' },
     ];
 

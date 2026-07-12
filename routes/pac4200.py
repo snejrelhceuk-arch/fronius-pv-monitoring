@@ -23,6 +23,13 @@ def pac4200_page():
     return render_template('pac4200_view.html')
 
 
+@bp.route('/netzqualitaet/live')
+def nq_live_page():
+    """Netzqualität-Live-Tableau — alle PAC4200-Messwerte als Datentabelle
+    (Pendant zu „Echtzeit", read-only). Erreichbar über den Maschinenraum."""
+    return render_template('nq_live_view.html')
+
+
 @bp.route('/api/pac4200/live')
 def api_pac4200_live():
     """Read-only Live-Snapshot des PAC4200 (alle Mess-Bildschirme + Energie)."""
