@@ -1,6 +1,6 @@
 # LLM-Card-Index — Trigger → Card
 
-**Stand:** 2026-05-03 (Phase 4 — Domains D/E/NQ/System/Web ergaenzt)
+**Stand:** 2026-07-11 (NQ-Modul Rolle N ergaenzt: Collector/Aggregation/Analyse)
 
 Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet konkrete Aufgabenstellungen / Stichworte auf die zuständige Card ab.
 
@@ -29,6 +29,9 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 | **diagnos: Energiebilanz, Rollups, Gap-Scan, Config-Parse** | [`diagnos-integrity.card.md`](./cards/diagnos-integrity.card.md) | stable |
 | **steuerbox: Operator-Intents, Guards, respekt_s, Override-Status** | [`steuerbox-intents.card.md`](./cards/steuerbox-intents.card.md) | stable |
 | **netzqualitaet: Export, DFD-Analyse, Tages-/Boundary-API** | [`netzqualitaet-analysis.card.md`](./cards/netzqualitaet-analysis.card.md) | stable |
+| **NQ (Rolle N): PAC4200-Collector, tmpfs, Block-Poller, Kappung (Tech)** | [`netzqualitaet-nq-collector.card.md`](./cards/netzqualitaet-nq-collector.card.md) | experimental |
+| **NQ (Rolle N): Transfer Tech→Primary, Aggregationskaskade** | [`netzqualitaet-nq-aggregation.card.md`](./cards/netzqualitaet-nq-aggregation.card.md) | experimental |
+| **NQ (Rolle N): Netzereignis-Analyse (HF/NF/VLF), Harmonische, DFD** | [`netzqualitaet-nq-analysis-events.card.md`](./cards/netzqualitaet-nq-analysis-events.card.md) | experimental |
 | **system: .role-Guards, Failover, Publish-Audit, Backup-GFS** | [`system-ops-guards.card.md`](./cards/system-ops-guards.card.md) | stable |
 | **web: Blueprints, FroniusReadOnly, Display-Formatierung** | [`web-display-api.card.md`](./cards/web-display-api.card.md) | stable |
 
@@ -62,6 +65,11 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 
 ### netzqualitaet
 - [`netzqualitaet-analysis.card.md`](./cards/netzqualitaet-analysis.card.md) — Export, Analyse, API
+
+### netzqualitaet — NQ-Modul (Rolle N, PAC4200)
+- [`netzqualitaet-nq-collector.card.md`](./cards/netzqualitaet-nq-collector.card.md) — Tech-Collector, tmpfs, Block-Poller, Kappung
+- [`netzqualitaet-nq-aggregation.card.md`](./cards/netzqualitaet-nq-aggregation.card.md) — Transfer Tech→Primary + Aggregationskaskade
+- [`netzqualitaet-nq-analysis-events.card.md`](./cards/netzqualitaet-nq-analysis-events.card.md) — Netzereignis-Analyse (HF/NF/VLF)
 
 ### system
 - [`system-ops-guards.card.md`](./cards/system-ops-guards.card.md) — Rollen, Sync, Backup, Publish

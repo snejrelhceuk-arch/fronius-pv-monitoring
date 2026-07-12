@@ -5,7 +5,7 @@ role: B
 applyTo: "routes/**"
 tags: [web-api, blueprints, templates, formatting, read-only]
 status: stable
-last_review: 2026-07-11
+last_review: 2026-07-12
 
 ---
 
@@ -15,6 +15,8 @@ last_review: 2026-07-11
 Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly bereitstellen und Werte konsistent im Frontend darstellen.
 
 ## Changes
+- 2026-07-12 (PAC4200-Clone): Geräte-Clone `/pac4200` vervollständigt — 12 read-only Screens (U L-N/L-L, Strom signiert+I_N, P, Q/S, PF/cos φ, THD-U/I, THD-U L-L, Phasenwinkel, Verzerrungsstrom, Frequenz, Energie), **F1-F4-Tasten** (F1 ESC, F2 ▲/+, F3 ▼/−, F4 Menü/OK) mit Screen-Menü, größere Darstellung. Datenquelle `nq/pac_live.py:read_snapshot` (`FLOAT_MAP`/`FLOAT2_MAP`/`DOUBLE_MAP`).
+- 2026-07-11 (PAC4200): Neue read-only Live-Anzeige `/pac4200` (Flow → Maschinenraum → PAC4200). `routes/pac4200.py:api_pac4200_live` liest per `nq/pac_live.py:read_snapshot` (Rolle N, Modbus read-only, verifizierte PAC4200-Registerkarte) und rendert `templates/pac4200_view.html` (Gerätenachbildung mit Up/Down-Bildschirmen). Muster: read-only Geräte-Zugriff analog `FroniusReadOnly`. Navigation: SVG-Sub-Button `btn-pac` in `templates/flow_view.html` (Maschinenraum-Ausklapp, über „Netzqualität"), Drawer-Eintrag `/pac4200` in `static/js/nav-ui.js` (`DEFAULT_PAGES`), und die Seite selbst bindet die Standard-Schublade (`PVNavUI.initDrawer`) ein. Ströme vorzeichenbehaftet (Zweirichtungszähler, Vorzeichen aus P_Lx) inkl. `Isum`.
 - 2026-07-11 (Energiekosten-Tabelle): Komplette Neukonzeption der Energiekosten-Tabelle in `templates/analyse_amortisation_view.html` + `routes/pages.py:_build_energy_costs_data`. Spalte 1 = €/kWh (real) aus kumulativer PV-Investition / kumulative PV-Erzeugung. Drei Bereiche (Heizen, Mobilität, Haushalt) mit jeweils Nutzenergie + Netto-€/kWh (= Spalte 1 minus Nutzenergie). Mobilität-Nutzenergie berechnet aus Benzinpreisen: (6 L/100km × Benzinpreis €/L) / 15 kWh/100km; nur ab 2024 (vorher 0, kein E-Auto). Gewichtete Spalte 7 = gewichteter Durchschnitt der Netto-Werte (Spalte 3 × Heiz-kWh + Spalte 5 × Mob-kWh + Spalte 6 × Haus-kWh) / Gesamt-kWh, Mobilität nur ab 2024 einbezogen. Benzinpreise 2021–2026 hinterlegt. Alle Spalten zentriert, Werte auf 2 Nachkommastellen. Tests: `tests/test_amortisation_energy_costs.py`.
 - 2026-07-11 (fix): Erstinvestitionen auf Baujahr 2021 rückdatiert. PV-Anlage 24.000 € + WP 12.000 € → 2021 (nicht 2022), weil beide März/April 2021 gebaut und PV seit 05.11.2021 aktiv. Effekt: `routes/pages.py:analyse` bucht Erstinvestitionen jetzt im Jahr 2021 (PV-Amortisation + Haushalts-Amortisation + Energiekosten-Tabelle). Erweiterung 2024 bleibt 2024. Amortisationsprognosen Update: PV ~2029, Haushalt ~2028. €/kWh (real) 2021: 47,94 € (36.000 €/ 751 kWh cumsum).
 - 2026-07-11: Neue Tabelle „Energiekosten nach Typ (Nutzenergie, investitionsgewichtet)“ in `templates/analyse_amortisation_view.html`; Daten aus `routes/pages.py:analyse` (`energy_costs_data`). Die erste Spalte basiert jetzt auf dem PV-Selbstverbrauch (Direkt + Batterie), Heizung trägt 12.000 € ab 2021 und Mobilität 2.000 € Wallbox ab 2024. Die Tabelle bewertet die Kosten auf Nutzenergie-Basis statt über Primärenergie und zeigt die netto verbleibenden Kosten pro Nutzenergieeinheit. Modellkonstanten in `config.py` ergänzt (`INVEST_HEIZUNG_2021`, `INVEST_WALLBOX_2024`). Human-Doku: `doc/meta/PV_REFERENZSYSTEM_DOKUMENTATION.md` (Abschnitt „Energiekosten nach Typ“).
