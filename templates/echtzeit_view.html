@@ -248,11 +248,16 @@
                 <a href="/" class="back-btn">Flow</a>
                 <a href="/monitoring" class="back-btn">Monitoring</a>
                 <a href="/analyse" class="back-btn">Analyse</a>
-                <a href="/netzqualitaet" class="back-btn" style="background:rgba(0,175,0,0.2); border-color:rgba(0,175,0,0.4);">Netzqualität</a>
-                <a href="/netzqualitaet/live" class="back-btn" style="background:rgba(0,175,0,0.2); border-color:rgba(0,175,0,0.4);">NQ Live</a>
+                <a href="/maschinenraum?db=nq" class="back-btn" style="background:rgba(0,175,0,0.2); border-color:rgba(0,175,0,0.4);">Netzqualität</a>
+                <a href="/netzqualitaet/live" class="back-btn" style="background:rgba(0,175,0,0.2); border-color:rgba(0,175,0,0.4);">Screens</a>
                 <a href="/pac4200" class="back-btn" style="background:rgba(0,175,0,0.2); border-color:rgba(0,175,0,0.4);">PAC4200</a>
             </div>
             <div style="display:flex; gap:10px; align-items:center;">
+                <div class="db-selector" style="display:flex; gap:4px; align-items:center; margin-right:6px;">
+                    <span style="color:rgba(255,255,255,0.6); font-size:12px;">DB:</span>
+                    <button class="btn db-btn active" data-db="core">PV-System</button>
+                    <button class="btn db-btn" data-db="nq">PAC4200 (NQ)</button>
+                </div>
                 <div class="nav-group">
                     <button class="nav-btn" id="navPrev">◀</button>
                     <button class="nav-btn" id="navToday">Heute</button>
@@ -297,6 +302,7 @@
         let currentHours = 24;  // Stunden im Zeitfenster
         let currentOffset = 0;  // Tage zurück (0 = heute)
         let activeTopics = [];  // Initial leer - User wählt selbst aus
+        let currentDB = 'core';  // 'core' = pv-system Kern-DB, 'nq' = PAC4200 NQ-DB
         let chartData = [];
         let availableFields = [];  // Wird aus Daten extrahiert
         let COLOR_SCHEME = {};  // Wird aus config/color_config.json geladen
@@ -388,10 +394,38 @@
         };
         
         function getUnit(topic) {
+            if (currentDB === 'nq') return nqUnit(topic);
             for (let prefix in UNITS) {
                 if (topic.startsWith(prefix)) return UNITS[prefix];
             }
             return '';
+        }
+
+        // === NQ (PAC4200) Einheiten + Kategorien ===
+        function nqUnit(f) {
+            if (f.startsWith('U_')) return 'V';
+            if (f.startsWith('Is_') || f.startsWith('I_')) return 'A';
+            if (f.startsWith('P_')) return 'W';
+            if (f.startsWith('Q_')) return 'VAr';
+            if (f.startsWith('S_')) return 'VA';
+            if (f.startsWith('PF_') || f.startsWith('cosphi_')) return '';
+            if (f.startsWith('THD')) return '%';
+            if (f.startsWith('Unbal')) return '%';
+            if (f === 'FREQ') return 'Hz';
+            return '';
+        }
+        function nqCategories(fields) {
+            return {
+                '⚡ Spannung L-N': fields.filter(f => /^U_L[123]N$/.test(f)),
+                '⚡ Spannung L-L': fields.filter(f => /^U_L(12|23|31)$/.test(f)),
+                '🔌 Strom': fields.filter(f => f.startsWith('Is_') || f === 'I_N'),
+                '🔋 Wirkleistung': fields.filter(f => f.startsWith('P_')),
+                '🌀 Blind-/Scheinleistung': fields.filter(f => f.startsWith('Q_') || f.startsWith('S_')),
+                '📐 Leistungsfaktor / cos φ': fields.filter(f => f.startsWith('PF_') || f.startsWith('cosphi_')),
+                '〰️ THD Spannung': fields.filter(f => f.startsWith('THDu_')),
+                '〰️ THD Strom': fields.filter(f => f.startsWith('THDi_')),
+                '📊 Frequenz / Unsymmetrie': fields.filter(f => f === 'FREQ' || f.startsWith('Unbal'))
+            };
         }
         
         function getYAxisGroup(unit) {
@@ -447,7 +481,14 @@
             console.log('=== Echtzeit-View initialisiert ===');
             console.log('Initial Resolution:', currentResolution, 's');
             console.log('Initial Hours:', currentHours, 'h');
-            
+
+            // DB aus URL-Param (?db=nq) vorwählen (Netzqualität nutzt dasselbe Programm)
+            const _p = new URLSearchParams(window.location.search);
+            if (_p.get('db') === 'nq') {
+                currentDB = 'nq';
+                document.querySelectorAll('.db-btn').forEach(b => b.classList.toggle('active', b.dataset.db === 'nq'));
+            }
+
             // Farben laden
             await loadColorConfig();
             
@@ -462,7 +503,7 @@
             console.log('→ Generiere Topic-Buttons für', availableFields.length, 'Felder');
             
             // Kategorisierung nach Devices (nur RAW-Felder!)
-            const categories = {
+            const categories = currentDB === 'nq' ? nqCategories(availableFields) : {
                 '🔌 Netz': availableFields.filter(f => f.includes('_Netz')),
                 '☀️ WR F1': availableFields.filter(f => 
                     (f.includes('_Inv') || f.includes('_DC1') || f.includes('_DC2')) && 
@@ -602,6 +643,20 @@
                 loadData();
             });
             
+            // DB-Umschaltung (Kern-DB <-> NQ-DB) — dasselbe Programm, andere Datenquelle
+            document.querySelectorAll('.db-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const db = e.target.dataset.db;
+                    if (db === currentDB) return;
+                    currentDB = db;
+                    document.querySelectorAll('.db-btn').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    availableFields = [];
+                    activeTopics = [];
+                    loadData();
+                });
+            });
+
             // Resize
             window.addEventListener('resize', () => chart?.resize());
             
@@ -625,7 +680,8 @@
                 const start = window.start;
                 const end = window.end;
                 
-                const url = `/api/realtime_smart?start=${start}&end=${end}&resolution=${currentResolution}`;
+                const base = currentDB === 'nq' ? '/api/nq/realtime_smart' : '/api/realtime_smart';
+                const url = `${base}?start=${start}&end=${end}&resolution=${currentResolution}`;
                 console.log('→ API-Call:', url);
                 const response = await fetch(url);
                 const data = await response.json();

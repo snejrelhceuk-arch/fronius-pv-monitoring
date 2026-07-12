@@ -39,10 +39,12 @@
         { href: '/analyse/amortisation', label: 'Amortisation', sub: true },
         { href: '/analyse/primaerenergie', label: '🌍 Primärenergie', sub: true, stale: true },
         { sep: true },
-        { href: '/netzqualitaet', label: 'Netzqualität' },
-        { href: '/netzqualitaet/live', label: 'NQ Live (PAC4200)', sub: true },
-        { href: '/pac4200', label: 'PAC4200 Gerät', sub: true },
         { href: '/maschinenraum', label: 'Maschinenraum' },
+        { href: '/maschinenraum', label: 'Echtzeit (Kern-DB)', sub: true },
+        { href: '/maschinenraum?db=nq', label: 'Netzqualität (NQ-DB)', sub: true, noctx: true },
+        { href: '/netzqualitaet/live', label: 'Screens (Live-Tableau)', sub: true },
+        { href: '/pac4200', label: 'PAC4200 (Gerät)', sub: true },
+        { href: '/netzqualitaet', label: 'NQ DFD-Analyse', sub: true },
     ];
 
     function navQuery() {
