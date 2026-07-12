@@ -9,10 +9,11 @@ etablierten read-only `FroniusReadOnly`-Muster (nur GET/Read, kein Schreibpfad).
 """
 import logging
 
-from flask import Blueprint, jsonify, render_template
+from flask import Blueprint, jsonify, render_template, request
 
 import config
 from nq import pac_live
+from nq import tech_read
 
 bp = Blueprint('pac4200', __name__)
 
@@ -42,3 +43,27 @@ def api_pac4200_live():
     except Exception as exc:  # pragma: no cover
         logging.exception("PAC4200 live snapshot failed")
         return jsonify({"ok": False, "error": str(exc), "screens": []}), 503
+
+
+@bp.route('/api/nq/realtime_smart')
+def api_nq_realtime_smart():
+    """NQ-Zeitreihe (PAC4200 10-s-Aggregat) im gleichen Format wie
+    /api/realtime_smart — Datenquelle für das DB-umschaltbare Maschinenraum-
+    Charting („Netzqualität"-DB statt Kern-DB). Read-only von Tech."""
+    import time as _t
+    try:
+        resolution = max(request.args.get('resolution', type=int, default=300), 10)
+        start_ts = request.args.get('start', type=int)
+        end_ts = request.args.get('end', type=int)
+        end = end_ts if end_ts else int(_t.time())
+        if start_ts and end_ts and start_ts < end_ts:
+            start = start_ts
+        else:
+            hours = min(max(request.args.get('hours', type=float, default=24.0), 0.001), 168)
+            start = end - int(hours * 3600)
+        res = tech_read.fetch_agg(start, end, resolution)
+        res["resolution"] = f"{resolution}s"
+        return jsonify(res), (200 if not res.get("error") else 503)
+    except Exception as exc:  # pragma: no cover
+        logging.exception("NQ realtime_smart failed")
+        return jsonify({"data": [], "error": str(exc), "source": "nq_tech_agg10s"}), 503

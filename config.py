@@ -93,6 +93,8 @@ WEB_API_PORT = 8000
 PAC_IP = load_local_setting('PV_PAC_IP', '192.0.2.111')
 PAC_MODBUS_PORT = 502
 PAC_UNIT_ID = 1
+# Tech-Host für read-only NQ-Zeitreihen-Fetch (Primary → Tech tmpfs)
+NQ_TECH_IP = load_local_setting('PV_TECH_IP', '192.0.2.181')
 
 # --- Steuerbox (Operator-Intent-API, Schicht E) ---
 STEUERBOX_HOST = load_local_setting('PV_STEUERBOX_HOST', '0.0.0.0')
