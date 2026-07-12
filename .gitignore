@@ -119,3 +119,4 @@ config/systemd/pv-wp-bridge.service
 config/systemd/pv-nq-energy.service
 config/systemd/pv-nq-energy-rollup.service
 config/systemd/pv-nq-energy-rollup.timer
+config/systemd/pv-nq-poller.service
