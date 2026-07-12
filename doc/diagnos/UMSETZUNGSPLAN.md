@@ -11,7 +11,7 @@
 **Ziel:** Doku konsolidieren, Rollenmodell freigeben.
 
 Ergebnisse:
-- `ABCD_ROLLENMODELL.md`
+- `ABCDEN_ROLLENMODELL.md`
 - `doc/diagnos/` als eigener Planungsbereich
 - klare Regel: keine Kalender-Restarts des Collectors
 

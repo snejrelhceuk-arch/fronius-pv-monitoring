@@ -246,5 +246,5 @@ im Read-only-Modus gestartet (nur GET /status und /audit).
 | [TODO.md](TODO.md) | Umsetzungsschritte mit Akzeptanzkriterien |
 | [LLM_AUSFUEHRUNG.md](LLM_AUSFUEHRUNG.md) | Kompakte Implementierungsanweisung fuer ausfuehrendes LLM |
 | [AGENTS.md](../../AGENTS.md) | Gesamtsystem-Kontext (ABCDE, No-Gos, Hosts) |
-| [doc/system/ABCD_ROLLENMODELL.md](../system/ABCD_ROLLENMODELL.md) | Rollenmodell (jetzt ABCDE) |
+| [doc/system/ABCDEN_ROLLENMODELL.md](../system/ABCDEN_ROLLENMODELL.md) | Rollenmodell (jetzt ABCDEN) |
 | [doc/automation/STEUERUNGSPHILOSOPHIE.md](../automation/STEUERUNGSPHILOSOPHIE.md) | Schutzgrenzen und Prioritaeten |

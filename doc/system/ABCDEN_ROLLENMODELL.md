@@ -1,6 +1,6 @@
-# A/B/C/D/E Rollenmodell — Collector, Web, Automation, Diagnos, Steuerbox
+# A/B/C/D/E/N Rollenmodell — Collector, Web, Automation, Diagnos, Steuerbox, Netzqualität
 
-**Stand:** 11. April 2026  
+**Stand:** 11. Juli 2026  
 **Status:** Governance-Dokument (dokumentierend, ohne Laufzeitwirkung)  
 **Geltungsbereich:** Architekturentscheidungen und künftige Änderungen im Repo `pv-system`
 
@@ -8,16 +8,19 @@
 
 ## 1. Zweck
 
-Das Rollenmodell beschreibt die fünf Systembereiche mit ihren klaren Grenzen:
+Das Rollenmodell beschreibt die sechs Systembereiche mit ihren klaren Grenzen:
 
 - **A Collector-Pipeline** — Erfassung, Aggregation, Datenfluss
 - **B Web-API** — Darstellung, API, Read-Model
 - **C Automation** — Regeln, Entscheidungen, Aktorik
 - **D Diagnos** — Health, Integritaet, Parity, Alarmierung
 - **E Steuerbox** — Operator-Intent-API, eingeschraenkte Aktorik nur via C
+- **N Netzqualität** — dedizierte PAC4200-Messkette am PCC, eigene RAM-first-Erfassung
+  (Tech) + Aggregation/Analyse (Primary), read-only gegenüber der Produktionskette
 
 Die gemeinsame SQLite-Landschaft ist dabei **Plattform unterhalb** der Rollen,
-kein eigener Buchstabe.
+kein eigener Buchstabe. Rolle **N** hat bewusst eine **eigene DB-Landschaft**
+(`nq/db/`, tmpfs auf Tech), die nicht mit der Produktions-`data.db` vermischt wird.
 
 ---
 
@@ -35,7 +38,8 @@ kein eigener Buchstabe.
    und `pv-config.py` oder ueber die **Steuerbox** (zeitlich begrenzte Overrides).
    Web-UI bleibt read-only.
 6. **Failover-Grenzen bleiben bindend:** Die bestehende `primary`/`failover`-Logik
-   ist fuer alle vier Rollen Sicherheitsanker.
+   ist fuer alle Rollen Sicherheitsanker. Rolle **N** l\u00e4uft host-spezifisch
+   (Collector nur auf Tech, Aggregation/Analyse nur auf Primary).
 
 ---
 
@@ -48,6 +52,7 @@ kein eigener Buchstabe.
 | **C Automation** | Regeln, Schutzlogik, Aktorik, Audit-Log | Sensoren lesen, Aktoren schreiben, Entscheidungen protokollieren | Web-Logik oder generelle Diagnos-Orchestrierung uebernehmen |
 | **D Diagnos** | Health, Integritaet, Parity, Kapazitaet, Alarmierung | lesen, vergleichen, klassifizieren, melden | technische Messwerte interpolieren oder kalenderbasiert den Collector neu starten |
 | **E Steuerbox** | Operator-Intents, zeitlich begrenzte Overrides, Safety Enforcer | Intents validieren, operator_overrides schreiben, Audit fuehren, Normparameter-Reset bei Timeout | Aktoren direkt ansprechen, Overrides ohne Timeout setzen, Hardware-Zugriff |
+| **N Netzqualität** | PAC4200-Rohdaten am PCC, RAM-first-Erfassung, NQ-Aggregate, Netzereignis-Analyse | PAC4200 read-only via Modbus TCP lesen, eigene NQ-DBs (tmpfs/SD) schreiben, Aggregate rechnen, Ereignisse klassifizieren | Produktions-`data.db` schreiben, Aktoren (WR/Batterie/HP/Wattpilot/Fritz!DECT) ansprechen, Polling der Produktions-Modbus-Kette verschärfen |
 
 ---
 
@@ -89,7 +94,36 @@ Die Planungsdokumente fuer E liegen gesammelt in `doc/steuerbox/`.
 
 ---
 
-## 6. Entscheidungsregeln fuer Aenderungen
+## 5b. N als eigene Messtechnik-Schicht
+
+**N Netzqualität** ist die dedizierte Power-Quality-Messkette am
+Netzanschlusspunkt (PCC) auf Basis des Siemens SENTRON **PAC4200**.
+
+Sie ist absichtlich getrennt vom Produktions-Collector (A):
+
+- **A** misst den Energiefluss (Fronius-Modbus, 3 s) für Bilanz/Steuerung.
+- **N** misst die **Netzbeschaffenheit** (RMS/THD/Harmonische bis 64. Ordnung)
+  in eigener Kadenz über ein eigenes Gerät.
+
+Zwei-Host-Aufteilung:
+
+| Host | N-Aufgabe | Speicher |
+|---|---|---|
+| **Pi4-Tech** (`192.0.2.181`) | PAC4200-Collector, Block-Polling, Ereignis-Vorfilter | **RAM-first** (tmpfs, 72 h Ring-Buffer); SD nur selten |
+| **Pi5-Primary** (`192.0.2.204`) | Übernahme, Aggregation (3–10 s → 5 min → …), Analyse | NQ-DB auf SD (aggregiert, sparsam) |
+
+Ziel:
+- Belastbare Aussagen zu lokaler (HF), globaler (NF) und sehr niederfrequenter
+  Netzqualität am PCC.
+- Vollerfassung aller PAC4200-Größen ohne Dauerlast auf der SD-Karte von Tech.
+
+Nicht-Ziel:
+- Zweite Steuerlogik oder Aktorik.
+- Vermischung mit der Produktions-`data.db` oder dem Fronius-Collector-Polling.
+- SD-Dauerbeschreibung auf Tech.
+
+Die Planungsdokumente fuer N liegen gesammelt in `doc/netzqualitaet/`
+(Modulbeschreibung: `doc/netzqualitaet/NQ_MODUL.md`).
 
 Bei jeder neuen Funktion zuerst pruefen:
 
@@ -99,6 +133,8 @@ Bei jeder neuen Funktion zuerst pruefen:
 4. **Ist die Entscheidung auditierbar?**
 5. **Gehoert das Thema fachlich zu Diagnos statt in Collector/Web/Automation?**
 6. **Geht ein Operator-Eingriff ueber E (Steuerbox) statt ueber direkten Code-Zugriff?**
+7. **Ist es reine Netzbeschaffenheit (PAC4200/PCC)? Dann gehört es zu N — read-only
+   gegenüber Produktion, eigene DB-Landschaft, kein Produktions-Actor-Write.**
 
 ---
 
@@ -106,13 +142,14 @@ Bei jeder neuen Funktion zuerst pruefen:
 
 | Dokument | Zweck |
 |---|---|
-| `AGENTS.md` | Kurzuebersicht des Gesamtsystems (ABCDE, No-Gos, Hosts) |
+| `AGENTS.md` | Kurzuebersicht des Gesamtsystems (ABCDEN, No-Gos, Hosts) |
 | `doc/system/SYSTEM_ARCHITECTURE.md` | Gesamtarchitektur, Datenfluesse, Modulrollen |
 | `doc/automation/AUTOMATION_ARCHITEKTUR.md` | Schicht C im Detail |
 | `doc/diagnos/DIAGNOS_KONZEPT.md` | Zielbild fuer D Diagnos |
 | `doc/steuerbox/ARCHITEKTUR.md` | Architektur der E-Schicht (Operator-Intent-API) |
 | `doc/steuerbox/SICHERHEIT.md` | Sicherheitskonzept Steuerbox |
 | `doc/steuerbox/TODO.md` | Umsetzungsplan Steuerbox |
+| `doc/netzqualitaet/NQ_MODUL.md` | Architektur der N-Schicht (PAC4200, Tech+Primary) |
 | `doc/diagnos/CHECKKATALOG.md` | Check-Domaenen und Methoden |
 | `doc/diagnos/TAKTUNG_UND_ESKALATION.md` | Intervalle und Schutzreaktionen |
 | `doc/diagnos/UMSETZUNGSPLAN.md` | Schrittweise Realisierung |

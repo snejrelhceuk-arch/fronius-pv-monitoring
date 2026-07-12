@@ -3,7 +3,7 @@
 **Erstellt:** 2026-02-22  
 **Letzte Überarbeitung:** 2026-03-01 (HP-Automation produktiv: Fritz!DECT, SOC-AUS, flow_view)  
 **Status:** Produktiv (Batterie + Heizpatrone laufen über pv-automation.service)  
-**Referenz Rollenmodell:** [ABCD_ROLLENMODELL.md](../system/ABCD_ROLLENMODELL.md)
+**Referenz Rollenmodell:** [ABCDEN_ROLLENMODELL.md](../system/ABCDEN_ROLLENMODELL.md)
 
 ---
 
@@ -820,7 +820,7 @@ CREATE TABLE obs_state_snapshot (
 
 | Dokument | Relevanz |
 |----------|----------|
-| [ABCD_ROLLENMODELL.md](../system/ABCD_ROLLENMODELL.md) | Rollen A/B/C/D/E, Grenzen und Verantwortungen |
+| [ABCDEN_ROLLENMODELL.md](../system/ABCDEN_ROLLENMODELL.md) | Rollen A/B/C/D/E/N, Grenzen und Verantwortungen |
 | [DIAGNOS_KONZEPT.md](../diagnos/DIAGNOS_KONZEPT.md) | Zielbild fuer Health, Integritaet und Parity |
 | [BEOBACHTUNGSKONZEPT.md](BEOBACHTUNGSKONZEPT.md) | ObsState-Definition, Datenkanäle, Prioritäten |
 | [PARAMETER_MATRIZEN.md](PARAMETER_MATRIZEN.md) | Erzeuger/Speicher/Verbraucher/Netz-Matrizen |

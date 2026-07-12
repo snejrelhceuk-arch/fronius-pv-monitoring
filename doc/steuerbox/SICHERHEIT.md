@@ -153,5 +153,5 @@ Bei Ueberschreitung: HTTP 429 mit Wartezeit in Sekunden.
 |---|---|
 | [ARCHITEKTUR.md](ARCHITEKTUR.md) | Gesamtarchitektur Steuerbox |
 | [TODO.md](TODO.md) | Implementierungsplan |
-| [doc/system/ABCD_ROLLENMODELL.md](../system/ABCD_ROLLENMODELL.md) | Rollenmodell |
+| [doc/system/ABCDEN_ROLLENMODELL.md](../system/ABCDEN_ROLLENMODELL.md) | Rollenmodell |
 | [scripts/safe_ufw_apply.sh](../../scripts/safe_ufw_apply.sh) | UFW-Setup mit Rollback |

@@ -13,7 +13,7 @@ ohne Urheberrechte, Nutzungsbedingungen, Geheimhaltungsinteressen oder
 Sicherheitsgrenzen zu verletzen.
 
 Sie ergaenzt die technische Architektur und ist bewusst getrennt vom
-`doc/system/ABCD_ROLLENMODELL.md`.
+`doc/system/ABCDEN_ROLLENMODELL.md`.
 
 ---
 
@@ -85,7 +85,7 @@ Vor jedem öffentlichen Push/Release:
 
 ## 8. Abgrenzung zu technischer Architektur
 
-- **Technische Systemgrenzen (A/B/C/D):** `doc/system/ABCD_ROLLENMODELL.md`
+- **Technische Systemgrenzen (A/B/C/D/E/N):** `doc/system/ABCDEN_ROLLENMODELL.md`
 - **Betriebs- und Schutzregeln:** `doc/automation/SCHUTZREGELN.md`
 - **Rollen/Failover-Betrieb:** `doc/system/DUAL_HOST_ARCHITECTURE.md`
 - **Technische Publish-Absicherung:** `doc/system/PUBLISH_GUARD.md`

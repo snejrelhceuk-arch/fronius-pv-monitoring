@@ -3,7 +3,7 @@
 > **Du arbeitest am PV-System.** Lies diese Datei vollständig, bevor du irgendetwas tust.
 > Nach diesem Dokument lädst du je nach Aufgabe gezielt weiter — die Lade-Hierarchie steht unten.
 
-## ABCDE-Rollenmodell (Sicherheits-Anker)
+## ABCDEN-Rollenmodell (Sicherheits-Anker)
 
 | Rolle | Schreibt | Hardware | Bemerkung |
 |---|---|---|---|
@@ -12,6 +12,7 @@
 | **C** Automation | DB + HTTP/Modbus write | Inverter, HP, Fritz!DECT, Wattpilot | einzige Schreib-Rolle |
 | **D** Diagnos | DB read + Mail | — | Phase 1+2 produktiv |
 | **E** Steuerbox | `operator_overrides` (Intent-DB) | **nichts** (Intents an C) | eigener Port, validiert, zeitlich begrenzt |
+| **N** Netzqualität | eigene NQ-DBs (`nq/db/`, tmpfs auf Tech) | PAC4200 Modbus TCP **read** | Tech = RAM-first-Collector, Primary = Aggregation/Analyse; kein Produktions-Write |
 
 **Architektur-Regel:** DRY < ABCDE-Reinheit. Code-Dupletten (z. B. `FroniusReadOnly` vs. `BatteryConfig`) sind erforderlich, wenn sie die Rollentrennung absichern.
 
@@ -23,8 +24,7 @@
 4. **Wattpilot ≠ WP.** „WP" = Wärmepumpe (Dimplex). „Wattpilot" = EV-Lader (Fronius). Niemals verwechseln.
 5. **Keine destruktiven Git-Aktionen** (`push --force`, `reset --hard` auf Published, `--no-verify`) ohne explizite Freigabe.
 6. **Keine TODOs in Subdirectories.** Alle offenen Aufgaben gehören in `doc/TODO.md`.
-7. **Veröffentlichung:** Vor jedem Push prüft der Publish-Guard (s. `doc/system/PUBLISH_GUARD.md`). Niemals umgehen.
-
+7. **Veröffentlichung:** Vor jedem Push prüft der Publish-Guard (s. `doc/system/PUBLISH_GUARD.md`). Niemals umgehen.8. **Rolle N ist read-only gegenüber Produktion.** PAC4200/NQ schreibt nur eigene NQ-DBs, niemals `data.db` oder Aktoren. Tech-Collector arbeitet RAM-first (tmpfs), SD nur selten.
 ## Hosts (knapp)
 
 Nach der **REFORMATION** (Umzug der Produktion auf Pi5, 2026-07-11) gilt die Vier-Host-Topologie:
@@ -32,7 +32,7 @@ Nach der **REFORMATION** (Umzug der Produktion auf Pi5, 2026-07-11) gilt die Vie
 - **Pi5-Primary** `192.0.2.204` (admin) — Produktion, Vollsystem A–E. Pi 5 Rev 1.0 · Cortex-A76 4×2,4 GHz · 4 GB RAM · microSD 64 GB · Debian 12 · Py 3.11. WP-Zugriff via Pi4-Tech-Bridge (`WP_BACKEND_MODE=remote`). UFW aktiv.
 - **Pi5-FB** `192.0.2.195` (admin) — Failover (read-only) + Backup-Empfänger + Dashboard-Ticker. Pi 5 Rev 1.0 · Cortex-A76 4×2,4 GHz · 8 GB RAM · NVMe 512 GB · Debian 12 · Py 3.11 · `.role=failover`. UFW aktiv.
 - **Pi4-Küche** `192.0.2.105` (jk) — Kiosk-Display (Touch) + Longterm-GFS (monthly/yearly). Pi 4 · Cortex-A72 4×1,8 GHz · 8 GB RAM · SD 128 GB · Debian 13. UFW aktiv.
-- **Pi4-Tech** `192.0.2.181` (admin) — WP/HW-Bridge (RS485, `WP_BACKEND_MODE=local`), **keine** Engine; künftig PAC4200-RAM-Collector. Pi 4 Rev 1.5 · Cortex-A72 4×1,8 GHz · 4 GB RAM · microSD 64 GB · Debian 13. UFW aktiv.
+- **Pi4-Tech** `192.0.2.181` (admin) — WP/HW-Bridge (RS485, `WP_BACKEND_MODE=local`), **keine** Engine; **PAC4200-RAM-Collector (Rolle N)**. Pi 4 Rev 1.5 · Cortex-A72 4×1,8 GHz · 4 GB RAM · microSD 64 GB · Debian 13. UFW aktiv.
 
 Rollen werden über die `.role`-Datei (gitignored) gesteuert, nicht über divergenten Code.
 
@@ -67,6 +67,7 @@ Rollen werden über die `.role`-Datei (gitignored) gesteuert, nicht über diverg
   - C → `automation/` (z. B. `engine/`)
   - D → `diagnos/` (z. B. `health.py`)
   - E → `steuerbox/`
+  - N → `nq/` (Collector auf Tech, Aggregation/Analyse auf Primary)
 - **Entscheidungsbaum:**
   1. Rollenspezifisch → Rollenpaket.
   2. Konfiguration → `config/`.
