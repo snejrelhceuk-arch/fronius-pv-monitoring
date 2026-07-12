@@ -116,3 +116,6 @@ data_stats.db
 data_stats.db-shm
 data_stats.db-wal
 config/systemd/pv-wp-bridge.service
+config/systemd/pv-nq-energy.service
+config/systemd/pv-nq-energy-rollup.service
+config/systemd/pv-nq-energy-rollup.timer
