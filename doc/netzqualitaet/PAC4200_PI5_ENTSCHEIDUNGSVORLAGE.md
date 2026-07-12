@@ -1,6 +1,17 @@
-# Entscheidungsvorlage: Netzqualität PAC4200 auf Pi5 (RAM-Only)
+# Entscheidungsvorlage: Netzqualität PAC4200 (RAM-Only Collector)
 
-**Stand:** 2026-04-19
+**Stand:** 2026-04-19 · **Host-Entscheidung angepasst:** 2026-07-11
+
+> **⚠️ Host-Update (2026-07-11):** Diese Vorlage rechnete den RAM-Only-Ingest
+> ursprünglich auf dem **Pi5** durch. Nach der REFORMATION läuft die Produktion
+> (A–E) auf dem **Pi5-Primary**; der NQ-Collector (Rolle N) läuft daher auf dem
+> **Pi4-Tech** (`192.0.2.181`, 4 GB RAM, RAM-first), die Aggregation/Analyse auf
+> dem **Pi5-Primary** (`192.0.2.204`). Die **Datenmengen-/Transfer-Rechnung unten
+> bleibt gültig** (gleiche Blöcke, gleiche FLOAT32-Kalkulation); nur die
+> Host-Zuordnung und das tmpfs-Budget sind aktualisiert. Verbindliche
+> Architektur- und Budget-Entscheidung: [`NQ_MODUL.md`](NQ_MODUL.md).
+> Gewähltes Betriebsprofil: **Profil 2 (Balanciert)**, 72 h RAW im tmpfs.
+
 **Ursprung:** `.github/prompts/plan-NQPac4200Pi5Szenario.prompt.md`
 
 ## 1. Rahmenbedingungen & Prämissen

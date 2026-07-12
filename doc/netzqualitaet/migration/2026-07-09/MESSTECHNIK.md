@@ -1,10 +1,6 @@
 # Netzqualität — Messtechnik
 
-**Stand:** 2026-04-19 · **Modul-Einordnung:** 2026-07-11
-
-> Diese Datei sammelt die belastbaren **PAC4200-Messtechnik-Fakten**. Die daraus
-> abgeleitete Modul-Architektur (Collector auf **Tech**, Aggregation/Analyse auf
-> **Primary**, Rolle N) ist in [`NQ_MODUL.md`](NQ_MODUL.md) festgelegt.
+**Stand:** 2026-04-02
 
 ## Ausgangslage
 
@@ -34,6 +30,80 @@ Netzqualitaet am Netzanschlusspunkt.
 Wenn Netzqualitaet kuenftig **entkoppelt vom Produktiv-Collector** gelesen werden
 soll, braucht es daher **ein zusaetzliches Messgeraet am PCC**, nicht die
 Umwidmung eines vorhandenen Unterzaehlers.
+
+## Soll man in den Collector eingreifen?
+
+### Empfehlung
+
+**Nicht als ersten Schritt.**
+
+Der produktive Collector:
+
+- pollt bereits Inverter + 4 SmartMeter
+- ist bewusst als Single Instance abgesichert
+- soll den Modbus-Pfad fuer den regulaeren Anlagenbetrieb nicht stoeren
+
+Ein kuerzeres Polling im Produktivpfad ist deshalb nur vertretbar, wenn ein
+kurzer, isolierter Benchmark zeigt, dass:
+
+- die Poll-Zeiten stabil bleiben
+- keine Read-Timeouts zunehmen
+- keine Datenluecken entstehen
+- keine Seiteneffekte fuer den restlichen Anlagenbetrieb auftreten
+
+### Empfohlene Testreihenfolge
+
+1. **Bestehende 3s-Daten maximal auswerten**.
+2. Falls weiter noetig: kurzer Benchmark, der **nur das Netz-SmartMeter** liest.
+3. Erst danach ueber Produktiv-Aenderung entscheiden.
+4. Falls NQ dauerhaft dichter sampeln soll: **eigenen NQ-Messpfad** aufbauen.
+
+## 1 kHz: sinnvoll oder nicht?
+
+### Sinnvoll fuer
+
+- Grundschwingung 50 Hz mit guter zeitlicher Aufloesung
+- niedrige Harmonische bis grob einige hundert Hz
+- THD-nahe Auswertungen
+- schnellere lokale Spannungs- und Stromspruenge
+
+### Nicht ausreichend fuer
+
+- echte Breitbandanalyse im kHz-Bereich
+- Supraharmonics
+- HF-Stoerungen von Inverter-, Wallbox- oder Schaltnetzteil-Schaltvorgaengen
+
+### Urteil
+
+**1 kHz ist sinnvoll, wenn die Frage lautet:**
+
+- Wie sehen niedrige Harmonische aus?
+- Gibt es im Bereich bis einige hundert Hz erkennbare Muster?
+- Wie verhaelt sich die 50-Hz-Groesse kurzfristig?
+
+**1 kHz ist nicht ausreichend, wenn die Frage lautet:**
+
+- Was passiert im Bereich mehrerer kHz bis 100 kHz?
+- Welche Leistungselektronik erzeugt welche HF-Struktur?
+
+## Was kommt vom europaeischen Netz wirklich bei uns an?
+
+### Kommt klar durch
+
+- Netzfrequenz und ihre langsamen Abweichungen
+- grossraeumige Fahrplan- und Regelleistungs-Effekte
+- langsame Spannungsniveau-Verschiebungen
+
+### Kommt gemischt an
+
+- niedrige Oberschwingungen
+- Spannungsunsymmetrien und Lastmuster
+
+### Ist meist lokal oder regional gepraegt
+
+- schnellere Schaltmuster von Leistungselektronik
+- kHz-Anteile und Supraharmonics
+- Stoerspektren einzelner lokaler Verbraucher oder Umrichter
 
 ## PAC4200 am PCC
 
@@ -176,90 +246,6 @@ passend, wenn die Genauigkeit auch bei kleineren Stroemen sauber bleiben soll.
 Fuer die konkrete Beschaffung im Projekt ist bereits ein **150/5A 0,2S**-
 Wandler gesetzt. Das ist fuer die PAC4200-Doku hier ausreichend; weitere
 Produktvergleiche werden bewusst nicht mehr gefuehrt.
-
-## Verifizierte Registerkarte (Live-Messung 2026-07-11)
-
-Gegen das reale Geraet (`192.0.2.111`, Modbus TCP) bestaetigt. Messwerte als
-**FLOAT32** (big-endian, High-Word zuerst), gelesen ab **Modbus-Adresse 1**
-(0-basierte Adresse 0 wird vom Geraet **nicht** beantwortet). Plausibilitaet
-geprueft: U ~239 V, U_LL ~414 V, f = 50,02 Hz, THD-U ~1,2 %.
-
-| Adresse | Groesse | Einheit |
-|--:|---|---|
-| 1 / 3 / 5 | U L1-N / L2-N / L3-N | V |
-| 7 / 9 / 11 | U L1-L2 / L2-L3 / L3-L1 | V |
-| 13 / 15 / 17 | I L1 / L2 / L3 (Betrag; Vorzeichen via P, s. u.) | A |
-| 19 / 21 / 23 | S L1 / L2 / L3 | VA |
-| 25 / 27 / 29 | P L1 / L2 / L3 | W |
-| 31 / 33 / 35 | Q L1 / L2 / L3 | var |
-| 37 / 39 / 41 | Leistungsfaktor (PF) L1 / L2 / L3 | — |
-| 43 / 45 / 47 | THD-U **L-L** (L1-L2 / L2-L3 / L3-L1) | % |
-| 49 / 51 / 53 | **undefiniert** (liefert NaN — hier liegt **kein** THD-I) | — |
-| 55 | Frequenz | Hz |
-| 57 / 59 / 61 | U Oe L-N / U Oe L-L / I Oe | V / V / A |
-| 63 / 65 / 67 | S / P / Q gesamt | VA / W / var |
-| 69 | Leistungsfaktor gesamt | — |
-| 71 / 73 | Unsymmetrie U / I | % |
-| 243 / 245 / 247 | cos φ (Grundschwingung) L1 / L2 / L3 | — |
-| 261 / 263 / 265 | THD-U **L-N** je Phase L1 / L2 / L3 | % |
-| 267 / 269 / 271 | **THD-I je Phase L1 / L2 / L3** (echte Lage) | % |
-| 295 | Neutralleiterstrom I_N | A |
-
-> **Korrektur 2026-07-11:** THD-U-Register 43/45/47 sind **L-L**, nicht L-N.
-> Das echte **THD-I liegt bei 267/269/271** (live 38–45 %), nicht bei 49/51/53
-> (die liefern NaN und sind undefiniert). Per-Phase-THD-U (L-N) steht bei
-> 261/263/265. Grundlage: die vollstaendige Registerreferenz
-> [`PAC4200-Modbus.md`](PAC4200-Modbus.md), gegen das reale Geraet bestaetigt.
-
-Energiezaehler als **FLOAT64** (4 Register) ab Adresse **801**: 801 Wirkarbeit
-Bezug, 805 Wirkarbeit Lieferung, 809 Blindarbeit Bezug, 813 Blindarbeit
-Lieferung, 817 Scheinarbeit (Wh / varh / VAh).
-
-> **Befund Energiezaehler (2026-07-11):** `Wh_imp` (801) und `VAh` (817) zaehlen
-> hoch (live steigend), **`Wh_exp` (805) und `varh_exp` (813) stehen jedoch auf
-> 0,000** — obwohl das Haus einspeist (Phasen mit `P_Lx < 0`). Ursache offen
-> (Geraete-Konfiguration der Lieferungs-Zaehler? Wandler-Richtung?). Genau dieser
-> Punkt ist ein Ziel des Zaehler-Vergleichs gegen Master-SM und iMS (siehe
-> [`NQ_TESTS_UND_DB.md`](NQ_TESTS_UND_DB.md)). Alle Zaehler werden ab Start per
-> **Differenzmethode** mitgefuehrt, damit die Abweichung sichtbar/auswertbar wird.
-
-Code: [`../../nq/pac_live.py`](../../nq/pac_live.py) (`FLOAT_MAP`, `FLOAT2_MAP`, `DOUBLE_MAP`).
-Read-only Live-Anzeige: `/pac4200` (Flow -> Maschinenraum -> PAC4200).
-Vollstaendige Registerreferenz: [`PAC4200-Modbus.md`](PAC4200-Modbus.md).
-
-### Vorzeichen der Stroeme (Zweirichtungszaehler, verifiziert 2026-07-11)
-
-Der PAC4200 liefert die **RMS-Stroeme (Adr. 13/15/17) als vorzeichenlose
-Betraege** — auch wenn eine Phase einspeist. Am PCC ist der Zaehler jedoch ein
-**Zweirichtungszaehler**: die Stromrichtung ergibt sich aus dem **Vorzeichen der
-Phasen-Wirkleistung** P (Adr. 25/27/29). Konvention im System:
-
-- **P_Lx < 0** (Einspeisung/Lieferung) -> Strom der Phase wird **negativ** gefuehrt.
-- **P_Lx >= 0** (Bezug) -> Strom positiv.
-- Angezeigte **Stromsumme** = vorzeichenbehaftete Summe `Is_L1 + Is_L2 + Is_L3`
-  (netzt Bezug gegen Einspeisung; ~0 A bei Erzeugung ≈ Verbrauch).
-
-Der Register-Betrag bleibt als `I_Lx` erhalten; der vorzeichenbehaftete Wert
-steht als `Is_Lx` (+ `Isum`) im Snapshot. Live verifiziert (z. B. `I_L3` mit
-`P_L3 < 0` -> `-4,87 A`, `Isum` netzt korrekt). `Iavg` (Adr. 61) ist der
-**vorzeichenlose** Geraetemittelwert und wird fuer die Richtungsanzeige nicht
-verwendet. Code: `_build_screens` / Screen `Strom` in
-[`../../nq/pac_live.py`](../../nq/pac_live.py).
-
-### Gemessene Refresh-Raten (Phase-0-Kurzlauf, 250 ms-Polling)
-
-- **RMS / Leistung / PF / THD-U:** aendern sich bei ~99 % der Reads -> interne
-  Aktualisierung **<= 250 ms**. Fast-Block bei 500 ms unkritisch.
-- **Frequenz (Adr. 55):** aendert sich nur ~alle **6–10 s** (dt_median 6,0–9,8 s
-  je Lauf) -> dichteres Pollen liefert nur Wiederholwerte; Frequenz gehoert in
-  einen langsamen Takt.
-- **THD-I (Adr. 267–271):** liefert **echte Werte** (live 38–45 %, verifiziert
-  2026-07-11). Die frueher genutzten Adressen 49–53 sind undefiniert (NaN) —
-  Registerlage korrigiert (s. o.).
-- Einzelharmonische 2..64: Modbus-Adressen **noch offen** (Voll-Feldtest /
-  Siemens-Registerdoku) — nicht raten. Der **48-h-Dauertest** ist erst sinnvoll,
-  wenn diese Adressen vorliegen (nur dann ist der Slow-Block messbar); die
-  schnellen/mittleren Bloecke sind mit Kurzläufen bereits belastbar bestimmt.
 
 ## Pflege-Regel
 
