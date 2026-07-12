@@ -1,0 +1,57 @@
+{
+  "_comment": "NQ-Modul (Rolle N) — PAC4200. Werte sind Defaults; Poll-Raten nach 48h-Feldtest (Phase 0) auf reale interne Refresh-Rate des PAC4200 nachziehen. Basis-Messwertblock (Adr. 1..73 FLOAT32) + Energie (Adr. 801 FLOAT64) gegen das reale Gerät verifiziert (2026-07-11), siehe nq/pac_live.py. Harmonik-Adressen noch offen. Reale PAC-IP steht in .infra.local als PV_PAC_IP (host hier ist anonymisierter Default).",
+
+  "pac": {
+    "host": "192.0.2.111",
+    "port": 502,
+    "unit_id": 1,
+    "timeout_s": 2.0
+  },
+
+  "tmpfs": {
+    "db_path": "/dev/shm/nq_cache.db",
+    "budget_mb": 1500,
+    "cap_mb": 1200
+  },
+
+  "retention": {
+    "raw_hours": 72,
+    "primary_agg10s_hours": 72,
+    "primary_5min_days": 90,
+    "primary_hourly_days": 365,
+    "primary_daily_days": 3650
+  },
+
+  "polling": {
+    "profile": "balanced",
+    "fast_ms": 500,
+    "medium_ms": 1000,
+    "slow_ms": 5000,
+    "energy_s": 60,
+    "flush_interval_s": 15,
+    "buffer_maxlen": 4000
+  },
+
+  "aggregate": {
+    "grid_s": 10
+  },
+
+  "event_filter": {
+    "enabled": true,
+    "du_step_v": 3.0,
+    "df_step_hz": 0.02,
+    "thd_u_pct": 5.0,
+    "di_step_a": 5.0,
+    "pre_window_s": 30,
+    "post_window_s": 60,
+    "max_duration_s": 60,
+    "cooldown_s": 120,
+    "dedup_same_trigger": true
+  },
+
+  "transfer": {
+    "mode": "daily",
+    "primary_host": "CHANGE_ME_PRIMARY",
+    "primary_db_dir": "nq/db"
+  }
+}
