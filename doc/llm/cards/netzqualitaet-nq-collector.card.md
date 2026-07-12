@@ -10,6 +10,7 @@ changes:
 	- 2026-07-11: Modul NQ (Rolle N) angelegt; Tech-Collector-Skelette + tmpfs-Schema + Kappungskonzept dokumentiert (Implementierung Phase 1).
 	- 2026-07-11 (b): Registerkarte korrigiert/verifiziert (THD-U L-L @43-47, THD-U L-N @261-265, **THD-I @267-271**, cos φ @243-247, I_N @295; 49-53 = NaN). Energie-Differenzmethode umgesetzt: `nq/collector/nq_energy.py` (`compute_daily`, Reset-Erkennung) + `nq_energy_raw`. PAC-Live-Screens erweitert (I_N, cos φ).
 	- 2026-07-12: Energie-Snapshotter **produktiv auf Tech** (systemd `pv-nq-energy.service`, Restart=always, EnvironmentFile=.infra.local -> PV_PAC_IP, tmpfs). Primary-Tages-Rollup `nq/transfer/nq_energy_rollup.py` + Timer `pv-nq-energy-rollup.timer` (00:05) schreibt nq_energy_daily/checkpoint/compare auf SD. Event-Schnipsel-Schema (dedup/60s/peak) + PAC-Clone auf 12 Screens + F1-F4-Menü erweitert.
+	- 2026-07-12 (b): **Fast/Medium-Poller** `nq/collector/nq_poller.py:poller_loop` PRODUKTIV auf Tech (systemd `pv-nq-poller`, reuse `pac_live.read_snapshot`, 35 Größen -> `nq_agg_10s` + RAW fast/medium + Event-Vorfilter) + Ring-Kappung `nq/collector/nq_capping.py:enforce_retention` (Zeit-Ring 72 h + Größen-Kappung). Skalar-Aggregat: meas=''/phase=0/ord=0 (WITHOUT-ROWID-PK).
 	- 2026-07-11: Basis-Registerkarte (Adr. 1..73 FLOAT32 + Energie 801 FLOAT64) gegen reales Geraet verifiziert; read-only `nq/pac_live.py` + Live-Web-Anzeige `/pac4200`; Phase-0-Feldtest `nq/fieldtest/pac_refresh_probe.py` gestartet (Frequenz refresht ~10 s, RMS <=250 ms, THD-I NaN).
 ---
 

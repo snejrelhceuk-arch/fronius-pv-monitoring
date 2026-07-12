@@ -181,10 +181,11 @@ Gespiegelt aus den Collector-Mustern der Produktion:
 |---|---|---|
 | 0 | Refresh-Raten (Fast/Medium/Freq) | erledigt (bekannte Register) |
 | 1a | **Energie-Snapshotter (Differenzmethode) auf Tech** | **PRODUKTIV** (systemd, seit 2026-07-12) |
-| 1b | Fast/Medium-Poller + tmpfs-Kappung + Event-Detektion | folgt (delegierter Build) |
+| 1b | **Fast/Medium-Poller (nq_agg_10s + RAW + Event-Vorfilter) + Ring-Kappung** | **PRODUKTIV** (systemd `pv-nq-poller`, seit 2026-07-12) |
 | 2a | **Energie-Tages-Rollup + Zählervergleich auf Primary** | **PRODUKTIV** (systemd-Timer 00:05) |
 | 2b | RAW/Aggregat-Transfer + Kaskade + GFS | Schema steht, Umsetzung folgt |
-| 3 | Analyse HF/NF/VLF + Event-Charts | nach Phase 1b/2b |
+| 3a | **DB-umschaltbares Charting (Kern-DB / NQ-DB) im Maschinenraum** | **PRODUKTIV** (2026-07-12) |
+| 3b | Analyse HF/NF/VLF + Event-Chart-Drilldown | folgt |
 | Slow | Einzelharmonische 2..64 | **blockiert** bis Register-Adressen vorliegen |
 
 ---
@@ -232,8 +233,15 @@ mit allen verfügbaren Größen** dauerhaft gespeichert (nicht aggregiert).
   `nq/db/nq_YYYY-MM.db`.
 
 **Viewing:** Read-only Live-Anzeige `/pac4200` (Geräte-Clone, F1–F4 + Menü, alle
-Live-Bildschirme). Erweitertes Netzqualität-Live-Tableau (Pendant zu „Echtzeit")
-+ Event-Chart-Drill-down: folgt (Phase 1b/3).
+Live-Bildschirme). Netzqualität-Live-Tableau `/netzqualitaet/live` (Pendant zu
+„Echtzeit", alle Messwerte als Datentabelle). **DB-umschaltbares Charting** im
+Maschinenraum (`/maschinenraum` = Kern-DB „Echtzeit", `/maschinenraum?db=nq` =
+NQ-DB „Netzqualität"): dasselbe Programm, DB-Umschalter oben, Feldkategorien +
+Einheiten je Quelle. NQ-Zeitreihe read-only von Tech (`nq/tech_read.py` →
+`/api/nq/realtime_smart`, Wide-Format wie `/api/realtime_smart`).
 
-**Offen für Vollbetrieb:** Fast/Medium-Poller + Event-Detektion (1b),
-RAW-Transfer/Aggregat-Kaskade + GFS (2b), Netzqualität-Tableau + Charts (3).
+Navigationshierarchie: Flow → Maschinenraum → { Echtzeit (Kern-DB), Netzqualität
+(NQ-DB) → Screens (Live-Tableau), PAC4200 (Gerät) }.
+
+**Offen für Vollbetrieb:** RAW-Transfer/Aggregat-Kaskade auf Primary + GFS (2b),
+Event-Chart-Drilldown + HF/NF/VLF-Analyse (3b).
