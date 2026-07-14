@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico?v={{ favicon_version }}">
+    <title>Netzqualität · Chart (PAC4200) - PV-System</title>
+    <script src="/static/js/nav-context.js"></script>
+    <script src="/static/js/nav-ui.js"></script>
+    <link rel="stylesheet" href="/static/css/nav-ui.css">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0f172a; color: #e2e8f0;
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+        }
+        /* Oberer Bereich: AUSSCHLIESSLICH zeitliche Navigation (+ Hamburger via initDrawer). */
+        .top-nav-bar {
+            display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+            padding: 8px 14px; background: rgba(15,23,42,0.95);
+            border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0;
+        }
+        .period-group { display: flex; gap: 0; }
+        .period-group button {
+            background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.55);
+            border: 1px solid rgba(255,255,255,0.12); padding: 5px 12px; cursor: pointer;
+            font-size: 12px;
+        }
+        .period-group button:first-child { border-radius: 5px 0 0 5px; }
+        .period-group button:last-child { border-radius: 0 5px 5px 0; border-left: none; }
+        .period-group button.active {
+            background: rgba(70,110,255,0.28); color: #fff; border-color: rgba(70,110,255,0.5);
+        }
+        .time-nav { display: flex; gap: 4px; align-items: center; }
+        .time-nav button {
+            background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.75);
+            border: 1px solid rgba(255,255,255,0.12); padding: 5px 10px; border-radius: 5px;
+            cursor: pointer; font-size: 13px;
+        }
+        .time-nav button:hover:not(:disabled) { background: rgba(255,255,255,0.16); color: #fff; }
+        .time-nav button:disabled { opacity: 0.3; cursor: not-allowed; }
+        .date-label { min-width: 130px; text-align: center; font-weight: 600; }
+        select#qty {
+            background: rgba(255,255,255,0.08); color: #e2e8f0;
+            border: 1px solid rgba(255,255,255,0.12); border-radius: 5px; padding: 5px 8px;
+            font-size: 12px;
+        }
+        .status { display: flex; gap: 8px; align-items: center; margin-left: auto; font-size: 12px; color: #94a3b8; }
+        .dot { width: 9px; height: 9px; border-radius: 50%; background: #64748b; }
+        .dot.ok { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+        .dot.err { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+        #chart { flex: 1; min-height: 0; }
+        .hint { font-size: 11px; color: #64748b; padding: 4px 14px 8px; flex-shrink: 0; }
+
+        /* Event-Schnipsel-Overlay (Drill-down 300 s / 200 ms) */
+        .overlay-backdrop {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; z-index: 40;
+        }
+        .overlay-backdrop.open { display: block; }
+        .overlay {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+            width: min(920px, 94vw); height: min(560px, 88vh); background: #111c30;
+            border: 1px solid rgba(255,255,255,0.14); border-radius: 10px; z-index: 41;
+            display: none; flex-direction: column;
+        }
+        .overlay.open { display: flex; }
+        .overlay-head {
+            display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+            border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 13px;
+        }
+        .overlay-head .close { margin-left: auto; cursor: pointer; font-size: 20px; background: none; border: none; color: #cbd5e1; }
+        .overlay-head .seg-nav button {
+            background: rgba(255,255,255,0.08); color: #e2e8f0; border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 5px; padding: 3px 9px; cursor: pointer; font-size: 12px;
+        }
+        #overlayChart { flex: 1; min-height: 0; }
+    </style>
+</head>
+<body>
+    <div class="top-nav-bar">
+        <div class="period-group" id="periodGroup">
+            <button data-period="tag" class="active">Tag</button>
+            <button data-period="monat">Monat</button>
+            <button data-period="jahr">Jahr</button>
+        </div>
+        <div class="time-nav">
+            <button id="prev">◀</button>
+            <button class="date-label" id="dateLabel">Heute</button>
+            <button id="next">▶</button>
+        </div>
+        <select id="qty" title="Messgröße"></select>
+        <span class="status"><span class="dot" id="dot"></span><span id="statusText">Lade…</span></span>
+    </div>
+
+    <div id="chart"></div>
+    <div class="hint" id="hint">Feste Darstellung · Tag = 5-min-Raster · Marker ⚡ = Event (Klick → 200-ms-Schnipsel). Quelle: PAC4200-Aggregate (Primary-SD).</div>
+
+    <div class="overlay-backdrop" id="ovBackdrop"></div>
+    <div class="overlay" id="overlay">
+        <div class="overlay-head">
+            <span id="ovTitle">Event</span>
+            <span class="seg-nav" id="segNav" style="display:none;">
+                <button id="segPrev">◀ 300 s</button><span id="segInfo" style="margin:0 6px;"></span><button id="segNext">300 s ▶</button>
+            </span>
+            <button class="close" id="ovClose">×</button>
+        </div>
+        <div id="overlayChart"></div>
+    </div>
+
+<script>
+(function () {
+    if (window.PVNavUI) PVNavUI.initDrawer();
+    const NC = window.PVNavContext;
+    const $ = id => document.getElementById(id);
+    const chart = echarts.init($('chart'));
+    const ovChart = echarts.init($('overlayChart'));
+    window.addEventListener('resize', () => { chart.resize(); ovChart.resize(); });
+
+    // Zeitkontext aus zentralem Speicher (URL/localStorage, 1 h Verfall) oder Default heute.
+    let ctx = (NC && NC.getState() ? NC.getState().context : null) || { period: 'tag', date: NC.formatDateISO(new Date()) };
+    if (!ctx.period) ctx.period = 'tag';
+    let curQty = 'U_L1N';
+    let events = [];
+
+    function setStatus(ok, msg) {
+        $('dot').className = 'dot ' + (ok ? 'ok' : 'err');
+        $('statusText').textContent = msg;
+    }
+
+    function anchorDate() {
+        if (ctx.period === 'tag' && ctx.date) return new Date(ctx.date + 'T12:00:00');
+        if (ctx.year) return new Date(ctx.year, (ctx.month || 1) - 1, 1, 12, 0, 0);
+        return new Date();
+    }
+
+    function windowBounds() {
+        const d = anchorDate();
+        if (ctx.period === 'tag') {
+            const s = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
+            return { start: Math.floor(s.getTime() / 1000), end: Math.floor(s.getTime() / 1000) + 86400, range: '5min' };
+        }
+        if (ctx.period === 'monat') {
+            const s = new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0);
+            const e = new Date(d.getFullYear(), d.getMonth() + 1, 1, 0, 0, 0);
+            return { start: Math.floor(s.getTime() / 1000), end: Math.floor(e.getTime() / 1000), range: 'daily' };
+        }
+        const s = new Date(d.getFullYear(), 0, 1, 0, 0, 0);
+        const e = new Date(d.getFullYear() + 1, 0, 1, 0, 0, 0);
+        return { start: Math.floor(s.getTime() / 1000), end: Math.floor(e.getTime() / 1000), range: 'daily' };
+    }
+
+    function labelText() {
+        const d = anchorDate();
+        if (ctx.period === 'tag') return d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+        if (ctx.period === 'monat') return d.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+        return String(d.getFullYear());
+    }
+
+    function isFuture(dir) {
+        if (dir < 0) return false;
+        const now = new Date();
+        const d = anchorDate();
+        if (ctx.period === 'tag') return d.setHours(0,0,0,0) >= now.setHours(0,0,0,0);
+        if (ctx.period === 'monat') return (d.getFullYear() > now.getFullYear()) || (d.getFullYear() === now.getFullYear() && d.getMonth() >= now.getMonth());
+        return d.getFullYear() >= now.getFullYear();
+    }
+
+    function shift(dir) {
+        const d = anchorDate();
+        if (ctx.period === 'tag') { d.setDate(d.getDate() + dir); ctx.date = NC.formatDateISO(d); }
+        else if (ctx.period === 'monat') { d.setMonth(d.getMonth() + dir); ctx.year = d.getFullYear(); ctx.month = d.getMonth() + 1; }
+        else { ctx.year = d.getFullYear() + dir; }
+        commitAndLoad();
+    }
+
+    function setPeriod(p) {
+        const d = anchorDate();
+        ctx = { period: p };
+        if (p === 'tag') ctx.date = NC.formatDateISO(d);
+        else if (p === 'monat') { ctx.year = d.getFullYear(); ctx.month = d.getMonth() + 1; }
+        else ctx.year = d.getFullYear();
+        commitAndLoad();
+    }
+
+    function commitAndLoad() {
+        if (NC && NC.commit) NC.commit(ctx);       // URL + localStorage (1 h Verfall)
+        syncPeriodButtons();
+        load();
+    }
+
+    function syncPeriodButtons() {
+        document.querySelectorAll('#periodGroup button').forEach(b =>
+            b.classList.toggle('active', b.dataset.period === ctx.period));
+        $('dateLabel').textContent = labelText();
+        $('next').disabled = isFuture(1);
+    }
+
+    function bandOption(rows, qty) {
+        const xs = rows.map(r => new Date(r.ts * 1000));
+        const avg = rows.map(r => (r[qty] == null ? null : +r[qty].toFixed(3)));
+        const mn = rows.map(r => (r[qty + '_min'] == null ? null : +r[qty + '_min'].toFixed(3)));
+        const mx = rows.map(r => (r[qty + '_max'] == null ? null : +r[qty + '_max'].toFixed(3)));
+        const band = mx.map((v, i) => (v == null || mn[i] == null) ? null : +(v - mn[i]).toFixed(3));
+        const markPoints = eventMarkPoints(qty, rows);
+        return {
+            backgroundColor: 'transparent',
+            grid: { left: 56, right: 20, top: 20, bottom: 46 },
+            tooltip: PVChart.tooltipResponsive({ trigger: 'axis' }),
+            xAxis: { type: 'time', axisLine: { lineStyle: { color: '#334155' } }, axisLabel: { color: '#94a3b8' } },
+            yAxis: { type: 'value', scale: true, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } }, axisLabel: { color: '#94a3b8' } },
+            series: [
+                { name: 'min', type: 'line', data: xs.map((x, i) => [x, mn[i]]), lineStyle: { opacity: 0 }, symbol: 'none', stack: 'band', silent: true },
+                { name: 'Spanne', type: 'line', data: xs.map((x, i) => [x, band[i]]), lineStyle: { opacity: 0 }, areaStyle: { color: 'rgba(96,165,250,0.18)' }, symbol: 'none', stack: 'band', silent: true },
+                {
+                    name: qty, type: 'line', data: xs.map((x, i) => [x, avg[i]]), showSymbol: false,
+                    lineStyle: { color: '#60a5fa', width: 1.5 }, connectNulls: false,
+                    markPoint: markPoints
+                }
+            ]
+        };
+    }
+
+    function eventMarkPoints(qty, rows) {
+        if (ctx.period !== 'tag' || !events.length) return { data: [] };
+        const b = windowBounds();
+        const inWin = events.filter(e => e.ts >= b.start && e.ts < b.end);
+        const yByBucket = {};
+        rows.forEach(r => { yByBucket[Math.floor(r.ts / 300) * 300] = r[qty]; });
+        return {
+            symbol: 'pin', symbolSize: 34,
+            data: inWin.map(e => {
+                const bucket = Math.floor(e.ts / 300) * 300;
+                const y = yByBucket[bucket];
+                return {
+                    xAxis: new Date(e.ts * 1000), yAxis: (y == null ? undefined : y),
+                    value: '⚡', itemStyle: { color: e.has_snippet ? '#f59e0b' : '#64748b' },
+                    label: { formatter: '⚡', color: '#111' },
+                    _eid: e.event_id, _month: e.month, _snip: e.has_snippet
+                };
+            })
+        };
+    }
+
+    async function load() {
+        setStatus(true, 'Lade…');
+        const b = windowBounds();
+        try {
+            const [aggRes, evRes] = await Promise.all([
+                fetch(`/api/nq/aggregates?range=${b.range}&start=${b.start}&end=${b.end}`).then(r => r.json()),
+                ctx.period === 'tag' ? fetch(`/api/nq/analyse/events?days=2`).then(r => r.json()) : Promise.resolve({ events: [] })
+            ]);
+            events = evRes.events || [];
+            const rows = aggRes.data || [];
+            const qs = (aggRes.quantities || []);
+            populateQty(qs);
+            if (!rows.length) { chart.clear(); setStatus(false, 'Keine Daten'); return; }
+            chart.setOption(bandOption(rows, curQty), true);
+            setStatus(true, `${rows.length} Punkte · ${b.range}` + (events.length ? ` · ${events.length} Events` : ''));
+        } catch (e) {
+            setStatus(false, 'Fehler: ' + e.message);
+        }
+    }
+
+    function populateQty(qs) {
+        if (!qs.length) return;
+        const sel = $('qty');
+        const want = ['U_L1N','U_L2N','U_L3N','U_L12','U_L23','U_L31','Is_L1','Is_L2','Is_L3','P_tot','Q_tot','S_tot','THDu_L1','THDu_L2','THDu_L3','FREQ'];
+        const ordered = want.filter(q => qs.includes(q)).concat(qs.filter(q => !want.includes(q)));
+        if (sel.dataset.filled === '1' && ordered.includes(curQty)) return;
+        sel.innerHTML = ordered.map(q => `<option value="${q}">${q}</option>`).join('');
+        if (!ordered.includes(curQty)) curQty = ordered[0];
+        sel.value = curQty;
+        sel.dataset.filled = '1';
+    }
+
+    // ── Event-Drill-down (Overlay) ─────────────────────────────
+    let ovSegs = [], ovSeg = 0;
+    function openEvent(eid, month) {
+        fetch(`/api/nq/event/${eid}` + (month ? `?month=${month}` : '')).then(r => r.json()).then(d => {
+            if (d.error) { setStatus(false, d.error); return; }
+            $('ovTitle').textContent = `Event #${eid} · ${d.event.kind} · ${d.event.peak_quantity}=${d.event.peak_value}`;
+            const fast = d.fast || [];
+            // In 300-s-Segmente aufteilen (mehrere zusammenhängende Charts bei langen Events)
+            ovSegs = [];
+            if (fast.length) {
+                const t0 = fast[0].ts_ms; const segMs = 300000;
+                let cur = [];
+                let segStart = t0;
+                fast.forEach(r => {
+                    if (r.ts_ms - segStart > segMs) { ovSegs.push(cur); cur = []; segStart = r.ts_ms; }
+                    cur.push(r);
+                });
+                if (cur.length) ovSegs.push(cur);
+            }
+            ovSeg = 0;
+            $('segNav').style.display = ovSegs.length > 1 ? '' : 'none';
+            renderSeg();
+            $('ovBackdrop').classList.add('open');
+            $('overlay').classList.add('open');
+            setTimeout(() => ovChart.resize(), 30);
+        }).catch(e => setStatus(false, e.message));
+    }
+    function renderSeg() {
+        const seg = ovSegs[ovSeg] || [];
+        $('segInfo').textContent = `${ovSeg + 1}/${ovSegs.length}`;
+        const xs = seg.map(r => new Date(r.ts_ms));
+        const mk = k => seg.map((r, i) => [xs[i], r[k]]);
+        ovChart.setOption({
+            backgroundColor: 'transparent',
+            grid: { left: 56, right: 16, top: 26, bottom: 40 },
+            legend: { textStyle: { color: '#94a3b8' }, top: 0 },
+            tooltip: PVChart.tooltipResponsive({ trigger: 'axis' }),
+            xAxis: { type: 'time', axisLabel: { color: '#94a3b8' } },
+            yAxis: { type: 'value', scale: true, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } }, axisLabel: { color: '#94a3b8' } },
+            series: [
+                { name: 'U L1', type: 'line', data: mk('u_l1'), showSymbol: false, lineStyle: { width: 1, color: '#60a5fa' } },
+                { name: 'I L1', type: 'line', data: mk('i_l1'), showSymbol: false, lineStyle: { width: 1, color: '#f87171' }, yAxisIndex: 0 },
+                { name: 'f', type: 'line', data: mk('f'), showSymbol: false, lineStyle: { width: 1, color: '#34d399' } }
+            ]
+        }, true);
+    }
+    function closeOverlay() { $('ovBackdrop').classList.remove('open'); $('overlay').classList.remove('open'); }
+
+    // ── Events / Interaktion ───────────────────────────────────
+    chart.on('click', p => {
+        if (p.componentType === 'markPoint' && p.data && p.data._eid != null) openEvent(p.data._eid, p.data._month);
+    });
+    $('ovClose').addEventListener('click', closeOverlay);
+    $('ovBackdrop').addEventListener('click', closeOverlay);
+    $('segPrev').addEventListener('click', () => { if (ovSeg > 0) { ovSeg--; renderSeg(); } });
+    $('segNext').addEventListener('click', () => { if (ovSeg < ovSegs.length - 1) { ovSeg++; renderSeg(); } });
+    $('prev').addEventListener('click', () => shift(-1));
+    $('next').addEventListener('click', () => shift(1));
+    $('qty').addEventListener('change', e => { curQty = e.target.value; load(); });
+    document.querySelectorAll('#periodGroup button').forEach(b =>
+        b.addEventListener('click', () => setPeriod(b.dataset.period)));
+    if (window.PVNavUI && PVNavUI.attachCalendar) {
+        PVNavUI.attachCalendar($('dateLabel'), 'day',
+            () => {
+                const d = anchorDate();
+                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            },
+            v => {
+                const [y, m] = v.split('-').map(Number);
+                if (ctx.period === 'tag') ctx.date = v;
+                else if (ctx.period === 'monat') { ctx.year = y; ctx.month = m; }
+                else ctx.year = y;
+                commitAndLoad();
+            });
+    }
+
+    syncPeriodButtons();
+    load();
+})();
+</script>
+</body>
+</html>

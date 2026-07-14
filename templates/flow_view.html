@@ -8,6 +8,9 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png?v={{ favicon_version }}">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
     <title>PV</title>
+    <script src="/static/js/nav-context.js"></script>
+    <script src="/static/js/nav-ui.js"></script>
+    <link rel="stylesheet" href="/static/css/nav-ui.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -47,23 +50,15 @@
         .nav-main { display: flex; gap: 8px; }
 
         .nav-main a {
-            padding: 10px 20px; border: none;
-            background: rgba(255,255,255,0.1);
-            border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 6px; cursor: pointer; font-size: 14px;
-            font-weight: 600; text-decoration: none; color: rgba(255,255,255,0.9);
-            transition: all 0.2s;
+            display: none !important;
         }
 
         .nav-main a:hover {
-            background: rgba(255,255,255,0.2);
-            transform: translateY(-1px);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            display: none !important;
         }
         
         .nav-main a.active {
-            background: rgba(255,255,255,0.3);
-            border-color: rgba(255,255,255,0.5);
+            display: none !important;
         }
         
         /* Sub-Navigation */
@@ -518,7 +513,7 @@
             .top-nav { padding: 6px 10px 0 10px; }
             .top-nav-inner { padding: 8px 10px; border-radius: 10px 10px 0 0; }
             .nav-main { gap: 4px; }
-            .nav-main a { padding: 7px 12px; font-size: 13px; }
+            .nav-main a { display: none !important; }
             .container { padding: 0 8px 8px 8px; }
             .flow-chart { padding: 8px; border-radius: 10px; }
             .status-group { top: 8px; right: 10px; gap: 3px; }
@@ -681,12 +676,7 @@
     <!-- Navigation -->
     <div class="top-nav">
         <div class="top-nav-inner">
-            <div class="nav-main">
-                <a href="/" class="active">Flow</a>
-                <a href="/monitoring">Monitoring</a>
-                <a href="/analyse">Analyse</a>
-            </div>
-
+            <div class="nav-main"></div>
         </div>
     </div>
 
@@ -2233,6 +2223,10 @@
             }, 1000);
         });
     })();
+    </script>
+
+    <script>
+        if (window.PVNavUI) PVNavUI.initDrawer();
     </script>
 
     {% include 'info_overlay.html' %}

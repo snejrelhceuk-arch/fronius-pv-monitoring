@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico?v={{ favicon_version }}">
+    <title>NQ-Musteranalyse - PV-System</title>
+    <script src="/static/js/nav-context.js"></script>
+    <script src="/static/js/nav-ui.js"></script>
+    <link rel="stylesheet" href="/static/css/nav-ui.css">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0f172a; color: #e2e8f0;
+            min-height: 100vh; display: flex; flex-direction: column;
+        }
+
+        .top-nav {
+            display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+            padding: 8px 16px; background: rgba(15,23,42,0.95);
+            border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0;
+        }
+        .top-nav a {
+            color: rgba(255,255,255,0.6); text-decoration: none;
+            padding: 6px 12px; border-radius: 6px; font-size: 13px; transition: all .2s;
+        }
+        .top-nav a:hover { color: #fff; background: rgba(255,255,255,0.1); }
+        .top-nav a.active { color: #fff; background: rgba(0,175,0,0.25); border: 1px solid rgba(0,175,0,0.4); }
+        .nav-sep { width: 1px; height: 20px; background: rgba(255,255,255,0.15); }
+        .nav-title { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.8); letter-spacing: .3px; }
+
+        .content { flex: 1; overflow-y: auto; padding: 20px 16px 40px; max-width: 1200px; margin: 0 auto; width: 100%; }
+
+        /* Section layout */
+        .section {
+            margin-bottom: 36px;
+            background: rgba(30,41,59,0.5);
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 12px; overflow: hidden;
+        }
+        .section-header {
+            padding: 16px 20px 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.07);
+            display: flex; align-items: flex-start; gap: 12px;
+        }
+        .section-icon { font-size: 22px; flex-shrink: 0; margin-top: 1px; }
+        .section-title { font-size: 16px; font-weight: 700; color: #f1f5f9; margin-bottom: 4px; }
+        .section-sub { font-size: 12px; color: #94a3b8; line-height: 1.5; max-width: 820px; }
+        .section-sub strong { color: #cbd5e1; }
+        .section-sub .badge {
+            display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: .4px;
+            padding: 1px 6px; border-radius: 3px; margin-left: 4px; vertical-align: middle;
+        }
+        .badge-nf { background: rgba(99,102,241,0.25); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.4); }
+        .badge-hf { background: rgba(239,68,68,0.2); color: #fca5a5; border: 1px solid rgba(239,68,68,0.35); }
+        .badge-vlf { background: rgba(34,197,94,0.2); color: #86efac; border: 1px solid rgba(34,197,94,0.35); }
+
+        .section-body {
+            padding: 16px 20px 20px;
+        }
+
+        /* Charts */
+        .chart-row { display: flex; gap: 14px; margin-top: 14px; }
+        .chart-wrap {
+            flex: 1; min-width: 0;
+            background: rgba(15,23,42,0.5); border-radius: 8px;
+            padding: 12px; position: relative;
+        }
+        .chart-label { font-size: 11px; color: #64748b; margin-bottom: 6px; font-weight: 600; letter-spacing: .3px; text-transform: uppercase; }
+        .chart-el { width: 100%; height: 220px; }
+        .chart-el-tall { width: 100%; height: 260px; }
+
+        /* Stats row */
+        .stat-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+        .stat-card {
+            flex: 1; min-width: 130px;
+            background: rgba(15,23,42,0.7); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px; padding: 12px 14px;
+        }
+        .stat-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 4px; }
+        .stat-value { font-size: 20px; font-weight: 700; color: #f1f5f9; font-variant-numeric: tabular-nums; }
+        .stat-unit { font-size: 11px; color: #94a3b8; margin-left: 3px; }
+        .stat-sub { font-size: 11px; color: #64748b; margin-top: 2px; }
+
+        /* Events table */
+        .evt-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 14px; }
+        .evt-table th { text-align: left; padding: 6px 10px; color: #64748b; font-weight: 600;
+            letter-spacing: .3px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+        .evt-table td { padding: 7px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle; }
+        .evt-table tr:last-child td { border-bottom: none; }
+        .evt-table tr:hover td { background: rgba(255,255,255,0.03); }
+        .band-pill {
+            display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px;
+            border-radius: 10px; letter-spacing: .3px;
+        }
+        .band-HF { background: rgba(239,68,68,0.2); color: #fca5a5; }
+        .band-NF { background: rgba(99,102,241,0.22); color: #a5b4fc; }
+        .band-VLF { background: rgba(34,197,94,0.18); color: #86efac; }
+        .sev-bar { display: inline-block; height: 6px; border-radius: 3px; background: #22c55e; }
+        .origin-lokal { color: #f97316; }
+        .origin-net { color: #94a3b8; }
+
+        /* Controls */
+        .ctrl-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; align-items: center; }
+        .ctrl-btn {
+            font-size: 12px; padding: 5px 12px; border-radius: 5px; cursor: pointer;
+            border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.7); transition: all .15s;
+        }
+        .ctrl-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+        .ctrl-btn.active { background: rgba(99,102,241,0.25); color: #a5b4fc; border-color: rgba(99,102,241,0.5); }
+        .ctrl-label { font-size: 11px; color: #64748b; }
+
+        .hint-box {
+            font-size: 11px; color: #64748b; background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.06); border-radius: 6px;
+            padding: 8px 12px; margin-top: 10px; line-height: 1.6;
+        }
+        .hint-box strong { color: #94a3b8; }
+
+        .loading-msg { text-align: center; padding: 30px; color: #64748b; font-size: 13px; }
+        .no-data { text-align: center; padding: 24px; color: #475569; font-size: 12px; }
+
+        @media (max-width: 700px) {
+            .chart-row { flex-direction: column; }
+            .stat-card { min-width: 100px; }
+        }
+    </style>
+</head>
+<body>
+
+<nav class="top-nav">
+    <span class="nav-title">NQ · Musteranalyse</span>
+</nav>
+
+<div class="content">
+
+    <!-- ================================================================
+         SECTION 1: 15-min-Handelsmuster (DFD)
+    ================================================================ -->
+    <div class="section">
+        <div class="section-header">
+            <span class="section-icon">〰</span>
+            <div>
+                <div class="section-title">15-Minuten-Handelsmuster (DFD)
+                    <span class="badge badge-nf">NF_global</span>
+                </div>
+                <div class="section-sub">
+                    Der europäische Stromhandel (EPEX SPOT) handelt in <strong>15-Minuten-Blöcken</strong>.
+                    An jeder Viertelstunden-Grenze wechseln Fahrpläne: Erzeuger müssen ihre Einspeisung
+                    anpassen, was kurze Frequenzabweichungen verursacht — die
+                    <strong>Diskrete Frequenzänderung (DFD)</strong>. Vollstunden-Grenzen
+                    sind stärker (Stunden- <em>und</em> Viertelstunden-Kontrakte wechseln gleichzeitig).
+                    Regelleistung (z. B. 50Hertz) kompensiert, aber die Spur bleibt sichtbar.
+                    Die Spannungsverläufe bestätigen dies — ein leichter Spannungseinbruch begleitet
+                    den Frequenznadir.
+                </div>
+            </div>
+        </div>
+        <div class="section-body">
+            <div class="stat-row" id="dfdStats">
+                <div class="loading-msg">Lade DFD-Daten…</div>
+            </div>
+            <div class="chart-row">
+                <div class="chart-wrap" style="flex:1.2">
+                    <div class="chart-label">DFD-Amplitude nach Grenztyp (mHz)</div>
+                    <div class="chart-el" id="chartDfdByType"></div>
+                </div>
+                <div class="chart-wrap" style="flex:2">
+                    <div class="chart-label">DFD-Verlauf letzte 30 Tage (täglicher Mittelwert, mHz)</div>
+                    <div class="chart-el" id="chartDfdTrend"></div>
+                </div>
+            </div>
+            <div class="hint-box">
+                <strong>Quellhinweis:</strong> Daten aus dem Fronius Smart Meter am Netzanschlusspunkt.
+                Auflösung ~3 s. DFD-Amplitude = |f_post − f_pre| an der Grenze. Schwelle für
+                Anomalie: 100 mHz. Mit PAC4200-Daten (10 s) wird die Auflösung weiter verbessert.
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         SECTION 2: Tag-Nacht-Profil
+    ================================================================ -->
+    <div class="section">
+        <div class="section-header">
+            <span class="section-icon">☀</span>
+            <div>
+                <div class="section-title">Tages-Frequenz- und Spannungsprofil
+                    <span class="badge badge-vlf">VLF</span>
+                </div>
+                <div class="section-sub">
+                    Die Netzfrequenz folgt einem <strong>täglichen Rhythmus</strong>:
+                    Morgens steigt sie mit der Photovoltaik-Einspeisung (Überproduktion → f &gt; 50 Hz),
+                    zur Mittags-Spitze kann sie fallen (hoher Verbrauch), nachts pendelt sie um den
+                    Nennwert. Die <strong>Netzspannung</strong> zeigt einen ähnlichen, aber inversen
+                    Effekt — hohe Einspeisung durch Ortsnetz-Transformatoren drückt die Spannung nach
+                    oben. Das grau schattierte Band zeigt ±1σ (Schwankungsbreite über alle Tage).
+                </div>
+            </div>
+        </div>
+        <div class="section-body">
+            <div class="ctrl-row">
+                <span class="ctrl-label">Filtern:</span>
+                <button class="ctrl-btn active" id="btnWdAll" onclick="setWdFilter('', this)">Alle Tage</button>
+                <button class="ctrl-btn" id="btnWdWork" onclick="setWdFilter('work', this)">Mo–Fr</button>
+                <button class="ctrl-btn" id="btnWdWe" onclick="setWdFilter('weekend', this)">Sa+So</button>
+                <span class="ctrl-label" style="margin-left:8px">Zeitraum:</span>
+                <button class="ctrl-btn active" id="btnD30" onclick="setTpDays(30, this)">30 T</button>
+                <button class="ctrl-btn" id="btnD60" onclick="setTpDays(60, this)">60 T</button>
+                <button class="ctrl-btn" id="btnD90" onclick="setTpDays(90, this)">90 T</button>
+            </div>
+            <div class="chart-row">
+                <div class="chart-wrap" style="flex:1.4">
+                    <div class="chart-label">Netzfrequenz nach Stunde (avg ± σ, Hz)</div>
+                    <div class="chart-el-tall" id="chartTpFreq"></div>
+                </div>
+                <div class="chart-wrap" style="flex:1">
+                    <div class="chart-label">Netzspannung L-L nach Stunde (avg ± σ, V)</div>
+                    <div class="chart-el-tall" id="chartTpVolt"></div>
+                </div>
+            </div>
+            <div class="hint-box">
+                Die Frequenzabweichungen im <strong>Sub-Millihertz-Bereich</strong> (≈ 0.1–5 mHz)
+                spiegeln das Gleichgewicht zwischen Erzeugung und Verbrauch im europäischen Verbundnetz
+                (UCTEsynchron). Der lokale Solarertrag erscheint als Überlagerung zum europaweiten Signal —
+                herausfilterbar durch Vergleich <em>Mi–Do</em> (PV-reich, Sommer) vs.
+                <em>Sa–So</em> (gleiches PV-Potential, aber weniger Industrielast).
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         SECTION 3: Wochen-Profil
+    ================================================================ -->
+    <div class="section">
+        <div class="section-header">
+            <span class="section-icon">📅</span>
+            <div>
+                <div class="section-title">Wochen-Frequenzprofil
+                    <span class="badge badge-vlf">VLF</span>
+                </div>
+                <div class="section-sub">
+                    An <strong>Wochenenden</strong> ist die Industrielast deutlich niedriger.
+                    Weniger Last bei ähnlicher Grundlast-Einspeisung → Tendenz zu
+                    leicht erhöhter Netzfrequenz (Überschussenergie). Gleichzeitig fehlen
+                    Großbetriebe als dämpfende, träge Last. Das Ergebnis:
+                    <strong>Samstag/Sonntag zeigen eine andere Frequenzcharakteristik</strong>
+                    und oft eine höhere Volatilität (σ). Die Spannungsebene bestätigt diesen Effekt.
+                </div>
+            </div>
+        </div>
+        <div class="section-body">
+            <div class="ctrl-row">
+                <span class="ctrl-label">Zeitraum:</span>
+                <button class="ctrl-btn active" id="btnWp60" onclick="setWpDays(60, this)">60 T</button>
+                <button class="ctrl-btn" id="btnWp90" onclick="setWpDays(90, this)">90 T</button>
+                <button class="ctrl-btn" id="btnWp180" onclick="setWpDays(180, this)">180 T</button>
+            </div>
+            <div class="chart-row">
+                <div class="chart-wrap" style="flex:1.3">
+                    <div class="chart-label">Ø Netzfrequenz nach Wochentag (Hz, ± σ)</div>
+                    <div class="chart-el-tall" id="chartWpFreq"></div>
+                </div>
+                <div class="chart-wrap" style="flex:1">
+                    <div class="chart-label">Frequenz-Volatilität (σ) nach Wochentag</div>
+                    <div class="chart-el-tall" id="chartWpStd"></div>
+                </div>
+            </div>
+            <div class="stat-row" id="wpStats">
+                <div class="loading-msg">Lade Wochenprofil…</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================================================
+         SECTION 4: Letzte Events
+    ================================================================ -->
+    <div class="section">
+        <div class="section-header">
+            <span class="section-icon">⚡</span>
+            <div>
+                <div class="section-title">Erkannte Ereignisse (letzte Tage)</div>
+                <div class="section-sub">
+                    Aus der automatischen Analyse (HF/NF/VLF-Klassifikation).
+                    <strong>HF_local</strong> = lokale Transienten/THD,
+                    <strong>NF_global</strong> = Frequenz-/Spannungsmuster (DFD, Gradienten, U-Band),
+                    <strong>VLF</strong> = Langzeit-Drift, Changepoints.
+                    Quelle: PAC4200-Analyse (falls Daten vorhanden), sonst Legacy Smart-Meter-DFD.
+                </div>
+            </div>
+        </div>
+        <div class="section-body">
+            <div class="ctrl-row">
+                <span class="ctrl-label">Band:</span>
+                <button class="ctrl-btn active" id="evtAll" onclick="setEvtBand('', this)">Alle</button>
+                <button class="ctrl-btn" id="evtHF" onclick="setEvtBand('HF_local', this)">HF</button>
+                <button class="ctrl-btn" id="evtNF" onclick="setEvtBand('NF_global', this)">NF</button>
+                <button class="ctrl-btn" id="evtVLF" onclick="setEvtBand('VLF', this)">VLF</button>
+                <span class="ctrl-label" style="margin-left:8px">Tage:</span>
+                <button class="ctrl-btn active" id="evtD7" onclick="setEvtDays(7, this)">7 T</button>
+                <button class="ctrl-btn" id="evtD14" onclick="setEvtDays(14, this)">14 T</button>
+                <button class="ctrl-btn" id="evtD30" onclick="setEvtDays(30, this)">30 T</button>
+            </div>
+            <div id="evtBody"><div class="loading-msg">Lade Events…</div></div>
+        </div>
+    </div>
+
+</div><!-- /content -->
+
+<script>
+// ============================================================
+// State
+// ============================================================
+let tpDays = 30, tpWd = '', wpDays = 60;
+let evtBand = '', evtDays = 7;
+
+const HOUR_LABELS = Array.from({length:24}, (_,i) => `${String(i).padStart(2,'0')}:00`);
+const WD_LABELS = ['Mo','Di','Mi','Do','Fr','Sa','So'];
+const F_NOM = 50.0;
+
+// ECharts theme defaults
+const GRID = { top: 24, right: 16, bottom: 28, left: 52 };
+const ANIM = { animation: true, animationDuration: 400 };
+const AXIS_LABEL = { color: '#64748b', fontSize: 11 };
+const AXIS_LINE = { lineStyle: { color: '#1e293b' } };
+const SPLIT_LINE = { lineStyle: { color: 'rgba(255,255,255,0.05)' } };
+const BG = 'transparent';
+
+// ============================================================
+// ECharts helpers
+// ============================================================
+function initChart(id) {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const c = echarts.init(el, 'dark', { renderer: 'svg' });
+    c.setOption({ backgroundColor: BG });
+    return c;
+}
+
+const charts = {};
+
+function getChart(id) {
+    if (!charts[id]) charts[id] = initChart(id);
+    return charts[id];
+}
+
+window.addEventListener('resize', () => {
+    Object.values(charts).forEach(c => c && c.resize());
+});
+
+// ============================================================
+// DFD
+// ============================================================
+async function loadDfd() {
+    let data;
+    try {
+        const r = await fetch('/api/nq/analyse/dfd?days=60');
+        data = await r.json();
+    } catch { return; }
+
+    const bt = data.by_type || {};
+    const types = ['full_hour', 'half_hour', 'quarter_hour'];
+    const typeLabels = ['Vollstunde\n:00', 'Halbstunde\n:30', 'Viertelstunde\n:15/:45'];
+
+    // Stats
+    const statsEl = document.getElementById('dfdStats');
+    const total = data.n_total || 0;
+    let statsHtml = '';
+    types.forEach((t, i) => {
+        const s = bt[t] || {};
+        statsHtml += `<div class="stat-card">
+            <div class="stat-label">${typeLabels[i].replace('\n',' ')}</div>
+            <div class="stat-value">${s.avg != null ? s.avg.toFixed(1) : '—'}<span class="stat-unit">mHz</span></div>
+            <div class="stat-sub">Ø DFD · n=${s.count||0}</div>
+        </div>`;
+    });
+    statsHtml += `<div class="stat-card">
+        <div class="stat-label">Events gesamt</div>
+        <div class="stat-value">${total}</div>
+        <div class="stat-sub">${data.days} Tage analysiert</div>
+    </div>`;
+    statsEl.innerHTML = statsHtml;
+
+    // Chart: by type
+    const c1 = getChart('chartDfdByType');
+    if (c1) {
+        const avgVals = types.map(t => bt[t]?.avg ?? 0);
+        const maxVals = types.map(t => bt[t]?.max ?? 0);
+        c1.setOption({
+            ...ANIM, backgroundColor: BG, grid: { ...GRID, bottom: 40 },
+            xAxis: { type: 'category', data: typeLabels, axisLabel: { ...AXIS_LABEL, interval: 0, formatter: v => v.replace('\n','\n') }, axisLine: AXIS_LINE },
+            yAxis: { type: 'value', name: 'mHz', nameTextStyle: { color: '#64748b', fontSize: 10 }, axisLabel: AXIS_LABEL, splitLine: SPLIT_LINE },
+            tooltip: { trigger: 'axis', backgroundColor: '#1e293b', borderColor: '#334155',
+                formatter: p => `${p[0].name.replace('\n',' ')}<br>Ø ${p[0].value} mHz<br>Max ${p[1].value} mHz` },
+            series: [
+                { type: 'bar', name: 'Ø DFD', data: avgVals, barWidth: '40%',
+                  itemStyle: { color: '#6366f1', borderRadius: [4,4,0,0] }, z: 2 },
+                { type: 'bar', name: 'Max DFD', data: maxVals, barWidth: '40%', barGap: '-100%',
+                  itemStyle: { color: 'rgba(99,102,241,0.25)', borderRadius: [4,4,0,0] }, z: 1 },
+            ],
+        });
+    }
+
+    // Chart: trend
+    const c2 = getChart('chartDfdTrend');
+    if (c2 && data.trend?.length) {
+        const trend = data.trend;
+        c2.setOption({
+            ...ANIM, backgroundColor: BG, grid: { ...GRID, bottom: 32 },
+            xAxis: { type: 'category', data: trend.map(d => d.day.slice(5)), axisLabel: { ...AXIS_LABEL, interval: Math.max(1, Math.floor(trend.length/8)) }, axisLine: AXIS_LINE },
+            yAxis: { type: 'value', name: 'mHz', axisLabel: AXIS_LABEL, splitLine: SPLIT_LINE },
+            tooltip: { trigger: 'axis', backgroundColor: '#1e293b', borderColor: '#334155' },
+            legend: { top: 0, right: 0, textStyle: { color: '#94a3b8', fontSize: 10 } },
+            series: [
+                { type: 'line', name: 'Vollstunde', data: trend.map(d => d.full_hour), smooth: true,
+                  lineStyle: { color: '#f59e0b', width: 2 }, showSymbol: false },
+                { type: 'line', name: 'Halbstunde', data: trend.map(d => d.half_hour), smooth: true,
+                  lineStyle: { color: '#6366f1', width: 1.5 }, showSymbol: false },
+                { type: 'line', name: 'Viertelstunde', data: trend.map(d => d.quarter_hour), smooth: true,
+                  lineStyle: { color: '#22c55e', width: 1.5 }, showSymbol: false },
+            ],
+        });
+    }
+}
+
+// ============================================================
+// Tagesprofil
+// ============================================================
+async function loadTagesprofil() {
+    let data;
+    try {
+        const r = await fetch(`/api/nq/analyse/tagesprofil?days=${tpDays}&weekday=${tpWd}`);
+        data = await r.json();
+    } catch { return; }
+
+    const hours = data.hours || HOUR_LABELS.map((_,i)=>i);
+    const f_avg = data.f_avg || [];
+    const f_std = data.f_std || [];
+    const u_avg = data.u_avg || [];
+    const u_std = data.u_std || [];
+
+    // Frequency chart
+    const cf = getChart('chartTpFreq');
+    if (cf && f_avg.length) {
+        // Band: avg ± std as area series
+        const f_hi = f_avg.map((v,i) => v != null && f_std[i] != null ? +(v + f_std[i]).toFixed(4) : null);
+        const f_lo = f_avg.map((v,i) => v != null && f_std[i] != null ? +(v - f_std[i]).toFixed(4) : null);
+        const yMin = Math.min(49.90, ...f_lo.filter(v=>v!=null));
+        const yMax = Math.max(50.10, ...f_hi.filter(v=>v!=null));
+        cf.setOption({
+            ...ANIM, backgroundColor: BG,
+            grid: { ...GRID, top: 28, bottom: 32 },
+            xAxis: { type: 'category', data: HOUR_LABELS, axisLabel: { ...AXIS_LABEL, interval: 3 }, axisLine: AXIS_LINE },
+            yAxis: { type: 'value', min: +yMin.toFixed(3), max: +yMax.toFixed(3), name: 'Hz',
+                axisLabel: { ...AXIS_LABEL, formatter: v => v.toFixed(3) }, splitLine: SPLIT_LINE },
+            tooltip: { trigger: 'axis', backgroundColor: '#1e293b', borderColor: '#334155',
+                formatter: params => {
+                    const h = params[0]?.axisValue || '';
+                    const avg = params.find(p=>p.seriesName==='avg_f')?.value;
+                    const std = f_std[params[0]?.dataIndex];
+                    return `${h}<br>f: ${avg?.toFixed(4)} Hz${std!=null ? ` ± ${(std*1000).toFixed(1)} mHz` : ''}`;
+                }
+            },
+            series: [
+                { type: 'line', name: 'band', data: f_hi, smooth: true, showSymbol: false,
+                  lineStyle: { opacity: 0 }, areaStyle: { color: 'rgba(99,102,241,0.15)' }, stack: 'band_f', z: 1 },
+                { type: 'line', name: 'band_lo', data: f_lo.map((v,i)=> v!=null && f_hi[i]!=null ? +(f_hi[i]-v).toFixed(4) : null),
+                  smooth: true, showSymbol: false, lineStyle: { opacity: 0 },
+                  areaStyle: { color: '#0f172a' }, stack: 'band_f', z: 1 },
+                { type: 'line', name: '50 Hz', data: Array(24).fill(F_NOM),
+                  lineStyle: { color: '#475569', width: 1, type: 'dashed' }, showSymbol: false, z: 2 },
+                { type: 'line', name: 'avg_f', data: f_avg.map(v=>v?.toFixed(4)),
+                  smooth: true, showSymbol: false, lineStyle: { color: '#818cf8', width: 2.5 }, z: 3 },
+            ],
+        });
+    }
+
+    // Voltage chart
+    const cv = getChart('chartTpVolt');
+    if (cv && u_avg.length) {
+        const u_hi = u_avg.map((v,i) => v != null && u_std[i] != null ? +(v + u_std[i]).toFixed(1) : null);
+        const u_lo = u_avg.map((v,i) => v != null && u_std[i] != null ? +(v - u_std[i]).toFixed(1) : null);
+        const uMin = Math.min(215, ...u_lo.filter(v=>v!=null));
+        const uMax = Math.max(245, ...u_hi.filter(v=>v!=null));
+        cv.setOption({
+            ...ANIM, backgroundColor: BG,
+            grid: { ...GRID, top: 28, bottom: 32 },
+            xAxis: { type: 'category', data: HOUR_LABELS, axisLabel: { ...AXIS_LABEL, interval: 3 }, axisLine: AXIS_LINE },
+            yAxis: { type: 'value', min: +uMin.toFixed(0), max: +uMax.toFixed(0), name: 'V',
+                axisLabel: AXIS_LABEL, splitLine: SPLIT_LINE },
+            tooltip: { trigger: 'axis', backgroundColor: '#1e293b', borderColor: '#334155' },
+            series: [
+                { type: 'line', name: 'band_u', data: u_hi, smooth: true, showSymbol: false,
+                  lineStyle: { opacity: 0 }, areaStyle: { color: 'rgba(34,197,94,0.12)' }, stack: 'band_u', z: 1 },
+                { type: 'line', name: 'band_lo_u', data: u_lo.map((v,i)=> v!=null && u_hi[i]!=null ? +(u_hi[i]-v).toFixed(1) : null),
+                  smooth: true, showSymbol: false, lineStyle: { opacity: 0 },
+                  areaStyle: { color: '#0f172a' }, stack: 'band_u', z: 1 },
+                { type: 'line', name: 'U avg', data: u_avg.map(v=>v?.toFixed(1)),
+                  smooth: true, showSymbol: false, lineStyle: { color: '#4ade80', width: 2.5 }, z: 3 },
+            ],
+        });
+    }
+}
+
+function setWdFilter(wd, btn) {
+    tpWd = wd;
+    ['btnWdAll','btnWdWork','btnWdWe'].forEach(id => document.getElementById(id)?.classList.remove('active'));
+    btn.classList.add('active');
+    loadTagesprofil();
+}
+function setTpDays(d, btn) {
+    tpDays = d;
+    ['btnD30','btnD60','btnD90'].forEach(id => document.getElementById(id)?.classList.remove('active'));
+    btn.classList.add('active');
+    loadTagesprofil();
+}
+
+// ============================================================
+// Wochenprofil
+// ============================================================
+async function loadWochenprofil() {
+    let data;
+    try {
+        const r = await fetch(`/api/nq/analyse/wochenprofil?days=${wpDays}`);
+        data = await r.json();
+    } catch { return; }
+
+    const wdays = data.days || WD_LABELS;
+    const f_avg = data.f_avg || [];
+    const f_std = data.f_std || [];
+    const counts = data.sample_counts || [];
+
+    const cf = getChart('chartWpFreq');
+    if (cf && f_avg.length) {
+        // Error bars as custom series
+        const errData = f_avg.map((v,i) => ({
+            value: v?.toFixed(4),
+            errorInfo: f_std[i]
+        }));
+        const yVals = f_avg.filter(v=>v!=null);
+        const stdVals = f_std.filter(v=>v!=null);
+        const yMin = Math.min(49.92, ...yVals.map((v,i)=>v-(f_std[i]||0)));
+        const yMax = Math.max(50.08, ...yVals.map((v,i)=>v+(f_std[i]||0)));
+
+        cf.setOption({
+            ...ANIM, backgroundColor: BG,
+            grid: { ...GRID, top: 12, bottom: 32 },
+            xAxis: { type: 'category', data: wdays, axisLabel: AXIS_LABEL, axisLine: AXIS_LINE },
+            yAxis: { type: 'value', min: +yMin.toFixed(3), max: +yMax.toFixed(3), name: 'Hz',
+                axisLabel: { ...AXIS_LABEL, formatter: v => v.toFixed(3) }, splitLine: SPLIT_LINE },
+            tooltip: { trigger: 'axis', backgroundColor: '#1e293b', borderColor: '#334155',
+                formatter: p => {
+                    const i = p[0]?.dataIndex;
+                    return `${wdays[i]}<br>f: ${f_avg[i]?.toFixed(4)} Hz<br>σ: ${(f_std[i]*1000)?.toFixed(1)} mHz`;
+                }
+            },
+            series: [
+                { type: 'bar', data: f_avg.map(v=>v?.toFixed(4)), barWidth: '55%',
+                  itemStyle: {
+                      color: p => {
+                          const i = p.dataIndex;
+                          return i >= 5 ? '#f59e0b' : '#6366f1';  // Sa/So orange
+                      },
+                      borderRadius: [4,4,0,0]
+                  }
+                },
+                // std overlay as thin bar
+                { type: 'custom', name: 'Fehler', renderItem: (params, api) => {
+                    const i = params.dataIndex;
+                    const avg = f_avg[i]; const std = f_std[i];
+                    if (!avg || !std) return;
+                    const x = api.coord([i, avg])[0];
+                    const top = api.coord([i, avg + std])[1];
+                    const bot = api.coord([i, avg - std])[1];
+                    return { type: 'group', children: [
+                        { type: 'line', shape: { x1: x, y1: top, x2: x, y2: bot }, style: { stroke: '#94a3b8', lineWidth: 2 } },
+                        { type: 'line', shape: { x1: x-4, y1: top, x2: x+4, y2: top }, style: { stroke: '#94a3b8', lineWidth: 2 } },
+                        { type: 'line', shape: { x1: x-4, y1: bot, x2: x+4, y2: bot }, style: { stroke: '#94a3b8', lineWidth: 2 } },
+                    ]};
+                }, data: f_avg.map(v=>v) }
+            ],
+        });
+    }
+
+    // Std chart
+    const cs = getChart('chartWpStd');
+    if (cs && f_std.length) {
+        cs.setOption({
+            ...ANIM, backgroundColor: BG,
+            grid: { ...GRID, top: 12, bottom: 32 },
+            xAxis: { type: 'category', data: wdays, axisLabel: AXIS_LABEL, axisLine: AXIS_LINE },
+            yAxis: { type: 'value', name: 'mHz', axisLabel: AXIS_LABEL, splitLine: SPLIT_LINE },
+            tooltip: { trigger: 'axis', backgroundColor: '#1e293b', borderColor: '#334155',
+                formatter: p => `${p[0].axisValue}<br>σ = ${(p[0].value*1000).toFixed(2)} mHz` },
+            series: [{
+                type: 'bar', data: f_std.map(v => v != null ? +(v*1000).toFixed(2) : null), barWidth: '55%',
+                itemStyle: {
+                    color: p => p.dataIndex >= 5 ? 'rgba(245,158,11,0.7)' : 'rgba(99,102,241,0.6)',
+                    borderRadius: [4,4,0,0]
+                }
+            }],
+        });
+    }
+
+    // Stats
+    const statsEl = document.getElementById('wpStats');
+    const workAvg = f_avg.slice(0,5).filter(v=>v!=null);
+    const weAvg = f_avg.slice(5).filter(v=>v!=null);
+    const workMean = workAvg.length ? (workAvg.reduce((a,b)=>a+b,0)/workAvg.length) : null;
+    const weMean = weAvg.length ? (weAvg.reduce((a,b)=>a+b,0)/weAvg.length) : null;
+    const diff = (workMean && weMean) ? (weMean - workMean) * 1000 : null;
+    statsEl.innerHTML = `
+        <div class="stat-card">
+            <div class="stat-label">Ø Werktag (Mo–Fr)</div>
+            <div class="stat-value">${workMean ? workMean.toFixed(4) : '—'}<span class="stat-unit">Hz</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Ø Wochenende</div>
+            <div class="stat-value">${weMean ? weMean.toFixed(4) : '—'}<span class="stat-unit">Hz</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">WE – WT Differenz</div>
+            <div class="stat-value" style="color:${diff > 0 ? '#4ade80' : '#f87171'}">${diff != null ? (diff > 0 ? '+' : '') + diff.toFixed(1) : '—'}<span class="stat-unit">mHz</span></div>
+            <div class="stat-sub">${diff > 0 ? 'Wochenende leicht hoeher' : diff < 0 ? 'Wochenende tiefer' : ''}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Analysezeit</div>
+            <div class="stat-value">${wpDays}<span class="stat-unit">Tage</span></div>
+        </div>
+    `;
+}
+
+function setWpDays(d, btn) {
+    wpDays = d;
+    ['btnWp60','btnWp90','btnWp180'].forEach(id => document.getElementById(id)?.classList.remove('active'));
+    btn.classList.add('active');
+    loadWochenprofil();
+}
+
+// ============================================================
+// Events
+// ============================================================
+async function loadEvents() {
+    document.getElementById('evtBody').innerHTML = '<div class="loading-msg">Lade Events…</div>';
+    let data;
+    try {
+        const r = await fetch(`/api/nq/analyse/events?days=${evtDays}&band=${evtBand}`);
+        data = await r.json();
+    } catch {
+        document.getElementById('evtBody').innerHTML = '<div class="no-data">Fehler beim Laden</div>';
+        return;
+    }
+
+    const events = data.events || [];
+    if (!events.length) {
+        document.getElementById('evtBody').innerHTML =
+            `<div class="no-data">Keine Events (${evtDays} Tage${evtBand ? ', Band: '+evtBand : ''}). ` +
+            `Quelle: ${data.source || '—'}. Nach Ausführen des Analyselaufs erscheinen PAC4200-Events.</div>`;
+        return;
+    }
+
+    const fmtTs = ts => {
+        const d = new Date(ts * 1000);
+        return d.toLocaleString('de-DE', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    };
+    const bandClass = b => b === 'HF_local' ? 'band-HF' : b === 'NF_global' ? 'band-NF' : 'band-VLF';
+    const bandShort = b => b === 'HF_local' ? 'HF' : b === 'NF_global' ? 'NF' : 'VLF';
+
+    let html = `<table class="evt-table">
+        <thead><tr>
+            <th>Zeitpunkt</th><th>Band</th><th>Art</th><th>Trigger</th>
+            <th>Schwere</th><th>Spitze</th><th>Ursprung</th>
+        </tr></thead><tbody>`;
+
+    events.slice(0, 60).forEach(ev => {
+        const sev = ev.severity || 0;
+        const sevW = Math.round(sev * 50);
+        const sevColor = sev > 0.7 ? '#ef4444' : sev > 0.4 ? '#f59e0b' : '#22c55e';
+        const origClass = ev.origin === 'lokal' ? 'origin-lokal' : 'origin-net';
+        html += `<tr>
+            <td>${fmtTs(ev.ts)}</td>
+            <td><span class="band-pill ${bandClass(ev.band)}">${bandShort(ev.band)}</span></td>
+            <td style="font-size:11px;color:#cbd5e1">${ev.kind || '—'}</td>
+            <td style="font-size:11px;color:#94a3b8">${ev.trigger || '—'}</td>
+            <td><span class="sev-bar" style="width:${sevW}px;background:${sevColor}"></span></td>
+            <td style="font-size:11px">${ev.peak_qty ? `${ev.peak_val ?? '—'} (${ev.peak_qty})` : '—'}</td>
+            <td class="${origClass}" style="font-size:11px">${ev.origin || '—'}</td>
+        </tr>`;
+    });
+    html += '</tbody></table>';
+    if (events.length > 60) {
+        html += `<div class="no-data">+ ${events.length-60} weitere Events (Filter verfeinern)</div>`;
+    }
+    html += `<div class="hint-box" style="margin-top:10px">Quelle: <strong>${data.source}</strong> · ${data.n} Events total</div>`;
+    document.getElementById('evtBody').innerHTML = html;
+}
+
+function setEvtBand(band, btn) {
+    evtBand = band;
+    ['evtAll','evtHF','evtNF','evtVLF'].forEach(id => document.getElementById(id)?.classList.remove('active'));
+    btn.classList.add('active');
+    loadEvents();
+}
+function setEvtDays(d, btn) {
+    evtDays = d;
+    ['evtD7','evtD14','evtD30'].forEach(id => document.getElementById(id)?.classList.remove('active'));
+    btn.classList.add('active');
+    loadEvents();
+}
+
+// ============================================================
+// Init
+// ============================================================
+(async () => {
+    if (window.PVNavUI) PVNavUI.initDrawer();
+    await Promise.all([
+        loadDfd(),
+        loadTagesprofil(),
+        loadWochenprofil(),
+        loadEvents(),
+    ]);
+})();
+</script>
+</body>
+</html>

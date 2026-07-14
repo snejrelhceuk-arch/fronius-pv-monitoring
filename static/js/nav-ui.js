@@ -42,9 +42,11 @@
         { href: '/maschinenraum', label: 'Maschinenraum' },
         { href: '/maschinenraum', label: 'Echtzeit (Kern-DB)', sub: true },
         { href: '/maschinenraum?db=nq', label: 'Netzqualität (NQ-DB)', sub: true, noctx: true },
+        { href: '/netzqualitaet/chart', label: 'NQ Chart (Tag/Event)', sub: true },
         { href: '/netzqualitaet/live', label: 'Screens (Live-Tableau)', sub: true },
         { href: '/pac4200', label: 'PAC4200 (Gerät)', sub: true },
         { href: '/netzqualitaet', label: 'NQ DFD-Analyse', sub: true },
+        { href: '/netzqualitaet/analyse', label: 'NQ Musteranalyse', sub: true },
     ];
 
     function navQuery() {

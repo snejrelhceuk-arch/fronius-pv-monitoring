@@ -10,6 +10,9 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png?v={{ favicon_version }}">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
     <title>Maschinenraum - Fronius PV</title>
+    <script src="/static/js/nav-context.js"></script>
+    <script src="/static/js/nav-ui.js"></script>
+    <link rel="stylesheet" href="/static/css/nav-ui.css">
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -244,14 +247,6 @@
 <body>
     <div class="container">
         <div class="header">
-            <div class="nav-links">
-                <a href="/" class="back-btn">Flow</a>
-                <a href="/monitoring" class="back-btn">Monitoring</a>
-                <a href="/analyse" class="back-btn">Analyse</a>
-                <a href="/maschinenraum?db=nq" class="back-btn" style="background:rgba(0,175,0,0.2); border-color:rgba(0,175,0,0.4);">Netzqualität</a>
-                <a href="/netzqualitaet/live" class="back-btn" style="background:rgba(0,175,0,0.2); border-color:rgba(0,175,0,0.4);">Screens</a>
-                <a href="/pac4200" class="back-btn" style="background:rgba(0,175,0,0.2); border-color:rgba(0,175,0,0.4);">PAC4200</a>
-            </div>
             <div style="display:flex; gap:10px; align-items:center;">
                 <div class="db-selector" style="display:flex; gap:4px; align-items:center; margin-right:6px;">
                     <span style="color:rgba(255,255,255,0.6); font-size:12px;">DB:</span>
@@ -476,11 +471,38 @@
             return units.filter(u => u).join(' / ');
         }
         
+        // Zeit-Navigations-Übergabe (1 h): der betrachtete Tag (offset) wird als
+        // 'tag'-Kontext gespiegelt, damit er mit Tag/Erzeuger/Verbraucher/NQ fließt.
+        function _ezViewedDate() {
+            const d = new Date();
+            d.setHours(0, 0, 0, 0);
+            d.setDate(d.getDate() - currentOffset);
+            return d;
+        }
+        function _ezCommitDay() {
+            if (!window.PVNavContext || !PVNavContext.commit) return;
+            const d = _ezViewedDate();
+            const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            PVNavContext.commit({ period: 'tag', date: iso }, { preserveKeys: ['db', 'embed'] });
+        }
+        function _ezApplyDay() {
+            if (!window.PVNavContext || !PVNavContext.getState) return;
+            const st = PVNavContext.getState();
+            if (!st || !st.context || st.context.period !== 'tag' || !st.context.date) return;
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const d = new Date(st.context.date + 'T00:00:00');
+            const diff = Math.round((today.getTime() - d.getTime()) / 86400000);
+            if (diff >= 0) currentOffset = diff;
+        }
+
         // === Init ===
         async function init() {
             console.log('=== Echtzeit-View initialisiert ===');
             console.log('Initial Resolution:', currentResolution, 's');
             console.log('Initial Hours:', currentHours, 'h');
+
+            // Ausklapp-Navigation (Schublade) — Hamburger in die .header-Leiste.
+            if (window.PVNavUI) PVNavUI.initDrawer({ barSelector: '.header' });
 
             // DB aus URL-Param (?db=nq) vorwählen (Netzqualität nutzt dasselbe Programm)
             const _p = new URLSearchParams(window.location.search);
@@ -495,6 +517,8 @@
             chart = echarts.init(document.getElementById('mainChart'));
             chart.on('datazoom', checkLiveMode);
             setupEventListeners();
+            _ezApplyDay();          // betrachteten Tag (1 h) von anderen Seiten übernehmen
+            updateNavButtons();
             loadData();
         }
         
@@ -626,6 +650,7 @@
             document.getElementById('navPrev').addEventListener('click', () => {
                 currentOffset++;
                 updateNavButtons();
+                _ezCommitDay();
                 loadData();
             });
             
@@ -633,6 +658,7 @@
                 if (currentOffset > 0) {
                     currentOffset--;
                     updateNavButtons();
+                    _ezCommitDay();
                     loadData();
                 }
             });
@@ -640,6 +666,7 @@
             document.getElementById('navToday').addEventListener('click', () => {
                 currentOffset = 0;
                 updateNavButtons();
+                _ezCommitDay();
                 loadData();
             });
             
@@ -716,9 +743,24 @@
                     `${dateStr} (${dateLabel}) | ${timeWindow} | ${data.points} Punkte | ${data.source} | ${resolutionText}`;
                 
                 updateChart();
-                document.getElementById('footer').textContent = 
-                    `Letzte Aktualisierung: ${new Date().toLocaleTimeString('de-DE')}`;
-                    
+                const stamp = `Letzte Aktualisierung: ${new Date().toLocaleTimeString('de-DE')}`;
+                document.getElementById('footer').textContent = stamp;
+
+                // NQ2 WP3: PAC4200-Zähler-Fixpunkt (Bezug/Einspeisung) für den Tag spiegeln.
+                // Additiv + defensiv — bricht die bestehende Anzeige nie.
+                if (currentDB === 'nq') {
+                    const d = new Date((data.start || start) * 1000);
+                    const dayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                    fetch(`/api/nq/energy/day/${dayStr}`).then(r => (r.ok ? r.json() : null)).then(e => {
+                        if (e && !e.error) {
+                            const imp = e.wh_imp_kwh != null ? e.wh_imp_kwh.toFixed(1) : '–';
+                            const exp = e.wh_exp_kwh != null ? e.wh_exp_kwh.toFixed(1) : '–';
+                            document.getElementById('footer').textContent =
+                                `${stamp} · PAC ${dayStr}: Bezug ${imp} kWh · Einspeisung ${exp} kWh (Master-SM-Vergleich)`;
+                        }
+                    }).catch(() => { /* still nur Zeitstempel zeigen */ });
+                }
+
             } catch (e) {
                 document.getElementById('footer').textContent = `Fehler: ${e.message}`;
                 console.error('Fehler beim Laden:', e);

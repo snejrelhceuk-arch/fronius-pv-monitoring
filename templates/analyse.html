@@ -10,6 +10,9 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png?v={{ favicon_version }}">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
     <title>PV-Anlage Amortisation</title>
+    <script src="/static/js/nav-context.js"></script>
+    <script src="/static/js/nav-ui.js"></script>
+    <link rel="stylesheet" href="/static/css/nav-ui.css">
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -210,12 +213,7 @@
 <body>
     <div class="container">
         <div class="top-nav">
-            <a href="/analyse" class="active">📊 Analyse</a>
-            <div class="nav-separator"></div>
-            <a href="/erzeuger" class="btn-erzeuger">⚡ Erzeuger</a>
-            <a href="/verbraucher" class="btn-verbraucher">🔌 Verbraucher</a>
-            <div class="nav-separator"></div>
-            <a href="/">← Monitoring</a>
+            <span class="nav-title" style="font-weight:600;">📊 Analysen</span>
         </div>
         <div class="header-row">
             <div class="header-left">
@@ -391,5 +389,9 @@
         </div>
 
     {% include 'info_overlay.html' %}
+    <script>
+        if (window.PVNavUI) PVNavUI.initDrawer();
+    </script>
 </body>
+
 </html>

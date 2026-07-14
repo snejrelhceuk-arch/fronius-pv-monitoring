@@ -54,9 +54,6 @@
 <body>
     <nav class="top-nav">
         <span class="title">Netzqualität · Screens (Live-Tableau)</span>
-        <a href="/maschinenraum?db=nq">Netzqualität-Charts</a>
-        <a href="/pac4200">PAC4200-Gerät</a>
-        <a href="/maschinenraum">Maschinenraum</a>
         <span class="status">
             <span class="dot" id="dot"></span>
             <span id="statusText">Verbinde…</span>
@@ -82,7 +79,7 @@
         }
         $('grid').innerHTML = screens.map(s =>
             `<div class="card"><h3>${s.title}</h3>` +
-            s.lines.map(ln => {
+            (s.lines || []).map(ln => {
                 const neg = (typeof ln.value === 'number' && ln.value < 0) ? ' neg' : '';
                 return `<div class="row"><span class="lbl">${ln.label}</span>`
                     + `<span><span class="val${neg}">${fmt(ln.value)}</span>`
@@ -102,11 +99,12 @@
             } else {
                 $('dot').className = 'dot err';
                 $('statusText').textContent = j.error || 'PAC4200 nicht erreichbar';
-                render(j.screens);
+                render(null);
             }
         } catch (e) {
             $('dot').className = 'dot err';
             $('statusText').textContent = 'Netzwerkfehler: ' + e.message;
+            render(null);
         }
     }
     poll();
