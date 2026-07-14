@@ -24,6 +24,21 @@ CREATE TABLE IF NOT EXISTS nq_agg_10s (
 ) WITHOUT ROWID;
 
 -- ---------------------------------------------------------------------------
+-- Harmonik-RAW (1-s-Auflösung) — von Tech übernommen, Basis für _run_harm_5min.
+-- Schema identisch zu nq_raw_slow auf Tech. Nur kurz gehalten (SD-Schonung,
+-- primary_rawslow_hours); nach der 5-min-Aggregation nicht mehr benötigt.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS nq_raw_slow (
+    ts     INTEGER NOT NULL,
+    meas   TEXT    NOT NULL,   -- 'U_LN' | 'U_LL' | 'I'
+    phase  INTEGER NOT NULL,   -- 1..3
+    ord    INTEGER NOT NULL,   -- 1 (Grundschw.) oder 3,5,...,31
+    value  REAL,
+    event  INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (ts, meas, phase, ord)
+) WITHOUT ROWID;
+
+-- ---------------------------------------------------------------------------
 -- 5-min-Aggregat (Retention ~90 d)
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS nq_5min (
@@ -151,6 +166,48 @@ CREATE TABLE IF NOT EXISTS nq_energy_checkpoint (
     day       TEXT    NOT NULL,
     wh_imp REAL, wh_exp REAL, varh_imp REAL, varh_exp REAL, vah REAL
 );
+
+-- Monats-Fixpunkte (NQ2 WP2): Delta 1.→1. (00:00–00:00 localtime). Quelle für
+-- die Tooltip-Spiegelung in der Jahres-Ansicht. Aus den day_start-Checkpoints
+-- des Monatsanfangs/-endes gebildet (Differenzmethode, wie nq_energy_daily).
+CREATE TABLE IF NOT EXISTS nq_energy_monthly (
+    month           TEXT PRIMARY KEY,   -- YYYY-MM (localtime)
+    wh_imp_start    REAL, wh_imp_end    REAL, wh_imp_delta    REAL,
+    wh_exp_start    REAL, wh_exp_end    REAL, wh_exp_delta    REAL,
+    varh_imp_start  REAL, varh_imp_end  REAL, varh_imp_delta  REAL,
+    varh_exp_start  REAL, varh_exp_end  REAL, varh_exp_delta  REAL,
+    vah_start       REAL, vah_end       REAL, vah_delta       REAL,
+    src             TEXT,               -- 'counter' | 'reset_fallback' | 'partial'
+    n_samples       INTEGER,
+    created_ts      INTEGER NOT NULL
+);
+
+-- Jahres-Fixpunkte (NQ2 WP2): Delta 1.1.→1.1. Quelle für Tooltip in Gesamt-Ansicht.
+CREATE TABLE IF NOT EXISTS nq_energy_yearly (
+    year            TEXT PRIMARY KEY,   -- YYYY (localtime)
+    wh_imp_start    REAL, wh_imp_end    REAL, wh_imp_delta    REAL,
+    wh_exp_start    REAL, wh_exp_end    REAL, wh_exp_delta    REAL,
+    varh_imp_start  REAL, varh_imp_end  REAL, varh_imp_delta  REAL,
+    varh_exp_start  REAL, varh_exp_end  REAL, varh_exp_delta  REAL,
+    vah_start       REAL, vah_end       REAL, vah_delta       REAL,
+    src             TEXT,
+    n_samples       INTEGER,
+    created_ts      INTEGER NOT NULL
+);
+
+-- Transienten je 5-min-Fenster + Phase (NQ2 WP2). Auf Tech aus nq_raw_fast
+-- berechnet, hierher transferiert. count_pos/neg = Anzahl schneller Sprünge;
+-- slew_avg/max = mittlere/maximale Anstiegsgeschwindigkeit (V/s bzw. A/s).
+CREATE TABLE IF NOT EXISTS nq_transient_5min (
+    ts          INTEGER NOT NULL,   -- Fenster-Start (5-min-Raster)
+    phase       INTEGER NOT NULL,   -- 1..3
+    trans_u_pos INTEGER, trans_u_neg INTEGER,
+    slew_u_avg  REAL,    slew_u_max  REAL,
+    trans_i_pos INTEGER, trans_i_neg INTEGER,
+    slew_i_avg  REAL,    slew_i_max  REAL,
+    n           INTEGER NOT NULL,
+    PRIMARY KEY (ts, phase)
+) WITHOUT ROWID;
 
 -- iMS-Ablesungen des Netzbetreibers (kumulative Zählerstände, manuell/Portal).
 -- Basis für den Vergleich gegen PAC4200 + Master-SM.

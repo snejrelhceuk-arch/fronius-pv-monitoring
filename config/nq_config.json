@@ -1,5 +1,5 @@
 {
-  "_comment": "NQ-Modul (Rolle N) — PAC4200. Werte sind Defaults; Poll-Raten nach 48h-Feldtest (Phase 0) auf reale interne Refresh-Rate des PAC4200 nachziehen. Basis-Messwertblock (Adr. 1..73 FLOAT32) + Energie (Adr. 801 FLOAT64) gegen das reale Gerät verifiziert (2026-07-11), siehe nq/pac_live.py. Harmonik-Adressen noch offen. Reale PAC-IP steht in .infra.local als PV_PAC_IP (host hier ist anonymisierter Default).",
+  "_comment": "NQ-Modul (Rolle N) — PAC4200. Poll-Raten nach 48h-Feldtest nachziehen. Basis-Messwertblock (Adr. 1..73) + Max-Werte (75..144) + Energie (801) + Einzelharmonische (A.3.10): U L-N @9001..@9095, I @11001..@11095, U L-L @22001..@22095 — je 96 Register, ungerade H3..H31. slow_ms kann für Harmonik-Polling genutzt werden. Reale PAC-IP in .infra.local als PV_PAC_IP (host hier anonymisierter Default).",
 
   "pac": {
     "host": "192.0.2.111",
@@ -11,25 +11,30 @@
   "tmpfs": {
     "db_path": "/dev/shm/nq_cache.db",
     "budget_mb": 1500,
-    "cap_mb": 1200
+    "cap_mb": 1200,
+    "warn_free_mb": 200
   },
 
   "retention": {
-    "raw_hours": 72,
+    "raw_hours": 12,
     "primary_agg10s_hours": 72,
+    "primary_rawslow_hours": 12,
     "primary_5min_days": 90,
     "primary_hourly_days": 365,
-    "primary_daily_days": 3650
+    "primary_daily_days": 3650,
+    "event_keep_days": 90,
+    "event_max_count": 10000
   },
 
   "polling": {
-    "profile": "balanced",
-    "fast_ms": 500,
+    "profile": "dual-rate",
+    "fast_ms": 200,
     "medium_ms": 1000,
-    "slow_ms": 5000,
-    "energy_s": 60,
+    "slow_ms": 1000,
+    "energy_s": 300,
     "flush_interval_s": 15,
-    "buffer_maxlen": 4000
+    "buffer_maxlen": 5000,
+    "_comment": "NQ2-Tier-Benennung: fast(200ms)=Block-A/B-Skalare (U,I,P,Q,S,cos phi,THD); medium(1000ms)=Harmonische @9001/@11001/@22001 + Netzfrequenz (real ~10s Refresh); slow=Energiezaehler im energy_s-Takt (300s). slow_ms=Alias fuer medium_ms (Rueckwaertskompatibilitaet Harm-Loop). Feldtest 2026-07-12: A/B <=250ms, Harm ~1s, FREQ 10s."
   },
 
   "aggregate": {
@@ -43,15 +48,57 @@
     "thd_u_pct": 5.0,
     "di_step_a": 5.0,
     "pre_window_s": 30,
-    "post_window_s": 60,
-    "max_duration_s": 60,
+    "post_window_s": 30,
+    "max_duration_s": 300,
     "cooldown_s": 120,
-    "dedup_same_trigger": true
+    "dedup_same_trigger": true,
+    "dedup_amplitude_pct": 30,
+    "dedup_time_pct": 10,
+    "dedup_min_hours_apart": 24,
+    "trans_threshold_v": 3.0,
+    "trans_threshold_a": 5.0,
+    "trans_dt_ms": 200,
+    "event_stale_cap_s": 3600,
+    "_comment": "NQ2: max_duration_s=300 harte Obergrenze; Aehnlichkeits-Dedup (dedup_*): gleicher Trigger + Amplitude +/-30% + Zeit +/-10% + min 24h Abstand -> nur Beschreibung, kein Schnipsel. trans_*: Transienten-Schwellen fuer 5min-Fensteranalyse."
   },
 
   "transfer": {
     "mode": "daily",
-    "primary_host": "CHANGE_ME_PRIMARY",
-    "primary_db_dir": "nq/db"
+    "primary_db_dir": "nq/db",
+    "_transfer_note": "Pull-Modell: Primary laedt read-only via SSH von Tech (nq/transfer/nq_agg_transfer.py, nq_energy_rollup.py). Es gibt KEIN primary_host-Feld mehr (frueher CHANGE_ME_PRIMARY, ungenutzt). Tech-Host kommt aus PV_TECH_IP / config.NQ_TECH_IP."
+  },
+
+  "analysis": {
+    "_comment": "Schwellen für HF/NF/VLF-Detektoren. Alle Werte kalibrierbar ohne Code-Änderung.",
+    "thd_u_spike_pct": 5.0,
+    "thd_i_spike_pct": 80.0,
+    "du_net_step_v": 1.5,
+    "u_band_min_v": 207.0,
+    "u_band_max_v": 253.0,
+    "df_gradient_hz_per_min": 0.05,
+    "dfd_window_s": 180,
+    "dfd_anomaly_hz": 0.1,
+    "thres_tap_v": 2.0,
+    "z_loop_source": "config/nq_impedance.json",
+    "vlf_sigma_threshold": 2.0,
+    "vlf_changepoint_z": 2.5,
+    "pvsystem_crosscheck": true,
+    "limit_mail_enabled": true,
+    "limit_window_s": 10,
+    "limit_mail_cooldown_s": 300,
+    "_limit_comment": "Software-Grenzwertueberwachung (WP1): der Poller vergleicht die verifiziert gelesenen Skalare (U/I/FREQ/THD) gegen 'grenzwerte'. Bei >90% dauerhaft (>limit_window_s) -> Sofort-Alarm-Mail, danach limit_mail_cooldown_s Sperre. KEINE erfundenen PAC-Status-Register (No-Go: Adressen nicht erfinden); Auswertung aus gemessenen Werten."
+  },
+
+  "grenzwerte": {
+    "_comment": "Normgrenzen fuer Software-Ueberwachung + Chart-Warnstufen. Warnstufen bei 50/70/90% der Spanne zum Endwert. i_max_a aus pv-config (SLS-Grenze).",
+    "u_ln_min_v": 207.0,
+    "u_ln_max_v": 253.0,
+    "u_ll_min_v": 360.0,
+    "u_ll_max_v": 440.0,
+    "i_max_a": 35.0,
+    "freq_min_hz": 47.0,
+    "freq_max_hz": 52.0,
+    "thd_u_max_pct": 8.0,
+    "warning_levels": { "warn_pct": 50, "high_pct": 70, "crit_pct": 90 }
   }
 }
