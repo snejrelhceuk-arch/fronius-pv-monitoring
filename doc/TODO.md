@@ -124,6 +124,18 @@ Longterm-Offload-Skript, Einmal-Skripte entfernt (Snapshot auf Pi5-FB).
 - [ ] Datenreduktion fuer Visualisierung: Min/Max/Spread/Std pro 5min-Bucket
 - [ ] Baender-Darstellung (min/max als Flaeche + Mittelwert als Linie)
 
+### NQ-Modul (Rolle N) — aus Tiefenpruefung 2026-07-12 (`doc/netzqualitaet/NQ_TIEFENPRUEFUNG_2026-07-12.md`)
+
+> Pipeline am 2026-07-13 aktiviert + end-to-end verifiziert (inkl. Harmonische). Offene Folgepunkte:
+
+- [ ] **Tech-Code-Sync automatisieren:** Tech (`.181`) hat KEINEN automatischen Code-Abgleich und driftete ~1 Tag (Poller lief ohne Harmonik-Thread). Sync-Mechanismus Primary→Tech (analog `sync_code_to_peer.sh`, nur git-tracked, ohne Daten) + Poller-Restart-Hook etablieren.
+- [ ] **tmpfs-Schema-Migration robuster:** `open_db` nutzt `CREATE TABLE IF NOT EXISTS` → geaenderte tmpfs-Tabellen (z. B. `nq_raw_medium` `ts`→`ts_ms`) werden bei Poller-Neustart NICHT migriert (Insert-Fehler bis manuellem Drop). Versions-/Migrations-Check beim Poller-Start ergaenzen.
+- [ ] **NQ-Units in Standard-Deployment aufnehmen:** `install_nq_services.sh` in `install_services.sh` bzw. Provisionierung referenzieren, damit NQ nach Reinstall/Reboot nicht manuell vergessen wird.
+- [x] **Event-Snippet-Pipeline fertigstellen** (NQ2 WP4, 2026-07-14): `nq/transfer/nq_event_transfer.py` (event=1-RAW sofort Tech→Primary `nq_event_*`, vor Stale-Kappung), `has_snippet`/`peak_*` gesetzt, Endpoint `/api/nq/event/<event_id>`, Chart-Marker + 200-ms-Drill-down in `templates/nq_chart_view.html`.
+- [x] **Tote Stubs entfernt** (NQ2 WP0, 2026-07-14): `nq/collector/pac_client.py`, `nq/transfer/nq_export_tech.py`, `nq/transfer/nq_ingest_primary.py` per `git rm` entfernt; Collector-Card-Code-Anchor auf `pac_live.py`+`nq_poller.py` korrigiert.
+- [x] **Doku-Drift bereinigt** (NQ2 WP0, 2026-07-14): `retention.raw_hours`=12 vs. „72 h" in `nq_tech_schema.sql`/`nq_capping.py`/Collector-Card angeglichen; `transfer.primary_host="CHANGE_ME_PRIMARY"` entfernt (Pull-Modell dokumentiert).
+- [x] **Primary-Aggregate per API/Chart** (NQ2 WP5, 2026-07-14): `/api/nq/aggregates?range=5min|hourly|daily` (`tech_read.fetch_aggregates`, Primary-SD) + feste Chart-Seite `/netzqualitaet/chart`.
+
 ---
 
 ## Web / Datenexport

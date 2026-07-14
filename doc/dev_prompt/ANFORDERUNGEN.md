@@ -30,9 +30,10 @@
     PF/cos φ, THD-U (L-N + L-L), THD-I, Phasenwinkel, Verzerrungsstrom,
     Frequenz/Unsymmetrie, Energie (Differenzmethode), Extremwerte (Max/Min aus Gerät),
     Gleitende Mittelwerte, Demand/Periode, Zeigerdiagramm (neu)
-- **Harmonische 2..64**: Blockiert weil nicht in der Modbus-Map! Das PAC4200
-  liefert per Modbus **keine** Einzelharmonik-Register — nur THD-Gesamtwert.
-  Kein Slow-Block möglich mit diesem Gerät (Klarstellung!).
+- **Harmonische**: Die **Standard**-Modbus-Map liefert nur THD-Gesamtwerte. Die
+  **Siemens-Erweiterungsregister** @9001 (U L-N), @11001 (I), @22001 (U L-L)
+  liefern jedoch die ungeraden Einzelharmonischen **H3..H31** (% der Grundschwingung).
+  Verifiziert & produktiv gepollt im Medium-Tier (1 s) seit 2026-07-12 → `nq_raw_slow`.
 
 ---
 

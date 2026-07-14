@@ -120,3 +120,7 @@ config/systemd/pv-nq-energy.service
 config/systemd/pv-nq-energy-rollup.service
 config/systemd/pv-nq-energy-rollup.timer
 config/systemd/pv-nq-poller.service
+config/systemd/pv-nq-agg-transfer.service
+config/systemd/pv-nq-agg-transfer.timer
+config/systemd/pv-nq-aggregate.service
+config/systemd/pv-nq-aggregate.timer

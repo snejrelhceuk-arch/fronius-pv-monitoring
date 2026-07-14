@@ -30,8 +30,11 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 | **steuerbox: Operator-Intents, Guards, respekt_s, Override-Status** | [`steuerbox-intents.card.md`](./cards/steuerbox-intents.card.md) | stable |
 | **netzqualitaet: Export, DFD-Analyse, Tages-/Boundary-API** | [`netzqualitaet-analysis.card.md`](./cards/netzqualitaet-analysis.card.md) | stable |
 | **NQ (Rolle N): PAC4200-Collector, tmpfs, Block-Poller, Kappung (Tech)** | [`netzqualitaet-nq-collector.card.md`](./cards/netzqualitaet-nq-collector.card.md) | experimental |
+| **NQ2 (Rolle N): Grenzwert-Alarm/LimitMonitor, PAC-Clone Single-Reader, fast/medium/slow-Tier** | [`netzqualitaet-nq-collector.card.md`](./cards/netzqualitaet-nq-collector.card.md) | experimental |
 | **NQ (Rolle N): Transfer Tech→Primary, Aggregationskaskade** | [`netzqualitaet-nq-aggregation.card.md`](./cards/netzqualitaet-nq-aggregation.card.md) | experimental |
+| **NQ2 (Rolle N): Zähler-Fixpunkte (Monat/Jahr), Transienten, Event-Schnipsel-Transfer** | [`netzqualitaet-nq-aggregation.card.md`](./cards/netzqualitaet-nq-aggregation.card.md) | experimental |
 | **NQ (Rolle N): Netzereignis-Analyse (HF/NF/VLF), Harmonische, DFD** | [`netzqualitaet-nq-analysis-events.card.md`](./cards/netzqualitaet-nq-analysis-events.card.md) | experimental |
+| **NQ2-Web: NQ-Chart (Tag/5min), Event-Drill-down, /api/nq/energy|event|aggregates, Zeit-Navi** | [`web-display-api.card.md`](./cards/web-display-api.card.md) | stable |
 | **system: .role-Guards, Failover, Publish-Audit, Backup-GFS** | [`system-ops-guards.card.md`](./cards/system-ops-guards.card.md) | stable |
 | **web: Blueprints, FroniusReadOnly, Display-Formatierung** | [`web-display-api.card.md`](./cards/web-display-api.card.md) | stable |
 

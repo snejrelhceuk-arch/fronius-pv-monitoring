@@ -698,6 +698,64 @@
 - **ULong / Unsigned long:** 32-Bit Ganzzahl, belegt 2 Register.
 - **Timestamp:** 32-Bit Unix-Zeit (Sekunden seit 1970), belegt 4 oder 2 Register je nach Konfiguration.
 
+---
+
+## 56. Harmonische Oberschwingungen — Spannung L-N (ohne Zeitstempel)
+
+**A.3.10, Tab. A-17 (Betriebsanleitung S. 240). FC 0x03/0x04.**  
+H1 (Grundschwingung) in Volt, H3..H31 als % der Grundschwingung. Nur ungerade Ordnungen.  
+Formel: `addr = 9001 + ordinal*6 + phase_offset` (ordinal 0=H1, 1=H3, …, 15=H31; L1=+0, L2=+2, L3=+4).
+
+| Offset | Reg | Name | Format | Einheit | Zugriff |
+|--------|-----|----|--------|---------|------|
+| 9001 | 2 | Grundschwingung (H1) U L1-N | Float | V | R |
+| 9003 | 2 | Grundschwingung (H1) U L2-N | Float | V | R |
+| 9005 | 2 | Grundschwingung (H1) U L3-N | Float | V | R |
+| 9007 | 2 | 3. Oberschwingung U L1-N | Float | % | R |
+| 9009 | 2 | 3. Oberschwingung U L2-N | Float | % | R |
+| 9011 | 2 | 3. Oberschwingung U L3-N | Float | % | R |
+| 9013 | 2 | 5. Oberschwingung U L1-N | Float | % | R |
+| … | … | H7..H29 (Schrittweite 6 Reg. je Ordnung) | Float | % | R |
+| 9091 | 2 | 31. Oberschwingung U L1-N | Float | % | R |
+| 9093 | 2 | 31. Oberschwingung U L2-N | Float | % | R |
+| 9095 | 2 | 31. Oberschwingung U L3-N | Float | % | R |
+
+---
+
+## 57. Harmonische Oberschwingungen — Strom (ohne Zeitstempel)
+
+**A.3.10, Tab. A-18 (Betriebsanleitung). FC 0x03/0x04.**  
+H1 in Ampere, H3..H31 als % der Grundschwingung.
+
+| Offset | Reg | Name | Format | Einheit | Zugriff |
+|--------|-----|----|--------|---------|------|
+| 11001 | 2 | Grundschwingung (H1) I L1 | Float | A | R |
+| 11003 | 2 | Grundschwingung (H1) I L2 | Float | A | R |
+| 11005 | 2 | Grundschwingung (H1) I L3 | Float | A | R |
+| 11007 | 2 | 3. Oberschwingung I L1 | Float | % | R |
+| … | … | H5..H29 (Schrittweite 6 Reg.) | Float | % | R |
+| 11091 | 2 | 31. Oberschwingung I L1 | Float | % | R |
+| 11093 | 2 | 31. Oberschwingung I L2 | Float | % | R |
+| 11095 | 2 | 31. Oberschwingung I L3 | Float | % | R |
+
+---
+
+## 58. Harmonische Oberschwingungen — Spannung L-L (ohne Zeitstempel)
+
+**A.3.10, Tab. A-19 (Betriebsanleitung). FC 0x03/0x04.**  
+H1 in Volt, H3..H31 als % der Grundschwingung.
+
+| Offset | Reg | Name | Format | Einheit | Zugriff |
+|--------|-----|----|--------|---------|------|
+| 22001 | 2 | Grundschwingung (H1) U L1-L2 | Float | V | R |
+| 22003 | 2 | Grundschwingung (H1) U L2-L3 | Float | V | R |
+| 22005 | 2 | Grundschwingung (H1) U L3-L1 | Float | V | R |
+| 22007 | 2 | 3. Oberschwingung U L1-L2 | Float | % | R |
+| … | … | H5..H29 (Schrittweite 6 Reg.) | Float | % | R |
+| 22091 | 2 | 31. Oberschwingung U L1-L2 | Float | % | R |
+| 22093 | 2 | 31. Oberschwingung U L2-L3 | Float | % | R |
+| 22095 | 2 | 31. Oberschwingung U L3-L1 | Float | % | R |
+
 ### Zugriff
 - **R:** Read-only (Lesezugriff)
 - **RW:** Read-Write (Lese- und Schreibzugriff)

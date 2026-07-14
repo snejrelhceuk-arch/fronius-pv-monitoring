@@ -35,14 +35,15 @@ branch `feat/reformation-wp-bridge`). Lies zuerst AGENTS.md vollständig. Dann:
    JS-Renderer in `pac4200_view.html` muss den Typ erkennen und den SVG-String direkt
    einfügen (kein weiterer Backend-Aufruf).
 
-3. **THD-Anzeigen für einzelne Harmonische (H2..H64) — BLOCKIER-KLARSTELLUNG:**
-   Der bisherige Kommentar „Harmonische 2..64 blockiert — Adressen fehlen" ist
-   **inhaltlich falsch**. Die Modbus-Referenz `doc/netzqualitaet/PAC4200-Modbus.md`
-   enthält **keine** Register für Einzelharmonische H2..H64! Das Dokument listet
-   nur **THD-Gesamtwerte** (§7/§38/§39) und **Verzerrungsstrom** (§40), aber
-   **keine Amplitudenwerte der einzelnen Harmonischen-Ordnungen 2..64**.
-   Dies ist ein bekanntes Siemens-Verhalten: Das PAC4200 exportiert per Modbus
-   keine Einzelharmonik-Spektren in der öffentlichen Register-Map.
+3. **Einzelharmonische (H3..H31) — KORREKTUR 2026-07-12/NQ2-WP0:**
+   Frühere Prompts behaupteten „Harmonische 2..64 blockiert — Adressen fehlen".
+   Das ist **überholt**. Richtig ist: Die **Standard**-Modbus-Map
+   (`doc/netzqualitaet/PAC4200-Modbus.md`) listet nur THD-Gesamtwerte (§7/§38/§39)
+   und Verzerrungsstrom (§40). Die **Siemens-Erweiterungsregister** @9001 (U L-N),
+   @11001 (I), @22001 (U L-L) liefern aber die **ungeraden Einzelharmonischen
+   H3..H31** (% der Grundschwingung). Der Poller liest sie seit 2026-07-12
+   erfolgreich in `nq_raw_slow` (Medium-Tier, 1 s). Adressen: `nq/pac_live.py`
+   (`HARM_UN_MAP`/`HARM_I_MAP`/`HARM_ULL_MAP`).
 
    **Konsequenz + Aufgabe:**
    a) Korrigiere den Kommentar in `doc/netzqualitaet/MESSTECHNIK.md` Abschnitt

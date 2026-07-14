@@ -211,17 +211,23 @@ geprueft: U ~239 V, U_LL ~414 V, f = 50,02 Hz, THD-U ~1,2 %.
 > 261/263/265. Grundlage: die vollstaendige Registerreferenz
 > [`PAC4200-Modbus.md`](PAC4200-Modbus.md), gegen das reale Geraet bestaetigt.
 
-Energiezaehler als **FLOAT64** (4 Register) ab Adresse **801**: 801 Wirkarbeit
-Bezug, 805 Wirkarbeit Lieferung, 809 Blindarbeit Bezug, 813 Blindarbeit
-Lieferung, 817 Scheinarbeit (Wh / varh / VAh).
+Energiezaehler als **FLOAT64** (4 Register) ab Adresse **801** (Tarif 1 = aktiver Tarif):
 
-> **Befund Energiezaehler (2026-07-11):** `Wh_imp` (801) und `VAh` (817) zaehlen
-> hoch (live steigend), **`Wh_exp` (805) und `varh_exp` (813) stehen jedoch auf
-> 0,000** — obwohl das Haus einspeist (Phasen mit `P_Lx < 0`). Ursache offen
-> (Geraete-Konfiguration der Lieferungs-Zaehler? Wandler-Richtung?). Genau dieser
-> Punkt ist ein Ziel des Zaehler-Vergleichs gegen Master-SM und iMS (siehe
-> [`NQ_TESTS_UND_DB.md`](NQ_TESTS_UND_DB.md)). Alle Zaehler werden ab Start per
-> **Differenzmethode** mitgefuehrt, damit die Abweichung sichtbar/auswertbar wird.
+| Adresse | Groesse | Einheit |
+|---|---|---|
+| 801 | Bezogene Wirkenergie T1 (`Wh_imp`) | Wh |
+| 809 | Gelieferte Wirkenergie T1 (`Wh_exp`) | Wh |
+| 817 | Bezogene Blindenergie T1 (`varh_imp`) | varh |
+| 825 | Gelieferte Blindenergie T1 (`varh_exp`) | varh |
+| 833 | Scheinenergie T1 (`VAh`) | VAh |
+
+> **Korrektur 2026-07-12:** Die frueheren Adressen @805/809/813/817 waren
+> falsch — @805 ist **Bezogene Wirkenergie T2** (Bezug Tarif 2), nicht Lieferung!
+> Das Blockschema ist: alle Bezug-T1/T2 zuerst, dann alle Lieferung-T1/T2,
+> dann alle Blind usw. (nicht abwechselnd Bezug/Lieferung). Deshalb stand
+> `Wh_exp` (ehemals @805) immer auf 0 — es war der ungenutzten Tarif-2-Zaehler.
+> `DOUBLE_READ_COUNT` auf 36 erhoehen (801..836, um @833 zu erreichen).
+> Quelle: `doc/netzqualitaet/Modbus.md` A.3.6.
 
 Code: [`../../nq/pac_live.py`](../../nq/pac_live.py) (`FLOAT_MAP`, `FLOAT2_MAP`, `DOUBLE_MAP`).
 Read-only Live-Anzeige: `/pac4200` (Flow -> Maschinenraum -> PAC4200).
@@ -256,10 +262,12 @@ verwendet. Code: `_build_screens` / Screen `Strom` in
 - **THD-I (Adr. 267–271):** liefert **echte Werte** (live 38–45 %, verifiziert
   2026-07-11). Die frueher genutzten Adressen 49–53 sind undefiniert (NaN) —
   Registerlage korrigiert (s. o.).
-- Einzelharmonische 2..64: Modbus-Adressen **noch offen** (Voll-Feldtest /
-  Siemens-Registerdoku) — nicht raten. Der **48-h-Dauertest** ist erst sinnvoll,
-  wenn diese Adressen vorliegen (nur dann ist der Slow-Block messbar); die
-  schnellen/mittleren Bloecke sind mit Kurzläufen bereits belastbar bestimmt.
+- **Einzelharmonische (ungerade H3..H31): per Modbus verfügbar (A.3.10)**
+  — H1 (Grundschwingung) in V/A, H3..H31 als % der Grundschwingung. Drei
+  Blöcke ohne Zeitstempel: U L-N @9001–@9095, Strom I @11001–@11095, U L-L
+  @22001–@22095. Schrittformel: `base + ordinal*6 + phase_offset`
+  (ordinal 0=H1, 1=H3, …, 15=H31). Adressen aus Betriebsanleitung
+  Tab. A-17..A-19 (S. 240ff.); Endadressen @9095/@11095/@22095 bestätigt.
 
 ## Pflege-Regel
 
@@ -269,4 +277,96 @@ bezogenen Fragen belastbar klaert:
 - verifizierte Registerliste fuer schnelle Betriebswerte
 - verifizierte Registerliste fuer THD und Einzelharmonische
 - gemessene Refresh-Zeiten des Geraets unter realem Polling
+
+---
+
+## Feldtest-Ergebnisse: PAC4200 Register-Refresh-Raten (2026-07-12)
+
+**Methode:** `nq/fieldtest/pac_refresh_probe.py` und inline-Probe, Polling 250 ms
+(Block A) bzw. 500 ms (Block B+C), je 5 Minuten, von Primary (192.0.2.204) direkt
+auf PAC 192.0.2.111 (read-only, kein Speichern).
+
+### Block A — FLOAT_MAP (Adr. 1..73), Polling 250 ms, 5 min, 1200 Polls
+
+| Gruppe | Größen | Änderungsrate | dt_median |
+|---|---|---|---|
+| Phasenspannungen | U_L1N, U_L2N, U_L3N | 100 % | 0,25 s |
+| Leiter-Leiter-Spannungen | U_L12, U_L23, U_L31 | 100 % | 0,25 s |
+| Phasenströme | I_L1, I_L2, I_L3 | 100 % | 0,25 s |
+| Scheinleistung | S_L1, S_L2, S_L3 | 100 % | 0,25 s |
+| Wirkleistung | P_L1, P_L2, P_L3 | 100 % | 0,25 s |
+| Blindleistung | Q_L1, Q_L2, Q_L3 | 100 % | 0,25 s |
+| Leistungsfaktor | PF_L1, PF_L2, PF_L3 | 100 % | 0,25 s |
+| THD-U L-L | THDu_L12, THDu_L23, THDu_L31 | 100 % | 0,25 s |
+| Mittelwerte + Totale | Uavg_LN, Uavg_LL, Iavg, S_tot, P_tot, Q_tot, PF_tot | 100 % | 0,25 s |
+| Unsymmetrie | Unbal_U, Unbal_I | 100 % | 0,25 s |
+| **Frequenz** | **FREQ** | **2 %** | **10,00 s** |
+
+**Fazit Block A:** Alle RMS-, Leistungs- und THD-LL-Werte aktualisieren sich
+bei jedem 250-ms-Poll (~4 Hz intern). Frequenz aktualisiert intern **exakt alle
+10 Sekunden** — 200-ms- oder 250-ms-Polling für FREQ ist sinnlos, 10-s-Intervall
+reicht vollständig.
+
+### Block B — FLOAT2_MAP (Adr. 243..295), Polling 500 ms, 5 min, 121 Reads
+
+| Gruppe | Größen | Änderungsrate | dt_median |
+|---|---|---|---|
+| cos φ (Grundschwingung) | cosphi_L1, cosphi_L2, cosphi_L3 | 99 % | 0,50 s |
+| Phasenwinkel | ang_L1, ang_L2, ang_L3 | 99 % | 0,50 s |
+| THD-U L-N | THDu_L1, THDu_L2, THDu_L3 | 99 % | 0,50 s |
+| THD-I | THDi_L1, THDi_L2, THDi_L3 | 99 % | 0,50 s |
+| Verzerrungsstrom | Idist_L1, Idist_L2, Idist_L3 | 99 % | 0,50 s |
+| Neutralleiterstrom | I_N | 99 % | 0,50 s |
+
+**Fazit Block B:** Alle Werte ändern sich bei jedem 500-ms-Poll — das Gerät
+aktualisiert Block B mindestens so schnell wie Block A (~250 ms intern). 500-ms-
+oder 250-ms-Polling erfasst alle Messwertänderungen vollständig.
+
+### Harmonik-Blöcke D/E/F — @9001 (UN), @11001 (I), @22001 (ULL), Polling 1 s, 1 min, 61 Polls
+
+Einzelharmonische H1 (Grundschwingung, V/A) + H3..H31 (% der Grundschwingung),
+je 3 Phasen, 3 Blöcke = 144 Werte gesamt. Repräsentant: L1-Kanal je Block.
+
+| Block | Adressen | Änderungsrate | dt_median | Beispielwerte (L1) |
+|---|---|---|---|---|
+| UN (U L-N %) | @9001..@9096 | **98 %** | **1,0 s** | H1=237,4 V, H5=1,01 %, H7=0,72 %, H3=0,38 % |
+| I (%) | @11001..@11096 | **98 %** | **1,0 s** | H1=2,26 A, H3=0,40 %, H5=0,39 %, H7=0,24 % |
+| ULL (U L-L %) | @22001..@22096 | **98 %** | **1,0 s** | H1=411,3 V, H5=0,98 %, H7=0,66 %, H3=0,13 % |
+
+**Fazit:** Harmonische aktualisieren intern mit **~1 Hz** — identisch zu Block B.
+Das `slow_ms = 5000`-Polling erfasst jeden 5. Update; 1–2 s wäre optimal.
+Kein Unterschied zwischen Spannungs- und Stromharmonischen in der Refresh-Rate.
+
+### Block C — FLOAT3_MAP (Adr. 75..144, Max-Werte), Polling 500 ms, 5 min, 121 Reads
+
+| Gruppe | Größen | Änderungsrate | dt_median |
+|---|---|---|---|
+| Umax L-N | Umax_L1N, Umax_L2N, Umax_L3N | **0 %** | — |
+| Umax L-L | Umax_L12, Umax_L23, Umax_L31 | **0 %** | — |
+| Imax | Imax_L1, Imax_L2, Imax_L3 | **0 %** | — |
+| Pmax | Pmax_L1, Pmax_L2, Pmax_L3, Pmax_tot | **0 %** | — |
+| Qmax, Smax | Qmax_tot, Smax_tot | **0 %** | — |
+| FREQmax | FREQmax | **0 %** | — |
+
+**Fazit Block C:** Max-Werte sind Geräte-interne historische Extremwerte und
+ändern sich im normalen Betrieb nicht (nur bei neuem Extremum). Polling alle
+60–300 s ist mehr als ausreichend. Für den Produktivbetrieb reicht 1×/Min oder
+seltener.
+
+### Empfohlene Polling-Gruppen (nach Feldtest, bestätigt 2026-07-12)
+
+| Gruppe | Größen | Empfohlenes Polling | Feldtest-Befund |
+|---|---|---|---|
+| **Fast** | U_L1N–U_L31, I_L1–I_L3, P/Q/S je Phase+Total, PF, Unbal, THDu_LL (Block A) | **250–500 ms** | 100 % Änderungsrate bei 250 ms — Grenzrate des PAC |
+| **Medium** | THDu_LN, THDi, cosphi, ang, Idist, I_N (Block B) | **500 ms – 1 s** | 99 % Änderungsrate bei 500 ms — gleiche interne Rate wie Block A |
+| **FREQ** | FREQ (Block A, Adr. 55) | **10 s** | Exakt 10-s-Refresh intern; 2 % Änderungsrate bei 250 ms — alles schnellere ist Redundanz |
+| **Max-Werte** | Umax, Imax, Pmax, FREQmax (Block C, Adr. 75–144) | **60–300 s** | 0 % Änderungsrate in 5 min Normalsbetrieb — nur bei neuem Extremum |
+| **Einzelharmonische** | H3..H31 U/I (A.3.10, @9001/@11001/@22001) | **1–2 s** | **98 % Änderungsrate bei 1 s** — gleiche interne Rate wie Block B; `slow_ms=5000` konservativ korrekt |
+| **Energiezähler** | wh_imp, wh_exp, varh_*, vah (Adr. 801–817 FLOAT64) | **60 s** | kumulativ, Differenzmethode |
+
+> **Konfiguration in `config/nq_config.json`:**  
+> `fast_ms=500` (Block A+B gemeinsam), `slow_ms=5000` (Harmonische — konservativ
+> korrekt, Refresh ~1 s, erfasst jeden 5. Update), `energy_s=60`.  
+> FREQ wird im Fast-Snapshot mitgelesen; der 10-s-Aggregator (`nq_agg_10s`)
+> glättet die Redundanz (min/avg/max über identische FREQ-Werte → korrekter Mittelwert).
 - bewaehrter Polling-Zyklus fuer den produktiven Einsatz am PCC

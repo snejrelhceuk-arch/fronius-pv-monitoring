@@ -186,7 +186,7 @@ Gespiegelt aus den Collector-Mustern der Produktion:
 | 2b | RAW/Aggregat-Transfer + Kaskade + GFS | Schema steht, Umsetzung folgt |
 | 3a | **DB-umschaltbares Charting (Kern-DB / NQ-DB) im Maschinenraum** | **PRODUKTIV** (2026-07-12) |
 | 3b | Analyse HF/NF/VLF + Event-Chart-Drilldown | folgt |
-| Slow | Einzelharmonische 2..64 | **blockiert** bis Register-Adressen vorliegen |
+| Medium | Einzelharmonische H3..H31 (@9001/@11001/@22001) | **PRODUKTIV** (`nq_raw_slow`, 1 s, seit 2026-07-12) |
 
 ---
 
