@@ -5,10 +5,14 @@ role: N
 applyTo: "nq/transfer/**,nq/aggregate/**"
 tags: [netzqualitaet, nq, transfer, aggregation, primary, rolle-n]
 status: experimental
-last_review: 2026-07-12
+last_review: 2026-07-14
 changes:
+	- 2026-07-14 (k): **NQ2 WP2 + WP4.** Fixpunkt-Zähler `nq_energy_monthly`/`nq_energy_yearly` + `nq_energy_rollup.rollup_month`/`rollup_year` (aus Tages-Deltas, idempotent) + Timer `pv-nq-energy-rollup-month`(1.§00:10)/`-year`(1.1.§00:10). **Transienten:** `nq/aggregate/nq_transients.py` (5-min-Fenster aus `nq_raw_fast` auf Tech → `nq_transient_5min`), `nq_agg_transfer` triggert Berechnung + übernimmt Zeilen. **Event-Pipeline** `nq/transfer/nq_event_transfer.py`: Sofort-Transfer der `event=1`-Schnipsel (pre/post-Window, max_duration_s=300), `derive_event`/`ingest_snippets` setzen `has_snippet`/`peak_*`/`severity`, Cooldown 120s + Ähnlichkeits-Dedup (<24h → kein Snippet), Log-Cap `event_max_count`=10000. Retention 72h→12h angeglichen.
+	- 2026-07-12 (i): **Bugfix Harmonik-Pipeline + Prozess-Deployment.** `nq_raw_slow` fehlte im Primary-Schema → `nq_agg_transfer.transfer()` (INSERT) und `nq_aggregate._run_harm_5min()` (SELECT) brachen mit „no such table" ab; Tabelle in `nq_primary_schema.sql` ergänzt + Retention `primary_rawslow_hours` (12 h) in `_enforce_retention`. Doppelt einkopierten Alt-Block (tages-basierter Transfer nach dem `__main__`-Guard) aus `nq_agg_transfer.py` entfernt. Neue Timer `pv-nq-analysis` (Netzereignis-Analyse tägl. 00:30) + `pv-nq-primary-cap` (Event-Kappung 00:40) + rollenbewusster Installer `scripts/install_nq_services.sh`. Befund: auf Primary waren bisher nur `pv-nq-energy-rollup` installiert — Transfer/Aggregation liefen nie (nq_agg_10s leer trotz lebendem Tech-Collector).
+	- 2026-07-13 (j): **NQ-Pipeline aktiviert + verifiziert.** `_tech_host` in `nq_agg_transfer.py` + `nq_energy_rollup.py` fällt jetzt auf `config.NQ_TECH_IP` zurück (wie `tech_read`), damit CLI-Läufe ohne `.infra.local`-Env den echten Tech-Host treffen. Alle 5 Primary-Timer via Installer enabled; Tech-Poller-Code war veraltet (kein `_slow_thread`) → `nq/`+`nq_config.json` per rsync deployt, `pv-nq-poller` neu gestartet; veraltete tmpfs-Tabellen `nq_raw_medium`/`nq_raw_slow` (`ts`→`ts_ms`) verworfen + neu angelegt (`nq_energy_raw` erhalten). End-to-end grün inkl. Harmonische (`nq_5min` meas≠'' = 144).
 	- 2026-07-11: Modul NQ (Rolle N) angelegt; Transfer- + Aggregations-Skelette + Primary-Schema dokumentiert (Implementierung Phase 2).
 	- 2026-07-11 (b): Energie-Differenzmethode + Zählervergleich ergänzt: `nq_energy_daily` (start/end/delta, Reset), `nq_energy_checkpoint`, `nq_ims_reading`, `nq_energy_compare` (PAC↔Master-SM↔iMS). GFS-Backup konsistent mit `scripts/backup_db_gfs.sh`. Doku: `doc/netzqualitaet/NQ_TESTS_UND_DB.md`.
+	- 2026-07-12: **Phase 2 implementiert.** `nq/transfer/nq_agg_transfer.py` (SSH-Fetch nq_agg_10s Vortag → Primary, at-least-once, Retention 72 h, nq_ingest_log). `nq/aggregate/nq_aggregate.py:run(stage)` (5min/hourly/daily/all, min/avg/max/std, Retention gem. config, idempotent via INSERT OR REPLACE). `scripts/backup_nq_gfs.sh` (GFS daily/weekly/monthly, Integrität, Offsite Pi5-FB). Systemd-Timer pv-nq-agg-transfer (00:10) + pv-nq-aggregate (00:15) angelegt + .gitignore. Feldtest Block A 5 min dokumentiert (MESSTECHNIK.md §Feldtest-Ergebnisse).
 ---
 
 # NQ Transfer + Aggregation
@@ -20,16 +24,19 @@ täglich nur das **3–10 s-Aggregat** + **Event-markierte RAW-Segmente**; Prima
 fächert zu `5min → hourly → daily` auf und hält Event-RAW dauerhaft.
 
 ## Code-Anchor
-- **Tech-Export:** `nq/transfer/nq_export_tech.py:run_export`
-- **Primary-Ingest:** `nq/transfer/nq_ingest_primary.py:run_ingest`
-- **Aggregationskaskade:** `nq/aggregate/nq_aggregate.py:run` (stage: `5min`|`hourly`|`daily`)
+- **Täglicher agg_10s-Transfer (Primary):** `nq/transfer/nq_agg_transfer.py:transfer` — SSH-Fetch Vortag, INSERT OR REPLACE, Tech-Delete nach Quittung, nq_ingest_log; triggert + übernimmt `nq_transient_5min`
+- **Aggregationskaskade (Primary):** `nq/aggregate/nq_aggregate.py:run` (stage: `5min`|`hourly`|`daily`|`all`)
+- **Transienten (Tech):** `nq/aggregate/nq_transients.py:run_tech` / `detect_transients_in_window` / `analyze_jumps`
+- **Event-Schnipsel-Pipeline (Primary):** `nq/transfer/nq_event_transfer.py:transfer_events` / `derive_event` / `ingest_snippets` / `_cap_event_log`
+- **GFS-Backup NQ-DB:** `scripts/backup_nq_gfs.sh` (daily/weekly/monthly, Integrität, Offsite rsync)
+- **Energie-Rollup (Primary):** `nq/transfer/nq_energy_rollup.py:rollup` (tägl. 00:05) / `rollup_month` / `rollup_year`
 - **Schema (Primary):** `nq/schema/nq_primary_schema.sql`
 - **Konfig (Retention/Transfer):** `config/nq_config.json`
 - **Muster/Vorbild:** `collector/aggregate/`, Legacy `netzqualitaet/nq_export.py`
 
 ## Inputs / Outputs
 - **Inputs:** Tech-`nq_agg_10s` (Vortag) + `nq_raw_*` mit `event=1`.
-- **Outputs (Primary `nq/db/nq_YYYY-MM.db`):** `nq_agg_10s` (72 h), `nq_5min` (~90 d), `nq_hourly` (~365 d), `nq_daily` (~10 a), `nq_event_fast/medium/slow` (Originalauflösung, dauerhaft), Logs `nq_transfer_log`/`nq_ingest_log`.
+- **Outputs (Primary `nq/db/nq_YYYY-MM.db`):** `nq_agg_10s` (72 h), `nq_5min` (~90 d), `nq_hourly` (~365 d), `nq_daily` (~10 a), `nq_transient_5min` (5-min-Transienten), `nq_energy_daily`/`nq_energy_monthly`/`nq_energy_yearly` (Fixpunkt-Zähler), `nq_event_fast/medium/slow` + `nq_events` (Katalog, `has_snippet`/`peak_*`), Logs `nq_transfer_log`/`nq_ingest_log`.
 
 ## Invarianten
 - **At-least-once:** Löschen der tmpfs-Zeilen auf Tech **erst nach Ingest-Quittung**.

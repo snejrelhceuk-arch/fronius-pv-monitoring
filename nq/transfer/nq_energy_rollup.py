@@ -32,7 +32,14 @@ except Exception:  # pragma: no cover
 
 
 def _tech_host(cfg: dict) -> str:
-    return (os.environ.get("PV_TECH_IP")
+    host = os.environ.get("PV_TECH_IP")
+    if not host:
+        try:
+            import config
+            host = getattr(config, "NQ_TECH_IP", None)
+        except Exception:
+            host = None
+    return (host
             or cfg.get("transfer", {}).get("tech_host")
             or "192.0.2.181")
 
@@ -149,15 +156,148 @@ def rollup(day: str) -> dict:
             "msm_imp_kwh": msm_imp, "msm_exp_kwh": msm_exp}
 
 
+# ---------------------------------------------------------------------------
+# NQ2 WP2: Fixpunkt-Rollup Monat / Jahr (aus nq_energy_daily aggregiert)
+# ---------------------------------------------------------------------------
+def _db_dir() -> str:
+    return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "db")
+
+
+def _month_db_path(month: str) -> str:
+    return os.path.join(_db_dir(), f"nq_{month}.db")
+
+
+def _prev_month() -> str:
+    lt = time.localtime()
+    y, m = lt.tm_year, lt.tm_mon - 1
+    if m == 0:
+        y, m = y - 1, 12
+    return f"{y:04d}-{m:02d}"
+
+
+def _prev_year() -> str:
+    return str(time.localtime().tm_year - 1)
+
+
+def _rollup_from_daily(db_paths: list, day_like: str) -> dict | None:
+    """Aggregiert nq_energy_daily über db_paths (day LIKE day_like) zu Fixpunkten.
+
+    start = erster Tag *_start; end = letzter Tag *_end; delta = Σ Tages-Deltas
+    (reset-aware bereits je Tag angewandt). db_paths müssen sortiert sein.
+    """
+    import sqlite3
+    per = {c: {"start": None, "end": None, "delta": 0.0, "any": False} for c in COUNTERS}
+    src_overall = "counter"
+    n_total = 0
+    days_seen = 0
+    col_expr = ",".join(f"{c}_start,{c}_end,{c}_delta" for c in COUNTERS)
+    nc = len(COUNTERS)
+    for db_path in db_paths:
+        if not os.path.exists(db_path):
+            continue
+        c = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5.0)
+        try:
+            rows = c.execute(
+                f"SELECT day,{col_expr},src,n_samples FROM nq_energy_daily "
+                "WHERE day LIKE ? ORDER BY day", (day_like,)).fetchall()
+        except Exception:
+            rows = []
+        finally:
+            c.close()
+        for row in rows:
+            days_seen += 1
+            vals = row[1:1 + 3 * nc]
+            src = row[1 + 3 * nc]
+            n = row[2 + 3 * nc]
+            n_total += (n or 0)
+            if src and src != "counter":
+                src_overall = src
+            for i, cc in enumerate(COUNTERS):
+                s, e, d = vals[i * 3], vals[i * 3 + 1], vals[i * 3 + 2]
+                p = per[cc]
+                if s is not None and p["start"] is None:
+                    p["start"] = s
+                if e is not None:
+                    p["end"] = e
+                if d is not None:
+                    p["delta"] += d
+                    p["any"] = True
+    if not days_seen:
+        return None
+    out: dict = {"n_samples": n_total, "src": src_overall, "n_days": days_seen}
+    for cc in COUNTERS:
+        p = per[cc]
+        out[f"{cc}_start"] = p["start"]
+        out[f"{cc}_end"] = p["end"] if p["end"] is not None else p["start"]
+        out[f"{cc}_delta"] = round(p["delta"], 3) if p["any"] else None
+    return out
+
+
+def _write_fixpoint(conn, table: str, keycol: str, keyval: str, agg: dict) -> None:
+    now = int(time.time())
+    cols = [keycol]
+    vals = [keyval]
+    for c in COUNTERS:
+        cols += [f"{c}_start", f"{c}_end", f"{c}_delta"]
+        vals += [agg.get(f"{c}_start"), agg.get(f"{c}_end"), agg.get(f"{c}_delta")]
+    cols += ["src", "n_samples", "created_ts"]
+    vals += [agg.get("src"), agg.get("n_samples"), now]
+    ph = ",".join(["?"] * len(vals))
+    conn.execute(f"INSERT OR REPLACE INTO {table} ({','.join(cols)}) VALUES ({ph})", vals)
+    conn.commit()
+
+
+def rollup_month(month: str) -> dict:
+    """Monats-Fixpunkt (YYYY-MM) aus den Tages-Deltas des Monats. Idempotent."""
+    db_path = _month_db_path(month)
+    agg = _rollup_from_daily([db_path], f"{month}-%")
+    if agg is None:
+        return {"month": month, "written": False, "reason": "keine Tagesdaten"}
+    conn = open_db(db_path, PRIMARY_SCHEMA)
+    _write_fixpoint(conn, "nq_energy_monthly", "month", month, agg)
+    conn.close()
+    return {"month": month, "written": True, "src": agg["src"], "n_days": agg["n_days"],
+            "wh_imp_kwh": round((agg.get("wh_imp_delta") or 0.0) / 1000.0, 3),
+            "wh_exp_kwh": round((agg.get("wh_exp_delta") or 0.0) / 1000.0, 3)}
+
+
+def rollup_year(year: str) -> dict:
+    """Jahres-Fixpunkt (YYYY) aus den 12 Monats-DBs. Ablage in nq_{year}-01.db."""
+    db_paths = [os.path.join(_db_dir(), f"nq_{year}-{m:02d}.db") for m in range(1, 13)]
+    agg = _rollup_from_daily(db_paths, f"{year}-%")
+    if agg is None:
+        return {"year": year, "written": False, "reason": "keine Tagesdaten"}
+    conn = open_db(os.path.join(_db_dir(), f"nq_{year}-01.db"), PRIMARY_SCHEMA)
+    _write_fixpoint(conn, "nq_energy_yearly", "year", year, agg)
+    conn.close()
+    return {"year": year, "written": True, "src": agg["src"], "n_days": agg["n_days"],
+            "wh_imp_kwh": round((agg.get("wh_imp_delta") or 0.0) / 1000.0, 3),
+            "wh_exp_kwh": round((agg.get("wh_exp_delta") or 0.0) / 1000.0, 3)}
+
+
 def main() -> int:
     import sys
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
     except Exception:
         pass
-    ap = argparse.ArgumentParser(description="NQ Energie-Tages-Rollup (Primary)")
-    ap.add_argument("--day", default=None, help="YYYY-MM-DD (Default: gestern)")
+    ap = argparse.ArgumentParser(description="NQ Energie-Rollup (Primary)")
+    ap.add_argument("--day", default=None, help="YYYY-MM-DD Tages-Rollup (Default: gestern)")
+    ap.add_argument("--month", default=None, help="YYYY-MM Monats-Rollup (Default: Vormonat)")
+    ap.add_argument("--year", default=None, help="YYYY Jahres-Rollup (Default: Vorjahr)")
+    ap.add_argument("--auto-month", action="store_true",
+                    help="Vormonat rollen (für Timer am Monatsersten)")
+    ap.add_argument("--auto-year", action="store_true",
+                    help="Vorjahr rollen (für Timer am 1.1.)")
     a = ap.parse_args()
+    if a.month or a.auto_month:
+        month = a.month or _prev_month()
+        print(json.dumps(rollup_month(month), ensure_ascii=False))
+        return 0
+    if a.year or a.auto_year:
+        year = a.year or _prev_year()
+        print(json.dumps(rollup_year(year), ensure_ascii=False))
+        return 0
     day = a.day or time.strftime("%Y-%m-%d", time.localtime(time.time() - 86400))
     print(json.dumps(rollup(day), ensure_ascii=False))
     return 0
