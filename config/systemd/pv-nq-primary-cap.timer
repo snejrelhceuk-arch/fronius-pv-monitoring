@@ -1,0 +1,12 @@
+[Unit]
+Description=NQ Primary Event-Kappung täglich 00:40 (Primary, Rolle N)
+Documentation=https://github.com/mvk/pv-system/blob/main/doc/netzqualitaet/NQ_MODUL.md
+
+[Timer]
+# 00:40 — nach der Analyse (00:30). Persistent = Nachholen verpasster Läufe.
+OnCalendar=*-*-* 00:40:00
+Persistent=true
+Unit=pv-nq-primary-cap.service
+
+[Install]
+WantedBy=timers.target

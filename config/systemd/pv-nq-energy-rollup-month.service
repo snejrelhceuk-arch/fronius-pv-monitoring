@@ -1,0 +1,18 @@
+[Unit]
+Description=PV-System NQ Energie-Monats-Rollup (Primary, Rolle N, Fixpunkt-Zähler)
+Documentation=https://github.com/mvk/pv-system/blob/main/doc/netzqualitaet/NQ_TESTS_UND_DB.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=admin
+WorkingDirectory=/srv/pv-system
+EnvironmentFile=-%h/.infra.local
+Environment=PYTHONUNBUFFERED=1
+# --auto-month = Vormonat (Timer läuft am Monatsersten). Schreibt nq_energy_monthly.
+ExecStart=/usr/bin/python3 -m nq.transfer.nq_energy_rollup --auto-month
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pv-nq-energy-rollup-month
+NoNewPrivileges=true

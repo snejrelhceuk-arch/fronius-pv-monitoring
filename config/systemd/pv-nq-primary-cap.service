@@ -1,0 +1,17 @@
+[Unit]
+Description=PV-System NQ Primary Event-Snippet-Kappung (Primary, Rolle N)
+Documentation=https://github.com/mvk/pv-system/blob/main/doc/netzqualitaet/NQ_MODUL.md
+After=pv-nq-analysis.service
+
+[Service]
+Type=oneshot
+User=admin
+WorkingDirectory=/srv/pv-system
+EnvironmentFile=-%h/.infra.local
+Environment=PYTHONUNBUFFERED=1
+# Alters- + Zählgrenze für nq_event_* / nq_events in allen Monats-DBs.
+ExecStart=/usr/bin/python3 -m nq.transfer.nq_primary_cap
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pv-nq-primary-cap
+NoNewPrivileges=true

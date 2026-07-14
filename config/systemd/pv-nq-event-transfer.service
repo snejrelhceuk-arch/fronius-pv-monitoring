@@ -1,0 +1,19 @@
+[Unit]
+Description=PV-System NQ Event-Schnipsel-Transfer (Tech→Primary, Rolle N, NQ2 WP4)
+Documentation=https://github.com/mvk/pv-system/blob/main/doc/netzqualitaet/NQ2_ROADMAP.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=admin
+WorkingDirectory=/srv/pv-system
+EnvironmentFile=-%h/.infra.local
+Environment=PYTHONUNBUFFERED=1
+# Holt event=1-Schnipsel der letzten Stunde von Tech, baut nq_events + nq_event_*.
+# Fenster > Stale-Cap (1 h), damit kein Schnipsel vor dem Transfer verfällt.
+ExecStart=/usr/bin/python3 -m nq.transfer.nq_event_transfer --hours 1.2
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pv-nq-event-transfer
+NoNewPrivileges=true

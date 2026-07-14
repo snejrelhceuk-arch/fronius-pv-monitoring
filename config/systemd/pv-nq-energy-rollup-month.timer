@@ -1,0 +1,12 @@
+[Unit]
+Description=NQ Energie-Monats-Rollup am Monatsersten 00:10 (Primary, Rolle N)
+Documentation=https://github.com/mvk/pv-system/blob/main/doc/netzqualitaet/NQ_TESTS_UND_DB.md
+
+[Timer]
+# Monatserster 00:10 (nach dem Tages-Rollup 00:05). Persistent = Nachholen.
+OnCalendar=*-*-01 00:10:00
+Persistent=true
+Unit=pv-nq-energy-rollup-month.service
+
+[Install]
+WantedBy=timers.target

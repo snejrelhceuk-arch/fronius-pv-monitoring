@@ -1,0 +1,18 @@
+[Unit]
+Description=PV-System NQ Energie-Jahres-Rollup (Primary, Rolle N, Fixpunkt-Zähler)
+Documentation=https://github.com/mvk/pv-system/blob/main/doc/netzqualitaet/NQ_TESTS_UND_DB.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=admin
+WorkingDirectory=/srv/pv-system
+EnvironmentFile=-%h/.infra.local
+Environment=PYTHONUNBUFFERED=1
+# --auto-year = Vorjahr (Timer läuft am 1.1.). Schreibt nq_energy_yearly (nq_YYYY-01.db).
+ExecStart=/usr/bin/python3 -m nq.transfer.nq_energy_rollup --auto-year
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pv-nq-energy-rollup-year
+NoNewPrivileges=true

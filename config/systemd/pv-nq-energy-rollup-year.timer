@@ -1,0 +1,12 @@
+[Unit]
+Description=NQ Energie-Jahres-Rollup am 1.1. 00:10 (Primary, Rolle N)
+Documentation=https://github.com/mvk/pv-system/blob/main/doc/netzqualitaet/NQ_TESTS_UND_DB.md
+
+[Timer]
+# 1. Januar 00:10 (rollt das Vorjahr). Persistent = Nachholen verpasster Läufe.
+OnCalendar=*-01-01 00:10:00
+Persistent=true
+Unit=pv-nq-energy-rollup-year.service
+
+[Install]
+WantedBy=timers.target

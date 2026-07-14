@@ -1,0 +1,17 @@
+[Unit]
+Description=PV-System NQ Netzereignis-Analyse HF/NF/VLF (Primary, Rolle N)
+Documentation=https://github.com/mvk/pv-system/blob/main/doc/netzqualitaet/NQ_MODUL.md
+After=pv-nq-aggregate.service
+
+[Service]
+Type=oneshot
+User=admin
+WorkingDirectory=/srv/pv-system
+EnvironmentFile=-%h/.infra.local
+Environment=PYTHONUNBUFFERED=1
+# Analysiert den Vortag (nq_agg_10s auf Primary) -> nq_events (HF/NF/VLF).
+ExecStart=/bin/sh -c '/usr/bin/python3 -m nq.analysis.nq_events --date "$(date -d yesterday +%%Y-%%m-%%d)"'
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pv-nq-analysis
+NoNewPrivileges=true
