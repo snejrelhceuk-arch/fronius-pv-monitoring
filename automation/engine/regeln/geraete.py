@@ -1128,6 +1128,7 @@ class RegelHeizpatrone(Regel):
         # ── HP ist EIN → AUS prüfen ──
         if obs.heizpatrone_aktiv:
             aus_grund = None
+            should_cancel_override = False  # True → cancelt hp_toggle(state=on) Override
             min_rest_h = get_param(matrix, self.regelkreis, 'min_rest_h', 2.0)
             temp_max = get_param(matrix, self.regelkreis, 'speicher_temp_max_c', 78)
 
@@ -1141,14 +1142,17 @@ class RegelHeizpatrone(Regel):
             # ── HARTE Kriterien: IMMER sofort ──
             if obs.ww_temp_c is not None and obs.ww_temp_c >= temp_max:
                 aus_grund = f'HART: Übertemperatur ({obs.ww_temp_c:.0f}°C ≥ {temp_max}°C)'
+                should_cancel_override = True
             elif soc <= soc_schutz_abs:
                 aus_grund = f'HART: SOC {soc:.0f}% ≤ Schutzgrenze {soc_schutz_abs}%'
+                should_cancel_override = True
             # Extern-Autoritäts-Override + Hysterese
             elif ist_extern:
                 extern_aus_soc = get_param(matrix, self.regelkreis, 'extern_aus_soc_pct', 15)
                 if soc <= extern_aus_soc:
                     aus_grund = (f'Extern-Override: SOC {soc:.0f}% ≤ {extern_aus_soc}% '
                                     f'→ manuelle Einschaltung überstimmt')
+                    should_cancel_override = True
                 else:
                     verbleibend = int(extern_respekt - (time.time() - self._extern_ein_ts))
                     LOG.debug(f'HP extern → Autorität respektiert, '
@@ -1162,6 +1166,7 @@ class RegelHeizpatrone(Regel):
                 entl_ok = p_batt >= -abend_max_entl
                 pv_ok = (obs.pv_total_w or 0) >= abend_min_pv
                 if not (soc_ok and entl_ok and pv_ok):
+                    should_cancel_override = True
                     if not soc_ok:
                         aus_grund = (f'Phase 4: SOC {soc:.0f}% < SOC_MAX({soc_max_eff}%)-'
                                         f'{abend_aus}% → Batterie-Vorrang')
@@ -1251,11 +1256,13 @@ class RegelHeizpatrone(Regel):
                         if not self._batt_entladung_toleriert(potenzial, soc_max_eff, obs):
                             aus_grund = (f'Batterie entlädt ({p_batt:.0f}W) '
                                             f'bei Potenzial={potenzial}, SOC_MAX={soc_max_eff}%')
+                            should_cancel_override = True
 
                     # Verbraucher-Konkurrenz
                     if not aus_grund and not self._hp_parallel_erlaubt(potenzial, wp_aktiv, ev_aktiv):
                         aus_grund = (f'Verbraucher-Konkurrenz: Potenzial={potenzial}, '
                                         f'WP={wp_aktiv}, EV={ev_aktiv}')
+                        should_cancel_override = True
 
                     # Netzbezug (7-Min-Durchschnitt gegen Leistungssprünge/Haushaltslast)
                     if not aus_grund:
@@ -1263,6 +1270,7 @@ class RegelHeizpatrone(Regel):
                         aus_ausloesen, netz_grund = self._netzbezug_aus_ausloesen(obs, matrix)
                         if aus_ausloesen:
                             aus_grund = netz_grund
+                            should_cancel_override = True
 
                 # Burst-Timer abgelaufen
                 if not aus_grund and self._burst_ende > 0 and time.time() >= self._burst_ende:
@@ -1384,6 +1392,13 @@ class RegelHeizpatrone(Regel):
                 self._drain_modus = False
                 self._probe_modus = False
                 self._drain_lastbedingung_ts = 0   # Verzögerungstimer zurücksetzen
+                
+                # Cancel konfligierende hp_toggle(state=on) Overrides bei starken Bedingungen.
+                # Verhindert Pingpong: Override will EIN → Regel schaltet AUS → Override reapplied EIN → ...
+                # Nur bei kontextabhängigen/harten Kriterien, NICHT bei normalem Burst-Ende.
+                if should_cancel_override:
+                    self._cancel_conflicting_overrides('off')
+                
                 return [{
                     'tier': 2, 'aktor': 'fritzdect',
                     'kommando': 'hp_aus',
