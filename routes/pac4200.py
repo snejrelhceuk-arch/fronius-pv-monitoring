@@ -6,7 +6,7 @@ Enthält:
   /netzqualitaet/live    — Messwert-Tableau
   /netzqualitaet/analyse — Muster-Analyse (DFD, Tagesprofil, Wochenprofil)
   /api/pac4200/live      — Live-Snapshot JSON
-  /api/nq/realtime_smart — 10s-Aggregat für Maschinenraum-Chart
+    /api/nq/realtime_smart — 5min-Aggregat für Maschinenraum-Chart
   /api/nq/analyse/*      — Analyse-Daten (DFD, Tagesprofil, Wochenprofil, Events)
 
 ABCD(EN)-Rollenmodell: Säule B (read-only Anzeige).
@@ -16,6 +16,7 @@ import math
 import os
 import sqlite3
 import time as _time
+import calendar
 from datetime import datetime, timedelta
 from glob import glob
 
@@ -24,6 +25,7 @@ from flask import Blueprint, jsonify, render_template, request
 import config
 from nq import pac_live
 from nq import tech_read
+from nq.nq_common import load_config as _load_nq_config
 
 bp = Blueprint('pac4200', __name__)
 
@@ -123,9 +125,9 @@ def api_pac4200_live():
 
 @bp.route('/api/nq/realtime_smart')
 def api_nq_realtime_smart():
-    """NQ-Zeitreihe (PAC4200 10-s-Aggregat) für Maschinenraum-Chart."""
+    """NQ-Zeitreihe (PAC4200 5-min-Aggregat) für Maschinenraum-Chart."""
     try:
-        resolution = max(request.args.get('resolution', type=int, default=300), 10)
+        resolution = max(request.args.get('resolution', type=int, default=300), 300)
         start_ts = request.args.get('start', type=int)
         end_ts = request.args.get('end', type=int)
         end = end_ts if end_ts else int(_time.time())
@@ -139,7 +141,7 @@ def api_nq_realtime_smart():
         return jsonify(res), (200 if not res.get("error") else 503)
     except Exception as exc:
         logging.exception("NQ realtime_smart failed")
-        return jsonify({"data": [], "error": str(exc), "source": "nq_tech_agg10s"}), 503
+        return jsonify({"data": [], "error": str(exc), "source": "nq_tech_5min"}), 503
 
 
 # ---------------------------------------------------------------------------
@@ -471,6 +473,20 @@ def _nq_primary_db(month: str) -> str:
     return os.path.join(_NQ_PRIMARY_DIR, f"nq_{month}.db")
 
 
+def _energy_payload_from_row(row) -> dict:
+    def _kwh(wh):
+        return round((wh or 0.0) / 1000.0, 3) if wh is not None else None
+
+    return {
+        'wh_imp_kwh': _kwh(row[0]),
+        'wh_exp_kwh': _kwh(row[1]),
+        'varh_imp_kvarh': _kwh(row[2]),
+        'varh_exp_kvarh': _kwh(row[3]),
+        'vah_kvah': _kwh(row[4]),
+        'src': row[5],
+    }
+
+
 @bp.route('/api/nq/energy/<period_type>/<period_key>')
 def api_nq_energy(period_type, period_key):
     """Read-only Zähler-Fixpunkte für Tooltip-Spiegelung (Tag/Monat/Jahr).
@@ -501,14 +517,91 @@ def api_nq_energy(period_type, period_key):
     if not row:
         return jsonify({'error': 'no data', 'period': period_key}), 404
 
-    def _kwh(wh):
-        return round((wh or 0.0) / 1000.0, 3) if wh is not None else None
-
     return jsonify({
         'period': period_key, 'period_type': period_type, 'from': 'PAC4200',
-        'wh_imp_kwh': _kwh(row[0]), 'wh_exp_kwh': _kwh(row[1]),
-        'varh_imp_kvarh': _kwh(row[2]), 'varh_exp_kvarh': _kwh(row[3]),
-        'vah_kvah': _kwh(row[4]), 'src': row[5],
+        **_energy_payload_from_row(row),
+    })
+
+
+@bp.route('/api/nq/energy_map/<period_type>/<period_key>')
+def api_nq_energy_map(period_type, period_key):
+    """Read-only Sammelabfrage für Tooltip-Spiegelungen im Monitoring.
+
+    period_type:
+      - day/<YYYY-MM>   -> alle Tages-Fixpunkte des Monats
+      - month/<YYYY>    -> alle Monats-Fixpunkte des Jahres
+      - year/all        -> alle Jahres-Fixpunkte der vorhandenen NQ-DBs
+    """
+    by_key: dict[str, dict] = {}
+
+    if period_type == 'day':
+        db_path = _nq_primary_db(period_key)
+        conn = _open_legacy(db_path)
+        if not conn:
+            return jsonify({'error': 'no data', 'period_type': period_type, 'period_key': period_key}), 404
+        try:
+            rows = conn.execute(
+                "SELECT day, wh_imp_delta, wh_exp_delta, varh_imp_delta, varh_exp_delta, vah_delta, src "
+                "FROM nq_energy_daily WHERE day LIKE ? ORDER BY day",
+                (f"{period_key}-%",),
+            ).fetchall()
+        except Exception:
+            rows = []
+        finally:
+            conn.close()
+        for row in rows:
+            by_key[row[0]] = _energy_payload_from_row(row[1:])
+
+    elif period_type == 'month':
+        for month in range(1, 13):
+            month_key = f"{period_key}-{month:02d}"
+            conn = _open_legacy(_nq_primary_db(month_key))
+            if not conn:
+                continue
+            try:
+                row = conn.execute(
+                    "SELECT month, wh_imp_delta, wh_exp_delta, varh_imp_delta, varh_exp_delta, vah_delta, src "
+                    "FROM nq_energy_monthly WHERE month = ?",
+                    (month_key,),
+                ).fetchone()
+            except Exception:
+                row = None
+            finally:
+                conn.close()
+            if row:
+                by_key[row[0]] = _energy_payload_from_row(row[1:])
+
+    elif period_type == 'year' and period_key == 'all':
+        seen: set[str] = set()
+        for db_path in sorted(glob(os.path.join(_NQ_PRIMARY_DIR, 'nq_*-01.db'))):
+            year_key = os.path.basename(db_path)[3:7]
+            if year_key in seen:
+                continue
+            seen.add(year_key)
+            conn = _open_legacy(db_path)
+            if not conn:
+                continue
+            try:
+                row = conn.execute(
+                    "SELECT year, wh_imp_delta, wh_exp_delta, varh_imp_delta, varh_exp_delta, vah_delta, src "
+                    "FROM nq_energy_yearly WHERE year = ?",
+                    (year_key,),
+                ).fetchone()
+            except Exception:
+                row = None
+            finally:
+                conn.close()
+            if row:
+                by_key[row[0]] = _energy_payload_from_row(row[1:])
+    else:
+        return jsonify({'error': 'invalid period_type/key'}), 400
+
+    return jsonify({
+        'period_type': period_type,
+        'period_key': period_key,
+        'from': 'PAC4200',
+        'by_key': by_key,
+        'count': len(by_key),
     })
 
 
@@ -590,3 +683,269 @@ def api_nq_aggregates():
 def nq_chart_page():
     """NQ2 WP5: feste Tag-Ansicht (5-min-Raster) + Event-Marker/Drill-down."""
     return render_template('nq_chart_view.html')
+
+
+# ---------------------------------------------------------------------------
+# Netzkriterien-API (NQ/PAC4200-Quelle, ohne Legacy data_15min-Pfad)
+# ---------------------------------------------------------------------------
+def _safe_float(v):
+    try:
+        return float(v)
+    except Exception:
+        return None
+
+
+def _period_start_end(period: str, date_param: str | None) -> tuple[int, int]:
+    now = datetime.now()
+    if period == 'tag':
+        d = datetime.strptime(date_param, '%Y-%m-%d') if date_param else now
+        s = datetime(d.year, d.month, d.day, 0, 0, 0)
+        e = s + timedelta(days=1)
+        return int(s.timestamp()), int(e.timestamp())
+    if period == 'monat':
+        if date_param:
+            d = datetime.strptime(date_param, '%Y-%m-%d')
+        else:
+            d = now
+        s = datetime(d.year, d.month, 1, 0, 0, 0)
+        _, last_day = calendar.monthrange(d.year, d.month)
+        e = datetime(d.year, d.month, last_day, 23, 59, 59) + timedelta(seconds=1)
+        return int(s.timestamp()), int(e.timestamp())
+    if period == 'jahr':
+        y = int(date_param[:4]) if date_param else now.year
+        s = datetime(y, 1, 1, 0, 0, 0)
+        e = datetime(y + 1, 1, 1, 0, 0, 0)
+        return int(s.timestamp()), int(e.timestamp())
+    # gesamt: über alle vorhandenen NQ-Monats-DBs
+    years = sorted({int(os.path.basename(p)[3:7]) for p in glob(os.path.join(_NQ_PRIMARY_DIR, 'nq_*.db'))})
+    if years:
+        s = datetime(years[0], 1, 1, 0, 0, 0)
+    else:
+        s = datetime(now.year - 1, 1, 1, 0, 0, 0)
+    e = datetime(now.year + 1, 1, 1, 0, 0, 0)
+    return int(s.timestamp()), int(e.timestamp())
+
+
+def _pct_toward(value: float | None, lo: float, hi: float) -> tuple[float | None, str | None]:
+    """Ausschöpfung in % zur nächstliegenden Grenze bezogen auf nominale Mitte."""
+    if value is None:
+        return None, None
+    nom = (lo + hi) / 2.0
+    if value >= nom:
+        span = hi - nom
+        return (((value - nom) / span) * 100.0 if span > 0 else None), 'hi'
+    span = nom - lo
+    return (((nom - value) / span) * 100.0 if span > 0 else None), 'lo'
+
+
+def _core_fallback_rows(start: int, end: int) -> list[dict]:
+    """Fallback aus Kern-DB: liefert U_L-L + f aus data_15min.
+
+    Wird nur genutzt, wenn NQ-Daten für das angefragte Fenster leer sind.
+    """
+    rows_out: list[dict] = []
+    try:
+        conn = sqlite3.connect(f"file:{config.DB_PATH}?mode=ro", uri=True, timeout=5.0)
+    except Exception:
+        return rows_out
+    try:
+        rows = conn.execute(
+            "SELECT ts, U_L1_N_Netz, U_L2_N_Netz, U_L3_N_Netz, f_Netz "
+            "FROM data_15min WHERE ts >= ? AND ts < ? ORDER BY ts",
+            (start, end),
+        ).fetchall()
+    except Exception:
+        rows = []
+    finally:
+        conn.close()
+    rt3 = 1.7320508075688772
+    for ts, u1n, u2n, u3n, f in rows:
+        u12 = (u1n * rt3) if u1n is not None else None
+        u23 = (u2n * rt3) if u2n is not None else None
+        u31 = (u3n * rt3) if u3n is not None else None
+        rows_out.append({
+            'ts': int(ts),
+            'U_L12': u12, 'U_L23': u23, 'U_L31': u31,
+            'U_L12_min': u12, 'U_L12_max': u12,
+            'U_L23_min': u23, 'U_L23_max': u23,
+            'U_L31_min': u31, 'U_L31_max': u31,
+            'FREQ': _safe_float(f), 'FREQ_min': _safe_float(f), 'FREQ_max': _safe_float(f),
+        })
+    return rows_out
+
+
+@bp.route('/api/nq/netzkriterien')
+def api_nq_netzkriterien():
+    """Netzkriterien-Daten aus NQ-Primary-Aggregaten (PAC4200).
+
+    period=tag|monat|jahr|gesamt, date=YYYY-MM-DD.
+    Liefert Spannung L-L + Frequenz inkl. Warnstufen 50/70/90.
+    """
+    period = request.args.get('period', 'tag')
+    if period not in ('tag', 'monat', 'jahr', 'gesamt'):
+        return jsonify({'error': 'invalid period'}), 400
+    date_param = request.args.get('date')
+    start, end = _period_start_end(period, date_param)
+    rng = {'tag': '5min', 'monat': 'hourly', 'jahr': 'daily', 'gesamt': 'daily'}[period]
+
+    raw = tech_read.fetch_aggregates(rng, start, end)
+    rows = raw.get('data', [])
+    source = raw.get('source', f'nq_{rng}')
+    if not rows:
+        rows = _core_fallback_rows(start, end)
+        if rows:
+            source = 'core_data15min_fallback'
+
+    cfg = _load_nq_config()
+    gw = cfg.get('grenzwerte', {})
+    lv = gw.get('warning_levels', {})
+    warn_pct = float(lv.get('warn_pct', 50))
+    high_pct = float(lv.get('high_pct', 70))
+    crit_pct = float(lv.get('crit_pct', 90))
+    u_ll_lo = float(gw.get('u_ll_min_v', 360.0))
+    u_ll_hi = float(gw.get('u_ll_max_v', 440.0))
+    f_lo = float(gw.get('freq_min_hz', 47.0))
+    f_hi = float(gw.get('freq_max_hz', 52.0))
+    i_hi = float(gw.get('i_max_a', 35.0))
+    thd_hi = float(gw.get('thd_u_max_pct', 8.0))
+
+    datapoints = []
+    warnings = []
+    level_counts = {'warn': 0, 'high': 0, 'crit': 0}
+
+    def _level(pct: float | None) -> str | None:
+        if pct is None:
+            return None
+        if pct >= crit_pct:
+            return 'crit'
+        if pct >= high_pct:
+            return 'high'
+        if pct >= warn_pct:
+            return 'warn'
+        return None
+
+    for r in rows:
+        ts = int(r.get('ts', 0))
+        u12 = _safe_float(r.get('U_L12'))
+        u23 = _safe_float(r.get('U_L23'))
+        u31 = _safe_float(r.get('U_L31'))
+        f = _safe_float(r.get('FREQ'))
+        u12_min, u12_max = _safe_float(r.get('U_L12_min')), _safe_float(r.get('U_L12_max'))
+        u23_min, u23_max = _safe_float(r.get('U_L23_min')), _safe_float(r.get('U_L23_max'))
+        u31_min, u31_max = _safe_float(r.get('U_L31_min')), _safe_float(r.get('U_L31_max'))
+        f_min, f_max = _safe_float(r.get('FREQ_min')), _safe_float(r.get('FREQ_max'))
+
+        v_candidates_hi = [v for v in (u12_max, u23_max, u31_max, u12, u23, u31) if v is not None]
+        v_candidates_lo = [v for v in (u12_min, u23_min, u31_min, u12, u23, u31) if v is not None]
+        f_candidates_hi = [v for v in (f_max, f) if v is not None]
+        f_candidates_lo = [v for v in (f_min, f) if v is not None]
+
+        v_pct_hi, _ = _pct_toward(max(v_candidates_hi) if v_candidates_hi else None, u_ll_lo, u_ll_hi)
+        v_pct_lo, _ = _pct_toward(min(v_candidates_lo) if v_candidates_lo else None, u_ll_lo, u_ll_hi)
+        f_pct_hi, _ = _pct_toward(max(f_candidates_hi) if f_candidates_hi else None, f_lo, f_hi)
+        f_pct_lo, _ = _pct_toward(min(f_candidates_lo) if f_candidates_lo else None, f_lo, f_hi)
+
+        i_l1 = _safe_float(r.get('Is_L1'))
+        i_l2 = _safe_float(r.get('Is_L2'))
+        i_l3 = _safe_float(r.get('Is_L3'))
+        i_l1_max = _safe_float(r.get('Is_L1_max'))
+        i_l2_max = _safe_float(r.get('Is_L2_max'))
+        i_l3_max = _safe_float(r.get('Is_L3_max'))
+        i_candidates = [abs(v) for v in (i_l1, i_l2, i_l3, i_l1_max, i_l2_max, i_l3_max) if v is not None]
+        i_pct_hi = ((max(i_candidates) / i_hi) * 100.0) if (i_candidates and i_hi > 0) else None
+
+        thd1 = _safe_float(r.get('THDu_L1'))
+        thd2 = _safe_float(r.get('THDu_L2'))
+        thd3 = _safe_float(r.get('THDu_L3'))
+        thd1_max = _safe_float(r.get('THDu_L1_max'))
+        thd2_max = _safe_float(r.get('THDu_L2_max'))
+        thd3_max = _safe_float(r.get('THDu_L3_max'))
+        thd_candidates = [v for v in (thd1, thd2, thd3, thd1_max, thd2_max, thd3_max) if v is not None]
+        thd_pct_hi = ((max(thd_candidates) / thd_hi) * 100.0) if (thd_candidates and thd_hi > 0) else None
+
+        candidates = []
+        if v_pct_hi is not None:
+            candidates.append(('u_ll_max', v_pct_hi, max(v_candidates_hi) if v_candidates_hi else None))
+        if v_pct_lo is not None:
+            candidates.append(('u_ll_min', v_pct_lo, min(v_candidates_lo) if v_candidates_lo else None))
+        if f_pct_hi is not None:
+            candidates.append(('freq_max', f_pct_hi, max(f_candidates_hi) if f_candidates_hi else None))
+        if f_pct_lo is not None:
+            candidates.append(('freq_min', f_pct_lo, min(f_candidates_lo) if f_candidates_lo else None))
+        if i_pct_hi is not None:
+            candidates.append(('i_max', i_pct_hi, max(i_candidates) if i_candidates else None))
+        if thd_pct_hi is not None:
+            candidates.append(('thd_u_max', thd_pct_hi, max(thd_candidates) if thd_candidates else None))
+
+        warn_level = None
+        warn_kind = None
+        warn_pct_val = None
+        warn_value = None
+        if candidates:
+            warn_kind, warn_pct_val, warn_value = max(candidates, key=lambda x: x[1])
+            warn_level = _level(warn_pct_val)
+            if warn_level:
+                level_counts[warn_level] += 1
+                warnings.append({
+                    'ts': ts,
+                    'level': warn_level,
+                    'kind': warn_kind,
+                    'pct': round(warn_pct_val, 1),
+                    'value': round(float(warn_value), 3) if warn_value is not None else None,
+                })
+
+        datapoints.append({
+            'ts': ts,
+            'u_l1_l2': u12, 'u_l2_l3': u23, 'u_l3_l1': u31,
+            'u_l1_l2_min': u12_min, 'u_l1_l2_max': u12_max,
+            'u_l2_l3_min': u23_min, 'u_l2_l3_max': u23_max,
+            'u_l3_l1_min': u31_min, 'u_l3_l1_max': u31_max,
+            'f_netz': f, 'f_netz_min': f_min, 'f_netz_max': f_max,
+            'warn_level': warn_level,
+            'warn_kind': warn_kind,
+            'warn_pct': round(warn_pct_val, 1) if warn_pct_val is not None else None,
+        })
+
+    maxima = {'u_voltage_max': None, 'u_voltage_min': None, 'f_netz_max': None, 'f_netz_min': None}
+    for dp in datapoints:
+        ts = dp['ts']
+        for key, field in (
+            ('u_voltage_max', ('u_l1_l2_max', 'u_l2_l3_max', 'u_l3_l1_max', 'u_l1_l2', 'u_l2_l3', 'u_l3_l1')),
+            ('u_voltage_min', ('u_l1_l2_min', 'u_l2_l3_min', 'u_l3_l1_min', 'u_l1_l2', 'u_l2_l3', 'u_l3_l1')),
+        ):
+            vals = [dp[f] for f in field if dp.get(f) is not None]
+            if not vals:
+                continue
+            cand = max(vals) if key.endswith('max') else min(vals)
+            cur = maxima[key]
+            if cur is None or (cand > cur['value'] if key.endswith('max') else cand < cur['value']):
+                maxima[key] = {'value': float(cand), 'ts': ts}
+        if dp.get('f_netz_max') is not None:
+            cand = dp['f_netz_max']
+            cur = maxima['f_netz_max']
+            if cur is None or cand > cur['value']:
+                maxima['f_netz_max'] = {'value': float(cand), 'ts': ts}
+        if dp.get('f_netz_min') is not None:
+            cand = dp['f_netz_min']
+            cur = maxima['f_netz_min']
+            if cur is None or cand < cur['value']:
+                maxima['f_netz_min'] = {'value': float(cand), 'ts': ts}
+
+    return jsonify({
+        'period': period,
+        'date': date_param,
+        'window_start_ts': start,
+        'window_end_ts': end,
+        'datapoints': datapoints,
+        'warnings': warnings,
+        'warning_counts': level_counts,
+        'warning_levels': {'warn_pct': warn_pct, 'high_pct': high_pct, 'crit_pct': crit_pct},
+        'limits': {
+            'u_ll_min_v': u_ll_lo, 'u_ll_max_v': u_ll_hi,
+            'freq_min_hz': f_lo, 'freq_max_hz': f_hi,
+            'i_max_a': i_hi, 'thd_u_max_pct': thd_hi,
+        },
+        'maxima': maxima,
+        'available': bool(datapoints),
+        'source': source,
+    })

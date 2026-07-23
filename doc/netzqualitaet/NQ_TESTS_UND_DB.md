@@ -245,3 +245,89 @@ Navigationshierarchie: Flow → Maschinenraum → { Echtzeit (Kern-DB), Netzqual
 
 **Offen für Vollbetrieb:** RAW-Transfer/Aggregat-Kaskade auf Primary + GFS (2b),
 Event-Chart-Drilldown + HF/NF/VLF-Analyse (3b).
+
+---
+
+## 11. Datenbank-Struktur (kompakt, technisch)
+
+### 11.1 Tech-DB (tmpfs, /dev/shm/nq_cache.db)
+
+- `nq_raw_fast`: 200-ms-Skalare (U/I/P/Q/S/PF/f), event-Flag.
+- `nq_raw_medium`: 200-ms-Block-B-Werte (THD/cosphi/Unsymmetrie), event-Flag.
+- `nq_raw_slow`: 1-s-Harmonische (meas, phase, ord, value), event-Flag.
+- `nq_raw_max`: 300-s-Maxblock (Geraete-Maxwerte aus PAC Block C).
+- `nq_agg_10s`: 10-s-Downsample (quantity, vmin/vavg/vmax, n).
+- `nq_energy_raw`: 300-s-Energiezaehler-Snapshots (wh_imp/wh_exp/varh*/vah).
+- `nq_limit_alerts`: Software-Grenzwertalarme (50/70/90-Logik via crit/warn/high).
+
+### 11.2 Primary-DB (nq/db/nq_YYYY-MM.db)
+
+- `nq_agg_10s`: uebernommenes 10-s-Aggregat.
+- `nq_5min`: 5-min-Aggregat (Skalare + Harmonische, min/avg/max/std/n).
+- `nq_hourly`: stundenweise Aggregation.
+- `nq_daily`: tageweise Aggregation.
+- `nq_transient_5min`: Transientenzaehlung je 5-min-Fenster (pos/neg, slew avg/max).
+- `nq_events`: Event-Katalog (band/kind/trigger/severity/peak/has_snippet).
+- `nq_event_fast`, `nq_event_medium`, `nq_event_slow`: Event-Schnipsel-RAW.
+- `nq_energy_daily`: Tages-Fixpunkte (start/end/delta je Zaehler).
+- `nq_energy_monthly`: Monats-Fixpunkte.
+- `nq_energy_yearly`: Jahres-Fixpunkte.
+- `nq_energy_checkpoint`: day_start-Checkpoints (kumulative Zaehlerstaende).
+- `nq_energy_compare`: PAC vs Master-SM vs iMS Vergleich.
+- `nq_ims_reading`: iMS-Ablesungen.
+- `nq_ingest_log`: Ingest-/Transfer-Log.
+
+---
+
+## 12. Filterkette (Ist-Stand, Schritt fuer Schritt)
+
+### 12.1 RAW -> Aggregat
+
+1. PAC-Read auf Tech
+- fast 200 ms: Skalare in `nq_raw_fast` + `nq_raw_medium`.
+- medium 1 s: Harmonische in `nq_raw_slow`.
+- max 300 s: Geraete-Maxwerte in `nq_raw_max`.
+- energy 300 s: Zaehler in `nq_energy_raw`.
+
+2. 10-s-Bildung auf Tech
+- `nq_agg_10s`: je quantity min/avg/max + n.
+
+3. Transfer nach Primary
+- `nq_agg_10s` plus Event-Segmente.
+
+4. Kaskade auf Primary
+- `nq_agg_10s` -> `nq_5min` -> `nq_hourly` -> `nq_daily`.
+
+### 12.2 Lokal/Netz-Filter
+
+- Der Schalter Lokal/Netz in der Netzkriterien-UI ist aktuell eine Darstellungslogik:
+  - `Lokal`: drei L-L-Phasenkurven.
+  - `Netz`: gemittelte L-L-Kurve aus den drei Phasen.
+- Persistente Trennung in eigenen DB-Spalten (`*_local`, `*_grid`) ist aktuell noch nicht als separater Write-Pfad umgesetzt.
+
+### 12.3 Event-Erkennung und Speicherung
+
+- Event-Vorfilter im Poller (du/df/thd/di) markiert Kandidaten.
+- Transfer speichert Schnipsel in `nq_event_fast|medium|slow`.
+- Event-Metadaten in `nq_events` (`has_snippet`, `peak_*`, `severity`).
+- Dedup/Cooldown aktiv (`event_filter` in `config/nq_config.json`).
+
+### 12.4 Warnstufen 50/70/90
+
+- Schwellwerte aus `config/nq_config.json -> grenzwerte`.
+- Netzkriterien-API bewertet je Zeitbucket aktuell:
+  - Spannung L-L (min/max-Naehe zur Grenze)
+  - Frequenz (min/max-Naehe zur Grenze)
+  - Strom (`i_max_a`)
+  - THD-U (`thd_u_max_pct`)
+- Ausgabe: `warn_level` (warn/high/crit), `warn_kind`, `warn_pct`, Summen in `warning_counts`.
+
+### 12.5 Kern-DB -> NQ-DB (neuer Fill-Pfad)
+
+- Modul: `python3 -m nq.transfer.nq_core_feed --days N`
+- Quelle: `data.db:data_1min` (read-only)
+- Ziel: `nq_5min` (INSERT OR IGNORE, keine PAC-Ueberschreibung)
+- Mapping:
+  - `FREQ <- f_Netz_*`
+  - `U_L12/U_L23/U_L31 <- U_Lx_N_Netz_* * sqrt(3)`
+- Nach dem Fill werden `nq_hourly` und `nq_daily` fuer diese Groessen im Zeitfenster mitgezogen.

@@ -7,7 +7,7 @@
     <link rel="shortcut icon" href="/favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png?v={{ favicon_version }}">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <title>Netzqualität - PV-System</title>
+    <title>Netzkriterien - PV-System</title>
     <script src="/static/js/nav-context.js"></script>
     <script src="/static/js/nav-ui.js"></script>
     <link rel="stylesheet" href="/static/css/nav-ui.css">
@@ -191,12 +191,11 @@
             <button class="toggle-btn" id="btnPeriodGesamt" onclick="setPeriod('gesamt')">Gesamt</button>
         </div>
         <div class="nav-separator"></div>
-        <button class="toggle-btn active" id="btnAnalyse" onclick="toggleAnalysis()" style="border-radius:5px">15min</button>
-        <div class="nav-separator"></div>
         <div class="nav-group">
             <button class="nav-btn" id="navPrev" onclick="navigateStep(-1)">◀</button>
             <button class="date-label" id="dateDisplay" onclick="navigateToToday()">Heute</button>
             <button class="nav-btn" id="navNext" onclick="navigateStep(1)">▶</button>
+            <button class="nav-btn" id="navNow" onclick="navigateToToday()">Jetzt</button>
         </div>
         <span class="status-info" id="statusInfo">Lädt...</span>
     </div>
@@ -209,9 +208,7 @@
         </div>
     </div>
 
-    <div class="future-hint">
-        Zoom + Shift aktiv · Automatische Datenstufe: RAW -> 1min -> 15min -> monthly
-    </div>
+    <div class="future-hint">Feste Darstellung · Tag = 5-min-Raster · Zeitnavigation bleibt erhalten</div>
 
     <script>
         let mainChart = null;
@@ -221,9 +218,8 @@
         let currentData = null;
         let currentDateStr = null;
         let currentMeta = null;
-        let analysisData = null;
         let maximaData = null;
-        let showAnalysis = true;
+        let warningCounts = { warn: 0, high: 0, crit: 0 };
 
         function formatDateISO(d) {
             return d.getFullYear() + '-' +
@@ -291,11 +287,8 @@
         }
 
         function updateAnalysisButtonState() {
-            const btn = document.getElementById('btnAnalyse');
-            const enabled = currentPeriod === 'tag';
-            btn.disabled = !enabled;
-            btn.style.opacity = enabled ? '1' : '0.45';
-            btn.classList.toggle('active', enabled && showAnalysis);
+            // Analyse-Button entfällt in Netzkriterien; Funktion bleibt als no-op
+            // für bestehende Aufrufe aus dem Seiten-Lifecycle.
         }
 
         // Zentrale Zeit-Navigations-Übergabe (URL+localStorage, 1 h Verfall).
@@ -325,8 +318,7 @@
             currentPeriod = period;
             currentDate = normalizeDateForPeriod(currentDate, currentPeriod);
             if (currentPeriod !== 'tag') {
-                showAnalysis = false;
-                analysisData = null;
+                warningCounts = { warn: 0, high: 0, crit: 0 };
             }
             updatePeriodButtons();
             updateAnalysisButtonState();
@@ -335,16 +327,7 @@
             loadData();
         }
 
-        function toggleAnalysis() {
-            if (currentPeriod !== 'tag') return;
-            showAnalysis = !showAnalysis;
-            updateAnalysisButtonState();
-            if (showAnalysis) {
-                loadData();
-            } else if (currentData && currentDateStr) {
-                renderChart(currentData, currentDateStr);
-            }
-        }
+        function toggleAnalysis() { /* no-op */ }
 
         function updateDateDisplay() {
             const el = document.getElementById('dateDisplay');
@@ -423,19 +406,11 @@
             document.getElementById('loadingMain').style.display = 'block';
 
             try {
-                const resp = await fetch(`/api/netzqualitaet/zeitraum?period=${currentPeriod}&date=${dateStr}`);
+                const resp = await fetch(`/api/nq/netzkriterien?period=${currentPeriod}&date=${dateStr}`);
                 if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
                 const data = await resp.json();
-
-                const respMax = await fetch(`/api/netzqualitaet/maxima?period=${currentPeriod}&date=${dateStr}`);
-                maximaData = respMax.ok ? await respMax.json() : null;
-
-                if (showAnalysis && currentPeriod === 'tag') {
-                    const respA = await fetch(`/api/netzqualitaet/analyse?date=${dateStr}`);
-                    analysisData = respA.ok ? await respA.json() : null;
-                } else {
-                    analysisData = null;
-                }
+                maximaData = { available: !!data.available, maxima: data.maxima || {} };
+                warningCounts = data.warning_counts || { warn: 0, high: 0, crit: 0 };
 
                 document.getElementById('loadingMain').style.display = 'none';
                 currentData = data;
@@ -444,27 +419,10 @@
                 updateDateDisplay();
                 renderChart(data, dateStr);
 
-                let status = `${data.datapoints.length} Punkte · ${data.source}`;
-                if (analysisData && analysisData.summary) {
-                    const s = analysisData.summary;
-                    status += ` · DFD Ø${Math.round(s.dfd_mean)} mHz (max ${Math.round(s.dfd_max)})`;
-                    if (s.local_events > 0) {
-                        status += ` · ${s.local_events} lokale Events`;
-                    }
-                }
-                if (maximaData && maximaData.available && maximaData.maxima && maximaData.maxima.u_voltage_max) {
-                    const acc = maximaData.maxima.accuracy ? ` (${maximaData.maxima.accuracy})` : '';
-                    status += ` · Vmax ${maximaData.maxima.u_voltage_max.value.toFixed(1)}V${acc}`;
-                }
-                // Leistungsfaktor-Extremwerte inkl. Uhrzeit (nur Tagesansicht, raw_data ≤7 Tage)
-                const _mx = maximaData && maximaData.available ? maximaData.maxima : null;
-                if (_mx && (_mx.pf_netz_max || _mx.pf_netz_min)) {
-                    const ft = ts => new Date(ts * 1000).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-                    const parts = [];
-                    if (_mx.pf_netz_max) parts.push(`max ${_mx.pf_netz_max.value.toFixed(2)} (${ft(_mx.pf_netz_max.ts)})`);
-                    if (_mx.pf_netz_min) parts.push(`min ${_mx.pf_netz_min.value.toFixed(2)} (${ft(_mx.pf_netz_min.ts)})`);
-                    status += ` · cos φ ${parts.join(' / ')}`;
-                }
+                let status = `${data.datapoints.length} Punkte`;
+                status += ` · Warn ${warningCounts.warn || 0}`;
+                status += ` · Hoch ${warningCounts.high || 0}`;
+                status += ` · Kritisch ${warningCounts.crit || 0}`;
                 statusEl.textContent = status;
             } catch (err) {
                 console.error('Netzqualität Fehler:', err);
@@ -474,45 +432,7 @@
         }
 
         function buildAnalysisOverlay() {
-            // 15-min Raster: vertikale Linien, farbcodiert nach Grenztyp
-            // + DFD-Event-Marker auf der Frequenzkurve
-            const markLines = [];
-            const markPoints = [];
-            if (!analysisData || !analysisData.available || !analysisData.boundaries) return { markLines, markPoints };
-
-            analysisData.boundaries.forEach(b => {
-                const t = b.boundary_ts * 1000;
-                // Rasterlinien nach Typ
-                let color, width, dashType;
-                if (b.boundary_type === 'full_hour') {
-                    color = 'rgba(255,255,255,0.18)'; width = 1.2; dashType = 'solid';
-                } else if (b.boundary_type === 'half_hour') {
-                    color = 'rgba(255,255,255,0.09)'; width = 0.8; dashType = [4, 4];
-                } else {
-                    color = 'rgba(255,255,255,0.04)'; width = 0.5; dashType = [2, 4];
-                }
-                markLines.push({
-                    xAxis: t,
-                    lineStyle: { color, width, type: dashType }
-                });
-
-                // DFD-Event-Marker (>60 mHz)
-                if (b.dfd_mHz >= 60) {
-                    const isLocal = b.local_impact >= 0.1;
-                    markPoints.push({
-                        coord: [t, b.f_nadir],
-                        symbol: 'triangle',
-                        symbolSize: Math.min(6 + b.dfd_mHz / 20, 14),
-                        itemStyle: {
-                            color: isLocal ? '#facc15' : '#ef4444',
-                            borderColor: isLocal ? '#a16207' : '#991b1b',
-                            borderWidth: 1
-                        },
-                        name: `DFD ${b.dfd_mHz} mHz ${b.boundary_type.replace('_', ' ')}${isLocal ? ' (lokal)' : ''}`
-                    });
-                }
-            });
-            return { markLines, markPoints };
+            return { markLines: [], markPoints: [] };
         }
 
         function renderChart(data, dateStr) {
@@ -539,9 +459,23 @@
                 }
             });
 
-            const overlay = (showAnalysis && currentPeriod === 'tag')
-                ? buildAnalysisOverlay()
-                : { markLines: [], markPoints: [] };
+            const warnPoints = data.datapoints
+                .filter(dp => dp.warn_level)
+                .map(dp => {
+                    const clr = dp.warn_level === 'crit' ? '#ef4444'
+                        : dp.warn_level === 'high' ? '#f59e0b' : '#facc15';
+                    const y = dp.f_netz != null ? dp.f_netz
+                        : (dp.u_l1_l2 != null ? dp.u_l1_l2 : null);
+                    return {
+                        coord: [dp.ts * 1000, y],
+                        symbol: 'diamond',
+                        symbolSize: dp.warn_level === 'crit' ? 14 : (dp.warn_level === 'high' ? 12 : 10),
+                        itemStyle: { color: clr, borderColor: '#111827', borderWidth: 1 },
+                        name: `${dp.warn_level.toUpperCase()} ${dp.warn_kind || ''} (${(dp.warn_pct || 0).toFixed(1)}%)`
+                    };
+                });
+
+            const overlay = { markLines: [], markPoints: [] };
 
             // Helper: Zeit formatieren (Tag/Monat/Jahr-abhaengig)
             const fmtMarkerTime = (tsMs) => {
@@ -611,25 +545,51 @@
                 buildFreqPoint(mxNode ? mxNode.f_netz_min : null, 'min'),
             ].filter(Boolean);
 
+            // Warnings nach Typ trennen und nach unten verschieben
+            const warnPointsFreq = warnPoints
+                .filter(p => p.coord[1] >= 48 && p.coord[1] <= 52)  // Frequenz-Range
+                .map(p => ({ ...p, coord: [p.coord[0], 48] }));     // y=48 = Min der Hz-Achse
+            
+            const warnPointsVoltage = warnPoints
+                .filter(p => p.coord[1] >= 360 && p.coord[1] <= 440)  // Spannungs-Range
+                .map(p => ({ ...p, coord: [p.coord[0], 360] }));       // y=360 = Min der V-Achse
+
             const freqMarkPoints = [
-                ...(overlay.markPoints || []),
+                ...warnPointsFreq,
                 ...freqExtremes
+            ];
+            
+            const voltageMarkPointsWithWarnings = [
+                ...voltageMarkPoints,
+                ...warnPointsVoltage
             ];
 
             const seriesBase = {
-                type: 'line', smooth: true, symbol: 'none',
+                type: 'line', smooth: false, symbol: 'none',
                 lineStyle: { width: 1.5 }
+            };
+            const showIntervalMarkers = (currentPeriod === 'monat' || currentPeriod === 'jahr' || currentPeriod === 'gesamt');
+            const buildMinMaxLines = series => {
+                if (!showIntervalMarkers || !Array.isArray(series) || series.length === 0) return [];
+                const vals = series.map(p => p && p[1]).filter(v => Number.isFinite(v));
+                if (!vals.length) return [];
+                const minV = Math.min(...vals);
+                const maxV = Math.max(...vals);
+                return [
+                    { yAxis: minV, lineStyle: { color: 'rgba(56,189,248,0.32)', type: 'dashed', width: 1 } },
+                    { yAxis: maxV, lineStyle: { color: 'rgba(244,63,94,0.32)', type: 'dashed', width: 1 } },
+                ];
             };
 
             // Frequenz-Serie mit Analyse-Markern
             const freqSeries = {
                 ...seriesBase, name: 'Frequenz', data: tsFreq, yAxisIndex: 1,
                 itemStyle: { color: '#e8915a' }, lineStyle: { width: 1.5, type: 'solid' },
-                markLine: overlay.markLines.length > 0 ? {
+                markLine: (overlay.markLines.length > 0 || showIntervalMarkers) ? {
                     silent: true,
                     symbol: 'none',
                     label: { show: false },
-                    data: overlay.markLines
+                    data: [...overlay.markLines, ...buildMinMaxLines(tsFreq)]
                 } : undefined,
                 markPoint: freqMarkPoints.length > 0 ? {
                     data: freqMarkPoints,
@@ -649,8 +609,14 @@
                         data: tsL1L2,
                         yAxisIndex: 0,
                         itemStyle: { color: '#4646FF' },
-                        markPoint: voltageMarkPoints.length > 0 ? {
-                            data: voltageMarkPoints,
+                        markLine: showIntervalMarkers ? {
+                            silent: true,
+                            symbol: 'none',
+                            label: { show: false },
+                            data: buildMinMaxLines(tsL1L2)
+                        } : undefined,
+                        markPoint: voltageMarkPointsWithWarnings.length > 0 ? {
+                            data: voltageMarkPointsWithWarnings,
                             label: { show: true },
                             tooltip: {
                                 trigger: 'item',
@@ -658,8 +624,26 @@
                             }
                         } : undefined
                     },
-                    { ...seriesBase, name: 'L2-L3', data: tsL2L3, yAxisIndex: 0, itemStyle: { color: '#6E6EFF' } },
-                    { ...seriesBase, name: 'L3-L1', data: tsL3L1, yAxisIndex: 0, itemStyle: { color: '#8C8CFF' } }
+                    {
+                        ...seriesBase,
+                        name: 'L2-L3', data: tsL2L3, yAxisIndex: 0, itemStyle: { color: '#6E6EFF' },
+                        markLine: showIntervalMarkers ? {
+                            silent: true,
+                            symbol: 'none',
+                            label: { show: false },
+                            data: buildMinMaxLines(tsL2L3)
+                        } : undefined
+                    },
+                    {
+                        ...seriesBase,
+                        name: 'L3-L1', data: tsL3L1, yAxisIndex: 0, itemStyle: { color: '#8C8CFF' },
+                        markLine: showIntervalMarkers ? {
+                            silent: true,
+                            symbol: 'none',
+                            label: { show: false },
+                            data: buildMinMaxLines(tsL3L1)
+                        } : undefined
+                    }
                 ]
                 : [
                     {
@@ -669,8 +653,14 @@
                         yAxisIndex: 0,
                         itemStyle: { color: '#22d3ee' },
                         lineStyle: { width: 2 },
-                        markPoint: voltageMarkPoints.length > 0 ? {
-                            data: voltageMarkPoints,
+                        markLine: showIntervalMarkers ? {
+                            silent: true,
+                            symbol: 'none',
+                            label: { show: false },
+                            data: buildMinMaxLines(tsNetz)
+                        } : undefined,
+                        markPoint: voltageMarkPointsWithWarnings.length > 0 ? {
+                            data: voltageMarkPointsWithWarnings,
                             label: { show: true },
                             tooltip: {
                                 trigger: 'item',
@@ -799,24 +789,7 @@
                         splitLine: { show: false }
                     }
                 ],
-                dataZoom: [
-                    {
-                        type: 'inside',
-                        throttle: 30,
-                        zoomOnMouseWheel: true,
-                        moveOnMouseMove: true,
-                        moveOnMouseWheel: true
-                    },
-                    {
-                        type: 'slider',
-                        height: 16,
-                        bottom: 14,
-                        borderColor: 'rgba(255,255,255,0.1)',
-                        backgroundColor: 'rgba(15,23,42,0.45)',
-                        fillerColor: 'rgba(70,70,255,0.25)',
-                        handleSize: 14,
-                    }
-                ],
+                dataZoom: [],
                 series: [...voltageSeries, freqSeries]
             });
         }
@@ -828,6 +801,26 @@
 
         // Init
         if (window.PVNavUI) PVNavUI.initDrawer();
+        if (window.PVNavUI && PVNavUI.attachCalendar) {
+            PVNavUI.attachCalendar(
+                document.getElementById('dateDisplay'),
+                'day',
+                () => {
+                    const d = currentDate;
+                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                },
+                v => {
+                    const [y, m, d] = v.split('-').map(Number);
+                    if (currentPeriod === 'tag') currentDate = new Date(y, m - 1, d, 12);
+                    else if (currentPeriod === 'monat') currentDate = new Date(y, m - 1, 1, 12);
+                    else currentDate = new Date(y, 0, 1, 12);
+                    currentDate = normalizeDateForPeriod(currentDate, currentPeriod);
+                    updateDateDisplay();
+                    _nqCommitCtx();
+                    loadData();
+                }
+            );
+        }
         _nqApplyState();   // Zeitkontext (1 h) von anderen Seiten übernehmen
         currentDate = normalizeDateForPeriod(currentDate, currentPeriod);
         updatePeriodButtons();

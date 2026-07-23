@@ -194,6 +194,7 @@
         let chart = null;
         let periodExtremes = null;
         let tagExtremes = null;
+        let pacEnergyOverlay = { periodType: null, periodKey: null, byKey: {} };
 
         let chartData = null;
         let forecastData = null;  // Separate forecast for background overlay
@@ -250,6 +251,56 @@
             } catch (e) {
                 console.error('Fehler beim Speichern des States:', e);
             }
+        }
+
+        function pad2(value) {
+            return String(value).padStart(2, '0');
+        }
+
+        function monthKey(year, month) {
+            return `${year}-${pad2(month)}`;
+        }
+
+        function dayKey(dateObj) {
+            return `${dateObj.getFullYear()}-${pad2(dateObj.getMonth() + 1)}-${pad2(dateObj.getDate())}`;
+        }
+
+        async function loadPacEnergyOverlay(periodType, periodKey) {
+            if (!periodType || !periodKey) {
+                pacEnergyOverlay = { periodType: null, periodKey: null, byKey: {} };
+                return;
+            }
+            if (pacEnergyOverlay.periodType === periodType && pacEnergyOverlay.periodKey === periodKey) {
+                return;
+            }
+            try {
+                const response = await fetch(`/api/nq/energy_map/${periodType}/${periodKey}`);
+                if (!response.ok) {
+                    pacEnergyOverlay = { periodType, periodKey, byKey: {} };
+                    return;
+                }
+                const data = await response.json();
+                pacEnergyOverlay = {
+                    periodType,
+                    periodKey,
+                    byKey: data.by_key || {}
+                };
+            } catch (_err) {
+                pacEnergyOverlay = { periodType, periodKey, byKey: {} };
+            }
+        }
+
+        function pacEnergyForKey(key) {
+            return (pacEnergyOverlay && pacEnergyOverlay.byKey) ? pacEnergyOverlay.byKey[key] : null;
+        }
+
+        function formatPacMirror(mainValue, pacValue, label, shortLabel) {
+            if (!(mainValue > 0)) return '';
+            let line = `<strong>${label}:</strong> ${formatEnergy(mainValue)}`;
+            if (pacValue != null) {
+                line += ` <span style="color:#64748b">(${shortLabel} ${formatEnergy(pacValue)})</span>`;
+            }
+            return line + '<br/>';
         }
 
         // Hält currentDate/currentYear/currentMonth konsistent zu EINEM Zeitpunkt,
@@ -1886,6 +1937,7 @@
                 if (window.PVExtremes) {
                     periodExtremes = await PVExtremes.fetchFor('monat', { year: currentYear, month: currentMonth });
                 }
+                await loadPacEnergyOverlay('day', monthKey(currentYear, currentMonth));
                 
                 // Prognose-Daten für nächste 2 Tage nachladen und mergen
                 try {
@@ -1968,6 +2020,7 @@
                 if (window.PVExtremes) {
                     periodExtremes = await PVExtremes.fetchFor('jahr', { year: currentYear });
                 }
+                await loadPacEnergyOverlay('month', String(currentYear));
                 
                 updateYearDisplay();
                 
@@ -2003,6 +2056,7 @@
                 if (window.PVExtremes) {
                     periodExtremes = await PVExtremes.fetchFor('gesamt', {});
                 }
+                await loadPacEnergyOverlay('year', 'all');
                 
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('mainChart').style.display = 'block';
@@ -2204,13 +2258,18 @@
                         }
                         
                         let result = `<strong>${datumStr}</strong><br/><br/>`;
+                        const pac = pacEnergyForKey(dayKey(datum));
                         
                         // Alle Einzelwerte (nur wenn > 0)
                         if (dp.w_netzbezug > 0) {
-                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(244,67,54,0.8);border:1px solid #000;margin-right:5px;"></span>${formatEnergy(dp.w_netzbezug)}<br/>`;
+                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(244,67,54,0.8);border:1px solid #000;margin-right:5px;"></span>${formatEnergy(dp.w_netzbezug)}`;
+                            if (pac && pac.wh_imp_kwh != null) result += ` <span style="color:#64748b">(PAC ${formatEnergy(pac.wh_imp_kwh)})</span>`;
+                            result += '<br/>';
                         }
                         if (dp.w_einspeisung > 0) {
-                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(158,158,158,0.8);border:1px solid #000;margin-right:5px;"></span>${formatEnergy(dp.w_einspeisung)}<br/>`;
+                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(158,158,158,0.8);border:1px solid #000;margin-right:5px;"></span>${formatEnergy(dp.w_einspeisung)}`;
+                            if (pac && pac.wh_exp_kwh != null) result += ` <span style="color:#64748b">(PAC ${formatEnergy(pac.wh_exp_kwh)})</span>`;
+                            result += '<br/>';
                         }
                         if (dp.w_batterieladung > 0) {
                             result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(56,142,60,0.85);border:1px solid #000;margin-right:5px;"></span>${formatEnergy(dp.w_batterieladung)}<br/>`;
@@ -2243,6 +2302,8 @@
                         result += '<br/>';
                         result += `<strong>Spez. Ertrag:</strong> ${formatSpecificYield(dp.w_pv_total || 0, getInstalledKwpForDate(datum))}<br/>`;
                         result += `<strong>Verbrauch:</strong> ${formatEnergy(dp.w_gesamtverbrauch)}<br/>`;
+                        result += formatPacMirror(dp.w_netzbezug, pac ? pac.wh_imp_kwh : null, 'Bezug', 'PAC');
+                        result += formatPacMirror(dp.w_einspeisung, pac ? pac.wh_exp_kwh : null, 'Einspeisung', 'PAC');
                         result += `<strong>Autarkie:</strong> ${dp.autarkie != null ? Number(dp.autarkie).toFixed(1) : "&ndash;"} %`;
                         
                         if (periodExtremes && periodExtremes.by_key && window.PVExtremes) {
@@ -2551,12 +2612,20 @@
                         if (!dp || dp.w_pv_total === 0) return `<strong>${xLabels[i]}</strong><br/>Keine Daten`;
                         
                         let result = `<strong>${dp.label || xLabels[i]}</strong><br/><br/>`;
+                        const pacKey = currentPeriod === 'jahr'
+                            ? monthKey(currentYear, dp.month || (i + 1))
+                            : String(dp.year || xLabels[i]);
+                        const pac = pacEnergyForKey(pacKey);
                         
                         if (dp.w_netzbezug > 0) {
-                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(244,67,54,0.8);border:1px solid #000;margin-right:5px;"></span>Netzbez. ${formatEnergy(dp.w_netzbezug)}<br/>`;
+                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(244,67,54,0.8);border:1px solid #000;margin-right:5px;"></span>Netzbez. ${formatEnergy(dp.w_netzbezug)}`;
+                            if (pac && pac.wh_imp_kwh != null) result += ` <span style="color:#64748b">(PAC ${formatEnergy(pac.wh_imp_kwh)})</span>`;
+                            result += '<br/>';
                         }
                         if (dp.w_einspeisung > 0) {
-                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(158,158,158,0.8);border:1px solid #000;margin-right:5px;"></span>Einspeis. ${formatEnergy(dp.w_einspeisung)}<br/>`;
+                            result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(158,158,158,0.8);border:1px solid #000;margin-right:5px;"></span>Einspeis. ${formatEnergy(dp.w_einspeisung)}`;
+                            if (pac && pac.wh_exp_kwh != null) result += ` <span style="color:#64748b">(PAC ${formatEnergy(pac.wh_exp_kwh)})</span>`;
+                            result += '<br/>';
                         }
                         if (dp.w_batterieladung > 0) {
                             result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(56,142,60,0.85);border:1px solid #000;margin-right:5px;"></span>Batt.lad. ${formatEnergy(dp.w_batterieladung)}<br/>`;
@@ -2580,6 +2649,8 @@
                         }
                         result += `<strong>Spez. Ertrag:</strong> ${formatSpecificYield(dp.w_pv_total || 0, kwpRef)}<br/>`;
                         result += `<strong>Verbrauch:</strong> ${formatEnergy(dp.w_gesamtverbrauch)}<br/>`;
+                        result += formatPacMirror(dp.w_netzbezug, pac ? pac.wh_imp_kwh : null, 'Bezug', 'PAC');
+                        result += formatPacMirror(dp.w_einspeisung, pac ? pac.wh_exp_kwh : null, 'Einspeisung', 'PAC');
                         result += `<strong>Autarkie:</strong> ${dp.autarkie != null ? Number(dp.autarkie).toFixed(1) : "&ndash;"} %`;
                         
                         if (periodExtremes && periodExtremes.by_key && window.PVExtremes) {

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico?v={{ favicon_version }}">
-    <title>NQ-Musteranalyse - PV-System</title>
+    <title>Netzmusteranalyse - PV-System</title>
     <script src="/static/js/nav-context.js"></script>
     <script src="/static/js/nav-ui.js"></script>
     <link rel="stylesheet" href="/static/css/nav-ui.css">
@@ -132,26 +132,26 @@
 <body>
 
 <nav class="top-nav">
-    <span class="nav-title">NQ · Musteranalyse</span>
+    <span class="nav-title">NQ · Netzmusteranalyse</span>
 </nav>
 
 <div class="content">
 
     <!-- ================================================================
-         SECTION 1: 15-min-Handelsmuster (DFD)
+         SECTION 1: Viertelstunden-Frequenzmuster
     ================================================================ -->
     <div class="section">
         <div class="section-header">
             <span class="section-icon">〰</span>
             <div>
-                <div class="section-title">15-Minuten-Handelsmuster (DFD)
+                <div class="section-title">Viertelstunden-Frequenzmuster
                     <span class="badge badge-nf">NF_global</span>
                 </div>
                 <div class="section-sub">
                     Der europäische Stromhandel (EPEX SPOT) handelt in <strong>15-Minuten-Blöcken</strong>.
                     An jeder Viertelstunden-Grenze wechseln Fahrpläne: Erzeuger müssen ihre Einspeisung
                     anpassen, was kurze Frequenzabweichungen verursacht — die
-                    <strong>Diskrete Frequenzänderung (DFD)</strong>. Vollstunden-Grenzen
+                    <strong>diskrete Frequenzänderung</strong>. Vollstunden-Grenzen
                     sind stärker (Stunden- <em>und</em> Viertelstunden-Kontrakte wechseln gleichzeitig).
                     Regelleistung (z. B. 50Hertz) kompensiert, aber die Spur bleibt sichtbar.
                     Die Spannungsverläufe bestätigen dies — ein leichter Spannungseinbruch begleitet
@@ -161,21 +161,21 @@
         </div>
         <div class="section-body">
             <div class="stat-row" id="dfdStats">
-                <div class="loading-msg">Lade DFD-Daten…</div>
+                <div class="loading-msg">Lade Frequenzmuster…</div>
             </div>
             <div class="chart-row">
                 <div class="chart-wrap" style="flex:1.2">
-                    <div class="chart-label">DFD-Amplitude nach Grenztyp (mHz)</div>
+                    <div class="chart-label">Frequenzsprung nach Grenztyp (mHz)</div>
                     <div class="chart-el" id="chartDfdByType"></div>
                 </div>
                 <div class="chart-wrap" style="flex:2">
-                    <div class="chart-label">DFD-Verlauf letzte 30 Tage (täglicher Mittelwert, mHz)</div>
+                    <div class="chart-label">Verlauf letzte 30 Tage (täglicher Mittelwert, mHz)</div>
                     <div class="chart-el" id="chartDfdTrend"></div>
                 </div>
             </div>
             <div class="hint-box">
                 <strong>Quellhinweis:</strong> Daten aus dem Fronius Smart Meter am Netzanschlusspunkt.
-                Auflösung ~3 s. DFD-Amplitude = |f_post − f_pre| an der Grenze. Schwelle für
+                Auflösung ~3 s. Frequenzsprung = |f_post − f_pre| an der Grenze. Schwelle für
                 Anomalie: 100 mHz. Mit PAC4200-Daten (10 s) wird die Auflösung weiter verbessert.
             </div>
         </div>

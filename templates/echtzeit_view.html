@@ -9,7 +9,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png?v={{ favicon_version }}">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <title>Maschinenraum - Fronius PV</title>
+    <title>Darstellung aller Einzelwerte - PV-System</title>
     <script src="/static/js/nav-context.js"></script>
     <script src="/static/js/nav-ui.js"></script>
     <link rel="stylesheet" href="/static/css/nav-ui.css">
@@ -249,9 +249,9 @@
         <div class="header">
             <div style="display:flex; gap:10px; align-items:center;">
                 <div class="db-selector" style="display:flex; gap:4px; align-items:center; margin-right:6px;">
-                    <span style="color:rgba(255,255,255,0.6); font-size:12px;">DB:</span>
+                    <span style="color:rgba(255,255,255,0.6); font-size:12px;">Datenbank:</span>
                     <button class="btn db-btn active" data-db="core">PV-System</button>
-                    <button class="btn db-btn" data-db="nq">PAC4200 (NQ)</button>
+                    <button class="btn db-btn" data-db="nq">PAC4200</button>
                 </div>
                 <div class="nav-group">
                     <button class="nav-btn" id="navPrev">◀</button>
@@ -260,9 +260,7 @@
                 </div>
                 <div class="zoom-controls" style="display:flex; gap:5px; align-items:center;">
                     <span class="zoom-label">Auflösung:</span>
-                    <button class="btn active" data-resolution="300" data-hours="24">5 min</button>
-                    <button class="btn" data-resolution="60" data-hours="24">1 min</button>
-                    <button class="btn" data-resolution="3" data-hours="24">3 s</button>
+                    <button class="btn" id="resolutionToggle" type="button">5 min Raster</button>
                 </div>
                 <div class="status-info" id="statusInfo">Lädt...</div>
             </div>
@@ -277,7 +275,7 @@
             
             <div class="chart-area">
                 <div class="live-values" id="liveValues" style="display:none;">
-                    <div class="live-title">🔴 Live-Werte (3s)</div>
+                    <div class="live-title" id="liveTitle">🔴 Live-Werte (max. Auflösung)</div>
                     <div id="liveContent"></div>
                 </div>
                 <div class="chart-container" id="mainChart"></div>
@@ -292,16 +290,47 @@
     <script>
         // === Konfiguration ===
         let chart = null;
-        let currentRange = 'day';
-        let currentResolution = 300;  // Sekunden
-        let currentHours = 24;  // Stunden im Zeitfenster
+        let useMaxResolution = false;
         let currentOffset = 0;  // Tage zurück (0 = heute)
         let activeTopics = [];  // Initial leer - User wählt selbst aus
-        let currentDB = 'core';  // 'core' = pv-system Kern-DB, 'nq' = PAC4200 NQ-DB
+        let currentDB = 'core';
         let chartData = [];
         let availableFields = [];  // Wird aus Daten extrahiert
         let COLOR_SCHEME = {};  // Wird aus config/color_config.json geladen
         
+        function canUseMaxResolution() {
+            return currentDB === 'core' && currentOffset <= 2;
+        }
+
+        function effectiveResolution() {
+            if (currentDB === 'nq') return 300;
+            return (useMaxResolution && canUseMaxResolution()) ? 3 : 300;
+        }
+
+        function syncResolutionToggle() {
+            const btn = document.getElementById('resolutionToggle');
+            const liveTitle = document.getElementById('liveTitle');
+            if (!btn) return;
+            const maxAvailable = canUseMaxResolution();
+            if (!maxAvailable) useMaxResolution = false;
+            btn.disabled = !maxAvailable;
+            btn.classList.toggle('active', useMaxResolution && maxAvailable);
+            if (currentDB === 'nq') {
+                btn.textContent = '5 min Raster';
+                btn.title = 'In der NQ-Ansicht erfolgt die hohe Auflösung über Event-Schnipsel.';
+            } else {
+                btn.textContent = (useMaxResolution && maxAvailable) ? 'Max. Auflösung 3 s' : '5 min Raster';
+                btn.title = maxAvailable
+                ? 'Schaltet zwischen 5-min-Raster und maximaler Auflösung für die letzten 72 Stunden um.'
+                : 'Maximale Auflösung ist nur für die letzten 72 Stunden verfügbar.';
+            }
+            if (liveTitle) {
+                liveTitle.textContent = useMaxResolution && maxAvailable
+                    ? '🔴 Live-Werte (max. Auflösung)'
+                    : '🔴 Live-Werte';
+            }
+        }
+
         // === Farbschema FALLBACK (falls JSON nicht lädt) ===
         const COLOR_SCHEME_FALLBACK = {
             // Ströme - Rot→Orange→Dunkelrot (guter Kontrast)
@@ -497,16 +526,13 @@
 
         // === Init ===
         async function init() {
-            console.log('=== Echtzeit-View initialisiert ===');
-            console.log('Initial Resolution:', currentResolution, 's');
-            console.log('Initial Hours:', currentHours, 'h');
+            console.log('=== Einzelwerte-View initialisiert ===');
 
             // Ausklapp-Navigation (Schublade) — Hamburger in die .header-Leiste.
             if (window.PVNavUI) PVNavUI.initDrawer({ barSelector: '.header' });
 
-            // DB aus URL-Param (?db=nq) vorwählen (Netzqualität nutzt dasselbe Programm)
-            const _p = new URLSearchParams(window.location.search);
-            if (_p.get('db') === 'nq') {
+            const p = new URLSearchParams(window.location.search);
+            if (p.get('db') === 'nq') {
                 currentDB = 'nq';
                 document.querySelectorAll('.db-btn').forEach(b => b.classList.toggle('active', b.dataset.db === 'nq'));
             }
@@ -519,6 +545,7 @@
             setupEventListeners();
             _ezApplyDay();          // betrachteten Tag (1 h) von anderen Seiten übernehmen
             updateNavButtons();
+            syncResolutionToggle();
             loadData();
         }
         
@@ -608,48 +635,21 @@
             // Topic-Buttons werden nach loadData dynamisch generiert
             // Siehe attachTopicButtonListeners()
             
-            // Range-Buttons (Tag/Woche/Monat/Jahr)
-            document.querySelectorAll('[data-range]').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    currentRange = e.target.dataset.range;
-                    document.querySelectorAll('[data-range]').forEach(b => b.classList.remove('active'));
-                    e.target.classList.add('active');
-                    currentOffset = 0;
-                    
-                    // Automatische Anpassung des Zeitfensters
-                    if (currentRange === 'day') {
-                        currentHours = 24;
-                    } else if (currentRange === 'week') {
-                        currentHours = 168;
-                    } else if (currentRange === 'month') {
-                        currentHours = 720;
-                    } else if (currentRange === 'year') {
-                        currentHours = 8760;
-                    }
-                    
+            const resolutionToggle = document.getElementById('resolutionToggle');
+            if (resolutionToggle) {
+                resolutionToggle.addEventListener('click', () => {
+                    if (!canUseMaxResolution()) return;
+                    useMaxResolution = !useMaxResolution;
+                    syncResolutionToggle();
                     loadData();
                 });
-            });
-            
-            // Auflösungs-Buttons (5min/1min/3s)
-            document.querySelectorAll('[data-resolution]').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    currentResolution = parseInt(e.target.dataset.resolution);
-                    currentHours = parseInt(e.target.dataset.hours);
-                    
-                    console.log('Resolution Button geklickt:', currentResolution, 's, Zeitfenster:', currentHours, 'h');
-                    
-                    document.querySelectorAll('[data-resolution]').forEach(b => b.classList.remove('active'));
-                    e.target.classList.add('active');
-                    
-                    loadData();
-                });
-            });
+            }
             
             // Navigation
             document.getElementById('navPrev').addEventListener('click', () => {
                 currentOffset++;
                 updateNavButtons();
+                syncResolutionToggle();
                 _ezCommitDay();
                 loadData();
             });
@@ -658,6 +658,7 @@
                 if (currentOffset > 0) {
                     currentOffset--;
                     updateNavButtons();
+                    syncResolutionToggle();
                     _ezCommitDay();
                     loadData();
                 }
@@ -666,20 +667,21 @@
             document.getElementById('navToday').addEventListener('click', () => {
                 currentOffset = 0;
                 updateNavButtons();
+                syncResolutionToggle();
                 _ezCommitDay();
                 loadData();
             });
-            
-            // DB-Umschaltung (Kern-DB <-> NQ-DB) — dasselbe Programm, andere Datenquelle
+
             document.querySelectorAll('.db-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     const db = e.target.dataset.db;
                     if (db === currentDB) return;
                     currentDB = db;
-                    document.querySelectorAll('.db-btn').forEach(b => b.classList.remove('active'));
-                    e.target.classList.add('active');
+                    document.querySelectorAll('.db-btn').forEach(b => b.classList.toggle('active', b.dataset.db === db));
                     availableFields = [];
                     activeTopics = [];
+                    syncResolutionToggle();
+                    _ezCommitDay();
                     loadData();
                 });
             });
@@ -688,7 +690,7 @@
             window.addEventListener('resize', () => chart?.resize());
             
             console.log('✓ Alle Event Listeners registriert');
-            console.log('✓ Auflösungs-Buttons gefunden:', document.querySelectorAll('[data-resolution]').length);
+            console.log('✓ Auflösungs-Toggle initialisiert');
         }
         
         // === Navigation Update ===
@@ -699,7 +701,8 @@
         // === Daten laden ===
         async function loadData() {
             try {
-                console.log('→ loadData() gestartet: Resolution=' + currentResolution + 's, Hours=' + currentHours + 'h');
+                const resolution = effectiveResolution();
+                console.log('→ loadData() gestartet: Resolution=' + resolution + 's');
                 document.getElementById('footer').textContent = 'Lade Daten...';
                 
                 // Zeitfenster: Tagesfenster je Navigationstag
@@ -708,7 +711,7 @@
                 const end = window.end;
                 
                 const base = currentDB === 'nq' ? '/api/nq/realtime_smart' : '/api/realtime_smart';
-                const url = `${base}?start=${start}&end=${end}&resolution=${currentResolution}`;
+                const url = `${base}?start=${start}&end=${end}&resolution=${resolution}`;
                 console.log('→ API-Call:', url);
                 const response = await fetch(url);
                 const data = await response.json();
@@ -732,7 +735,7 @@
                 const date = new Date(end * 1000);
                 const dateLabel = getDateLabel(currentOffset);
                 const dateStr = date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-                const resolutionText = currentResolution < 60 ? `${currentResolution}s` : `${currentResolution/60}min`;
+                const resolutionText = (resolution < 60) ? `${resolution}s max` : '5min Raster';
                 const startTs = data.start || start;
                 const endTs = data.end || end;
                 const windowHours = Math.max(0.01, (endTs - startTs) / 3600);
@@ -748,19 +751,6 @@
 
                 // NQ2 WP3: PAC4200-Zähler-Fixpunkt (Bezug/Einspeisung) für den Tag spiegeln.
                 // Additiv + defensiv — bricht die bestehende Anzeige nie.
-                if (currentDB === 'nq') {
-                    const d = new Date((data.start || start) * 1000);
-                    const dayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                    fetch(`/api/nq/energy/day/${dayStr}`).then(r => (r.ok ? r.json() : null)).then(e => {
-                        if (e && !e.error) {
-                            const imp = e.wh_imp_kwh != null ? e.wh_imp_kwh.toFixed(1) : '–';
-                            const exp = e.wh_exp_kwh != null ? e.wh_exp_kwh.toFixed(1) : '–';
-                            document.getElementById('footer').textContent =
-                                `${stamp} · PAC ${dayStr}: Bezug ${imp} kWh · Einspeisung ${exp} kWh (Master-SM-Vergleich)`;
-                        }
-                    }).catch(() => { /* still nur Zeitstempel zeigen */ });
-                }
-
             } catch (e) {
                 document.getElementById('footer').textContent = `Fehler: ${e.message}`;
                 console.error('Fehler beim Laden:', e);
@@ -952,7 +942,7 @@
         
         function checkLiveMode() {
             // Live-Modus: Heute (kein Offset) + DataZoom am rechten Rand + aktive Topics
-            if (currentOffset !== 0 || activeTopics.length === 0) {
+            if (currentOffset !== 0 || activeTopics.length === 0 || !useMaxResolution || !canUseMaxResolution()) {
                 stopLiveUpdate();
                 return;
             }

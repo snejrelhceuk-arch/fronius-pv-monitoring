@@ -22,7 +22,6 @@ def enforce_retention(conn, cfg: dict) -> None:
     ret_h = cfg.get("retention", {}).get("raw_hours", 12)
     cutoff_s = now - ret_h * 3600
     cutoff_ms = cutoff_s * 1000
-    agg_cut = now - cfg.get("retention", {}).get("primary_agg10s_hours", 72) * 3600
 
     tmpfs_cfg = cfg.get("tmpfs", {})
     cap_mb = tmpfs_cfg.get("cap_mb", 1200)
@@ -43,8 +42,6 @@ def enforce_retention(conn, cfg: dict) -> None:
         "DELETE FROM nq_raw_medium WHERE ts_ms < ? AND event=0", (cutoff_ms,)).rowcount
     deleted += conn.execute(
         "DELETE FROM nq_raw_slow WHERE ts < ? AND event=0", (cutoff_s,)).rowcount
-    deleted += conn.execute(
-        "DELETE FROM nq_agg_10s WHERE ts < ?", (agg_cut,)).rowcount
     trigger = "time"
 
     # Stale-Event-Kappung: event=1-Zeilen ohne Transfer-Quittung nach stale_cap_s löschen.

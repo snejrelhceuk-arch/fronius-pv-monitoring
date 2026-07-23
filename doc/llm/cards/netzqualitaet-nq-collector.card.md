@@ -5,8 +5,10 @@ role: N
 applyTo: "nq/collector/**"
 tags: [netzqualitaet, nq, pac4200, collector, tmpfs, tech, rolle-n]
 status: experimental
-last_review: 2026-07-14
+last_review: 2026-07-23
 changes:
+	- 2026-07-14 (k): **10s-Skalarpfad entfernt.** `nq/collector/nq_poller.py` schreibt Skalar-Aggregate direkt nach `nq_5min` (5-min-Buckets, inkl. `vstd`) statt `nq_agg_10s`. `config/nq_config.json:aggregate.grid_s` auf 300 gesetzt; `nq/collector/nq_capping.py` löscht kein `nq_agg_10s` mehr.
+	- 2026-07-14 (j): **Saubere Lesepfade statt Fallback-Rechnung.** PAC-Clone-Werte kommen jetzt **direkt aus der Tech-DB** (kein Nachrechnen auf Primary). `nq_raw_fast` um `s_l1/l2/l3`, `q_l1/l2/l3`, `uavg_ln`, `uavg_ll`, `isum` erweitert (`_FAST_COLS`/`_FAST_REV` synchron). Vorzeichen kommen vom PAC (P/Q signiert; `Is_Lx` in `_decode_ab` aus P-Vorzeichen). **`tech_read._fill_missing_values` + `pac_live._fill_missing_values` ersatzlos entfernt** (waren U*I/cosφ-Schätzungen). **Max-Werte (Block C `FLOAT3_MAP`) via 300-s-Slow-Poll:** neue `pac_live.read_max_snapshot`, `nq_poller._MAX_COLS`→`nq_raw_max`-Tabelle (300 s im `_medium_thread`), `tech_read._MAX_REV`. Alle 16 Screens ohne None. PAC-IP-Auflösung: `PV_PAC_IP` (.infra.local) via systemd `EnvironmentFile` — manueller Start ohne Env greift auf anonymisierten Default zurück (Betrieb nur via `pv-nq-poller.service`).
 	- 2026-07-14 (i): **NQ2 WP0/WP1.** Tier-Benennung vereinheitlicht: fast(200ms Skalare), medium(1s Harmonik+Freq), slow(Energiezähler). `_slow_thread`→`_medium_thread`, `medium_ms` (Fallback `slow_ms`). `nq_raw_medium.f` (Frequenz-Spalte). **LimitMonitor** (`nq_poller.LimitMonitor`): Software-Grenzwertüberwachung der Skalare gegen `config.grenzwerte` → `nq_limit_alerts` + best-effort Sofort-Mail (`nq/collector/nq_limit_mail.py`), Cooldown. Tote Stubs entfernt (`pac_client`/`nq_export_tech`/`nq_ingest_primary` — jetzt via `pac_live.py`+`nq_poller.py`). Retention-Kommentare 72h→12h angeglichen. PAC-Clone liest indirekt aus Tech (kein PAC-Direktzugriff).
 	- 2026-07-12 (h): **Datenwachstum-Kontrolle.** Bug fix: `nq_raw_medium` wurde in `nq_capping.py` mit `ts` statt `ts_ms` gelöscht (Medium-Rows akkumulierten unbegrenzt). Stale-Event-Kappung ergänzt (`event_stale_cap_s=3600 s`): event=1-Zeilen ohne Transfer-Quittung nach 1 h gelöscht + stderr-Warnung. Speicherwarnungen bei >80 % Budget oder <warn_free_mb freiem tmpfs. Primary-Cap `nq/transfer/nq_primary_cap.py` neu (Alters- + Zählgrenze für nq_event_* auf SD). Config: `event_stale_cap_s`, `warn_free_mb`, `event_keep_days`, `event_max_count`.
 	- 2026-07-11: Modul NQ (Rolle N) angelegt; Tech-Collector-Skelette + tmpfs-Schema + Kappungskonzept dokumentiert (Implementierung Phase 1).
@@ -28,7 +30,7 @@ schreibt in eine tmpfs-DB und hält den RAM per Ring-Buffer-Kappung stabil.
 Abgrenzung: `nq/` (PAC4200, Rolle N) ≠ Legacy `netzqualitaet/` (Smart-Meter, Rolle B).
 
 ## Code-Anchor
-- **Verifizierte Registerkarte + Snapshots (read-only):** `nq/pac_live.py` (`FLOAT_MAP`, `FLOAT2_MAP`, `DOUBLE_MAP`, `HARM_*_MAP`, `read_fast_snapshot`, `read_harm_snapshot`, `read_snapshot`, `_build_screens`)
+- **Verifizierte Registerkarte + Snapshots (read-only):** `nq/pac_live.py` (`FLOAT_MAP`, `FLOAT2_MAP`, `FLOAT3_MAP`, `DOUBLE_MAP`, `HARM_*_MAP`, `read_fast_snapshot`, `read_max_snapshot`, `read_harm_snapshot`, `read_snapshot`, `_build_screens`)
 - **Block-Poller/Orchestrator (fast + medium-Thread + LimitMonitor):** `nq/collector/nq_poller.py:poller_loop` / `_medium_thread` / `LimitMonitor`
 - **Grenzwert-Alarm-Mail (best-effort):** `nq/collector/nq_limit_mail.py:send_limit_mail`
 - **Energie-Differenzmethode:** `nq/collector/nq_energy.py:compute_daily` / `append_snapshot`
@@ -43,7 +45,7 @@ Abgrenzung: `nq/` (PAC4200, Rolle N) ≠ Legacy `netzqualitaet/` (Smart-Meter, R
 
 ## Inputs / Outputs
 - **Inputs:** PAC4200 Modbus TCP **read** (FLOAT32, 2 Register/Wert); Poll-Raten + Budgets aus `config/nq_config.json`.
-- **Outputs (tmpfs `/dev/shm/nq_cache.db`):** `nq_raw_fast` (PK `ts_ms`), `nq_raw_medium` (PK `ts_ms`), `nq_raw_slow` (Long-Format PK `ts,meas,phase,ord`), `nq_agg_10s` (min/avg/max, Transfer-Basis), Logs `nq_capping_log` / `nq_transfer_log`.
+- **Outputs (tmpfs `/dev/shm/nq_cache.db`):** `nq_raw_fast` (PK `ts_ms`, inkl. `s_lx`/`q_lx`/`uavg_ln`/`uavg_ll`/`isum`), `nq_raw_medium` (PK `ts_ms`), `nq_raw_slow` (Long-Format PK `ts,meas,phase,ord`), `nq_raw_max` (Block C, 300-s-Poll, jüngste Zeile), `nq_5min` (min/avg/max/std, Transfer-Basis), Logs `nq_capping_log` / `nq_transfer_log`.
 
 ## Invarianten
 - **Nur Modbus `read`.** Kein Schreibpfad zum PAC4200, zu `data.db` oder Aktoren (Rolle N read-only ggü. Produktion).

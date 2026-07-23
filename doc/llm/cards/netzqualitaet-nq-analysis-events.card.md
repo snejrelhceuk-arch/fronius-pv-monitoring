@@ -4,9 +4,11 @@ domain: netzqualitaet
 role: N
 applyTo: "nq/analysis/**"
 tags: [netzqualitaet, nq, analyse, events, harmonische, frequenz, rolle-n]
-status: experimental
-last_review: 2026-07-14
+status: stable
+last_review: 2026-07-23
 changes:
+	- 2026-07-16 (l): **Dual-Modus: 4h HF/NF + täglich VLF.** `nq/analysis/nq_events.py` Refactor: neue `analyze_window(ts_start, ts_end, bands=[...])` für Fenster-basierte Analysen (HF/NF alle 4h), alte `analyze_day(day)` → Backward-Compat-Wrapper; CLI: `--hours N --bands HF_local,NF_global` für 4h-Läufe. Systemd: `pv-nq-analysis` = VLF täglich 00:30 (Vortag), `pv-nq-analysis-hf-nf` = HF/NF alle 4h (00:30,04:30,...,20:30, aktuelle Daten). Idempotent per INSERT OR REPLACE; Duplikat-Key bleibt Trigger+Stunden-Bucket.
+	- 2026-07-14 (d): **Events lesen keine 10s-Skalare mehr.** `nq/analysis/nq_events.py:_load_ts_series` nutzt jetzt `nq_5min` (meas='', phase=0, ord=0) als Skalarquelle; Meldungstexte entsprechend angepasst.
 	- 2026-07-14 (c): **NQ2 WP4.** Der `nq_events`-Katalog wird zusätzlich vom Schnipsel-Transfer `nq/transfer/nq_event_transfer.py` befüllt (`derive_event`): `has_snippet`, `peak_quantity`/`peak_value`, normierte `severity`, Cooldown- + Ähnlichkeits-Dedup (<24 h → nur Beschreibung), Log-Cap `event_max_count`=10000. Drill-down-RAW liegt in `nq_event_fast`/`nq_event_medium` (API `/api/nq/event/<id>`). `analyze_day` (HF/NF/VLF) bleibt unverändert der Tages-Klassifikator.
 	- 2026-07-12: Vollimplementierung HF/NF/VLF-Detektoren (nq_hf.py, nq_nf.py, nq_vlf.py, nq_events.py). analysis-Block in nq_config.json ergänzt.
 	- 2026-07-11: Modul NQ (Rolle N) angelegt; Analyse-Skelett + Ereignis-Katalog (nq_events) dokumentiert (Implementierung Phase 3).
@@ -21,7 +23,9 @@ schreibt sie nach `nq_events`: lokal-hochfrequent (`HF_local`),
 global-niederfrequent (`NF_global`), sehr niederfrequent (`VLF`).
 
 ## Code-Anchor
-- **Orchestrator (Tageslauf):** `nq/analysis/nq_events.py:analyze_day`
+- **Orchestrator (Fenster + Tag):** `nq/analysis/nq_events.py:analyze_window` (Fenster-Basis), `analyze_day` (Tag-Wrapper, Backward-Compat)
+- **CLI mit Dual-Modus:** `nq/analysis/nq_events.py:main` — `--date YYYY-MM-DD` (täglich VLF), `--hours N --bands ...` (4h HF/NF)
+- **Systemd Timer-Dual:** `pv-nq-analysis.timer` (00:30, VLF täglich), `pv-nq-analysis-hf-nf.timer` (00,04,08,12,16,20:30, HF/NF 4h)
 - **HF-Detektoren:** `nq/analysis/nq_hf.py` — `run_hf`, `detect_thd_spikes`, `detect_ui_correlation`
 - **NF-Detektoren:** `nq/analysis/nq_nf.py` — `run_nf`, `detect_dfd_events`, `detect_freq_gradient`, `detect_tap_and_u_steps`, `detect_u_rms_violations`
 - **VLF-Detektoren:** `nq/analysis/nq_vlf.py` — `run_vlf`, `detect_profile_anomalies`, `detect_changepoints`
@@ -32,7 +36,7 @@ global-niederfrequent (`NF_global`), sehr niederfrequent (`VLF`).
 - **Methodik-Vorbild:** Legacy `netzqualitaet/nq_analysis.py` (DFD, Boundary-Events)
 
 ## Inputs / Outputs
-- **Inputs (read-only):** `nq_agg_10s`/`nq_5min`/`nq_hourly`/`nq_daily` + `nq_event_*` aus `nq/db/`.
+- **Inputs (read-only):** `nq_5min`/`nq_hourly`/`nq_daily` + `nq_event_*` aus `nq/db/`.
 - **Outputs:** klassifizierte Zeilen in `nq_events` (`band`, `kind`, `severity`, `origin`, `metrics`-JSON).
 
 ## Analyse-Ebenen

@@ -1,5 +1,5 @@
 -- nq_tech_schema.sql — NQ-Collector-DB auf Tech (tmpfs, RAM-first)
--- Rolle N. Ziel: RAW-Blöcke (fast/medium/slow) + 3–10 s-Aggregat im
+-- Rolle N. Ziel: RAW-Blöcke (fast/medium/slow) + 5-min-Skalar-Aggregat im
 -- /dev/shm-tmpfs, 12 h Ring-Buffer (retention.raw_hours), Kappung gegen
 -- tmpfs-Überlauf. NQ2-Tier: fast=200ms Skalare, medium=1s Harmonik+Freq,
 -- slow=Energiezähler (energy_s). RAW wird 4-stündlich nach Primary exportiert.
@@ -21,11 +21,15 @@ CREATE TABLE IF NOT EXISTS nq_raw_fast (
     ts_ms   INTEGER PRIMARY KEY,   -- Unix epoch milliseconds
     u_l1    REAL, u_l2  REAL, u_l3  REAL,   -- Leiter-Neutral-Spannung (RMS)
     u_l12   REAL, u_l23 REAL, u_l31 REAL,   -- Leiter-Leiter-Spannung (RMS)
-    i_l1    REAL, i_l2  REAL, i_l3  REAL,   -- Phasenstrom (RMS)
+    i_l1    REAL, i_l2  REAL, i_l3  REAL,   -- Phasenstrom (RMS, signiert)
+    s_l1    REAL, s_l2  REAL, s_l3  REAL,   -- Phase-Scheinleistung
     p_l1    REAL, p_l2  REAL, p_l3  REAL,   -- Phase-Wirkleistung
+    q_l1    REAL, q_l2  REAL, q_l3  REAL,   -- Phase-Blindleistung
     p_tot   REAL, q_tot REAL, s_tot REAL,   -- Wirk/Blind/Scheinleistung (gesamt)
     pf_l1   REAL, pf_l2 REAL, pf_l3 REAL,   -- Phase-Leistungsfaktor
     pf      REAL,                            -- Leistungsfaktor (gesamt)
+    uavg_ln REAL, uavg_ll REAL,             -- 3ph-Mittelspannung L-N / L-L
+    isum    REAL,                            -- Summenstrom (signiert)
     f       REAL,                            -- Netzfrequenz
     event   INTEGER NOT NULL DEFAULT 0       -- 1 = Ereignis-markiert (Transfer als RAW)
 );
@@ -67,18 +71,30 @@ CREATE TABLE IF NOT EXISTS nq_raw_slow (
 CREATE INDEX IF NOT EXISTS idx_nq_slow_event ON nq_raw_slow(event);
 
 -- ---------------------------------------------------------------------------
--- 3–10 s-Aggregat (min/avg/max) — Transfer-Nutzlast nach Primary.
--- Long-Format: eine Zeile je (bucket, Größe[, phase, ord]).
--- quantity z. B. 'u_l1','i_l2','p_tot','pf','f','thd_u_l1','harm'.
--- Für Harmonische: quantity='harm', meas/phase/ord gefüllt.
+-- Max-Block (Block C, FLOAT3_MAP @75..144): Geräte-Max-Werte, 300-s-Poll.
+-- Ein Snapshot je ts; Primary liest die jüngste Zeile.
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS nq_agg_10s (
-    ts        INTEGER NOT NULL,   -- Bucket-Start (Unix seconds, 10 s-Raster)
+CREATE TABLE IF NOT EXISTS nq_raw_max (
+    ts        INTEGER PRIMARY KEY,   -- Unix seconds
+    umax_l1n  REAL, umax_l2n REAL, umax_l3n REAL,
+    umax_l12  REAL, umax_l23 REAL, umax_l31 REAL,
+    imax_l1   REAL, imax_l2  REAL, imax_l3  REAL,
+    pmax_l1   REAL, pmax_l2  REAL, pmax_l3  REAL,
+    freqmax   REAL,
+    smax_tot  REAL, pmax_tot REAL, qmax_tot REAL
+);
+
+-- ---------------------------------------------------------------------------
+-- 5-min-Skalar-Aggregat (min/avg/max/std) — Transfer-Nutzlast nach Primary.
+-- Long-Format: eine Zeile je (bucket, Größe).
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS nq_5min (
+    ts        INTEGER NOT NULL,   -- Bucket-Start (Unix seconds, 5-min-Raster)
     quantity  TEXT    NOT NULL,
-    meas      TEXT,               -- 'U'|'I' nur für Harmonische, sonst NULL
-    phase     INTEGER,            -- 1..3 oder NULL
-    ord       INTEGER,            -- Harmonische Ordnung oder NULL
-    vmin REAL, vavg REAL, vmax REAL,
+    meas      TEXT,
+    phase     INTEGER,
+    ord       INTEGER,
+    vmin REAL, vavg REAL, vmax REAL, vstd REAL,
     n         INTEGER NOT NULL,   -- Anzahl Samples im Bucket
     PRIMARY KEY (ts, quantity, meas, phase, ord)
 ) WITHOUT ROWID;

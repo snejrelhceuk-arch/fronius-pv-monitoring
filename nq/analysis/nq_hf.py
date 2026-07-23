@@ -1,6 +1,6 @@
 """nq.analysis.nq_hf — HF_local-Analyse: THD-Spikes, U↔I-Korrelation, Residualfilter.
 
-Eingang: Skalare aus nq_agg_10s (pivotiert durch nq_events._load_ts_series).
+Eingang: Skalare aus nq_5min (pivotiert durch nq_events._load_ts_series).
 Ausgang: Liste von Event-Dicts für nq_events (band='HF_local').
 
 Methoden:
@@ -37,7 +37,7 @@ def _pearson_r(x: np.ndarray, y: np.ndarray) -> float | None:
 
 
 def detect_thd_spikes(ts_series: dict[str, Any], cfg: dict) -> list[dict]:
-    """THD-Spike-Detektion auf nq_agg_10s-Aggregaten (vmax als Spitzenindikator).
+    """THD-Spike-Detektion auf nq_5min-Aggregaten (vmax als Spitzenindikator).
 
     Gibt Events mit kind='thd_spike' zurück.
     """

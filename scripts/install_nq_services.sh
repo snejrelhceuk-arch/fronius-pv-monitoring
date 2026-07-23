@@ -6,7 +6,8 @@
 #   tech     -> pv-nq-poller.service, pv-nq-energy.service (Dauerläufer)
 #   primary  -> pv-nq-agg-transfer / pv-nq-aggregate / pv-nq-energy-rollup /
 #               pv-nq-energy-rollup-month / pv-nq-energy-rollup-year /
-#               pv-nq-event-transfer / pv-nq-analysis / pv-nq-primary-cap  (Timer)
+#               pv-nq-event-transfer / pv-nq-analysis (VLF daily) /
+#               pv-nq-analysis-hf-nf (HF/NF 4h) / pv-nq-primary-cap  (Timers)
 #
 # Idempotent: install -m 0644 + daemon-reload + enable --now.
 # Aufruf:  scripts/install_nq_services.sh
@@ -49,6 +50,7 @@ case "$ROLE" in
         pv-nq-energy-rollup-year.service  pv-nq-energy-rollup-year.timer \
         pv-nq-event-transfer.service pv-nq-event-transfer.timer \
         pv-nq-analysis.service     pv-nq-analysis.timer \
+        pv-nq-analysis-hf-nf.service pv-nq-analysis-hf-nf.timer \
         pv-nq-primary-cap.service  pv-nq-primary-cap.timer; do
         install_unit "$u" || true
         [[ "$u" == *.timer ]] && TIMERS+=("$u")

@@ -1,7 +1,7 @@
 """nq.transfer.nq_agg_transfer — 4-stündlicher Transfer Tech tmpfs → Primary SD (Rolle N).
 
 Überträgt alle 4h:
-- ``nq_agg_10s`` (Skalare, 10-s-Buckets) — Fenster letzte 5 h (at-least-once)
+- ``nq_5min`` (Skalare, 5-min-Buckets) — Fenster letzte 5 h (at-least-once)
 - ``nq_raw_slow`` (Harmonische, 1-s-RAW) — gleiches Zeitfenster
 
 Löscht auf Tech erst nach Primary-Quittung (at-least-once). INSERT OR REPLACE
@@ -110,9 +110,9 @@ def _ssh_compute_transients(host: str, hours: float) -> None:
 
 def _enforce_retention(conn, cfg: dict) -> None:
     ret = cfg.get("retention", {})
-    hours = ret.get("primary_agg10s_hours", 72)
-    cutoff = int(time.time()) - hours * 3600
-    conn.execute("DELETE FROM nq_agg_10s WHERE ts < ?", (cutoff,))
+    days = ret.get("primary_5min_days", 90)
+    cutoff = int(time.time()) - days * 86400
+    conn.execute("DELETE FROM nq_5min WHERE ts < ?", (cutoff,))
     # nq_raw_slow (1-s-Harmonik-RAW) auf Primary nur kurz halten (SD-Schonung);
     # nach der 5-min-Aggregation nicht mehr nötig. Fenster > Aggregationszyklus.
     slow_h = ret.get("primary_rawslow_hours", 12)
@@ -126,17 +126,17 @@ def _enforce_retention(conn, cfg: dict) -> None:
 # ---------------------------------------------------------------------------
 
 def transfer(hours: float = _WINDOW_H) -> dict:
-    """Überträgt nq_agg_10s + nq_raw_slow der letzten `hours` Stunden Tech → Primary."""
+    """Überträgt nq_5min + nq_raw_slow der letzten `hours` Stunden Tech → Primary."""
     t_start = time.time()
     cfg = load_config()
     host = _tech_host(cfg)
     t0, t1 = _window_bounds(hours)
     db_path = _primary_db(t0)
 
-    # --- nq_agg_10s (Skalare) ---
+    # --- nq_5min (Skalare) ---
     agg_rows = _ssh_fetch(
         host, cfg["tmpfs"]["db_path"],
-        "SELECT ts,quantity,meas,phase,ord,vmin,vavg,vmax,n FROM nq_agg_10s "
+        "SELECT ts,quantity,meas,phase,ord,vmin,vavg,vmax,vstd,n FROM nq_5min "
         "WHERE ts>=? AND ts<? ORDER BY ts",
         (t0, t1),
     )
@@ -171,12 +171,12 @@ def transfer(hours: float = _WINDOW_H) -> dict:
 
     if agg_rows:
         conn.executemany(
-            "INSERT OR REPLACE INTO nq_agg_10s "
-            "(ts,quantity,meas,phase,ord,vmin,vavg,vmax,n) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT OR REPLACE INTO nq_5min "
+            "(ts,quantity,meas,phase,ord,vmin,vavg,vmax,vstd,n) VALUES (?,?,?,?,?,?,?,?,?,?)",
             agg_rows,
         )
         conn.commit()
-        _ssh_delete(host, cfg["tmpfs"]["db_path"], "nq_agg_10s", t0, t1)
+        _ssh_delete(host, cfg["tmpfs"]["db_path"], "nq_5min", t0, t1)
 
     if harm_rows:
         conn.executemany(
@@ -217,7 +217,7 @@ def transfer(hours: float = _WINDOW_H) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="Transfer nq_agg_10s + nq_raw_slow Tech → Primary (Rolle N)")
+        description="Transfer nq_5min + nq_raw_slow Tech → Primary (Rolle N)")
     ap.add_argument("--hours", type=float, default=_WINDOW_H,
                     help=f"Übernahme-Fenster in Stunden (Default: {_WINDOW_H})")
     a = ap.parse_args()

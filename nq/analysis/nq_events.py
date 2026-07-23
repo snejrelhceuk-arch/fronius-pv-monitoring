@@ -3,7 +3,7 @@
 Orchestrator für den Tages-Analyselauf auf Primary (Rolle N).
 
 Verantwortung:
-  - Lädt Skalare aus nq_agg_10s (pivotiert als ts_series)
+    - Lädt Skalare aus nq_5min (pivotiert als ts_series)
   - Koordiniert HF/NF/VLF-Detektoren (nq_hf / nq_nf / nq_vlf)
   - Cross-Check mit pv-system Produktions-DB: HP/WP/Wattpilot als Ursache prüfen
   - Schreibt idempotent nach nq_events (DELETE + INSERT je Tag)
@@ -60,13 +60,13 @@ def _load_ts_series(
     ts_start: int,
     ts_end: int,
 ) -> dict[str, dict[str, Any]]:
-    """Pivotiert nq_agg_10s-Skalare in ein Dict quantity → arrays.
+    """Pivotiert nq_5min-Skalare in ein Dict quantity → arrays.
 
     Skalare haben meas='', phase=0, ord=0 (Konvention Aggregator).
     Rückgabe: {quantity: {'ts': int64[], 'vmin': f64[], 'vavg': f64[], 'vmax': f64[], 'n': i32[]}}
     """
     rows = conn.execute(
-        "SELECT ts, quantity, vmin, vavg, vmax, n FROM nq_agg_10s "
+        "SELECT ts, quantity, vmin, vavg, vmax, n FROM nq_5min "
         "WHERE meas='' AND phase=0 AND ord=0 "
         "AND ts >= ? AND ts < ? ORDER BY ts, quantity",
         (ts_start, ts_end),
@@ -213,21 +213,32 @@ def _upsert_events(
 # Orchestrator
 # ---------------------------------------------------------------------------
 
-def analyze_day(day: str, data_db: str | None = None) -> int:
-    """Netzereignis-Analyse für einen Tag: HF/NF/VLF → nq_events.
+def analyze_window(
+    ts_start: int,
+    ts_end: int,
+    data_db: str | None = None,
+    bands: list[str] | None = None,
+) -> int:
+    """Netzereignis-Analyse für ein Zeitfenster: Bänder HF/NF/VLF → nq_events.
 
     Args:
-        day:     Analysetag 'YYYY-MM-DD'
-        data_db: optionaler Pfad zur pv-system Produktions-DB für Cross-Check
+        ts_start:  Fenster-Start (Unix-Sekunden)
+        ts_end:    Fenster-Ende
+        data_db:   optionaler Pfad zur pv-system Produktions-DB für Cross-Check
+        bands:     Bänder zu analysieren ['HF_local', 'NF_global', 'VLF'];
+                   None = alle
 
     Returns:
         Anzahl geschriebener Events (0 wenn keine Daten).
     """
-    day_dt = datetime.strptime(day, "%Y-%m-%d")
-    ts_start = int(day_dt.timestamp())
-    ts_end = ts_start + 86400
+    if bands is None:
+        bands = ["HF_local", "NF_global", "VLF"]
+    bands_set = set(bands)
 
-    db_path = _month_db(day)
+    # Bestimme DB-Pfad aus ts_start (Fenster könnte Monatsgrenzen überschreiten;
+    # vereinfacht: nutze Start-Monat)
+    day_str = datetime.fromtimestamp(ts_start).strftime("%Y-%m-%d")
+    db_path = _month_db(day_str)
     if not os.path.exists(db_path):
         logger.warning("NQ-DB nicht gefunden: %s", db_path)
         return 0
@@ -240,17 +251,27 @@ def analyze_day(day: str, data_db: str | None = None) -> int:
     try:
         ts_series = _load_ts_series(conn, ts_start, ts_end)
         if not ts_series:
-            logger.warning("Keine nq_agg_10s-Daten für %s in %s", day, db_path)
+            logger.warning(
+                "Keine nq_5min-Daten für Fenster [%d,%d) in %s",
+                ts_start, ts_end, db_path,
+            )
             return 0
 
         n_buckets = max(len(v["ts"]) for v in ts_series.values())
-        logger.info("Analysiere %s — %d Buckets, Quantitäten: %s",
-                    day, n_buckets, list(ts_series.keys()))
+        logger.info(
+            "Analysiere Fenster [%d,%d) — %d Buckets, Bänder: %s",
+            ts_start, ts_end, n_buckets, ",".join(bands),
+        )
 
         events: list[dict] = []
-        events.extend(run_hf(ts_series, z_loop, cfg))
-        events.extend(run_nf(conn, ts_series, ts_start, ts_end, cfg))
-        events.extend(run_vlf(conn, day, cfg))
+
+        if "HF_local" in bands_set:
+            events.extend(run_hf(ts_series, z_loop, cfg))
+        if "NF_global" in bands_set:
+            events.extend(run_nf(conn, ts_series, ts_start, ts_end, cfg))
+        if "VLF" in bands_set:
+            day_str = datetime.fromtimestamp(ts_start).strftime("%Y-%m-%d")
+            events.extend(run_vlf(conn, day_str, cfg))
 
         # Cross-Check: lokale Verbraucher als Ursache prüfen
         if cfg.get("pvsystem_crosscheck", True):
@@ -262,8 +283,8 @@ def analyze_day(day: str, data_db: str | None = None) -> int:
 
         n_written = _upsert_events(conn, events, ts_start, ts_end)
         logger.info(
-            "%s: %d Events → nq_events (HF=%d NF=%d VLF=%d)",
-            day, n_written,
+            "Fenster [%d,%d): %d Events (HF=%d NF=%d VLF=%d)",
+            ts_start, ts_end, n_written,
             sum(1 for e in events if e["band"] == "HF_local"),
             sum(1 for e in events if e["band"] == "NF_global"),
             sum(1 for e in events if e["band"] == "VLF"),
@@ -272,6 +293,23 @@ def analyze_day(day: str, data_db: str | None = None) -> int:
 
     finally:
         conn.close()
+
+
+def analyze_day(day: str, data_db: str | None = None) -> int:
+    """Netzereignis-Analyse für einen Tag: HF/NF/VLF → nq_events (Backward-Compat).
+
+    Args:
+        day:     Analysetag 'YYYY-MM-DD'
+        data_db: optionaler Pfad zur pv-system Produktions-DB für Cross-Check
+
+    Returns:
+        Anzahl geschriebener Events (0 wenn keine Daten).
+    """
+    day_dt = datetime.strptime(day, "%Y-%m-%d")
+    ts_start = int(day_dt.timestamp())
+    ts_end = ts_start + 86400
+
+    return analyze_window(ts_start, ts_end, data_db=data_db)
 
 
 # ---------------------------------------------------------------------------
@@ -284,19 +322,64 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(name)s — %(message)s",
     )
     parser = argparse.ArgumentParser(description="NQ Netzereignis-Analyse HF/NF/VLF")
+
+    # Modus 1: Nach Tag (Backward-Compat für täglich 00:30 VLF)
     parser.add_argument(
         "--date",
-        default=datetime.now().strftime("%Y-%m-%d"),
-        help="Analysetag YYYY-MM-DD (default: heute)",
+        default=None,
+        help="Analysetag YYYY-MM-DD (Backward-Compat; exclusive mit --hours)",
     )
+
+    # Modus 2: Nach Zeitfenster (für 4h HF/NF)
+    parser.add_argument(
+        "--hours",
+        type=int,
+        default=None,
+        help="Fensterbreite in Stunden, rückwärts von jetzt (z. B. 4 für letzte 4h)",
+    )
+
+    # Filterung der Bänder
+    parser.add_argument(
+        "--bands",
+        default="HF_local,NF_global,VLF",
+        help="Kommagetrennter Band-Filter (HF_local|NF_global|VLF); default: alle",
+    )
+
     parser.add_argument(
         "--data-db",
         default=None,
         help="Pfad zur pv-system data.db für Cross-Check (optional)",
     )
+
     args = parser.parse_args()
-    n = analyze_day(args.date, data_db=args.data_db)
-    print(f"analyze_day({args.date!r}) -> {n} Events geschrieben")
+
+    bands = [b.strip() for b in args.bands.split(",")]
+
+    if args.date is not None and args.hours is not None:
+        print("ERROR: --date und --hours sind mutually exclusive")
+        return
+
+    if args.date is not None:
+        # Tages-Modus (VLF + daily analyses)
+        n = analyze_day(args.date, data_db=args.data_db)
+        print(f"analyze_day({args.date!r}) -> {n} Events geschrieben")
+    elif args.hours is not None:
+        # Fenster-Modus (HF/NF 4h-Rhythmus)
+        now = int(time.time())
+        ts_end = now
+        ts_start = now - args.hours * 3600
+        logger = logging.getLogger("nq.analysis.nq_events")
+        logger.info(
+            "Fenster-Modus: Letzte %d Stunden [%d,%d), Bänder: %s",
+            args.hours, ts_start, ts_end, ",".join(bands),
+        )
+        n = analyze_window(ts_start, ts_end, data_db=args.data_db, bands=bands)
+        print(f"analyze_window({ts_start},{ts_end}, bands={bands}) -> {n} Events")
+    else:
+        # Default: heute (Backward-Compat)
+        today = datetime.now().strftime("%Y-%m-%d")
+        n = analyze_day(today, data_db=args.data_db)
+        print(f"analyze_day({today!r}) -> {n} Events geschrieben")
 
 
 if __name__ == "__main__":

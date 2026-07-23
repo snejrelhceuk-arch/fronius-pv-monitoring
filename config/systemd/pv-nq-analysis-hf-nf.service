@@ -1,0 +1,17 @@
+[Unit]
+Description=PV-System NQ Netzereignis-Analyse HF_local + NF_global alle 4h (Primary, Rolle N)
+Documentation=file:///opt/pv-system/doc/netzqualitaet/NQ_MODUL.md
+After=pv-nq-aggregate.service
+
+[Service]
+Type=oneshot
+User=admin
+WorkingDirectory=/opt/pv-system
+EnvironmentFile=-%h/.infra.local
+Environment=PYTHONUNBUFFERED=1
+# Analysiert letzte 4 Stunden: nur HF_local + NF_global (VLF läuft täglich)
+ExecStart=/usr/bin/python3 -m nq.analysis.nq_events --hours 4 --bands HF_local,NF_global
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pv-nq-analysis-hf-nf
+NoNewPrivileges=true

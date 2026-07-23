@@ -1,27 +1,12 @@
 -- nq_primary_schema.sql — NQ-Aggregat-/Analyse-DB auf Primary (SD, sparsam)
--- Rolle N. Ziel: Übernahme der 3–10 s-Aggregate + Event-RAW von Tech,
--- Aggregationskaskade analog Produktion (3–10 s → 5 min → hourly → daily),
+-- Rolle N. Ziel: Übernahme der 5-min-Skalaraggregate + Event-RAW von Tech,
+-- Aggregationskaskade analog Produktion (5 min → hourly → daily),
 -- Event-RAW dauerhaft in Originalauflösung.
 --
 -- Monatsdatei: nq/db/nq_YYYY-MM.db (wie Legacy netzqualitaet/db-Muster).
 
 PRAGMA journal_mode=WAL;
 PRAGMA synchronous=NORMAL;
-
--- ---------------------------------------------------------------------------
--- Übernommenes 3–10 s-Aggregat (Retention 72 h auf Primary; Basis der Kaskade)
--- Schema identisch zu nq_agg_10s auf Tech.
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS nq_agg_10s (
-    ts        INTEGER NOT NULL,
-    quantity  TEXT    NOT NULL,
-    meas      TEXT,
-    phase     INTEGER,
-    ord       INTEGER,
-    vmin REAL, vavg REAL, vmax REAL,
-    n         INTEGER NOT NULL,
-    PRIMARY KEY (ts, quantity, meas, phase, ord)
-) WITHOUT ROWID;
 
 -- ---------------------------------------------------------------------------
 -- Harmonik-RAW (1-s-Auflösung) — von Tech übernommen, Basis für _run_harm_5min.

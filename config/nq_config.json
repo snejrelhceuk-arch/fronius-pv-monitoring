@@ -17,7 +17,6 @@
 
   "retention": {
     "raw_hours": 12,
-    "primary_agg10s_hours": 72,
     "primary_rawslow_hours": 12,
     "primary_5min_days": 90,
     "primary_hourly_days": 365,
@@ -38,7 +37,7 @@
   },
 
   "aggregate": {
-    "grid_s": 10
+    "grid_s": 300
   },
 
   "event_filter": {

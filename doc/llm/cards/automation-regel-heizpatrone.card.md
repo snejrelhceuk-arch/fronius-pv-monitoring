@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/regeln/geraete.py"
 tags: [heizpatrone, fritzdect, ww-speicher, prognose]
 status: stable
-last_review: 2026-06-14
+last_review: 2026-07-23
 ---
 
 # Regel Heizpatrone
@@ -43,6 +43,7 @@ Zusätzlich pausiert die Regel bei aktivem `afternoon_charge_request` den HP-Bet
   3. **Auslöser:** Energie ≥ `aus_netzbezug_energie_kwh` (0.1 kWh ≡ Ø 1200 W über 5 Min) → HP AUS. Schaltspitzen (z. B. einmal 3 kW für 30 s) bleiben darunter. Wert erhöht 2026-05-25 (vorher 0.02 kWh).
   Es gibt **keine Vetos durch Forecast-Rest, Winter-Schutz oder Transient-Fenster mehr**. Winter-Tiefentladung wird über das **dynamische SOC_MIN-Sliding (5–25 %)** in `RegelSocSteuerung` und die HART-Schwellen `stop_entladung_unter`/`extern_aus_soc_pct` abgesichert, nicht durch toleriertes HP-Netzbezug.
 - Begriff **„Notaus"** ist reserviert für menschen-/spannungsbezogene Schutzkontexte (BYD-BMS, Tier-1-Alarm). Im HP-Kontext heißt es **„AUS"** (`aus_grund`, `_netzbezug_aus_ausloesen`, `extern_aus_soc_pct`, AUS-Pfad, AUS-Kriterienwerk).
+- **Override-Cancellation (seit 2026-07-23):** Regel cancelt automatisch konfligierende `hp_toggle(state=on)` Overrides bei starken AUS-Bedingungen (HARTE Kriterien, Verbraucher-Konkurrenz, Batterie-Entladung, Netzbezug, Phase 4). Verhindert Pingpong: Override will EIN → Regel schaltet AUS → Override reapplied → ... Normales Burst-Ende (Timer abgelaufen) cancelt NICHT.
 - Externe Schaltung erkannt → `_cancel_conflicting_overrides()` annulliert offene Operator-Overrides + setzt 30-min-Respekt-Hold (`extern_respekt_s`).
 - Schreibbestätigung: Aktor muss Engine-Wert registrieren, sonst falsch-positive Extern-Erkennung.
 - Bei aktivem Nachmittags-Ladewunsch (`afternoon_charge_request` + `pause_hp_until_target=true`) schaltet die Engine HP AUS **nur wenn** `0 < batt_power_w < 8000 W` (Batterie laedt mit schwacher Leistung). Bei fehlender Ladung (Batterie idle/entlaedt) oder starker Ladung (>=8 kW) bleibt HP freigegeben.

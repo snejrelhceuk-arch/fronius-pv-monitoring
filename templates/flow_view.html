@@ -845,13 +845,13 @@
                               letter-spacing="0.2">Maschinenraum</text>
                     </g>
 
-                    <!-- Sub-Buttons: Echtzeit + PAC4200 + NQ (nur sichtbar nach Klick auf Maschinenraum) -->
+                      <!-- Sub-Buttons: Einzelwerte PV-System + PAC4200 + NQ-System (nur sichtbar nach Klick auf Maschinenraum) -->
                     <g id="btn-echtzeit" class="mr-subbtn" transform="translate(200, 354)" style="display:none; cursor:pointer;">
                         <rect x="-45" y="-12" width="90" height="24" rx="6"
                               fill="rgba(34,197,94,0.18)" stroke="rgba(34,197,94,0.55)" stroke-width="1"/>
                         <text x="0" y="4" text-anchor="middle"
                               fill="rgba(187,247,208,0.95)" font-size="10" font-weight="600"
-                              letter-spacing="0.2">Echtzeit</text>
+                            letter-spacing="0.2">PV-System</text>
                     </g>
                     <g id="btn-pac" class="mr-subbtn" transform="translate(200, 381)" style="display:none; cursor:pointer;">
                         <rect x="-45" y="-12" width="90" height="24" rx="6"
@@ -865,7 +865,7 @@
                               fill="rgba(99,102,241,0.18)" stroke="rgba(129,140,248,0.6)" stroke-width="1"/>
                         <text x="0" y="4" text-anchor="middle"
                               fill="rgba(199,210,254,0.95)" font-size="10" font-weight="600"
-                              letter-spacing="0.2">Netzqualität</text>
+                            letter-spacing="0.2">NQ-System</text>
                     </g>
 
                     <!-- PV Gesamt -->
@@ -2116,7 +2116,7 @@
         if (lastFlowStatusData) renderFlowStatusDetail(lastFlowStatusData);
     });
 
-    // ── Maschinenraum-Button: Info 60s einblenden + Sub-Buttons (Echtzeit / NQ) ──
+    // ── Maschinenraum-Button: Info 60s einblenden + Sub-Buttons (PV-System / PAC4200) ──
     (function() {
         const btnEl   = document.getElementById('btn-maschinenraum');
         const btnBg   = document.getElementById('btn-mr-bg');

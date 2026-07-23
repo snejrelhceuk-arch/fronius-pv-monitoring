@@ -1,6 +1,6 @@
 """nq.tech_read — Primary-seitiges read-only Lesen der NQ-Zeitreihen von Tech.
 
-Liefert das 10-s-Aggregat (``nq_agg_10s``) aus Techs tmpfs im **Wide-Format**
+Liefert das 5-min-Aggregat (``nq_5min``) aus Techs tmpfs im **Wide-Format**
 (``[{ts, quantity1, quantity2, ...}]``) — identisch zum Format von
 ``/api/realtime_smart``, damit das bestehende Maschinenraum-Charting die NQ-DB
 ohne Änderung darstellen kann.
@@ -19,7 +19,21 @@ from nq.nq_common import load_config, BASE_DIR
 
 
 def _tech_host(cfg: dict) -> str:
+    """Resolve Tech host: ENV > .infra.local > config > fallback."""
     host = os.environ.get("PV_TECH_IP")
+    if not host:
+        # Versuche .infra.local zu laden (EnvironmentFile in systemd)
+        infra_file = os.path.join(BASE_DIR, ".infra.local")
+        if os.path.exists(infra_file):
+            try:
+                with open(infra_file, encoding="utf-8") as fh:
+                    for line in fh:
+                        line = line.strip()
+                        if line.startswith("PV_TECH_IP="):
+                            host = line.split("=", 1)[1].strip()
+                            break
+            except Exception:
+                pass
     if not host:
         try:
             import config
@@ -29,8 +43,68 @@ def _tech_host(cfg: dict) -> str:
     return host or cfg.get("transfer", {}).get("tech_host") or "192.0.2.181"
 
 
-def fetch_agg(start: int, end: int, resolution: int = 10) -> dict:
-    """Holt nq_agg_10s [start,end] von Tech, auf ``resolution`` (s) verdichtet.
+def _fetch_agg_primary(start: int, end: int, resolution: int = 300) -> dict | None:
+    """Fallback: Liest nq_5min von lokalen Primary-DBs (nq/db/nq_YYYY-MM.db).
+    
+    Gibt None zurück, wenn keine DB vorhanden oder leer. Otherwise dict wie fetch_agg().
+    """
+    from datetime import datetime, timedelta
+    from glob import glob
+    
+    res = max(int(resolution), 300)
+    nq_dir = os.path.join(BASE_DIR, "nq", "db")
+    if not os.path.isdir(nq_dir):
+        return None
+    
+    # Sammle alle NQ-DBs im Fenster [start, end]
+    db_paths = []
+    d = datetime.fromtimestamp(start)
+    end_d = datetime.fromtimestamp(end)
+    while d <= end_d:
+        db_path = os.path.join(nq_dir, f"nq_{d.strftime('%Y-%m')}.db")
+        if os.path.exists(db_path):
+            db_paths.append(db_path)
+        d += timedelta(days=32)
+    
+    if not db_paths:
+        return None
+    
+    try:
+        import sqlite3
+        buckets: dict[int, dict] = {}
+        quantities: set[str] = set()
+        
+        for db_path in db_paths:
+            try:
+                conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5.0)
+                rows = conn.execute(
+                    f"SELECT CAST(ts/{res} AS INT)*{res} tb, quantity, "
+                    f"AVG(vavg), MIN(vmin), MAX(vmax) FROM nq_5min "
+                    f"WHERE ts>={int(start)} AND ts<={int(end)} AND meas='' "
+                    f"GROUP BY tb,quantity ORDER BY tb"
+                ).fetchall()
+                conn.close()
+                
+                for tb, q, vavg, vmin, vmax in rows:
+                    row = buckets.setdefault(tb, {"ts": tb})
+                    row[q] = vavg
+                    quantities.add(q)
+            except Exception:
+                continue
+        
+        if not buckets:
+            return None
+        
+        data = [buckets[k] for k in sorted(buckets)]
+        return {"data": data, "quantities": sorted(quantities),
+                "source": "nq_primary_5min", "points": len(data),
+                "start": start, "end": end}
+    except Exception:
+        return None
+
+
+def fetch_agg(start: int, end: int, resolution: int = 300) -> dict:
+    """Holt nq_5min [start,end] von Tech (SSH), mit Fallback auf Primary-DBs.
 
     Returns dict: ``{"data": [...wide rows...], "quantities": [...], "source": ..,
     "points": n, "start": start, "end": end}``. Bei Fehler ``error`` gesetzt.
@@ -38,13 +112,13 @@ def fetch_agg(start: int, end: int, resolution: int = 10) -> dict:
     cfg = load_config()
     host = _tech_host(cfg)
     tmpfs_db = cfg.get("tmpfs", {}).get("db_path", "/dev/shm/nq_cache.db")
-    res = max(int(resolution), 10)
+    res = max(int(resolution), 300)
 
     remote_code = (
         "import sqlite3,json\n"
         f"c=sqlite3.connect('file:{tmpfs_db}?mode=ro',uri=True)\n"
         f"r=c.execute(\"SELECT CAST(ts/{res} AS INT)*{res} tb, quantity, "
-        f"AVG(vavg), MIN(vmin), MAX(vmax) FROM nq_agg_10s "
+        f"AVG(vavg), MIN(vmin), MAX(vmax) FROM nq_5min "
         f"WHERE ts>={int(start)} AND ts<={int(end)} AND meas='' "
         f"GROUP BY tb,quantity ORDER BY tb\").fetchall()\n"
         "print(json.dumps(r))\n"
@@ -58,26 +132,31 @@ def fetch_agg(start: int, end: int, resolution: int = 10) -> dict:
              "cd %s && python3 -" % remote_dir],
             input=remote_code, capture_output=True, text=True, timeout=25, check=False,
         )
-        if out.returncode != 0:
-            return {"data": [], "quantities": [], "source": "nq_tech_agg10s",
-                    "points": 0, "start": start, "end": end,
-                    "error": out.stderr.strip()[:200] or "Tech nicht erreichbar"}
-        triples = json.loads(out.stdout.strip() or "[]")
+        if out.returncode == 0:
+            triples = json.loads(out.stdout.strip() or "[]")
+            # Pivot long -> wide
+            buckets: dict[int, dict] = {}
+            quantities: set[str] = set()
+            for tb, q, vavg, vmin, vmax in triples:
+                row = buckets.setdefault(tb, {"ts": tb})
+                row[q] = vavg
+                quantities.add(q)
+            data = [buckets[k] for k in sorted(buckets)]
+            return {"data": data, "quantities": sorted(quantities),
+                    "source": "nq_tech_5min", "points": len(data),
+                    "start": start, "end": end}
     except Exception as exc:  # pragma: no cover
-        return {"data": [], "quantities": [], "source": "nq_tech_agg10s",
-                "points": 0, "start": start, "end": end, "error": str(exc)}
-
-    # Pivot long -> wide
-    buckets: dict[int, dict] = {}
-    quantities: set[str] = set()
-    for tb, q, vavg, vmin, vmax in triples:
-        row = buckets.setdefault(tb, {"ts": tb})
-        row[q] = vavg
-        quantities.add(q)
-    data = [buckets[k] for k in sorted(buckets)]
-    return {"data": data, "quantities": sorted(quantities),
-            "source": "nq_tech_agg10s", "points": len(data),
-            "start": start, "end": end}
+        pass
+    
+    # Fallback auf Primary-DBs, wenn Tech nicht erreichbar/Fehler
+    primary_res = _fetch_agg_primary(start, end, resolution)
+    if primary_res:
+        return primary_res
+    
+    # Kein Tech, kein Primary-Fallback
+    return {"data": [], "quantities": [], "source": "nq_none",
+            "points": 0, "start": start, "end": end,
+            "error": "NQ-Daten nicht verfügbar (Tech/Primary nicht erreichbar)"}
 
 
 # ---------------------------------------------------------------------------
@@ -103,10 +182,14 @@ _FAST_REV = {
     "u_l1": "U_L1N", "u_l2": "U_L2N", "u_l3": "U_L3N",
     "u_l12": "U_L12", "u_l23": "U_L23", "u_l31": "U_L31",
     "i_l1": "Is_L1", "i_l2": "Is_L2", "i_l3": "Is_L3",
+    "s_l1": "S_L1", "s_l2": "S_L2", "s_l3": "S_L3",
     "p_l1": "P_L1", "p_l2": "P_L2", "p_l3": "P_L3",
+    "q_l1": "Q_L1", "q_l2": "Q_L2", "q_l3": "Q_L3",
     "p_tot": "P_tot", "q_tot": "Q_tot", "s_tot": "S_tot",
     "pf_l1": "PF_L1", "pf_l2": "PF_L2", "pf_l3": "PF_L3",
-    "pf": "PF_tot", "f": "FREQ",
+    "pf": "PF_tot",
+    "uavg_ln": "Uavg_LN", "uavg_ll": "Uavg_LL", "isum": "Isum",
+    "f": "FREQ",
 }
 _MED_REV = {
     "cosphi_l1": "cosphi_L1", "cosphi_l2": "cosphi_L2", "cosphi_l3": "cosphi_L3",
@@ -120,6 +203,15 @@ _MED_REV = {
 }
 _ENERGY_REV = {"wh_imp": "Wh_imp", "wh_exp": "Wh_exp",
                "varh_imp": "varh_imp", "varh_exp": "varh_exp", "vah": "VAh"}
+# Max-Werte (Block C) — Spiegel von nq_poller._MAX_COLS
+_MAX_REV = {
+    "umax_l1n": "Umax_L1N", "umax_l2n": "Umax_L2N", "umax_l3n": "Umax_L3N",
+    "umax_l12": "Umax_L12", "umax_l23": "Umax_L23", "umax_l31": "Umax_L31",
+    "imax_l1": "Imax_L1", "imax_l2": "Imax_L2", "imax_l3": "Imax_L3",
+    "pmax_l1": "Pmax_L1", "pmax_l2": "Pmax_L2", "pmax_l3": "Pmax_L3",
+    "freqmax": "FREQmax",
+    "smax_tot": "Smax_tot", "pmax_tot": "Pmax_tot", "qmax_tot": "Qmax_tot",
+}
 # Harmonik meas/phase → Flat-Key-Bestandteile (Spiegel von nq_poller._HARM_PHASES)
 _HARM_PH = {
     "U_LN": ("U", {1: "L1N", 2: "L2N", 3: "L3N"}),
@@ -153,6 +245,10 @@ def _reconstruct_values(payload: dict) -> dict:
     for col, key in _ENERGY_REV.items():
         if col in en and en[col] is not None:
             vals[key] = en[col]
+    mx = payload.get("max") or {}
+    for col, key in _MAX_REV.items():
+        if col in mx and mx[col] is not None:
+            vals[key] = mx[col]
     for meas, phase, ord_, value in (payload.get("harm") or []):
         spec = _HARM_PH.get(meas)
         if not spec or value is None:
@@ -182,9 +278,10 @@ def fetch_tech_snapshot() -> dict:
         "fast=r1('SELECT * FROM nq_raw_fast ORDER BY ts_ms DESC LIMIT 1')\n"
         "med=r1('SELECT * FROM nq_raw_medium ORDER BY ts_ms DESC LIMIT 1')\n"
         "en=r1('SELECT * FROM nq_energy_raw ORDER BY ts DESC LIMIT 1')\n"
+        "mx=r1('SELECT * FROM nq_raw_max ORDER BY ts DESC LIMIT 1')\n"
         "hr=c.execute('SELECT ts FROM nq_raw_slow ORDER BY ts DESC LIMIT 1').fetchone()\n"
         "harm=c.execute('SELECT meas,phase,ord,value FROM nq_raw_slow WHERE ts=?',(hr[0],)).fetchall() if hr else []\n"
-        "print(json.dumps({'fast':fast,'medium':med,'energy':en,'harm':harm,"
+        "print(json.dumps({'fast':fast,'medium':med,'energy':en,'max':mx,'harm':harm,"
         "'ts':(fast.get('ts_ms') if fast else None)}))\n"
     )
     try:
@@ -201,6 +298,7 @@ def fetch_tech_snapshot() -> dict:
     from nq import pac_live
     units: dict = {k: u for k, (_, u) in pac_live.FLOAT_MAP.items()}
     units.update({k: u for k, (_, u) in pac_live.FLOAT2_MAP.items()})
+    units.update({k: u for k, (_, u) in pac_live.FLOAT3_MAP.items()})
     units.update({k: u for k, (_, u) in pac_live.DOUBLE_MAP.items()})
     ts_ms = payload.get("ts") or 0
     return {"ok": True, "ts": int((ts_ms or 0) / 1000) or int(time.time()),
@@ -271,7 +369,7 @@ def fetch_aggregates(rng: str, start: int, end: int) -> dict:
                         ts = int(datetime.strptime(day, "%Y-%m-%d").timestamp())
                     except Exception:
                         continue
-                    if ts < start or ts > end:
+                    if ts < start or ts >= end:
                         continue
                     r = buckets.setdefault(ts, {"ts": ts})
                     r[q], r[f"{q}_min"], r[f"{q}_max"] = vavg, vmin, vmax
@@ -279,7 +377,7 @@ def fetch_aggregates(rng: str, start: int, end: int) -> dict:
             else:
                 rows = conn.execute(
                     f"SELECT ts, quantity, vmin, vavg, vmax FROM {table} "
-                    "WHERE quantity != '' AND ts >= ? AND ts <= ? ORDER BY ts",
+                        "WHERE quantity != '' AND ts >= ? AND ts < ? ORDER BY ts",
                     (start, end)).fetchall()
                 for ts, q, vmin, vavg, vmax in rows:
                     r = buckets.setdefault(ts, {"ts": ts})

@@ -11,7 +11,7 @@
 **Fast-Loop schreibt:**
 - ``nq_raw_fast``   — Block-A-Rohwerte (ts_ms PK, 200-ms-Raster)
 - ``nq_raw_medium`` — Block-B-Rohwerte + Frequenz ``f`` (ts_ms PK)
-- ``nq_agg_10s``    — Skalare min/avg/max im 10-s-Raster (35 Größen)
+- ``nq_5min``       — Skalare min/avg/max/std im 5-min-Raster (35 Größen)
 
 **Medium-Loop schreibt:**
 - ``nq_raw_slow``   — Harmonische RAW (ts, meas, phase, ord, value) bei 1 s
@@ -41,11 +41,11 @@ import threading
 import time
 
 from nq.nq_common import open_db, load_config, TECH_SCHEMA
-from nq.pac_live import read_fast_snapshot, read_harm_snapshot
+from nq.pac_live import read_fast_snapshot, read_harm_snapshot, read_max_snapshot
 from nq.collector.nq_capping import enforce_retention
 
 # ---------------------------------------------------------------------------
-# Skalare Charting-/Analyse-Größen → nq_agg_10s (10-s-Bucket, meas=''/phase=0/ord=0)
+# Skalare Charting-/Analyse-Größen → nq_5min (5-min-Bucket, meas=''/phase=0/ord=0)
 # ---------------------------------------------------------------------------
 AGG_QUANTITIES = [
     "U_L1N", "U_L2N", "U_L3N", "U_L12", "U_L23", "U_L31",
@@ -91,10 +91,14 @@ _FAST_COLS = {
     "u_l1": "U_L1N", "u_l2": "U_L2N", "u_l3": "U_L3N",
     "u_l12": "U_L12", "u_l23": "U_L23", "u_l31": "U_L31",
     "i_l1": "Is_L1", "i_l2": "Is_L2", "i_l3": "Is_L3",
+    "s_l1": "S_L1", "s_l2": "S_L2", "s_l3": "S_L3",
     "p_l1": "P_L1", "p_l2": "P_L2", "p_l3": "P_L3",
+    "q_l1": "Q_L1", "q_l2": "Q_L2", "q_l3": "Q_L3",
     "p_tot": "P_tot", "q_tot": "Q_tot", "s_tot": "S_tot",
     "pf_l1": "PF_L1", "pf_l2": "PF_L2", "pf_l3": "PF_L3",
-    "pf": "PF_tot", "f": "FREQ",
+    "pf": "PF_tot",
+    "uavg_ln": "Uavg_LN", "uavg_ll": "Uavg_LL", "isum": "Isum",
+    "f": "FREQ",
 }
 _MED_COLS = {
     "cosphi_l1": "cosphi_L1", "cosphi_l2": "cosphi_L2", "cosphi_l3": "cosphi_L3",
@@ -117,11 +121,11 @@ def _handle_stop(_sig, _frm):
 
 
 # ---------------------------------------------------------------------------
-# 10-s-Bucket: nur Skalare (Block A+B). Harmonische gehen direkt in nq_raw_slow.
+# 5-min-Bucket: nur Skalare (Block A+B). Harmonische gehen direkt in nq_raw_slow.
 # ---------------------------------------------------------------------------
 class _Bucket:
     def __init__(self):
-        self.acc: dict[str, list] = {}  # key -> [min, sum, max, n]
+        self.acc: dict[str, list] = {}  # key -> [min, sum, max, n, sumsq]
 
     def add(self, vals: dict) -> None:
         for q in AGG_QUANTITIES:
@@ -130,7 +134,7 @@ class _Bucket:
                 continue
             a = self.acc.get(q)
             if a is None:
-                self.acc[q] = [v, v, v, 1]
+                self.acc[q] = [v, v, v, 1, v * v]
             else:
                 if v < a[0]:
                     a[0] = v
@@ -138,10 +142,15 @@ class _Bucket:
                 if v > a[2]:
                     a[2] = v
                 a[3] += 1
+                a[4] += v * v
 
     def rows(self, ts_bucket: int) -> list:
-        return [(ts_bucket, q, "", 0, 0, vmin, vsum / n, vmax, n)
-                for q, (vmin, vsum, vmax, n) in self.acc.items()]
+        out = []
+        for q, (vmin, vsum, vmax, n, sumsq) in self.acc.items():
+            vavg = vsum / n
+            vstd = (max(0.0, (sumsq / n) - (vavg * vavg))) ** 0.5 if n > 1 else 0.0
+            out.append((ts_bucket, q, "", 0, 0, vmin, vavg, vmax, vstd, n))
+        return out
 
 
 def _detect_event(prev: dict, cur: dict, ef: dict) -> str | None:
@@ -178,6 +187,19 @@ _MEDIUM_SQL = (
 )
 _MEDIUM_FLUSH = 1440   # ~10 Harm-Polls × 144 rows/Poll = 1440 Zeilen
 
+# Max-Werte (Block C) → nq_raw_max, 300-s-Slow-Poll (DB-Spalte → PAC-Key)
+_MAX_COLS = {
+    "umax_l1n": "Umax_L1N", "umax_l2n": "Umax_L2N", "umax_l3n": "Umax_L3N",
+    "umax_l12": "Umax_L12", "umax_l23": "Umax_L23", "umax_l31": "Umax_L31",
+    "imax_l1": "Imax_L1", "imax_l2": "Imax_L2", "imax_l3": "Imax_L3",
+    "pmax_l1": "Pmax_L1", "pmax_l2": "Pmax_L2", "pmax_l3": "Pmax_L3",
+    "freqmax": "FREQmax",
+    "smax_tot": "Smax_tot", "pmax_tot": "Pmax_tot", "qmax_tot": "Qmax_tot",
+}
+_MAX_SQL = ("INSERT OR REPLACE INTO nq_raw_max (ts,%s) VALUES (%s)"
+            % (",".join(_MAX_COLS), ",".join(["?"] * (len(_MAX_COLS) + 1))))
+_MAX_PERIOD_S = 300.0
+
 
 def _medium_ms(cfg: dict) -> int:
     pol = cfg.get("polling", {})
@@ -189,6 +211,7 @@ def _medium_thread(db_path: str, cfg: dict, stop_event: threading.Event) -> None
     conn = open_db(db_path, TECH_SCHEMA)
     medium_s = _medium_ms(cfg) / 1000.0
     last_harm = 0.0
+    last_max = 0.0
     buf: list = []
     errs = polls = 0
 
@@ -208,6 +231,19 @@ def _medium_thread(db_path: str, cfg: dict, stop_event: threading.Event) -> None
             except Exception as e:
                 errs += 1
                 print(f"[nq_poller/medium] Harm-Fehler: {e}")
+
+        # Max-Werte (Block C) alle 300 s → nq_raw_max
+        if now - last_max >= _MAX_PERIOD_S:
+            last_max = now
+            try:
+                msnap = read_max_snapshot(timeout=1.5)
+                if msnap.get("ok"):
+                    mv = msnap["values"]
+                    conn.execute(_MAX_SQL, [int(now)]
+                                 + [mv.get(k) for k in _MAX_COLS.values()])
+                    conn.commit()
+            except Exception as e:
+                print(f"[nq_poller/medium] Max-Fehler: {e}")
 
         if len(buf) >= _MEDIUM_FLUSH:
             try:
@@ -357,7 +393,7 @@ def poller_loop(db_path: str, cfg: dict) -> None:
     conn = open_db(db_path, TECH_SCHEMA)
 
     poll_s = cfg.get("polling", {}).get("fast_ms", 200) / 1000.0
-    grid_s = cfg.get("aggregate", {}).get("grid_s", 10)
+    grid_s = cfg.get("aggregate", {}).get("grid_s", 300)
     ef = cfg.get("event_filter", {})
     cooldown_s = ef.get("cooldown_s", 120)
     cap_every_s = 60
@@ -371,7 +407,7 @@ def poller_loop(db_path: str, cfg: dict) -> None:
     limit_mon = LimitMonitor(cfg)
 
     bucket = _Bucket()
-    cur_bucket = None
+    cur_bucket = int(time.time() // grid_s) * grid_s  # Initialisiere mit aktuellem Bucket
     fast_buf: list = []
     med_buf: list = []
     prev_vals: dict = {}
@@ -410,9 +446,9 @@ def poller_loop(db_path: str, cfg: dict) -> None:
                     cur_bucket = b
                 elif b != cur_bucket:
                     conn.executemany(
-                        "INSERT OR REPLACE INTO nq_agg_10s "
-                        "(ts,quantity,meas,phase,ord,vmin,vavg,vmax,n) "
-                        "VALUES (?,?,?,?,?,?,?,?,?)", bucket.rows(cur_bucket))
+                        "INSERT OR REPLACE INTO nq_5min "
+                        "(ts,quantity,meas,phase,ord,vmin,vavg,vmax,vstd,n) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?)", bucket.rows(cur_bucket))
                     conn.commit()
                     bucket = _Bucket()
                     cur_bucket = b
@@ -465,8 +501,8 @@ def poller_loop(db_path: str, cfg: dict) -> None:
             conn.executemany(med_sql, med_buf)
         if cur_bucket is not None and bucket.acc:
             conn.executemany(
-                "INSERT OR REPLACE INTO nq_agg_10s "
-                "(ts,quantity,meas,phase,ord,vmin,vavg,vmax,n) VALUES (?,?,?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO nq_5min "
+                "(ts,quantity,meas,phase,ord,vmin,vavg,vmax,vstd,n) VALUES (?,?,?,?,?,?,?,?,?,?)",
                 bucket.rows(cur_bucket))
         conn.commit()
     except Exception as e:

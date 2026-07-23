@@ -1,7 +1,7 @@
-"""nq.aggregate.nq_aggregate — Kaskade nq_agg_10s/nq_raw_slow → 5min → hourly → daily (Rolle N).
+"""nq.aggregate.nq_aggregate — Kaskade nq_5min/nq_raw_slow → hourly → daily (Rolle N).
 
 Läuft alle 4h auf Primary (Timer pv-nq-aggregate.timer, Persistent=yes).
-- Skalare (Block A+B):  nq_agg_10s → nq_5min → nq_hourly → nq_daily
+- Skalare (Block A+B):  nq_5min → nq_hourly → nq_daily
 - Harmonische:          nq_raw_slow → nq_5min → nq_hourly → nq_daily
   (quantity='', meas='U_LN'|'U_LL'|'I', phase 1–3, ord 1,3,5,...,31)
 
@@ -16,9 +16,6 @@ import os
 import time
 
 from nq.nq_common import load_config, open_db, PRIMARY_SCHEMA, BASE_DIR
-
-_SCALAR_FILTER = "meas='' AND phase=0 AND ord=0"   # nur für nq_agg_10s-Lesepfad
-
 
 def _month_dbs() -> list[str]:
     db_dir = os.path.join(BASE_DIR, "nq", "db")
@@ -36,35 +33,8 @@ def _open_month(db_path: str):
 
 
 # ---------------------------------------------------------------------------
-# Stufe 1a: nq_agg_10s → nq_5min (Skalare, quantity gefüllt)
 # ---------------------------------------------------------------------------
-def _run_5min(conn, cfg: dict) -> int:
-    rows = conn.execute(
-        "SELECT CAST(ts/300 AS INTEGER)*300 tb, quantity, meas, phase, ord, "
-        "MIN(vmin), AVG(vavg), MAX(vmax), AVG(vavg*vavg), SUM(n) "
-        "FROM nq_agg_10s WHERE " + _SCALAR_FILTER + " "
-        "GROUP BY tb, quantity, meas, phase, ord ORDER BY tb"
-    ).fetchall()
-    if not rows:
-        return 0
-    upsert = []
-    for tb, qty, meas, phase, ord_, vmin, vavg, vmax, vavg2, n in rows:
-        vstd = math.sqrt(max(0.0, vavg2 - vavg * vavg)) if n and n > 1 else 0.0
-        upsert.append((tb, qty, meas, phase, ord_, vmin, vavg, vmax, vstd, n))
-    conn.executemany(
-        "INSERT OR REPLACE INTO nq_5min "
-        "(ts,quantity,meas,phase,ord,vmin,vavg,vmax,vstd,n) VALUES (?,?,?,?,?,?,?,?,?,?)",
-        upsert,
-    )
-    conn.commit()
-    days = cfg.get("retention", {}).get("primary_5min_days", 90)
-    conn.execute("DELETE FROM nq_5min WHERE ts < ?", (int(time.time()) - days * 86400,))
-    conn.commit()
-    return len(upsert)
-
-
-# ---------------------------------------------------------------------------
-# Stufe 1b: nq_raw_slow → nq_5min (Harmonische, quantity='')
+# Stufe 1: nq_raw_slow → nq_5min (Harmonische, quantity='')
 # ---------------------------------------------------------------------------
 def _run_harm_5min(conn, cfg: dict) -> int:
     """Aggregiert Harmonische aus nq_raw_slow → nq_5min (quantity='', meas/phase/ord gefüllt)."""
@@ -158,7 +128,7 @@ def run(stage: str) -> dict:
     """Führt Aggregation für alle Monats-DBs aus.
 
     stage in {'5min', 'hourly', 'daily', 'all'}.
-    '5min' aggregiert SOWOHL Skalare (nq_agg_10s) ALS AUCH Harmonische (nq_raw_slow).
+    '5min' aggregiert Harmonische (nq_raw_slow) in nq_5min.
     """
     cfg = load_config()
     dbs = _month_dbs()
@@ -169,7 +139,6 @@ def run(stage: str) -> dict:
         total = 0
         for s in stages:
             if s == "5min":
-                total += _run_5min(conn, cfg)
                 total += _run_harm_5min(conn, cfg)
             elif s == "hourly":
                 total += _run_hourly(conn, cfg)

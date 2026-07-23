@@ -207,6 +207,36 @@ def read_fast_snapshot(host: str | None = None, port: int | None = None,
     return out
 
 
+def read_max_snapshot(host: str | None = None, port: int | None = None,
+                      unit_id: int | None = None, timeout: float = 2.0) -> dict:
+    """Read-only: nur Block C (FLOAT3_MAP, Max-Werte @75..144), 1 Modbus-Read.
+    Für den 300-s-Slow-Loop des nq_poller (Umax/Imax/Pmax/FREQmax).
+    """
+    host = host or _DEFAULT_HOST
+    port = port or _DEFAULT_PORT
+    unit_id = _DEFAULT_UNIT if unit_id is None else unit_id
+    out: dict = {"ok": False, "ts": int(time.time()), "values": {}, "error": None}
+
+    client = RawModbusClient(host, port, timeout=timeout)
+    if not client.connect():
+        out["error"] = "PAC4200 nicht erreichbar"
+        return out
+    try:
+        c_regs = read_registers_safe(client, _FLOAT3_READ_START, _FLOAT3_READ_COUNT, unit_id)
+    finally:
+        client.close()
+
+    if not c_regs:
+        out["error"] = "Keine Modbus-Antwort (Block C)"
+        return out
+
+    out["ok"] = True
+    out["ts"] = int(time.time())
+    out["values"] = {name: _f32(c_regs, _FLOAT3_READ_START, addr)
+                     for name, (addr, _) in FLOAT3_MAP.items()}
+    return out
+
+
 def read_harm_snapshot(host: str | None = None, port: int | None = None,
                        unit_id: int | None = None, timeout: float = 2.0) -> dict:
     """Read-only: nur Harmonik-Blöcke D/E/F (@9001/@11001/@22001), 3 Modbus-Reads.
@@ -448,107 +478,8 @@ def _harm_bar_svg(vals: dict, ph: str, kind: str) -> str:
     return ''.join(parts)
 
 
-def _fill_missing_values(v: dict) -> dict:
-    """Berechnet fehlende Messwerte aus verfügbaren Daten.
-    
-    Fügt Phase-spezifische Leistungen, Durchschnittswerte und Unsymmetrien ein,
-    die vom Tech-Collector nicht gespeichert wurden.
-    """
-    v = dict(v)  # Kopie, um Original nicht zu verändern
-    
-    # Sicherstelle, dass I_L1/L2/L3 (Betrag) aus Is_L1/L2/L3 berechnet sind
-    for ph in ("L1", "L2", "L3"):
-        is_key = f"Is_{ph}"
-        i_key = f"I_{ph}"
-        if is_key in v and v[is_key] is not None and i_key not in v:
-            v[i_key] = abs(v[is_key])
-    
-    # Durchschnittsspannungen
-    u_ln_vals = [v.get(f"U_L{i}N") for i in (1, 2, 3)]
-    u_ln_finite = [u for u in u_ln_vals if u is not None]
-    if len(u_ln_finite) == 3 and not v.get("Uavg_LN"):
-        v["Uavg_LN"] = sum(u_ln_finite) / 3.0
-    
-    u_ll_vals = [v.get(f"U_L{ab}") for ab in ("L12", "L23", "L31")]
-    u_ll_finite = [u for u in u_ll_vals if u is not None]
-    if len(u_ll_finite) == 3 and not v.get("Uavg_LL"):
-        v["Uavg_LL"] = sum(u_ll_finite) / 3.0
-    
-    # Phase-spezifische Leistungen aus U, I, cos(phi)
-    for ph in ("L1", "L2", "L3"):
-        u_key = f"U_{ph}N"
-        i_key = f"I_{ph}"
-        cos_key = f"cosphi_{ph}"
-        s_key = f"S_{ph}"
-        p_key = f"P_{ph}"
-        q_key = f"Q_{ph}"
-        
-        u = v.get(u_key)
-        i = v.get(i_key)
-        cos_phi = v.get(cos_key)
-        
-        # S = U * I (wenn nicht vorhanden)
-        if u is not None and i is not None and v.get(s_key) is None:
-            s = u * i
-            v[s_key] = s
-            
-            # P = S * |cos(phi)| (wenn cos_phi vorhanden)
-            if cos_phi is not None and v.get(p_key) is None:
-                v[p_key] = s * abs(cos_phi)
-            
-            # Q = S * sqrt(1 - cos(phi)²)
-            if cos_phi is not None and v.get(q_key) is None:
-                sin_sq = max(0, 1.0 - cos_phi * cos_phi)
-                v[q_key] = s * math.sqrt(sin_sq)
-    
-    # Phase-spezifische Leistungsfaktoren aus cos(phi)
-    for ph in ("L1", "L2", "L3"):
-        cos_key = f"cosphi_{ph}"
-        pf_key = f"PF_{ph}"
-        if cos_key in v and v[cos_key] is not None and pf_key not in v:
-            v[pf_key] = abs(v[cos_key])
-    
-    # THD L-L aus L-N (grobe Approximation)
-    # THD_L12 ≈ sqrt((THD_L1² + THD_L2²) / 2)
-    for l1_n, l2_n, l_ll in (("L1", "L2", "L12"), ("L2", "L3", "L23"), ("L3", "L1", "L31")):
-        thd1_key = f"THDu_{l1_n}"
-        thd2_key = f"THDu_{l2_n}"
-        thd_ll_key = f"THDu_{l_ll}"
-        
-        thd1 = v.get(thd1_key)
-        thd2 = v.get(thd2_key)
-        if thd1 is not None and thd2 is not None and thd_ll_key not in v:
-            v[thd_ll_key] = math.sqrt((thd1*thd1 + thd2*thd2) / 2.0)
-    
-    # Unsymmetrie U aus 3-Phasen-Spannungen (negatives Phasensystem-Verhältnis)
-    # Vereinfachte Berechnung: Unbal = 100 * (U_max - U_min) / U_avg
-    if "Unbal_U" not in v:
-        u_ln_vals = [v.get(f"U_L{i}N") for i in (1, 2, 3)]
-        u_ln_finite = [u for u in u_ln_vals if u is not None]
-        if len(u_ln_finite) == 3:
-            u_min = min(u_ln_finite)
-            u_max = max(u_ln_finite)
-            u_avg = sum(u_ln_finite) / 3.0
-            if u_avg > 10:  # Plausibilität
-                v["Unbal_U"] = 100.0 * (u_max - u_min) / u_avg
-    
-    # Unsymmetrie I aus 3-Phasen-Strömen
-    if "Unbal_I" not in v:
-        i_vals = [v.get(f"I_L{i}") for i in (1, 2, 3)]
-        i_finite = [i for i in i_vals if i is not None]
-        if len(i_finite) == 3:
-            i_min = min(i_finite)
-            i_max = max(i_finite)
-            i_avg = sum(i_finite) / 3.0
-            if i_avg > 0.5:  # Plausibilität
-                v["Unbal_I"] = 100.0 * (i_max - i_min) / i_avg
-    
-    return v
-
-
 def _build_screens(v: dict) -> list[dict]:
     """PAC4200-Display-Bildschirme nach Original-Geraet (A.1 Messgroessen)."""
-    v = _fill_missing_values(v)  # Fehlende Werte berechnen
     _KILO = frozenset({"W", "VA", "var", "Wh", "varh", "VAh"})
 
     def L(label, key, unit, digits=1):

@@ -1,0 +1,14 @@
+[Unit]
+Description=NQ Netzereignis-Analyse HF/NF alle 4h :30 (Primary, Rolle N)
+Documentation=file:///opt/pv-system/doc/netzqualitaet/NQ_MODUL.md
+
+[Timer]
+# 00:30, 04:30, 08:30, 12:30, 16:30, 20:30 — HF/NF-Analysen alle 4h
+# Nach Transfer (:10) + Aggregation (:15), parallel mit täglichem VLF (00:30)
+# Persistent = verpasste Läufe nachholen
+OnCalendar=*-*-* 00,04,08,12,16,20:30:00
+Persistent=true
+Unit=pv-nq-analysis-hf-nf.service
+
+[Install]
+WantedBy=timers.target

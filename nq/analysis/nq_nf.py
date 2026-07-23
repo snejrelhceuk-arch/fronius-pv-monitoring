@@ -1,6 +1,6 @@
 """nq.analysis.nq_nf — NF_global-Analyse: DFD, df/dt-Gradienten, Trafofilter, U-Band.
 
-Eingang: nq_agg_10s (ts_series-Dict) + nq_5min (direkte DB-Abfrage).
+Eingang: nq_5min (ts_series-Dict) + nq_5min (direkte DB-Abfrage).
 Ausgang: Liste von Event-Dicts für nq_events (band='NF_global').
 
 Methoden:
