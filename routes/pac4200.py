@@ -125,9 +125,13 @@ def api_pac4200_live():
 
 @bp.route('/api/nq/realtime_smart')
 def api_nq_realtime_smart():
-    """NQ-Zeitreihe (PAC4200 5-min-Aggregat) für Maschinenraum-Chart."""
+    """NQ-Zeitreihe (PAC4200) fuer Maschinenraum-Chart.
+
+    resolution>=300 s -> nq_5min (Tagesraster). resolution<300 s -> Hochaufloesung
+    aus Techs RAW-RAM (nur die letzten ~12 h; aeltere Buckets im Fenster bleiben 5 min).
+    """
     try:
-        resolution = max(request.args.get('resolution', type=int, default=300), 300)
+        resolution = max(request.args.get('resolution', type=int, default=300), 5)
         start_ts = request.args.get('start', type=int)
         end_ts = request.args.get('end', type=int)
         end = end_ts if end_ts else int(_time.time())

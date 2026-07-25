@@ -5,7 +5,7 @@ role: B
 applyTo: "routes/**"
 tags: [web-api, blueprints, templates, formatting, read-only]
 status: stable
-last_review: 2026-07-23
+last_review: 2026-07-25
 
 ---
 
@@ -15,6 +15,7 @@ last_review: 2026-07-23
 Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly bereitstellen und Werte konsistent im Frontend darstellen.
 
 ## Changes
+- 2026-07-25 (NQ 10s-Hochauflösung + 5min-Tagesansicht + Flow-Infozeilen): (a) **5-min-Tagesansicht NQ** wieder vollständig: `nq/tech_read.py:fetch_agg` **mergt** die Primary-Historie (`nq/db/nq_YYYY-MM.db:nq_5min`) mit Techs jüngsten, noch nicht transferierten 5-min-Buckets (`source=nq_5min_merged`) statt nur Techs nach Transfer geleertes `nq_5min` zu lesen (vorher ~2 h statt ganzer Tag). (b) **10-s-Schalter** im NQ-Maschinenraum (`templates/echtzeit_view.html`, nur „Jetzt“/heute; gestern nur <12 Uhr): `effectiveResolution`→10 s, neu `nq/tech_read.py:fetch_agg_fast` aggregiert `nq_raw_fast`/`nq_raw_medium` aus Techs RAM (~letzte 12 h) zu 10-s-Buckets und blendet sie über den 5-min-Tagesraster (ältere Buckets aus Primary), zoombar; Rück-Navigation deaktiviert 10 s. `routes/pac4200.py:api_nq_realtime_smart` erlaubt jetzt `resolution<300`. Live-Werte-Panel (Kern-DB-3s-Poll) in NQ-Ansicht deaktiviert (`checkLiveMode`). Netzkriterien-Quelle bestätigt: `/api/nq/netzkriterien` → `nq/tech_read.py:fetch_aggregates` (`source=nq_primary_agg`, PAC4200-NQ-DB). (c) **Flow-Infozeilen** (`templates/flow_view.html:renderFlowStatusDetail` via `routes/system/battery.py:_fetch_hp_status`): Anzeige-Sammelfenster 24 h→14 Tage (seltene SOC-Schaltungen erscheinen wieder), Datum-Prefix für ältere Einträge (`fmtSwitchTime`), Labels „Batt/HP/Klima“ statt „…24h“; Zaehler `hp_bursts_heute` bleibt 24 h; Schaltlog-Lesen jetzt utf-8. Ursache der fehlenden Zeilen war ein Schaltlog-Schreibfehler unter latin-1 (s. automation-state-Card).
 - 2026-07-14 (Netzkriterien/UI + 5min-Basis): `templates/netzqualitaet_view.html` entfernt den unteren Pan/Zoom-Slider (`dataZoom`) und zeigt stattdessen einen Warn-Strip mit den letzten Warnereignissen (warn/high/crit). Frequenzachse wird dynamisch auf Intervall-Min/Max skaliert und die Frequenzlinie hervorgehoben. Navigation ergänzt um expliziten „Jetzt“-Button und Kalender-Anbindung via `PVNavUI.attachCalendar`. `routes/pac4200.py:/api/nq/realtime_smart` + `nq/tech_read.py:fetch_agg` nutzen jetzt die 5-min-Basis (`nq_5min`, Mindestauflösung 300s, source=`nq_tech_5min`) statt `nq_agg_10s`.
 - 2026-07-14 (Netzkriterien NQ-Quelle): `templates/netzqualitaet_view.html` liest nicht mehr den Legacy-Pfad (`/api/netzqualitaet/*` mit `data_15min`), sondern `routes/pac4200.py:/api/nq/netzkriterien` aus PAC4200-NQ-Aggregaten (`nq_5min|nq_hourly|nq_daily` via `nq/tech_read.py:fetch_aggregates`). Warnstufen 50/70/90 kommen jetzt sichtbar als Marker/Counter (warn/high/crit) aus den konfigurierten Grenzwerten (`u_ll`, `freq`, `i_max`, `thd_u`).
 - 2026-07-14 (NQ2 UI/Konsolidierung): Monitoring-Tooltips spiegeln PAC-Fixpunkte jetzt gesammelt über `routes/pac4200.py:/api/nq/energy_map/<day|month|year>/<key>` in `templates/tag_view.html` für Monat/Jahr/Gesamt (Bezug/Einspeisung inkl. PAC-Klammerwert). Maschinenraum (`templates/echtzeit_view.html`) sprachlich auf **Darstellung aller Einzelwerte** umgestellt, DB-Umschaltung durch Seitenwechsel PV-System ↔ NQ-System ersetzt, Auflösung auf **5-min-Raster vs. Max-Auflösung (3 s, letzte 72 h)** vereinfacht. `templates/netzqualitaet_view.html` zeigt Netzkriterien ohne 15min-DFD-Button; `templates/nq_analyse_view.html` benennt DFD verständlicher als Viertelstunden-Frequenzmuster. Navigation synchronisiert in `static/js/nav-ui.js` + `templates/flow_view.html`.
@@ -47,7 +48,7 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 ## Code-Anchor
 - **App + Blueprint-Setup:** `web_api.py` (`app.register_blueprint(...)`)
 - **NQ2-API (PAC4200/NQ):** `routes/pac4200.py` (`api_pac4200_live`, `api_nq_energy`, `api_nq_event`, `api_nq_aggregates`, `nq_chart_page`)
-- **NQ read-only Datenzugriff:** `nq/tech_read.py` (`fetch_tech_snapshot`, `fetch_aggregates`, `fetch_agg`)
+- **NQ read-only Datenzugriff:** `nq/tech_read.py` (`fetch_tech_snapshot`, `fetch_aggregates`, `fetch_agg` = 5min-Merge Primary+Tech, `fetch_agg_fast` = 10s aus Tech-RAM)
 - **Read-only Fronius-Zugriff:** `routes/helpers.py:FroniusReadOnly`, `routes/helpers.py:get_fronius_api`
 - **DB-Zugriff:** `routes/helpers.py:get_db_connection`
 - **Page-Routen:** `routes/pages.py` (z. B. `maschinenraum`, `netzqualitaet`)

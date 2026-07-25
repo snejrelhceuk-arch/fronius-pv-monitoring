@@ -109,54 +109,198 @@ def fetch_agg(start: int, end: int, resolution: int = 300) -> dict:
     Returns dict: ``{"data": [...wide rows...], "quantities": [...], "source": ..,
     "points": n, "start": start, "end": end}``. Bei Fehler ``error`` gesetzt.
     """
+    # Hochaufloesung (<300 s) laeuft ueber die RAW-Tabellen (Tech RAM, ~12 h),
+    # nicht ueber nq_5min. Aeltere Buckets im Fenster kommen weiter aus nq_5min.
+    if int(resolution) < 300:
+        return fetch_agg_fast(start, end, int(resolution))
     cfg = load_config()
     host = _tech_host(cfg)
     tmpfs_db = cfg.get("tmpfs", {}).get("db_path", "/dev/shm/nq_cache.db")
     res = max(int(resolution), 300)
 
+    # Basis: vollstaendige 5-min-Historie aus den Primary-DBs (bis zum letzten
+    # Transfer). Techs nq_5min wird nach jedem Transfer geleert und deckt nur den
+    # Live-Rand ab -> deshalb Primary als Basis, Tech als frisches Overlay.
+    buckets: dict[int, dict] = {}
+    quantities: set[str] = set()
+    primary = _fetch_agg_primary(start, end, res)
+    if primary and primary.get("data"):
+        for prow in primary["data"]:
+            pts = prow.get("ts")
+            if pts is None:
+                continue
+            dst = buckets.setdefault(pts, {"ts": pts})
+            for k, v in prow.items():
+                if k == "ts":
+                    continue
+                dst[k] = v
+                quantities.add(k)
+
+    # Overlay: Techs juengste (noch nicht transferierte) 5-min-Buckets am Live-Rand.
     remote_code = (
         "import sqlite3,json\n"
         f"c=sqlite3.connect('file:{tmpfs_db}?mode=ro',uri=True)\n"
         f"r=c.execute(\"SELECT CAST(ts/{res} AS INT)*{res} tb, quantity, "
-        f"AVG(vavg), MIN(vmin), MAX(vmax) FROM nq_5min "
+        f"AVG(vavg) FROM nq_5min "
         f"WHERE ts>={int(start)} AND ts<={int(end)} AND meas='' "
         f"GROUP BY tb,quantity ORDER BY tb\").fetchall()\n"
         "print(json.dumps(r))\n"
     )
-    remote_dir = os.environ.get("PV_REPO_DIR", BASE_DIR)
+    tech_ok = False
     try:
-        # Skript über stdin (python3 -), damit keine Shell die Anführungszeichen
-        # im SQL zerlegt.
-        out = subprocess.run(
-            ["ssh", "-o", "ConnectTimeout=8", "-o", "BatchMode=yes", f"admin@{host}",
-             "cd %s && python3 -" % remote_dir],
-            input=remote_code, capture_output=True, text=True, timeout=25, check=False,
-        )
-        if out.returncode == 0:
-            triples = json.loads(out.stdout.strip() or "[]")
-            # Pivot long -> wide
-            buckets: dict[int, dict] = {}
-            quantities: set[str] = set()
-            for tb, q, vavg, vmin, vmax in triples:
-                row = buckets.setdefault(tb, {"ts": tb})
-                row[q] = vavg
-                quantities.add(q)
-            data = [buckets[k] for k in sorted(buckets)]
-            return {"data": data, "quantities": sorted(quantities),
-                    "source": "nq_tech_5min", "points": len(data),
-                    "start": start, "end": end}
-    except Exception as exc:  # pragma: no cover
+        for tb, q, vavg in json.loads(_ssh_python(host, remote_code, timeout=25) or "[]"):
+            dst = buckets.setdefault(tb, {"ts": tb})
+            dst[q] = vavg          # Tech ist am Rand frischer als die Primary-Historie
+            quantities.add(q)
+        tech_ok = True
+    except Exception:
         pass
-    
-    # Fallback auf Primary-DBs, wenn Tech nicht erreichbar/Fehler
-    primary_res = _fetch_agg_primary(start, end, resolution)
-    if primary_res:
-        return primary_res
-    
-    # Kein Tech, kein Primary-Fallback
-    return {"data": [], "quantities": [], "source": "nq_none",
-            "points": 0, "start": start, "end": end,
-            "error": "NQ-Daten nicht verfügbar (Tech/Primary nicht erreichbar)"}
+
+    if not buckets:
+        return {"data": [], "quantities": [], "source": "nq_none",
+                "points": 0, "start": start, "end": end,
+                "error": "NQ-Daten nicht verfügbar (Tech/Primary nicht erreichbar)"}
+
+    data = [buckets[k] for k in sorted(buckets)]
+    if primary and primary.get("data") and tech_ok:
+        source = "nq_5min_merged"
+    elif tech_ok:
+        source = "nq_tech_5min"
+    else:
+        source = "nq_primary_5min"
+    return {"data": data, "quantities": sorted(quantities),
+            "source": source, "points": len(data),
+            "start": start, "end": end}
+
+
+# ---------------------------------------------------------------------------
+# Hochaufloesung (<300 s): Aggregation direkt aus Techs RAW-Tabellen (RAM, ~12 h)
+# ---------------------------------------------------------------------------
+# RAW-Spalte -> nq_5min-quantity, aber NUR die Skalare aus AGG_QUANTITIES
+# (Spiegel von nq_poller.AGG_QUANTITIES), damit die 10-s-Reihe exakt denselben
+# Feldsatz wie nq_5min liefert (konsistenter Feld-Selektor im Frontend).
+_FAST_AGG = {
+    "u_l1": "U_L1N", "u_l2": "U_L2N", "u_l3": "U_L3N",
+    "u_l12": "U_L12", "u_l23": "U_L23", "u_l31": "U_L31",
+    "i_l1": "Is_L1", "i_l2": "Is_L2", "i_l3": "Is_L3",
+    "p_l1": "P_L1", "p_l2": "P_L2", "p_l3": "P_L3",
+    "p_tot": "P_tot", "q_tot": "Q_tot", "s_tot": "S_tot",
+    "pf_l1": "PF_L1", "pf_l2": "PF_L2", "pf_l3": "PF_L3", "pf": "PF_tot",
+    "f": "FREQ",
+}
+_MED_AGG = {
+    "cosphi_l1": "cosphi_L1", "cosphi_l2": "cosphi_L2", "cosphi_l3": "cosphi_L3",
+    "thd_u_l1": "THDu_L1", "thd_u_l2": "THDu_L2", "thd_u_l3": "THDu_L3",
+    "thd_u_l12": "THDu_L12", "thd_u_l23": "THDu_L23", "thd_u_l31": "THDu_L31",
+    "thd_i_l1": "THDi_L1", "thd_i_l2": "THDi_L2", "thd_i_l3": "THDi_L3",
+    "i_n": "I_N", "unbal_u": "Unbal_U", "unbal_i": "Unbal_I",
+}
+
+# Remote-Skript (laeuft auf Tech, read-only). Platzhalter via str.replace, damit
+# geschweifte Klammern/Prozente im Skript nicht mit Python-Formatierung kollidieren.
+# Nur Fast/Medium-RAW -> res-s-Buckets. Die aelteren 5-min-Buckets kommen aus der
+# Primary-DB (Techs nq_5min wird nach jedem Transfer geleert -> unvollstaendig).
+_HIRES_REMOTE_TPL = r'''
+import sqlite3, json
+c = sqlite3.connect('file:__DB__?mode=ro', uri=True)
+res = __RES__; start = __START__; end = __END__
+FSEL = "__FSEL__"; MSEL = "__MSEL__"
+FP = __FP__; MP = __MP__
+def rnd(v):
+    return round(v, 3) if v is not None else None
+row = c.execute('SELECT MIN(ts_ms) FROM nq_raw_fast').fetchone()
+rmin = (row[0] // 1000) if row and row[0] else None
+out = []
+if rmin is not None:
+    fq = ("SELECT CAST(ts_ms/1000/%d AS INT)*%d tb,%s FROM nq_raw_fast "
+          "WHERE ts_ms>=%d AND ts_ms<=%d GROUP BY tb ORDER BY tb"
+          % (res, res, FSEL, start * 1000, end * 1000))
+    for r in c.execute(fq):
+        tb = r[0]
+        for i, q in enumerate(FP):
+            v = r[i + 1]
+            if v is not None:
+                out.append((tb, q, rnd(v)))
+    mq = ("SELECT CAST(ts_ms/1000/%d AS INT)*%d tb,%s FROM nq_raw_medium "
+          "WHERE ts_ms>=%d AND ts_ms<=%d GROUP BY tb ORDER BY tb"
+          % (res, res, MSEL, start * 1000, end * 1000))
+    for r in c.execute(mq):
+        tb = r[0]
+        for i, q in enumerate(MP):
+            v = r[i + 1]
+            if v is not None:
+                out.append((tb, q, rnd(v)))
+print(json.dumps({'rows': out, 'rmin': rmin}))
+'''
+
+
+def fetch_agg_fast(start: int, end: int, resolution: int = 10) -> dict:
+    """Hochaufloesung (<300 s) aus Techs RAM: aggregiert ``nq_raw_fast`` +
+    ``nq_raw_medium`` zu ``resolution``-s-Buckets fuer den Teil im RAW-
+    Retentionsfenster (~12 h) und fuellt aeltere Buckets aus der Primary-DB
+    ``nq_5min`` (300 s) auf.
+
+    Ergebnis ist Wide-Format wie :func:`fetch_agg`, mit demselben Feldsatz wie
+    nq_5min. ``hires_start`` = Unix-ts, ab dem 10-s-Daten vorliegen (sonst 5 min).
+    Faellt bei nicht erreichbarem Tech auf Primary-``nq_5min`` (300 s) zurueck.
+    """
+    cfg = load_config()
+    host = _tech_host(cfg)
+    tmpfs_db = cfg.get("tmpfs", {}).get("db_path", "/dev/shm/nq_cache.db")
+    res = max(int(resolution), 1)
+    fast_pairs = list(_FAST_AGG.items())
+    med_pairs = list(_MED_AGG.items())
+    fast_sel = ",".join("AVG(%s)" % col for col, _ in fast_pairs)
+    med_sel = ",".join("AVG(%s)" % col for col, _ in med_pairs)
+    remote_code = (
+        _HIRES_REMOTE_TPL
+        .replace("__DB__", tmpfs_db)
+        .replace("__RES__", str(res))
+        .replace("__START__", str(int(start)))
+        .replace("__END__", str(int(end)))
+        .replace("__FSEL__", fast_sel)
+        .replace("__MSEL__", med_sel)
+        .replace("__FP__", json.dumps([q for _, q in fast_pairs]))
+        .replace("__MP__", json.dumps([q for _, q in med_pairs]))
+    )
+    try:
+        payload = json.loads(_ssh_python(host, remote_code, timeout=30) or "{}")
+        triples = payload.get("rows", [])
+        rmin = payload.get("rmin")
+        buckets: dict[int, dict] = {}
+        quantities: set[str] = set()
+        for tb, q, v in triples:
+            row = buckets.setdefault(tb, {"ts": tb})
+            row[q] = v
+            quantities.add(q)
+        # Aeltere Buckets im Fenster (vor rmin) aus Primary-nq_5min (300 s) auffuellen.
+        if rmin and start < rmin:
+            older = _fetch_agg_primary(start, rmin, 300)
+            if older and older.get("data"):
+                for orow in older["data"]:
+                    ots = orow.get("ts")
+                    if ots is None or ots >= rmin:
+                        continue
+                    dst = buckets.setdefault(ots, {"ts": ots})
+                    for k, val in orow.items():
+                        if k == "ts":
+                            continue
+                        dst.setdefault(k, round(val, 3) if isinstance(val, (int, float)) else val)
+                        quantities.add(k)
+        data = [buckets[k] for k in sorted(buckets)]
+        return {"data": data, "quantities": sorted(quantities),
+                "source": "nq_tech_fast", "points": len(data),
+                "start": start, "end": end,
+                "hires_start": rmin, "resolution_s": res}
+    except Exception:
+        # Tech nicht erreichbar -> 5-min-Fallback aus Primary-DBs (degradiert).
+        primary = _fetch_agg_primary(start, end, 300)
+        if primary:
+            primary["degraded"] = "tech_unreachable_5min_fallback"
+            return primary
+        return {"data": [], "quantities": [], "source": "nq_none",
+                "points": 0, "start": start, "end": end,
+                "error": "NQ-Hochaufloesung nicht verfuegbar (Tech nicht erreichbar)"}
 
 
 # ---------------------------------------------------------------------------

@@ -48,10 +48,10 @@ def _truncate_if_needed():
     try:
         if not os.path.exists(SCHALTLOG_PATH):
             return
-        with open(SCHALTLOG_PATH, 'r') as f:
+        with open(SCHALTLOG_PATH, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
         if len(lines) > MAX_ZEILEN:
-            with open(SCHALTLOG_PATH, 'w') as f:
+            with open(SCHALTLOG_PATH, 'w', encoding='utf-8') as f:
                 f.writelines(lines[-MAX_ZEILEN:])
     except Exception as e:
         LOG.warning(f'Schaltlog Truncate fehlgeschlagen: {e}')
@@ -101,7 +101,7 @@ def logge(quelle: str, aktor: str, kommando: str,
             _ensure_dir()
             zeile = _format_zeile(quelle, aktor, kommando, wert,
                                   ergebnis, grund, now, ungefaehr)
-            with open(SCHALTLOG_PATH, 'a') as f:
+            with open(SCHALTLOG_PATH, 'a', encoding='utf-8') as f:
                 f.write(zeile)
             _write_count += 1
             if _write_count % _TRUNCATE_CHECK_INTERVAL == 0:
@@ -150,7 +150,7 @@ def lese_log(max_zeilen: int = 500) -> str:
         return header + '(Noch keine Eintraege)\n'
 
     try:
-        with open(SCHALTLOG_PATH, 'r') as f:
+        with open(SCHALTLOG_PATH, 'r', encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
     except Exception as e:
         return header + f'Fehler beim Lesen: {e}\n'

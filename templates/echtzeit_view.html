@@ -299,12 +299,23 @@
         let COLOR_SCHEME = {};  // Wird aus config/color_config.json geladen
         
         function canUseMaxResolution() {
-            return currentDB === 'core' && currentOffset <= 2;
+            // Kern-DB: 3-s-Auflösung für die letzten 72 h (raw_data-RAM).
+            if (currentDB === 'core') return currentOffset <= 2;
+            // NQ-DB: 10-s-Auflösung nur solange das Tagesfenster die letzten ~12 h
+            // berührt (Techs RAW-RAM). Heute (offset 0) immer; gestern (offset 1)
+            // nur früh morgens (<12 Uhr), weil dann noch ein Teil von gestern im
+            // 12-h-Fenster liegt. Alles davor bleibt 5-min-Raster.
+            if (currentDB === 'nq') {
+                if (currentOffset === 0) return true;
+                if (currentOffset === 1) return new Date().getHours() < 12;
+                return false;
+            }
+            return false;
         }
 
         function effectiveResolution() {
-            if (currentDB === 'nq') return 300;
-            return (useMaxResolution && canUseMaxResolution()) ? 3 : 300;
+            if (!(useMaxResolution && canUseMaxResolution())) return 300;
+            return currentDB === 'nq' ? 10 : 3;
         }
 
         function syncResolutionToggle() {
@@ -316,8 +327,10 @@
             btn.disabled = !maxAvailable;
             btn.classList.toggle('active', useMaxResolution && maxAvailable);
             if (currentDB === 'nq') {
-                btn.textContent = '5 min Raster';
-                btn.title = 'In der NQ-Ansicht erfolgt die hohe Auflösung über Event-Schnipsel.';
+                btn.textContent = (useMaxResolution && maxAvailable) ? 'Max. Auflösung 10 s' : '5 min Raster';
+                btn.title = maxAvailable
+                ? 'Blendet für die letzten ~12 Stunden die 10-Sekunden-Auflösung aus Techs RAM ein (davor 5-min-Raster). Zoombar.'
+                : '10-Sekunden-Auflösung ist nur für die letzten ~12 Stunden verfügbar (Jetzt-Ansicht).';
             } else {
                 btn.textContent = (useMaxResolution && maxAvailable) ? 'Max. Auflösung 3 s' : '5 min Raster';
                 btn.title = maxAvailable
@@ -941,6 +954,11 @@
         let isLive = false;
         
         function checkLiveMode() {
+            // Live-Werte-Panel nutzt die Kern-DB (raw_data-RAM, 3-s-Poll). In der
+            // NQ-Ansicht kein Auto-Poll (Tech-SSH wäre pro 3 s zu teuer) — die
+            // 10-s-Reihe wird beim Navigieren/Umschalten geladen; Live-PAC-Werte
+            // stehen unter /pac4200 und /netzqualitaet/live bereit.
+            if (currentDB === 'nq') { stopLiveUpdate(); return; }
             // Live-Modus: Heute (kein Offset) + DataZoom am rechten Rand + aktive Topics
             if (currentOffset !== 0 || activeTopics.length === 0 || !useMaxResolution || !canUseMaxResolution()) {
                 stopLiveUpdate();

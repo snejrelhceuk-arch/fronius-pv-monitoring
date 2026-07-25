@@ -533,7 +533,12 @@ def _fetch_hp_status(now, result):
     import re as _re_hp
     DOUBLET_WINDOW_S = 120  # ±2 Min: Übergangs-Fenster für ENGINE/EXTERN-Doppel
     BATT_DEDUP_WINDOW_S = 90  # gleiche EXTERN-Drift mehrfach geloggt → entdoppeln
-    cutoff_24h = now - 86400
+    # "cutoff" fürs Anzeige-Sammelfenster. Früher 24 h; jetzt 14 Tage, damit auch
+    # seltene SOC-/Batt-Schaltungen in den Infozeilen erscheinen. Das Frontend
+    # begrenzt die Anzeige dynamisch nach Fensterbreite ("so viele der letzten
+    # Schaltvorgänge wie hineinpassen"). Der Tages-Zähler hp_bursts_heute filtert
+    # unten unabhängig mit (now - 86400).
+    cutoff_24h = now - 14 * 86400
 
     def _parse_ts(_d, _t):
         try:
@@ -576,7 +581,7 @@ def _fetch_hp_status(now, result):
         wp_events, batt_events = [], []
 
         if os.path.exists(_schaltlog_path):
-            with open(_schaltlog_path, 'r') as _slf:
+            with open(_schaltlog_path, 'r', encoding='utf-8', errors='replace') as _slf:
                 for _line in _slf:
                     _m = _hp_engine_pat.match(_line)
                     if _m:
@@ -716,8 +721,9 @@ def _fetch_hp_status(now, result):
         # Phase 3: Sortierung (neueste zuerst) und Begrenzung
         for _lst in (hp_events, klima_events, wp_events, batt_events):
             _lst.sort(key=lambda e: e['epoch'], reverse=True)
-        # epoch-Feld nicht ans Frontend
-        def _strip(lst, n=120):
+        # epoch-Feld nicht ans Frontend. n=40 reicht als Puffer: das Frontend
+        # zeigt fensterbreitenabhaengig max. ~13 Eintraege pro Zeile an.
+        def _strip(lst, n=40):
             return [{k: v for k, v in e.items() if k != 'epoch'} for e in lst[:n]]
 
         result['hp_aktionen'] = _strip(hp_events)

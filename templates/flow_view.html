@@ -1761,7 +1761,7 @@
         const toShow = merged.slice(-maxN);  // neueste N
 
         return toShow.map(a => {
-            const zeit = a.ts ? a.ts.substring(11, 16) : '?';
+            const zeit = fmtSwitchTime(a.ts);
             const isWw  = a.kommando === 'set_ww_soll';
             const label = isWw ? 'WW' : 'Hz';
             const color = isWw ? '#14b8a6' : '#8b5cf6';
@@ -1783,6 +1783,20 @@
         // items kommen älteste-zuerst → letzte maxEvents zeigen (neueste)
         const displayed = items.slice(-limit);
         return displayed.join(' <span class="ap-sep">\u2502</span> ');
+    }
+
+    function fmtSwitchTime(ts) {
+        // ts = 'YYYY-MM-DD HH:MM'. Heute → nur HH:MM, sonst kompaktes 'D.M. HH:MM',
+        // damit auch ältere (>24 h) Schaltvorgänge eindeutig lesbar bleiben.
+        if (!ts || ts.length < 16) return '?';
+        const timePart = ts.substring(11, 16);
+        const datePart = ts.substring(0, 10);
+        const now = new Date();
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        if (datePart === todayStr) return timePart;
+        const d = parseInt(ts.substring(8, 10), 10);
+        const m = parseInt(ts.substring(5, 7), 10);
+        return `${d}.${m}. ${timePart}`;
     }
 
     function buildBattReasonTags(action) {
@@ -1965,7 +1979,7 @@
                     return grund.includes('zellausgleich') || grund.includes('steuerbox override: nachmittag');
                 });
                 const battItems = battAktionen.slice().reverse().map(a => {
-                    const zeit = a.ts ? a.ts.substring(11, 16) : '?';
+                    const zeit = fmtSwitchTime(a.ts);
                     const cmd = a.kommando || '';
                     const isExtern = String(a.quelle || '').toLowerCase() === 'extern';
                     const isFehler = a.ergebnis === 'FEHLER';
@@ -1987,9 +2001,9 @@
                     battItems,
                     getBattTimelineMaxEvents(hasReasonBadges)
                 );
-                battBody.innerHTML = `<span class="ap-icon">⚡</span><span class="ap-label" style="color:#10b981">Batt 24h:</span> ${battTimeline}`;
+                battBody.innerHTML = `<span class="ap-icon">⚡</span><span class="ap-label" style="color:#10b981">Batt:</span> ${battTimeline}`;
             } else {
-                battBody.innerHTML = `<span class="ap-icon">⚡</span><span class="ap-label" style="color:#10b981">Batt 24h:</span> <span class="ap-text">keine SOC-Schaltungen</span>`;
+                battBody.innerHTML = `<span class="ap-icon">⚡</span><span class="ap-label" style="color:#10b981">Batt:</span> <span class="ap-text">keine SOC-Schaltungen</span>`;
             }
 
             // ── Zeile 3: HP-Schaltzeiten (24h, einzeilig) ───────
@@ -1997,7 +2011,7 @@
             const hpBody = document.getElementById('hpAutoBody');
             if (hpAktionen.length > 0) {
                 const hpItems = hpAktionen.slice().reverse().map(a => {
-                    const zeit    = a.ts ? a.ts.substring(11, 16) : '?';
+                    const zeit    = fmtSwitchTime(a.ts);
                     const aIsEin  = a.kommando === 'hp_ein';
                     const isExtern = String(a.quelle || '').toLowerCase() === 'extern';
                     const isFehler = a.ergebnis === 'FEHLER';
@@ -2011,9 +2025,9 @@
                     return `<span style="color:${color}" title="${titleAttr}">${zeit}${symbol}${suffix}</span>`;
                 });
                 const hpTimeline = buildTimelineSnippet(hpItems);
-                hpBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#fb923c">HP 24h:</span> ${hpTimeline}`;
+                hpBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#fb923c">HP:</span> ${hpTimeline}`;
             } else {
-                hpBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#fb923c">HP 24h:</span> <span class="ap-text">keine Schaltungen</span>`;
+                hpBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#fb923c">HP:</span> <span class="ap-text">keine Schaltungen</span>`;
             }
 
             // ── Zeile 4: Klima-Schaltzeiten (24h, einzeilig) ─────────────────
@@ -2038,7 +2052,7 @@
                 : '';
             if (klimaAktionen.length > 0) {
                 const klimaItems = klimaAktionen.slice().reverse().map(a => {
-                    const zeit = a.ts ? a.ts.substring(11, 16) : '?';
+                    const zeit = fmtSwitchTime(a.ts);
                     const aIsEin = a.kommando === 'klima_ein';
                     const isExtern = String(a.quelle || '').toLowerCase() === 'extern';
                     const isFehler = a.ergebnis === 'FEHLER';
@@ -2052,9 +2066,9 @@
                     return `<span style="color:${color}" title="${titleAttr}">${zeit}${symbol}${suffix}</span>`;
                 });
                 const klimaTimeline = buildTimelineSnippet(klimaItems);
-                klimaBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#06b6d4">Klima 24h:</span> ${kPrefix}${kCooldownBadge} <span class="ap-sep">·</span> ${klimaTimeline}`;
+                klimaBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#06b6d4">Klima:</span> ${kPrefix}${kCooldownBadge} <span class="ap-sep">·</span> ${klimaTimeline}`;
             } else {
-                klimaBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#06b6d4">Klima 24h:</span> ${kPrefix}${kCooldownBadge} <span class="ap-sep">·</span> <span class="ap-text">keine Schaltungen</span>`;
+                klimaBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#06b6d4">Klima:</span> ${kPrefix}${kCooldownBadge} <span class="ap-sep">·</span> <span class="ap-text">keine Schaltungen</span>`;
             }
 
             // ── Zeile 5: WP Wärmepumpe (zweizeilig) ─────────────────
