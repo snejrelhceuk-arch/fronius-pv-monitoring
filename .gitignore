@@ -106,6 +106,8 @@ doc/meta/TODO.md
 tools/PV_Anlagendokumentation.pdf
 
 # Systemd-Service-Dateien (enthalten host-spezifische Pfade)
+# pv-ticker.override.conf enthaelt die reale Ollama-Host-IP (Publish-Guard) -> nur lokal/Deploy
+config/systemd/pv-ticker.override.conf
 config/systemd/pv-automation.service
 config/systemd/pv-observer.service
 config/systemd/pv-wattpilot.service

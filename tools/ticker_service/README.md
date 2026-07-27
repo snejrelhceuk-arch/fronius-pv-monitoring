@@ -2,7 +2,7 @@
 
 Dieser Dienst ist ein leichtgewichtiger, entkoppelter Service für das PV-System. Er holt standardmaessig alle 5 Minuten RSS-Nachrichten (z.B. Tagesschau, Heise), erkennt neue Meldungen seit dem letzten Lauf und stellt sie im Ticker vorne an. Nur diese neuen Meldungen werden fuer die optionale zweite Zeile via Ollama erklaert. Falls Ollama beim Start oder zwischendurch offline ist, bleiben die Rohmeldungen sichtbar; fehlende Erklaerungen fuer bereits laufende Meldungen werden nachgezogen, sobald Ollama wieder erreichbar ist.
 
-> **Zweite Tickerzeile — Resilienz (2026-07-25):** Ist Ollama nicht erreichbar oder das Modell nicht geladen, faellt die zweite Zeile als self-contained Fallback auf die RSS-Detailzusammenfassung zurueck (`TICKER_EXPLAIN_FALLBACK_DETAILS=1`, Default an) und bleibt damit **nie leer**. Das Feld `explain` bleibt intern leer, sodass der Backfill die Zeile automatisch auf echte KI-Erklaerungen aufwertet, sobald Ollama wieder antwortet. Aktives Modell: **`qwen2.5:7b`** (Q4_K_M, ~4.7 GB) — passt in die 8 GB VRAM der RTX 3070 (~0.6 s/Satz). Das frühere `mi24ins8:latest` (Mistral 25 GB) war CPU-gebunden/fragil.
+> **Zweite Tickerzeile — Resilienz (2026-07-25):** Ist Ollama nicht erreichbar oder das Modell nicht geladen, faellt die zweite Zeile als self-contained Fallback auf die RSS-Detailzusammenfassung zurueck (`TICKER_EXPLAIN_FALLBACK_DETAILS=1`, Default an) und bleibt damit **nie leer**. Das Feld `explain` bleibt intern leer, sodass der Backfill die Zeile automatisch auf echte KI-Erklaerungen aufwertet, sobald Ollama wieder antwortet. Aktives Modell: **`gemma2:9b`** (Q4_K_M, ~5.4 GB) — passt in die 8 GB VRAM der RTX 3070 (~1.5 s/Satz warm; ~30 s Kaltstart, innerhalb des 90-s-Timeouts). Löst seit 2026-07-27 `qwen2.5:7b` ab (natürlicheres Deutsch, weniger Schlagzeilen-Echo).
 
 ## Feeds und Verhaeltnis (API/Flow-Ticker)
 
@@ -63,8 +63,8 @@ Die Ticker-Konfiguration wird aus `~/.infra.local` geladen. **Auf dem Backup-Hos
 
 ```bash
 # Erklaerungsmodell (nachhaltig, passt in RTX-3070-VRAM):
-PV_TICKER_EXPLAIN_MODEL=qwen2.5:7b
-PV_TICKER_EXPLAIN_MODEL_FALLBACK=qwen2.5:7b
+PV_TICKER_EXPLAIN_MODEL=gemma2:9b
+PV_TICKER_EXPLAIN_MODEL_FALLBACK=gemma2:9b
 
 # Timeout fuer Modell-Generierung:
 PV_TICKER_EXPLAIN_TIMEOUT_SEC=90
@@ -82,7 +82,7 @@ TICKER_EXPLAIN_FALLBACK_DETAILS=1
 Fehlt das Modell (Ollama meldet `model '...' not found`, `GET /api/tags` zeigt `{"models":[]}`), per HTTP-API neu ziehen — **kein SSH noetig**:
 
 ```bash
-curl -s http://192.0.2.116:11434/api/pull -d '{"model":"qwen2.5:7b"}'
+curl -s http://192.0.2.116:11434/api/pull -d '{"model":"gemma2:9b"}'
 curl -s http://192.0.2.116:11434/api/tags   # Verifikation
 sudo systemctl restart pv-ticker            # auf .195
 ```
