@@ -2,6 +2,8 @@
 
 Dieser Dienst ist ein leichtgewichtiger, entkoppelter Service für das PV-System. Er holt standardmaessig alle 5 Minuten RSS-Nachrichten (z.B. Tagesschau, Heise), erkennt neue Meldungen seit dem letzten Lauf und stellt sie im Ticker vorne an. Nur diese neuen Meldungen werden fuer die optionale zweite Zeile via Ollama erklaert. Falls Ollama beim Start oder zwischendurch offline ist, bleiben die Rohmeldungen sichtbar; fehlende Erklaerungen fuer bereits laufende Meldungen werden nachgezogen, sobald Ollama wieder erreichbar ist.
 
+> **Zweite Tickerzeile — Resilienz (2026-07-25):** Ist Ollama nicht erreichbar oder das Modell nicht geladen, faellt die zweite Zeile als self-contained Fallback auf die RSS-Detailzusammenfassung zurueck (`TICKER_EXPLAIN_FALLBACK_DETAILS=1`, Default an) und bleibt damit **nie leer**. Das Feld `explain` bleibt intern leer, sodass der Backfill die Zeile automatisch auf echte KI-Erklaerungen aufwertet, sobald Ollama wieder antwortet. Aktives Modell: **`qwen2.5:7b`** (Q4_K_M, ~4.7 GB) — passt in die 8 GB VRAM der RTX 3070 (~0.6 s/Satz). Das frühere `mi24ins8:latest` (Mistral 25 GB) war CPU-gebunden/fragil.
+
 ## Feeds und Verhaeltnis (API/Flow-Ticker)
 
 - ARD-Quelle ist weiterhin aktiv: `https://www.tagesschau.de/xml/rss2/`
@@ -57,19 +59,32 @@ Dieser Service erfordert **keinen** Code/Datenbank-Clone des Haupt-Repos.
 
 ## Konfiguration & Rollback
 
-Die Ticker-Konfiguration wird aus `~/.infra.local` geladen:
+Die Ticker-Konfiguration wird aus `~/.infra.local` geladen. **Auf dem Backup-Host (.195) ist die systemd-Drop-in `/etc/systemd/system/pv-ticker.service.d/override.conf` massgeblich** (Env-Vars haben im Code Vorrang vor `.infra.local`); die Repo-Referenz dieser Datei liegt unter `config/systemd/pv-ticker.override.conf`.
 
 ```bash
-# Erklaerungsmodell waehlen:
-PV_TICKER_EXPLAIN_MODEL=mi24ins8:latest    # Primary (Mistral 25GB)
-PV_TICKER_EXPLAIN_MODEL_FALLBACK=mi24ins8:latest  # qwen removed from fallback
+# Erklaerungsmodell (nachhaltig, passt in RTX-3070-VRAM):
+PV_TICKER_EXPLAIN_MODEL=qwen2.5:7b
+PV_TICKER_EXPLAIN_MODEL_FALLBACK=qwen2.5:7b
 
 # Timeout fuer Modell-Generierung:
-PV_TICKER_EXPLAIN_TIMEOUT_SEC=180           # Erhöht fuer grosses Modell (mi24ins8)
+PV_TICKER_EXPLAIN_TIMEOUT_SEC=90
 PV_TICKER_EXPLAIN_TIMEOUT_FALLBACK_SEC=30
 
-# Ollama-URL (Beispiel):
+# Ollama-URL:
 PV_TICKER_EXPLAIN_OLLAMA_URL=http://192.0.2.116:11434/api/generate
+
+# Resilienz: leere KI-Zeile -> Fallback auf RSS-Details (self-contained). 1=an (Default).
+TICKER_EXPLAIN_FALLBACK_DETAILS=1
+```
+
+### Modell auf dem Ollama-Host wiederherstellen
+
+Fehlt das Modell (Ollama meldet `model '...' not found`, `GET /api/tags` zeigt `{"models":[]}`), per HTTP-API neu ziehen — **kein SSH noetig**:
+
+```bash
+curl -s http://192.0.2.116:11434/api/pull -d '{"model":"qwen2.5:7b"}'
+curl -s http://192.0.2.116:11434/api/tags   # Verifikation
+sudo systemctl restart pv-ticker            # auf .195
 ```
 
 ### Systemsicheres Rollback (bei Performance-Problemen)

@@ -39,6 +39,10 @@ EXPLAIN_TEMPERATURE = float(os.environ.get("TICKER_EXPLAIN_TEMPERATURE", 0.12))
 EXPLAIN_TOP_P = float(os.environ.get("TICKER_EXPLAIN_TOP_P", 0.6))
 EXPLAIN_MIN_WORDS = int(os.environ.get("TICKER_EXPLAIN_MIN_WORDS", 20))
 EXPLAIN_MAX_WORDS = int(os.environ.get("TICKER_EXPLAIN_MAX_WORDS", 35))
+# Resilienz: Wenn keine KI-Erklaerung vorliegt (Ollama offline/Modell fehlt),
+# wird die RSS-Detailzusammenfassung als zweite Zeile genutzt (self-contained,
+# ohne externe Abhaengigkeit). Standard: aktiv.
+EXPLAIN_FALLBACK_DETAILS = os.environ.get("TICKER_EXPLAIN_FALLBACK_DETAILS", "1").lower() in ("1", "true", "yes", "on")
 TICKER_RESET_EXPLANATIONS_ONCE = os.environ.get("TICKER_RESET_EXPLANATIONS_ONCE", "0").lower() in ("1", "true", "yes", "on")
 TICKER_RESET_BACKFILL_IMMEDIATELY = os.environ.get(
     "TICKER_RESET_BACKFILL_IMMEDIATELY", "0"
@@ -170,6 +174,11 @@ def _refresh_ticker_strings():
         explain = (item.get("explain") or "").strip()
         if topic:
             topics.append(topic)
+        # Resilienz-Fallback: fehlt die KI-Erklaerung, nutze die RSS-Details.
+        # Das Feld 'explain' bleibt leer, damit der Backfill spaeter echte
+        # Erklaerungen nachziehen kann, sobald Ollama wieder erreichbar ist.
+        if not explain and EXPLAIN_FALLBACK_DETAILS:
+            explain = (item.get("details") or "").strip()
         if explain:
             explain_parts.append(explain)
 
