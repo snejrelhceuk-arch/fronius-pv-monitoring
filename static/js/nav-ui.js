@@ -34,6 +34,7 @@
         { heading: 'Analyse' },
         { href: '/erzeuger', label: 'Erzeuger', sub: true },
         { href: '/verbraucher', label: 'Verbraucher', sub: true },
+        { href: '/analyse/batterie', label: 'Batterie', sub: true },
         { href: '/analyse/pv', label: 'PV-Übersicht', sub: true },
         { href: '/analyse/haushalt', label: 'Haushalt', sub: true },
         { href: '/analyse/amortisation', label: 'Amortisation', sub: true },

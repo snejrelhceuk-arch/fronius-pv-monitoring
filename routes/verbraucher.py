@@ -9,7 +9,7 @@ import csv
 import math
 import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from flask import Blueprint, jsonify, request
 import config
 from routes.helpers import get_db_connection, api_error_response, validate_year_month, tag_table
@@ -196,6 +196,152 @@ def _load_wattpilot_daily(cursor, first_ts, last_ts):
     return data
 
 
+# SOC-Stress-Schwellen für die Akku-Stress-Analyse (LFP): dauerhafte Voll-/Tiefladung belastet die Zellen.
+SOC_STRESS_HIGH_PCT = 95   # Hoch-Stress: SOC oberhalb → Vollladungs-Belastung
+SOC_STRESS_LOW_PCT = 10    # Tief-Stress: SOC unterhalb → Tiefentladungs-Belastung
+
+# SOC-Quellen mit Sub-Tages-Auflösung (feinste zuerst). daily_data/data_monthly
+# führen nur einen SOC-Wert je Periode und taugen NICHT für Stress-Dauern.
+_SOC_SOURCE_TABLES = ['data_1min', 'data_15min', 'hourly_data']
+
+
+def _resolve_soc_table(cursor, start_ts, end_ts):
+    """Feinste SOC-Tabelle, die den Perioden-Anfang abdeckt; sonst die mit weitester Rückreichweite."""
+    overlapping = []
+    for table in _SOC_SOURCE_TABLES:
+        try:
+            row = cursor.execute(f"SELECT MIN(ts), MAX(ts) FROM {table}").fetchone()
+        except Exception:
+            continue
+        if not row or row[0] is None:
+            continue
+        tmin, tmax = int(row[0]), int(row[1])
+        if tmax < start_ts or tmin >= end_ts:
+            continue
+        if tmin <= start_ts:
+            return table
+        overlapping.append((tmin, table))
+    if overlapping:
+        overlapping.sort(key=lambda item: item[0])
+        return overlapping[0][1]
+    return 'hourly_data'
+
+
+def _fetch_soc_points(cursor, start_ts, end_ts, table=None):
+    """Liest (ts, soc) aus der passendsten SOC-Quelle für den Zeitraum."""
+    table = table or _resolve_soc_table(cursor, start_ts, end_ts)
+    try:
+        cursor.execute(
+            f"SELECT ts, SOC_Batt_avg FROM {table} WHERE ts >= ? AND ts < ? ORDER BY ts",
+            (start_ts, end_ts),
+        )
+        rows = cursor.fetchall()
+        return [(int(ts), float(soc)) for ts, soc in rows if soc is not None], table
+    except Exception:
+        return [], table
+
+
+def _infer_soc_interval_s(points):
+    """Ermittelt die typische Messintervall-Länge aus den Zeitstempeln."""
+    if len(points) <= 1:
+        return 300
+    deltas = [
+        points[i][0] - points[i - 1][0]
+        for i in range(1, len(points))
+        if points[i][0] > points[i - 1][0]
+    ]
+    if not deltas:
+        return 300
+    deltas.sort()
+    return max(60, int(deltas[len(deltas) // 2]))
+
+
+def _downsample_soc_points(points, bucket_s=300):
+    """Aggregiert SOC-Punkte zu gleichmäßigen Buckets, z. B. 5-Minuten-Schritten."""
+    if not points:
+        return []
+
+    sampled = []
+    bucket_ts = None
+    bucket_values = []
+    for ts, soc in points:
+        bucket = int(int(ts) // bucket_s) * bucket_s
+        if bucket_ts is None:
+            bucket_ts = bucket
+            bucket_values = [float(soc)]
+            continue
+        if bucket != bucket_ts:
+            sampled.append((bucket_ts, sum(bucket_values) / len(bucket_values)))
+            bucket_ts = bucket
+            bucket_values = [float(soc)]
+        else:
+            bucket_values.append(float(soc))
+
+    if bucket_ts is not None:
+        sampled.append((bucket_ts, sum(bucket_values) / len(bucket_values)))
+
+    return sampled
+
+
+def _summarize_soc_points(points, interval_s=None):
+    """SOC-Kennzahlen: Max/Min sowie Stress-Dauer über/unter den SOC-Schwellen."""
+    values = [soc for _, soc in points if soc is not None]
+    if not values:
+        return {
+            'current': None,
+            'day_max': None,
+            'day_min': None,
+            'high_stress_minutes': 0.0,
+            'low_stress_minutes': 0.0,
+        }
+
+    if interval_s is None:
+        interval_s = _infer_soc_interval_s(points)
+
+    high_stress_minutes = 0.0
+    low_stress_minutes = 0.0
+    for _, soc in points:
+        if soc is None:
+            continue
+        if soc > SOC_STRESS_HIGH_PCT:
+            high_stress_minutes += (interval_s / 60.0)
+        if soc < SOC_STRESS_LOW_PCT:
+            low_stress_minutes += (interval_s / 60.0)
+
+    return {
+        'current': round(values[-1], 1),
+        'day_max': round(max(values), 1),
+        'day_min': round(min(values), 1),
+        'high_stress_minutes': round(high_stress_minutes, 1),
+        'low_stress_minutes': round(low_stress_minutes, 1),
+    }
+
+
+def _aggregate_soc_buckets(points, key_fn, interval_s=None):
+    """Aggregiert SOC-Punkte je Bucket (key_fn(ts)) zu Max/Min + Stress-Dauer."""
+    if interval_s is None:
+        interval_s = _infer_soc_interval_s(points)
+    minutes = interval_s / 60.0
+    buckets = {}
+    for ts, soc in points:
+        if soc is None:
+            continue
+        key = key_fn(ts)
+        bucket = buckets.get(key)
+        if bucket is None:
+            bucket = {'max': soc, 'min': soc, 'high_min': 0.0, 'low_min': 0.0}
+            buckets[key] = bucket
+        if soc > bucket['max']:
+            bucket['max'] = soc
+        if soc < bucket['min']:
+            bucket['min'] = soc
+        if soc > SOC_STRESS_HIGH_PCT:
+            bucket['high_min'] += minutes
+        if soc < SOC_STRESS_LOW_PCT:
+            bucket['low_min'] += minutes
+    return buckets
+
+
 # Zusätzliche Fritz!DECT-Verbraucher für die Aufschlüsselung (neben WP/HP/Wattpilot).
 # Whitelist der erlaubten Daily-Tabellen (kein User-Input → keine Injection).
 # Status-only-Geräte (fussbodenheizung: Thermostat ohne Leistungsmessung) sind
@@ -341,6 +487,136 @@ def _build_average_summary(totals, divisor, unit_label):
             'lueftung': round((totals.get('lueftung') or 0) / divisor, 2),
         },
     }
+
+
+@bp.route('/api/verbraucher/batterie')
+def api_verbraucher_batterie():
+    """Akku-Stress-Analyse: SOC-Verlauf (Tag) bzw. Stress-Dauer je Tag/Monat/Jahr."""
+    try:
+        period = request.args.get('period', 'tag')
+        if period not in {'tag', 'monat', 'jahr', 'gesamt'}:
+            period = 'tag'
+
+        date_param = request.args.get('date')
+        year = request.args.get('year', type=int)
+        month = request.args.get('month', type=int)
+
+        if period == 'tag':
+            if not date_param:
+                date_param = datetime.now().strftime('%Y-%m-%d')
+            try:
+                day_dt = datetime.strptime(date_param, '%Y-%m-%d')
+            except ValueError:
+                return jsonify({'error': 'Ungültiges Datumsformat'}), 400
+            start_ts = int(day_dt.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+            end_ts = int((day_dt + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+        elif period == 'gesamt':
+            start_ts = 0
+            end_ts = int((datetime.now() + timedelta(days=1)).timestamp())
+        else:
+            if not year or not month:
+                now = datetime.now()
+                year, month = now.year, now.month
+            valid, err = validate_year_month(year, month)
+            if err:
+                return err
+            year, month = valid
+            if period == 'monat':
+                first_day = datetime(year, month, 1)
+                last_day = datetime(year + (1 if month == 12 else 0), (month % 12) + 1, 1)
+                start_ts = int(first_day.timestamp())
+                end_ts = int(last_day.timestamp())
+            else:
+                start_ts = int(datetime(year, 1, 1).timestamp())
+                end_ts = int(datetime(year + 1, 1, 1).timestamp())
+
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'DB nicht verfügbar'}), 500
+        cursor = conn.cursor()
+        points, table = _fetch_soc_points(cursor, start_ts, end_ts)
+        conn.close()
+
+        thresholds = {'high': SOC_STRESS_HIGH_PCT, 'low': SOC_STRESS_LOW_PCT}
+
+        # Tag: SOC-Verlauf als 5-Minuten-Linie + Tages-Stresskennzahlen
+        if period == 'tag':
+            summary = _summarize_soc_points(points)
+            tag_points = _downsample_soc_points(points, bucket_s=300)
+            return jsonify({
+                'period': period,
+                'date': date_param,
+                'table': table,
+                'thresholds': thresholds,
+                'points': [{'ts': ts, 'soc': round(soc, 1)} for ts, soc in tag_points],
+                'summary': summary,
+            })
+
+        # Monat/Jahr/Gesamt: Stress-Dauer je Bucket (Tag/Monat/Jahr) als Balken
+        interval_s = _infer_soc_interval_s(points)
+        if period == 'monat':
+            def key_fn(ts):
+                return datetime.fromtimestamp(ts).strftime('%Y-%m-%d')
+            day_count = (datetime(year + (1 if month == 12 else 0), (month % 12) + 1, 1)
+                         - datetime(year, month, 1)).days
+            labels = [(f'{year:04d}-{month:02d}-{d:02d}', f'{d:02d}') for d in range(1, day_count + 1)]
+        elif period == 'jahr':
+            def key_fn(ts):
+                return datetime.fromtimestamp(ts).strftime('%Y-%m')
+            labels = [(f'{year:04d}-{m:02d}', datetime(year, m, 1).strftime('%b')) for m in range(1, 13)]
+        else:
+            def key_fn(ts):
+                return datetime.fromtimestamp(ts).strftime('%Y')
+            years = sorted({datetime.fromtimestamp(ts).year for ts, _ in points})
+            labels = [(f'{y:04d}', f'{y:04d}') for y in years]
+
+        buckets = _aggregate_soc_buckets(points, key_fn, interval_s)
+
+        chart_points = []
+        for key, label in labels:
+            bucket = buckets.get(key)
+            if bucket is None:
+                chart_points.append({
+                    'label': label,
+                    'soc_max': None,
+                    'soc_min': None,
+                    'high_stress_minutes': 0.0,
+                    'low_stress_minutes': 0.0,
+                })
+            else:
+                chart_points.append({
+                    'label': label,
+                    'soc_max': round(bucket['max'], 1),
+                    'soc_min': round(bucket['min'], 1),
+                    'high_stress_minutes': round(bucket['high_min'], 1),
+                    'low_stress_minutes': round(bucket['low_min'], 1),
+                })
+
+        soc_max_values = [cp['soc_max'] for cp in chart_points if cp['soc_max'] is not None]
+        soc_min_values = [cp['soc_min'] for cp in chart_points if cp['soc_min'] is not None]
+        summary = {
+            'current': round(points[-1][1], 1) if points else None,
+            'day_max': round(max(soc_max_values), 1) if soc_max_values else None,
+            'day_min': round(min(soc_min_values), 1) if soc_min_values else None,
+            'high_stress_minutes': round(sum(cp['high_stress_minutes'] for cp in chart_points), 1),
+            'low_stress_minutes': round(sum(cp['low_stress_minutes'] for cp in chart_points), 1),
+        }
+
+        response = {
+            'period': period,
+            'table': table,
+            'thresholds': thresholds,
+            'chart_points': chart_points,
+            'summary': summary,
+        }
+        if period in ('monat', 'jahr'):
+            response['year'] = year
+        if period == 'monat':
+            response['month'] = month
+        return jsonify(response)
+
+    except Exception as e:
+        return api_error_response(e, 'Verbraucher-Batterie')
 
 
 @bp.route('/api/verbraucher')

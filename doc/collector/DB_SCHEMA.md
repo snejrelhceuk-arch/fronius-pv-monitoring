@@ -96,11 +96,15 @@ Ermöglicht exakte Delta-Berechnung auch über Lücken hinweg.
 |---------|-----------|-------|
 | `raw_data` | collector.py (Modbus) | aggregate_1min.py |
 | `data_1min` | aggregate_1min.py | web_api.py (Tag-Chart), aggregate_daily.py |
+| `data_15min` | aggregate_1min.py/aggregate.py | web_api.py (SOC-Fallback), aggregate_daily.py |
+| `hourly_data` | aggregate.py | web_api.py (SOC-Analyse, Fallback) |
 | `daily_data` | aggregate_daily.py | web_api.py, aggregate_monthly.py |
 | `forecast_daily` | web_api.py (lazy), Cron | web_api.py (Tag-Chart) |
 | `monthly_statistics` | aggregate_statistics.py | web_api.py (Analyse) |
 | `automation_log` | actuator.py (Engine) | web_api.py (Dashboard) |
 | `wattpilot_readings` | wattpilot_collector.py | web_api.py |
+
+> **Unverletzlichkeit des Produktionsprozesses:** Neue Spalten sollten nur dann eingeführt werden, wenn sie in der Produktionspipeline klar definiert, schema-versioniert und in allen Produzenten/Readern konsistent behandelt werden. Für SOC- oder andere Betriebsdaten bedeutet das: erst Schema-Änderung, dann Backfill/Schreibpfade, dann Read-Path, danach Monitoring. So bleiben Aggregation, Retention und Reproduzierbarkeit unverändert.
 
 ## Externe Datenquellen
 

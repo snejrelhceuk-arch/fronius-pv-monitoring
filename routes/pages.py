@@ -268,6 +268,12 @@ def verbraucher_page():
     return render_template('verbraucher_view.html')
 
 
+@bp.route('/analyse/batterie')
+def batterie_page():
+    """Akku-Stress-Analyse: SOC-Verlauf (Tag) und Stress-Dauer je Tag/Monat/Jahr."""
+    return render_template('batterie_view.html')
+
+
 @bp.route('/verbraucher/wp-leistung')
 @bp.route('/analyse/verbraucher/wp-leistung')
 def wp_leistung_page():

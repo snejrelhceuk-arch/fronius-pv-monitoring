@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Batterie — PV-Anlage</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="/static/js/nav-context.js"></script>
+    <script src="/static/js/nav-ui.js"></script>
+    <link rel="stylesheet" href="/static/css/monitoring.css">
+    <link rel="stylesheet" href="/static/css/nav-ui.css">
+    <style>
+        body { background: #f6f7fb; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 12px; }
+        .page-head { margin: 2px 2px 10px; }
+        .page-head h1 { font-size: 20px; margin: 0; color: #0f172a; }
+        .page-head p { font-size: 12px; color: #64748b; margin: 4px 0 0; }
+        .top-nav-bar { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px; }
+        .nav-left, .nav-center, .nav-right { display:flex; align-items:center; gap:6px; }
+        .nav-left button, .nav-center button, .btn-jetzt { border:1px solid #d0d7de; background:#fff; padding:6px 10px; border-radius:6px; cursor:pointer; }
+        .nav-left button.active { background:#2563eb; color:#fff; border-color:#2563eb; }
+        .chart-area { background:white; border-radius:10px; padding:12px; min-height:420px; }
+        .status-bar { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px; margin-bottom:10px; }
+        .status-chip { background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 10px; color:#0f172a; }
+        #thresholdInfo { background:#0f172a; color:#f8fafc; border-color:#334155; }
+        #batteryChart { width:100%; height:420px; }
+        .loading, .error { padding:16px; color:#475569; }
+        .error { color:#b91c1c; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="page-head">
+            <h1>Akku-Stress-Analyse</h1>
+            <p>SOC-Verlauf und integrierte Belastungszeit in den Stresszonen (Vollladung &gt;95&nbsp;%, Tiefentladung &lt;10&nbsp;%).</p>
+        </div>
+        <div class="top-nav-bar">
+            <div class="nav-left">
+                <button class="active" id="btnViewTag" onclick="switchView('tag')">Tag</button>
+                <button id="btnViewMonat" onclick="switchView('monat')">Monat</button>
+                <button id="btnViewJahr" onclick="switchView('jahr')">Jahr</button>
+                <button id="btnViewGesamt" onclick="switchView('gesamt')">Gesamt</button>
+            </div>
+            <div class="nav-center">
+                <div id="tagNavigation" style="display:flex; gap:4px; align-items:center;">
+                    <button onclick="navigate(-1)">&#9664;</button>
+                    <button class="date-label" id="tagDateDisplay">Heute</button>
+                    <button onclick="navigate(1)">&#9654;</button>
+                </div>
+                <div id="monatNavigation" style="display:none; gap:4px; align-items:center;">
+                    <button onclick="navigate(-1)">&#9664;</button>
+                    <button class="date-label" id="monatDateDisplay">Monat</button>
+                    <button onclick="navigate(1)">&#9654;</button>
+                </div>
+                <div id="jahrNavigation" style="display:none; gap:4px; align-items:center;">
+                    <button onclick="navigate(-1)">&#9664;</button>
+                    <button class="date-label" id="jahrDateDisplay">Jahr</button>
+                    <button onclick="navigate(1)">&#9654;</button>
+                </div>
+                <div id="gesamtNavigation" style="display:none; gap:4px; align-items:center;">
+                    <button class="date-label" id="gesamtDateDisplay">Gesamt</button>
+                </div>
+                <button class="btn-jetzt" id="btnHeute" onclick="navigateToday()">&#9201; Heute</button>
+            </div>
+            <div class="nav-right"></div>
+        </div>
+
+        <div class="chart-area">
+            <div id="summaryGrid" class="status-bar" style="display:none;"></div>
+            <div id="thresholdInfo" class="status-chip" style="display:none; margin-bottom:10px;"></div>
+            <div id="chartLoading" class="loading">Lade SOC-Daten...</div>
+            <div id="chartError" class="error" style="display:none;"></div>
+            <div id="batteryChart" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script>
+        const COLORS = { main: '#16a34a', high: '#ef4444', low: '#3b82f6', highArea: 'rgba(239,68,68,0.10)', lowArea: 'rgba(59,130,246,0.10)' };
+        let currentView = 'tag';
+        let currentDate = new Date();
+        let currentYear = currentDate.getFullYear();
+        let currentMonth = currentDate.getMonth() + 1;
+        let chart = null;
+
+        const MONTHS_DE = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+
+        function formatDateISO(d) {
+            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        }
+
+        function buildNavQuery() {
+            return PVNavContext.buildQuery(PVNavContext.createContext(currentView, currentDate, currentYear, currentMonth));
+        }
+
+        function updateContextLinks() {
+            const links = { linkMonitoring: '/monitoring', linkVerbraucher: '/verbraucher', linkBatterie: '/analyse/batterie' };
+            const ctx = PVNavContext.createContext(currentView, currentDate, currentYear, currentMonth);
+            PVNavContext.applyToLinks(links, ctx);
+            if (PVNavContext.commit) PVNavContext.commit(ctx);
+        }
+
+        function applyStateFromUrl() {
+            const navState = PVNavContext.parse(window.location.search);
+            if (!navState.hasContext) return;
+            if (navState.isExpired) {
+                PVNavContext.stripFromCurrentUrl();
+                return;
+            }
+            currentView = navState.context.period || 'tag';
+            if (currentView === 'tag') {
+                currentDate = new Date(`${navState.context.date}T12:00:00`);
+                currentYear = currentDate.getFullYear();
+                currentMonth = currentDate.getMonth() + 1;
+            } else if (currentView === 'monat') {
+                currentYear = navState.context.year || currentYear;
+                currentMonth = navState.context.month || currentMonth;
+            } else if (currentView === 'jahr') {
+                currentYear = navState.context.year || currentYear;
+            }
+        }
+
+        function setActiveViewButton() {
+            ['Tag','Monat','Jahr','Gesamt'].forEach(v => {
+                const el = document.getElementById('btnView' + v);
+                if (el) el.classList.remove('active');
+            });
+            const active = document.getElementById('btnView' + currentView.charAt(0).toUpperCase() + currentView.slice(1));
+            if (active) active.classList.add('active');
+        }
+
+        function updateNavUI() {
+            document.getElementById('tagNavigation').style.display = currentView === 'tag' ? 'flex' : 'none';
+            document.getElementById('monatNavigation').style.display = currentView === 'monat' ? 'flex' : 'none';
+            document.getElementById('jahrNavigation').style.display = currentView === 'jahr' ? 'flex' : 'none';
+            document.getElementById('gesamtNavigation').style.display = currentView === 'gesamt' ? 'flex' : 'none';
+            setActiveViewButton();
+            if (currentView === 'tag') {
+                document.getElementById('tagDateDisplay').textContent = currentDate.toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' });
+            } else if (currentView === 'monat') {
+                document.getElementById('monatDateDisplay').textContent = `${MONTHS_DE[currentMonth - 1]} ${currentYear}`;
+            } else if (currentView === 'jahr') {
+                document.getElementById('jahrDateDisplay').textContent = String(currentYear);
+            } else {
+                document.getElementById('gesamtDateDisplay').textContent = 'Gesamt';
+            }
+            updateContextLinks();
+        }
+
+        function switchView(view) {
+            currentView = view;
+            updateNavUI();
+            loadData();
+        }
+
+        function navigate(delta) {
+            if (currentView === 'tag') {
+                currentDate.setDate(currentDate.getDate() + delta);
+            } else if (currentView === 'monat') {
+                currentMonth += delta;
+                if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+                if (currentMonth < 1) { currentMonth = 12; currentYear--; }
+            } else if (currentView === 'jahr') {
+                currentYear += delta;
+            }
+            updateNavUI();
+            loadData();
+        }
+
+        function navigateToday() {
+            const now = new Date();
+            currentDate = new Date(now);
+            currentYear = now.getFullYear();
+            currentMonth = now.getMonth() + 1;
+            updateNavUI();
+            loadData();
+        }
+
+        function fmtDuration(minutes) {
+            if (minutes == null) return '--';
+            const m = Math.round(minutes);
+            if (m <= 0) return '0 min';
+            if (m < 60) return `${m} min`;
+            const h = Math.floor(m / 60);
+            const rest = m % 60;
+            return rest ? `${h} h ${rest} min` : `${h} h`;
+        }
+
+        function renderSummary(data) {
+            const summary = data.summary || {};
+            const thr = data.thresholds || { high: 95, low: 10 };
+            const socLabel = currentView === 'tag' ? '' : ' SOC';
+            const chips = [
+                { label: 'Aktuell', value: summary.current != null ? `${summary.current.toFixed(1)} %` : '--' },
+                { label: `Max${socLabel}`, value: summary.day_max != null ? `${summary.day_max.toFixed(1)} %` : '--' },
+                { label: `Min${socLabel}`, value: summary.day_min != null ? `${summary.day_min.toFixed(1)} %` : '--' },
+                { label: `Hoch-Stress >${thr.high} %`, value: fmtDuration(summary.high_stress_minutes), accent: COLORS.high },
+                { label: `Tief-Stress <${thr.low} %`, value: fmtDuration(summary.low_stress_minutes), accent: COLORS.low },
+            ];
+            const grid = document.getElementById('summaryGrid');
+            grid.innerHTML = chips.map(c => `<div class="status-chip"><div style="font-size:11px;opacity:0.7;">${c.label}</div><div style="font-size:16px;font-weight:700;${c.accent ? `color:${c.accent};` : ''}">${c.value}</div></div>`).join('');
+            grid.style.display = 'grid';
+
+            const info = document.getElementById('thresholdInfo');
+            info.innerHTML = `<div style="font-size:11px; opacity:0.8; text-transform:uppercase; letter-spacing:0.04em;">Integrierte Stress-Zeit im Zeitraum</div>`
+                + `<div style="font-size:14px; font-weight:700; margin-top:3px;">`
+                + `<span style="color:${COLORS.high};">Hoch &gt;${thr.high}&#8201;%: ${fmtDuration(summary.high_stress_minutes)}</span>`
+                + ` &nbsp;&#183;&nbsp; `
+                + `<span style="color:${COLORS.low};">Tief &lt;${thr.low}&#8201;%: ${fmtDuration(summary.low_stress_minutes)}</span></div>`;
+            info.style.display = 'block';
+        }
+
+        function buildTagSeriesData(points) {
+            const start = new Date(currentDate);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(start);
+            end.setDate(end.getDate() + 1);
+            const bucketMs = 5 * 60 * 1000;
+            const byBucket = new Map();
+            (points || []).forEach(p => {
+                const bucket = Math.floor((p.ts * 1000) / bucketMs) * bucketMs;
+                if (!byBucket.has(bucket)) {
+                    byBucket.set(bucket, p.soc);
+                }
+            });
+            const data = [];
+            let cursor = start.getTime();
+            while (cursor < end.getTime()) {
+                const key = Math.floor(cursor / bucketMs) * bucketMs;
+                const value = byBucket.has(key) ? byBucket.get(key) : null;
+                data.push([key, value]);
+                cursor += bucketMs;
+            }
+            return data;
+        }
+
+        function renderTagChart(data) {
+            const thr = data.thresholds || { high: 95, low: 10 };
+            const line = buildTagSeriesData(data.points || []);
+            const start = new Date(currentDate); start.setHours(0, 0, 0, 0);
+            const end = new Date(start); end.setDate(end.getDate() + 1);
+            chart.setOption({
+                tooltip: { trigger: 'axis', formatter: params => {
+                    const r0 = (Array.isArray(params) ? params : [params])[0] || {};
+                    const v = (r0.value && r0.value[1] != null) ? `${Number(r0.value[1]).toFixed(1)} %` : 'keine Daten';
+                    const d = new Date(r0.axisValue);
+                    return `${d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}<br/>${r0.marker || ''} SOC: ${v}`;
+                } },
+                grid: { left: 44, right: 16, top: 16, bottom: 28 },
+                xAxis: {
+                    type: 'time', min: start.getTime(), max: end.getTime(), boundaryGap: false, splitNumber: 8,
+                    axisLabel: { formatter: value => new Date(value).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) },
+                },
+                yAxis: { type: 'value', min: 0, max: 100, axisLabel: { formatter: v => `${v}%` } },
+                series: [{
+                    name: 'SOC', type: 'line', data: line, showSymbol: false, connectNulls: false,
+                    lineStyle: { color: COLORS.main, width: 2 }, itemStyle: { color: COLORS.main },
+                    areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: 'rgba(22,163,74,0.22)' }, { offset: 1, color: 'rgba(22,163,74,0.03)' }]) },
+                    markLine: { silent: true, symbol: 'none', lineStyle: { type: 'dashed', width: 1 }, data: [
+                        { yAxis: thr.high, lineStyle: { color: COLORS.high }, label: { formatter: `>${thr.high}% Hoch-Stress`, color: COLORS.high, position: 'insideStartTop', fontSize: 10 } },
+                        { yAxis: thr.low, lineStyle: { color: COLORS.low }, label: { formatter: `<${thr.low}% Tief-Stress`, color: COLORS.low, position: 'insideStartBottom', fontSize: 10 } },
+                    ] },
+                    markArea: { silent: true, data: [
+                        [{ yAxis: thr.high, itemStyle: { color: COLORS.highArea } }, { yAxis: 100 }],
+                        [{ yAxis: 0, itemStyle: { color: COLORS.lowArea } }, { yAxis: thr.low }],
+                    ] },
+                }],
+            }, true);
+        }
+
+        function renderStressBars(data) {
+            const thr = data.thresholds || { high: 95, low: 10 };
+            const cps = data.chart_points || [];
+            const labels = cps.map(c => c.label);
+            const highHours = cps.map(c => c.high_stress_minutes != null ? +(c.high_stress_minutes / 60).toFixed(2) : 0);
+            const lowHours = cps.map(c => c.low_stress_minutes != null ? +(c.low_stress_minutes / 60).toFixed(2) : 0);
+            const highName = `Hoch-Stress >${thr.high} %`;
+            const lowName = `Tief-Stress <${thr.low} %`;
+            chart.setOption({
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: params => {
+                    const rows = Array.isArray(params) ? params : [params];
+                    const cp = cps[rows[0].dataIndex] || {};
+                    const socLine = (cp.soc_max != null && cp.soc_min != null)
+                        ? `<br/><span style="opacity:0.7;">SOC ${cp.soc_min.toFixed(1)}\u2013${cp.soc_max.toFixed(1)} %</span>` : '';
+                    return `<b>${cp.label}</b>`
+                        + `<br/><span style="color:${COLORS.high}">\u25A0</span> Hoch-Stress &gt;${thr.high}&#8201;%: ${fmtDuration(cp.high_stress_minutes)}`
+                        + `<br/><span style="color:${COLORS.low}">\u25A0</span> Tief-Stress &lt;${thr.low}&#8201;%: ${fmtDuration(cp.low_stress_minutes)}`
+                        + socLine;
+                } },
+                legend: { bottom: 0, data: [highName, lowName] },
+                grid: { left: 48, right: 16, top: 16, bottom: 40, containLabel: true },
+                xAxis: { type: 'category', data: labels, axisLabel: { interval: 0, fontSize: labels.length > 16 ? 9 : 11 } },
+                yAxis: { type: 'value', name: 'Std.', min: 0, minInterval: 1 },
+                series: [
+                    { name: highName, type: 'bar', data: highHours, barMaxWidth: 14, itemStyle: { color: COLORS.high } },
+                    { name: lowName, type: 'bar', data: lowHours, barMaxWidth: 14, itemStyle: { color: COLORS.low } },
+                ],
+            }, true);
+        }
+
+        function renderChart(data) {
+            const el = document.getElementById('batteryChart');
+            el.style.display = 'block';
+            if (!chart) chart = echarts.init(el);
+            if (currentView === 'tag') {
+                renderTagChart(data);
+            } else {
+                renderStressBars(data);
+            }
+        }
+
+        async function loadData() {
+            document.getElementById('chartLoading').style.display = 'block';
+            document.getElementById('chartError').style.display = 'none';
+            document.getElementById('batteryChart').style.display = 'none';
+            document.getElementById('summaryGrid').style.display = 'none';
+
+            let url = `/api/verbraucher/batterie?period=${currentView}`;
+            if (currentView === 'tag') {
+                url += `&date=${formatDateISO(currentDate)}`;
+            } else if (currentView === 'monat') {
+                url += `&year=${currentYear}&month=${currentMonth}`;
+            } else if (currentView === 'jahr') {
+                url += `&year=${currentYear}`;
+            }
+
+            try {
+                const response = await fetch(url, { headers: { Accept: 'application/json' } });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Unbekannter Fehler');
+                renderSummary(data);
+                renderChart(data);
+            } catch (e) {
+                document.getElementById('chartError').textContent = e.message;
+                document.getElementById('chartError').style.display = 'block';
+            } finally {
+                document.getElementById('chartLoading').style.display = 'none';
+            }
+        }
+
+        window.addEventListener('load', () => {
+            applyStateFromUrl();
+            updateNavUI();
+            loadData();
+            window.PVNavUI && PVNavUI.initDrawer();
+        });
+    </script>
+</body>
+</html>

@@ -5,7 +5,7 @@ role: B
 applyTo: "routes/**"
 tags: [web-api, blueprints, templates, formatting, read-only]
 status: stable
-last_review: 2026-07-27
+last_review: 2026-07-30
 
 ---
 
@@ -15,6 +15,7 @@ last_review: 2026-07-27
 Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly bereitstellen und Werte konsistent im Frontend darstellen.
 
 ## Changes
+- 2026-07-30: Neue **Akku-Stress-Analyse** unter `/analyse/batterie` (`routes/pages.py:batterie_page`, `templates/batterie_view.html`, API `routes/verbraucher.py:api_verbraucher_batterie`). Tag = SOC-Verlauf (5-Min) mit markierten Stresszonen; Monat/Jahr/Gesamt = schmale Balken der **Stress-Dauer** (Zeit >95 % Hoch-Stress / <10 % Tief-Stress, Y = Std.) mit Tooltips. Schwellen `SOC_STRESS_HIGH_PCT=95`/`SOC_STRESS_LOW_PCT=10`. Abdeckungsbewusste SOC-Quelle (`_resolve_soc_table`): feinste Tabelle, die den Perioden-Anfang abdeckt (Tag/Monat meist `data_1min`, Jahr/Gesamt `hourly_data`). Read-only Rolle B, keine Schema-Änderung. Human-Doku: `doc/web/AKKU_STRESS_ANALYSE.md`.
 - 2026-07-27 (fix): Link zur WP-Leistungsanalyse in `templates/verbraucher_view.html` korrigiert (`wp_leistung` -> `wp-leistung`).
 - 2026-07-27: Button zur WP-Leistungsanalyse in `templates/verbraucher_view.html` wiederhergestellt.
 - 2026-07-25 (NQ 10s-Hochauflösung + 5min-Tagesansicht + Flow-Infozeilen): (a) **5-min-Tagesansicht NQ** wieder vollständig: `nq/tech_read.py:fetch_agg` **mergt** die Primary-Historie (`nq/db/nq_YYYY-MM.db:nq_5min`) mit Techs jüngsten, noch nicht transferierten 5-min-Buckets (`source=nq_5min_merged`) statt nur Techs nach Transfer geleertes `nq_5min` zu lesen (vorher ~2 h statt ganzer Tag). (b) **10-s-Schalter** im NQ-Maschinenraum (`templates/echtzeit_view.html`, nur „Jetzt“/heute; gestern nur <12 Uhr): `effectiveResolution`→10 s, neu `nq/tech_read.py:fetch_agg_fast` aggregiert `nq_raw_fast`/`nq_raw_medium` aus Techs RAM (~letzte 12 h) zu 10-s-Buckets und blendet sie über den 5-min-Tagesraster (ältere Buckets aus Primary), zoombar; Rück-Navigation deaktiviert 10 s. `routes/pac4200.py:api_nq_realtime_smart` erlaubt jetzt `resolution<300`. Live-Werte-Panel (Kern-DB-3s-Poll) in NQ-Ansicht deaktiviert (`checkLiveMode`). Netzkriterien-Quelle bestätigt: `/api/nq/netzkriterien` → `nq/tech_read.py:fetch_aggregates` (`source=nq_primary_agg`, PAC4200-NQ-DB). (c) **Flow-Infozeilen** (`templates/flow_view.html:renderFlowStatusDetail` via `routes/system/battery.py:_fetch_hp_status`): Anzeige-Sammelfenster 24 h→14 Tage (seltene SOC-Schaltungen erscheinen wieder), Datum-Prefix für ältere Einträge (`fmtSwitchTime`), Labels „Batt/HP/Klima“ statt „…24h“; Zaehler `hp_bursts_heute` bleibt 24 h; Schaltlog-Lesen jetzt utf-8. Ursache der fehlenden Zeilen war ein Schaltlog-Schreibfehler unter latin-1 (s. automation-state-Card).
@@ -98,4 +99,5 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 ## Human-Doku
 - `doc/web/DISPLAY_CONVENTIONS.md`
 - `doc/web/HA_INTEGRATION.md`
+- `doc/web/AKKU_STRESS_ANALYSE.md`
 - `AGENTS.md` (Architektur-Skelett)
