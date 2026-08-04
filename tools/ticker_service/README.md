@@ -75,6 +75,11 @@ PV_TICKER_EXPLAIN_OLLAMA_URL=http://192.0.2.116:11434/api/generate
 
 # Resilienz: leere KI-Zeile -> Fallback auf RSS-Details (self-contained). 1=an (Default).
 TICKER_EXPLAIN_FALLBACK_DETAILS=1
+
+# Zeichen des RSS-Detailtexts: LLM-Kontext fuer die 2. Zeile UND (im Fallback)
+# direkt die 2. Zeile. 2026-08-04 von 256 auf 512 verdoppelt = mehr Kontext,
+# bessere Erklaerungen. Massgeblich im systemd-Override auf .195.
+TICKER_DETAIL_MAX_CHARS=512
 ```
 
 ### Modell auf dem Ollama-Host wiederherstellen

@@ -27,7 +27,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 PORT = int(os.environ.get("TICKER_PORT", 8050))
 # Increase default update interval by 15% to slow system speed slightly
 UPDATE_INTERVAL_SEC = int(os.environ.get("TICKER_UPDATE_INTERVAL_SEC", int(5 * 60 * 1.15)))
-DETAIL_MAX_CHARS = int(os.environ.get("TICKER_DETAIL_MAX_CHARS", 500))  # erhöht für besseren Ollama-Kontext
+# Zeichen des RSS-Detailtexts: dient dem LLM als Kontext für die 2. Zeile UND
+# erscheint im Fallback (Ollama offline) direkt als 2. Zeile. 2026-08-04 von 256
+# auf 512 verdoppelt (mehr Kontext -> bessere Erklärungen). Maßgeblich = systemd-
+# Override auf .195 (Env hat Vorrang); dieser Default gilt nur ohne Override.
+DETAIL_MAX_CHARS = int(os.environ.get("TICKER_DETAIL_MAX_CHARS", 512))
 # Optionale zweite Zeile: Erlaeuterungen vom externen Ubuntu-Ollama.
 EXPLAIN_REMOTE_ENABLE = os.environ.get("TICKER_EXPLAIN_ENABLE", "1").lower() in ("1", "true", "yes", "on")
 EXPLAIN_REMOTE_URL = os.environ.get("TICKER_EXPLAIN_OLLAMA_URL") or load_local_setting("PV_TICKER_EXPLAIN_OLLAMA_URL", "http://ollama-host:11434/api/generate")
