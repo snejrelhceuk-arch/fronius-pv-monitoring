@@ -5,7 +5,7 @@ role: meta
 applyTo: "scripts/**"
 tags: [role-guard, failover, backup, publish-guard, sync]
 status: stable
-last_review: 2026-06-30
+last_review: 2026-08-04
 ---
 
 # System Ops-Guards
@@ -19,6 +19,7 @@ Systemweite Betriebsleitplanken fuer Multi-Host-Betrieb: `.role`-basiertes Verha
 - **Cron-Monitore:** `scripts/monitor_collector.sh`, `scripts/monitor_wattpilot.sh`, `scripts/monitor_steuerbox.sh`
 - **Terminal-Safe-Runner:** `scripts/terminal_safe_run.sh`
 - **Code-Sync Primary->Failover:** `scripts/sync_code_to_peer.sh`
+- **Workspace-Redundanz-Sync Primary->alle Pi:** `scripts/sync_workspace_all_hosts.sh` (Hosts aus `.infra.local:PV_SYNC_HOSTS`)
 - **Failover-Quickstart (64bit-Rebuild):** `scripts/failover_postswap_quickstart.sh`, `scripts/install_failover_services.sh`, `scripts/failover_sync_db.sh`
 - **Browser-Autostart (Display-Host):** `scripts/pv_kiosk_browser.sh`, `scripts/install_kiosk_autostart.sh`
 - **GFS-Backup:** `scripts/backup_db_gfs.sh`
@@ -32,6 +33,7 @@ Systemweite Betriebsleitplanken fuer Multi-Host-Betrieb: `.role`-basiertes Verha
 
 ## Invarianten
 - Ein gemeinsamer Code-Stand auf den Hosts; Verhalten wird ueber `.role` gesteuert, nicht ueber divergenten Code.
+- **Genau ein Failover (Pi5-FB `.195`).** Pi4-Küche/Pi4-Tech sind Auxiliary-Hosts (Kiosk/Longterm bzw. WP-Bridge/NQ), übernehmen **nie** die Primary-Rolle. Der frühere Ansatz „jeder Pi kann Primary werden" ist mit der REFORMATION entfallen.
 - Failover darf keine Writer-Pfade fuer Collector/Aggregation/Automation aktiv betreiben.
 - Publish-Pipeline muss vor Push sensible Muster blocken (`.publish-guard` + `publish_audit.sh`).
 - GFS-Backups werden aus der RAM-DB per `sqlite3 .backup` erzeugt, nicht per blindem Datei-Copy im Laufbetrieb.
@@ -50,6 +52,7 @@ Systemweite Betriebsleitplanken fuer Multi-Host-Betrieb: `.role`-basiertes Verha
 - Neues Leak-Muster aufnehmen -> `.publish-guard` erweitern, dann `./scripts/publish_audit.sh --history` laufen lassen.
 - Backup-Retention anpassen -> `scripts/backup_db_gfs.sh` (Daily/Weekly/Monthly) aendern.
 - Peer driften synchronisieren -> `./scripts/sync_code_to_peer.sh` verwenden.
+- Workspace-Redundanz auf alle Pi (SD-schonend, wöchentlich) -> `./scripts/sync_workspace_all_hosts.sh` (Crontab-Beispiel im Skriptkopf).
 
 ## Bekannte Fallstricke
 - Fehlt `.role`, ist der Default `primary` (sicher fuer Produktion, gefaehrlich auf falsch konfiguriertem Failover).

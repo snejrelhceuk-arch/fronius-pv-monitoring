@@ -12,9 +12,9 @@ Erledigt: Produktion auf **Pi5-Primary** (`.204`, A–E), **Pi5-FB** (`.195`, Fa
 Flow-„Safe"-Badge auf neuen Failover korrigiert, Kiosk touch-freundlich, HW-Doku/Info-Buttons,
 Longterm-Offload-Skript, Einmal-Skripte entfernt (Snapshot auf Pi5-FB).
 
-- [ ] **Pi4-Küche (`.105`) anbinden:** SSH-Key `admin@Pi5-Primary` beim Küche-User (jk) autorisieren,
-  dann Kiosk-Autostart (`install_kiosk_autostart.sh`, `PV_KIOSK_URL=http://192.0.2.204:8000`) +
-  `install_longterm_offload.sh` auf Pi5-FB aktivieren (Offload-Ziel `PV_KUECHE_HOST`).
+- [ ] **Pi4-Küche (`.105`) Kiosk/Longterm aktivieren:** SSH `admin@Pi5-Primary` → Küche-User (jk) auf `.105` steht bereits;
+  noch offen: Kiosk-Autostart (`install_kiosk_autostart.sh`, `PV_KIOSK_URL=http://192.0.2.204:8000`) +
+  `install_longterm_offload.sh` (Offload-Ziel `PV_KUECHE_HOST`). Code-Redundanz läuft über `sync_workspace_all_hosts.sh`.
 - [ ] **Pi4-Tech PAC4200:** RAM-Collector für PAC4200-Messdaten (temporär im Hauptspeicher) umsetzen.
 - [ ] **SMTP-Passwort** auf Pi5-FB für `pv-failover-health`-Alarm-Mails provisionieren (Betreiber, Secret).
 
@@ -22,7 +22,6 @@ Longterm-Offload-Skript, Einmal-Skripte entfernt (Snapshot auf Pi5-FB).
 
 ## Sicherheit & Haertung
 
-- [ ] Team-Remediation: frische Klone bzw. `git fetch --all` + `git reset --hard origin/main` auf Pi4-Failover und Pi5-Backup ausfuehren (Nachgang zur Git-History-Bereinigung 2026-05-04)
 - [ ] API-Authentifizierung evaluieren (bei Remote-Zugriff)
 - [ ] Rate Limiting (`flask-limiter`, 60 req/min/IP)
 - [ ] CORS auf Frontend einschraenken (bei Oeffnung)
@@ -80,10 +79,12 @@ Longterm-Offload-Skript, Einmal-Skripte entfernt (Snapshot auf Pi5-FB).
 - [ ] Optional: `DATA_1MIN_RETENTION_DAYS` senken (RAM entlasten) — jetzt möglich, bewusst offen gelassen.
 - [ ] STATS-DB in die reguläre GFS-Backup-Kette aufnehmen (nicht nur täglicher Direkt-Sync).
 
-### Task Pi4-Failover — Einsatzbereitschaft (Status: `doc/system/FAILOVER_STATUS.md`)
+### Task Failover (Pi5-FB `.195`) — Einsatzbereitschaft (Status: `doc/system/FAILOVER_STATUS.md`)
 
-- [ ] **venv offline provisionieren** (Failover hat KEIN Internet) — `.venv` vom Primary klonen (identische HW aarch64/Py3.13.5) + Pfade patchen; danach App-Import verifizieren.
-- [ ] `pv-failover-health.service` reparieren (schlug fehl — venv/Script) + Code-Sync (`sync_code_to_peer.sh`) auf aktuellen Stand.
+> Einziger Failover ist **Pi5-FB (`.195`)**; der frühere „Pi4-Failover" ist jetzt Pi4-Küche.
+
+- [ ] `.venv` auf Pi5-FB aktuell halten (Pi5-FB hat Internet: `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`); danach App-Import verifizieren.
+- [ ] `pv-failover-health.service` reparieren (schlug fehl — venv/Script) + Code-Sync (`sync_workspace_all_hosts.sh`) auf aktuellen Stand.
 
 ### Hardware: MEGA-BAS HAT
 
@@ -115,7 +116,6 @@ Longterm-Offload-Skript, Einmal-Skripte entfernt (Snapshot auf Pi5-FB).
 - [ ] Phase 3: Infrastruktur-/IO-Pruefungen (LAN, SSH, API, MEGA-BAS, RS485) — sinnvoll **parallel** zur PAC4200-Inbetriebnahme im Mai
 - [ ] Phase 4: Begrenzte Schutzaktionen mit Cooldown (nur falls noetig)
 - [ ] Phase 5: Langzeitspeicher Diagnos-Berichte auf Pi5-SSD
-- [ ] 3. lauschende Instanz: `failover_health_check.sh` analog auf Pi5-Backup deployen
 - [ ] NQ-Aktivierung: `nq_notifier.ENABLED = True` setzen + `automation_daemon` einklinken, sobald PAC4200 produktiv
 
 

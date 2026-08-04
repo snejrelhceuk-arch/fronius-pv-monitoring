@@ -29,6 +29,12 @@ PV_PI5_BACKUP_HOST=backup-user@backup-host
 PV_PI5_BACKUP_DB_PATH=/srv/pv-system/data.db
 PV_PI5_BACKUP_BASE=/srv/pv-system/backup/db
 
+# ── Workspace-Redundanz-Sync auf alle Pi (scripts/sync_workspace_all_hosts.sh) ──
+# Leerzeichen-getrennte user@host-Liste (Failover + Auxiliary-Hosts).
+# Nur Code-Redundanz; Rolle steuert das Verhalten (nicht divergenter Code).
+PV_SYNC_HOSTS="user@192.0.2.195 user@192.0.2.105 user@192.0.2.181"
+PV_SYNC_REMOTE_PATH=Dokumente/PVAnlage/pv-system
+
 PV_OLLAMA_SSH_HOST=ollama-host
 
 PV_NOTIFICATION_EMAIL=alerts@example.invalid

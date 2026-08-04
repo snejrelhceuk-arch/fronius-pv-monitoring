@@ -2,7 +2,7 @@
 # =============================================================
 # install_kiosk_autostart.sh — Browser-Autostart fuer das PV-Dashboard
 #
-# Richtet auf einem Display-Host (z. B. Pi4-Failover, rpd-labwc/Wayland)
+# Richtet auf einem Display-Host (Pi4-Küche, rpd-labwc/Wayland)
 # den automatischen Browser-Start beim Login ein. Idempotent.
 #
 # WICHTIG (labwc-pi): Raspberry Pi OS startet SOWOHL die System-Autostart
