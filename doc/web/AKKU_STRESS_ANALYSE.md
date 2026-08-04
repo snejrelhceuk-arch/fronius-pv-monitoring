@@ -27,9 +27,13 @@ selbst (`= 95` / `= 10`) zählen **nicht** als Stress.
 | Jahr | 12 Monate | Balken je Monat = Summe der Tages-Stressdauern |
 | Gesamt | vorhandene Jahre | Balken je Jahr = Summe der Jahres-Stressdauern |
 
-Über allen Ansichten zeigen Kennzahlen-Chips den aktuellen SOC, Max/Min-SOC und
-die integrierte Hoch-/Tief-Stress-Dauer des Zeitraums. Die Tooltips nennen je
-Balken die Stunden/Minuten sowie die SOC-Spanne des Buckets.
+Eine **Live-Kopfzeile** (30-s-Poll auf `/api/flow_status`) zeigt Batterie-Gesundheit
+(SOH), das SOC-Schaltband (`soc_min`–`soc_max` + Modus) und die Batterie-Temperatur
+inkl. Live-Änderung (Δ ggü. letztem Poll). Darunter zeigen Kennzahlen-Chips den
+aktuellen SOC, den **Stress-Anteil** (Stresszeit/ausgewertete Zeit, prominent), die
+Hoch-/Tief-Stress-Dauer samt Anteil und den **Wirkungsgrad** (Entladung/Ladung).
+Die Datums-Schaltfläche zwischen den Navigations-Pfeilen öffnet einen Kalender. Die
+Tooltips nennen je Balken die Stunden/Minuten sowie die SOC-Spanne des Buckets.
 
 ## Datenquelle (read-only, Rolle B)
 
@@ -60,6 +64,9 @@ Schema-Erweiterung.
 - `tag`: `points[]` (`ts`, `soc`) + `summary`
 - `monat|jahr|gesamt`: `chart_points[]` (`label`, `soc_max`, `soc_min`,
   `high_stress_minutes`, `low_stress_minutes`) + `summary`
+- `summary`: `current`, `high_stress_minutes`, `low_stress_minutes`,
+  `available_hours`, `stress_pct`, `high_stress_pct`, `low_stress_pct`,
+  `efficiency_pct` (Entl./Lad. in %, `null` wenn keine Ladeenergie vorliegt)
 - immer: `thresholds` (`{high, low}`), `table` (verwendete Quelle)
 
 ## Verwandte Doku

@@ -308,13 +308,50 @@ def _summarize_soc_points(points, interval_s=None):
         if soc < SOC_STRESS_LOW_PCT:
             low_stress_minutes += (interval_s / 60.0)
 
+    available_minutes = len(values) * (interval_s / 60.0)
+    stress_minutes = high_stress_minutes + low_stress_minutes
     return {
         'current': round(values[-1], 1),
         'day_max': round(max(values), 1),
         'day_min': round(min(values), 1),
         'high_stress_minutes': round(high_stress_minutes, 1),
         'low_stress_minutes': round(low_stress_minutes, 1),
+        'available_hours': round(available_minutes / 60.0, 1),
+        'stress_pct': round(stress_minutes / available_minutes * 100.0, 1) if available_minutes else 0.0,
+        'high_stress_pct': round(high_stress_minutes / available_minutes * 100.0, 1) if available_minutes else 0.0,
+        'low_stress_pct': round(low_stress_minutes / available_minutes * 100.0, 1) if available_minutes else 0.0,
     }
+
+
+def _period_efficiency_pct(cursor, start_ts, end_ts, table):
+    """Batterie-Wirkungsgrad (Entladung/Ladung in %) über den Zeitraum.
+
+    Wählt die passenden Energiespalten je Tabelle (data_1min: W_inBatt/W_outBatt;
+    hourly_data: W_Batt_Charge_total/W_Batt_Discharge_total). None, wenn keine
+    Ladeenergie oder Spalten fehlen (z. B. STATS-Fallback-Tabelle).
+    """
+    try:
+        cols = {r[1] for r in cursor.execute(f"PRAGMA table_info({table})")}
+    except Exception:
+        return None
+    if {'W_inBatt', 'W_outBatt'} <= cols:
+        ch, dis = 'W_inBatt', 'W_outBatt'
+    elif {'W_Batt_Charge_total', 'W_Batt_Discharge_total'} <= cols:
+        ch, dis = 'W_Batt_Charge_total', 'W_Batt_Discharge_total'
+    else:
+        return None
+    try:
+        row = cursor.execute(
+            f"SELECT SUM({ch}), SUM({dis}) FROM {table} WHERE ts >= ? AND ts < ?",
+            (start_ts, end_ts),
+        ).fetchone()
+    except Exception:
+        return None
+    charge = row[0] or 0.0
+    discharge = row[1] or 0.0
+    if charge <= 0:
+        return None
+    return round(discharge / charge * 100.0, 1)
 
 
 def _aggregate_soc_buckets(points, key_fn, interval_s=None):
@@ -535,6 +572,7 @@ def api_verbraucher_batterie():
             return jsonify({'error': 'DB nicht verfügbar'}), 500
         cursor = conn.cursor()
         points, table = _fetch_soc_points(cursor, start_ts, end_ts)
+        efficiency_pct = _period_efficiency_pct(cursor, start_ts, end_ts, table)
         conn.close()
 
         thresholds = {'high': SOC_STRESS_HIGH_PCT, 'low': SOC_STRESS_LOW_PCT}
@@ -542,6 +580,7 @@ def api_verbraucher_batterie():
         # Tag: SOC-Verlauf als 5-Minuten-Linie + Tages-Stresskennzahlen
         if period == 'tag':
             summary = _summarize_soc_points(points)
+            summary['efficiency_pct'] = efficiency_pct
             tag_points = _downsample_soc_points(points, bucket_s=300)
             return jsonify({
                 'period': period,
@@ -594,12 +633,21 @@ def api_verbraucher_batterie():
 
         soc_max_values = [cp['soc_max'] for cp in chart_points if cp['soc_max'] is not None]
         soc_min_values = [cp['soc_min'] for cp in chart_points if cp['soc_min'] is not None]
+        high_stress_minutes = sum(cp['high_stress_minutes'] for cp in chart_points)
+        low_stress_minutes = sum(cp['low_stress_minutes'] for cp in chart_points)
+        available_minutes = len(points) * (interval_s / 60.0)
+        stress_minutes = high_stress_minutes + low_stress_minutes
         summary = {
             'current': round(points[-1][1], 1) if points else None,
             'day_max': round(max(soc_max_values), 1) if soc_max_values else None,
             'day_min': round(min(soc_min_values), 1) if soc_min_values else None,
-            'high_stress_minutes': round(sum(cp['high_stress_minutes'] for cp in chart_points), 1),
-            'low_stress_minutes': round(sum(cp['low_stress_minutes'] for cp in chart_points), 1),
+            'high_stress_minutes': round(high_stress_minutes, 1),
+            'low_stress_minutes': round(low_stress_minutes, 1),
+            'available_hours': round(available_minutes / 60.0, 1),
+            'stress_pct': round(stress_minutes / available_minutes * 100.0, 1) if available_minutes else 0.0,
+            'high_stress_pct': round(high_stress_minutes / available_minutes * 100.0, 1) if available_minutes else 0.0,
+            'low_stress_pct': round(low_stress_minutes / available_minutes * 100.0, 1) if available_minutes else 0.0,
+            'efficiency_pct': efficiency_pct,
         }
 
         response = {
