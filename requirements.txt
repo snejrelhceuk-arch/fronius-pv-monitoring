@@ -1,23 +1,40 @@
-# Fronius PV-Monitoring - Python-Abhängigkeiten
-# Installation: .venv/bin/pip install -r requirements.txt
+# PV-System — Python-Abhaengigkeiten (AUTO-generiert).
+# Quelle: scripts/pv_freeze_requirements.sh (pip freeze des Produktions-venv).
+# NICHT von Hand editieren — wird bei update/upgrade neu erzeugt.
+# Rebuild:  python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 #
-# VERSIONS-PINNING
-# =====================================
-# App-Deps sind für venv-Reproduzierbarkeit gepinnt (== weiter unten).
-# Update-Politik: doc/system/SYSTEM_ARCHITECTURE.md Abschnitt "Update-Strategie".
-#
-# Hinweis: Der frühere Sonderpfad (selbst kompiliertes SQLite, "nicht via apt
-# upgraden", Pi4/armv7l/Python 3.9) ist mit dem Umstieg auf Pi5/64-bit hinfällig.
-# SQLite + Python stammen jetzt aus Standard-Systempaketen und werden regulär
-# mitaktualisiert. pip-Pins gezielt (nicht blind) heben, Kompatibilität nach
-# einem Versions-Sprung kurz prüfen.
-#
-flask==1.1.2
+bcrypt==5.0.0
+blinker==1.9.0
+certifi==2026.1.4
+cffi==2.0.0
+charset-normalizer==3.4.4
+click==8.3.1
+cryptography==48.0.0
+Flask==3.1.3
 gunicorn==23.0.0
-requests==2.25.1
+idna==3.11
+importlib_metadata==7.2.1
+iniconfig==2.3.0
+itsdangerous==2.2.0
+Jinja2==3.1.6
+MarkupSafe==3.0.3
+minimalmodbus==2.1.1
+numpy==1.26.4
+packaging==26.0
 paho-mqtt==1.6.1
-numpy==1.19.5
+pluggy==1.6.0
+pycparser==3.0
+Pygments==2.19.2
+pymodbus==3.8.6
+pyreadline==2.1
+pyserial==3.5
+pytest==9.1.1
+PyYAML==6.0.3
+requests==2.32.5
+typing_extensions==4.15.0
+urllib3==2.6.3
+wattpilot==0.1
+websocket-client==1.9.0
 websockets==15.0.1
-# pvlib und pandas: derzeit NICHT installiert (nur für solar_forecast.py geplant)
-# pvlib>=0.10.4
-# pandas>=2.0.0
+Werkzeug==3.1.8
+zipp==3.23.0

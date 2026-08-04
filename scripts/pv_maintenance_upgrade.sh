@@ -55,6 +55,12 @@ else
   echo "  Kein venv gefunden — uebersprungen."
 fi
 
+# --- 4b. requirements.txt an realen venv-Stand angleichen ----------------
+if [[ -x "${BASE}/scripts/pv_freeze_requirements.sh" || -f "${BASE}/scripts/pv_freeze_requirements.sh" ]]; then
+  bash "${BASE}/scripts/pv_freeze_requirements.sh" || true
+  echo "  (requirements.txt ggf. aktualisiert — bei Aenderung committen)"
+fi
+
 # --- 5. Reboot-Hinweis ---------------------------------------------------
 KREV_AFTER="$(dpkg -l 'linux-image-*' 2>/dev/null | grep '^ii' | awk '{print $2"="$3}' | sort)"
 FW_AFTER="$(dpkg -l 'raspi-firmware' 2>/dev/null | grep '^ii' | awk '{print $3}')"
