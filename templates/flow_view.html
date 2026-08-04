@@ -271,13 +271,15 @@
         /* ══════ Battery Detail Bar ══════ */
         .battery-detail {
             display: flex;
-            justify-content: flex-start;
+            justify-content: flex-end;
             align-items: center;
             gap: 20px;
             padding: 6px 0 2px 8px;
             color: rgba(255,255,255,0.45);
             font-size: 12px;
             font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
         }
         .battery-detail .bd-val {
             color: #10b981;
@@ -327,6 +329,7 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: clip;
+            text-align: right;
         }
         .wp-auto-line.events {
             color: rgba(255,255,255,0.55);
@@ -406,10 +409,12 @@
             white-space: nowrap;
             overflow: hidden;
         }
-        /* Einzeilige Automation-Zeilen */
+        /* Einzeilige Automation-Zeilen: neueste Infos rechtsbündig (Rechtsanschlag),
+           ältere links abgeschnitten — breitenunabhängig via justify-content:flex-end. */
         .auto-oneliner {
             display: flex;
             align-items: baseline;
+            justify-content: flex-end;
             gap: 6px;
             padding: 2px 8px 2px 8px;
             font-size: 11px;
@@ -476,7 +481,7 @@
         /* (HP styles moved into .auto-section / .auto-phase) */
         .inverter-temps {
             display: flex;
-            justify-content: flex-start;
+            justify-content: flex-end;
             align-items: center;
             gap: 16px;
             padding: 6px 0 4px 8px;
@@ -485,6 +490,8 @@
             color: rgba(255,255,255,0.35);
             font-size: 11px;
             font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
         }
         .inverter-temps .it-val {
             color: #60a5fa;
@@ -1708,6 +1715,29 @@
         return 2;
     }
 
+    // ── Info-Zeilen rechtsbündig halten (Rechtsanschlag) ────────────────────
+    // Block-/Snapshot-Zeilen (WP, Batterie-Detail, WR-Temps) haben overflow:hidden;
+    // scrollLeft ans Ende schiebt die neuesten Werte an den rechten Rand und
+    // schneidet links ab — breitenunabhängig. (.auto-oneliner nutzt CSS flex-end.)
+    let _pinRAF = 0;
+    function pinInfoRowsRight() {
+        const wrap = document.getElementById('maschinen-info-wrap');
+        if (!wrap) return;
+        wrap.querySelectorAll('.wp-auto-line, .battery-detail, .inverter-temps')
+            .forEach(el => { el.scrollLeft = el.scrollWidth; });
+    }
+    function scheduleInfoPin() {
+        if (_pinRAF) return;
+        _pinRAF = requestAnimationFrame(() => { _pinRAF = 0; pinInfoRowsRight(); });
+    }
+    function initInfoRowPinning() {
+        const wrap = document.getElementById('maschinen-info-wrap');
+        if (!wrap) return;
+        new MutationObserver(scheduleInfoPin)
+            .observe(wrap, { childList: true, subtree: true, characterData: true });
+        window.addEventListener('resize', scheduleInfoPin);
+    }
+
     function buildWpSollEventSnippet(events) {
         // events: älteste zuerst (nach .slice().reverse() im aufrufenden Code)
         if (!events || events.length === 0) return 'keine Sollwert-Änderungen heute';
@@ -2105,6 +2135,7 @@
     fetchBatteryDetail();
     fetchFailoverStatus();
     fetchBackupStatus();
+    initInfoRowPinning();
     setInterval(fetchFlow, FLOW_POLL_MS);
     setInterval(fetchBatteryDetail, 10000);
     setInterval(fetchFailoverStatus, 60000);  // Failover-Check 1×/Min (SSH-basiert, Cache: 60s)
@@ -2221,9 +2252,11 @@
             btnBg.setAttribute('fill', 'rgba(99,102,241,0.28)');
             btnBg.setAttribute('stroke', 'rgba(129,140,248,0.75)');
             if (typeof adjustSvgViewBox === 'function') adjustSvgViewBox(false);
+            if (typeof scheduleInfoPin === 'function') scheduleInfoPin();
             // Nach Transition: scroll in Sicht falls nötig
             setTimeout(function() {
                 infoWrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                if (typeof scheduleInfoPin === 'function') scheduleInfoPin();
             }, 520);
             let remaining = 60;
             btnTxt.textContent = `\u25cf ${remaining}s`;

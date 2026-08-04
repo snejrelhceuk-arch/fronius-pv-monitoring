@@ -5,7 +5,7 @@ role: B
 applyTo: "routes/**"
 tags: [web-api, blueprints, templates, formatting, read-only]
 status: stable
-last_review: 2026-07-30
+last_review: 2026-08-04
 
 ---
 
@@ -15,6 +15,7 @@ last_review: 2026-07-30
 Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly bereitstellen und Werte konsistent im Frontend darstellen.
 
 ## Changes
+- 2026-08-04 (Flow-Infozeilen Rechtsanschlag): Die Maschinenraum-Infozeilen (Batt/HP/Klima/WP/WR-Temp) sind jetzt **breitenunabhängig rechtsbündig** — die neuesten Infos stehen immer am rechten Rand, Älteres wird links abgeschnitten. Umsetzung in `templates/flow_view.html`: `.auto-oneliner` + `.battery-detail` + `.inverter-temps` via CSS `justify-content:flex-end`; die Block-Zeilen `.wp-auto-line` via `text-align:right`. Zusätzlich `pinInfoRowsRight`/`scheduleInfoPin` (rAF-debounced `scrollLeft=scrollWidth`) über einen `MutationObserver` auf `#maschinen-info-wrap` (+ Resize/Reveal), damit auch die Block-Zeilen bei Überlauf links abschneiden. Ersetzt die fragile innerWidth-Heuristik als Sichtbarkeitsgarant (`getTimelineMaxEvents` bleibt nur als DOM-Größenlimit). Mobile-Wrap (`flex-wrap:wrap` <600px) bleibt erhalten.
 - 2026-07-30: Neue **Akku-Stress-Analyse** unter `/analyse/batterie` (`routes/pages.py:batterie_page`, `templates/batterie_view.html`, API `routes/verbraucher.py:api_verbraucher_batterie`). Tag = SOC-Verlauf (5-Min) mit markierten Stresszonen; Monat/Jahr/Gesamt = schmale Balken der **Stress-Dauer** (Zeit >95 % Hoch-Stress / <10 % Tief-Stress, Y = Std.) mit Tooltips. Schwellen `SOC_STRESS_HIGH_PCT=95`/`SOC_STRESS_LOW_PCT=10`. Abdeckungsbewusste SOC-Quelle (`_resolve_soc_table`): feinste Tabelle, die den Perioden-Anfang abdeckt (Tag/Monat meist `data_1min`, Jahr/Gesamt `hourly_data`). Read-only Rolle B, keine Schema-Änderung. Human-Doku: `doc/web/AKKU_STRESS_ANALYSE.md`.
 - 2026-07-27 (fix): Link zur WP-Leistungsanalyse in `templates/verbraucher_view.html` korrigiert (`wp_leistung` -> `wp-leistung`).
 - 2026-07-27: Button zur WP-Leistungsanalyse in `templates/verbraucher_view.html` wiederhergestellt.
