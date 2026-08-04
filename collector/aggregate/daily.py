@@ -617,9 +617,11 @@ def _fill_fritzdect_daily_from_devstats(c):
     die hochauflösenden Rohdaten (10s-Polling) wegen Retention oder Collector-
     Ausfall fehlen — die Leistungs-Tageswerte also lückenhaft sind.
 
-    Befüllt werden nur Tage, deren aktueller Tabellenwert 0/fehlend ist und die
-    nicht durch eine geschützte Quelle (manual/recon) belegt sind. Geschriebene
-    Tage erhalten source='fritz_devstats'. Best-effort: ohne Fritz-Zugriff still.
+    Befüllt/korrigiert werden Tage, deren aktueller Tabellenwert 0/fehlend ist
+    ODER durch einen Zähler-Freeze deutlich untererfasst wurde (Box-Tageswert
+    liegt klar höher als das gespeicherte Intraday-Delta). Geschützte Quellen
+    (manual/recon) bleiben unangetastet. Geschriebene Tage erhalten
+    source='fritz_devstats'. Best-effort: ohne Fritz-Zugriff still.
     """
     try:
         from automation.engine.aktoren.aktor_fritzdect import (
@@ -663,12 +665,17 @@ def _fill_fritzdect_daily_from_devstats(c):
             if row:
                 src = row[0] or ''
                 cur = row[1] or 0
-                # Nur eigene Auto-Quellen mit 0/leer überschreiben; alles andere schützen
+                # Nur eigene Auto-Quellen anfassen; manual/recon schützen.
                 if src not in ('counter_auto', 'counter_interday', 'fritz_devstats'):
                     continue
-                if cur and cur > 0.1:
-                    continue
                 if wh < 0.1:
+                    continue
+                # Box-Tagesstatistik ist autoritativ (Zähler-freeze-immun). Sie
+                # ersetzt den Auto-Wert, wenn dieser 0/leer ist ODER wenn der Box-
+                # Wert deutlich höher liegt (= Intraday-Delta hat wegen Zähler-
+                # Freeze untererfasst). Stimmen beide ~überein, kein Churn.
+                freeze_undercount = wh > (cur + max(50.0, 0.15 * wh))
+                if cur > 0.1 and not freeze_undercount:
                     continue
                 c.execute(f"""
                     UPDATE {table} SET energy_wh = ?, source = 'fritz_devstats',

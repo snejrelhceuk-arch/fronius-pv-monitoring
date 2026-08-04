@@ -20,6 +20,7 @@ Read-only Zustandspruefung fuer Host, Services und Datenfrische. Liefert eine sc
 - **Freshness:** `diagnos/health.py:check_freshness`
 - **Mirror/Backup:** `diagnos/health.py:check_mirror_sync_age`, `check_local_gfs_backup_age`
 - **Mail-Bereitschaft:** `diagnos/health.py:check_notification_ready` (SMTP-Credential vorhanden?)
+- **Fritz!DECT-Frische:** `diagnos/health.py:check_fritzdect_freshness` (Stale-Steckdose → Sunset-Hinweis)
 - **Schwellwerte/Tabellen:** `diagnos/config.py` (`SERVICES`, `FRESHNESS_TABLES`, Warn-/Crit-Grenzen)
 
 ## Inputs / Outputs

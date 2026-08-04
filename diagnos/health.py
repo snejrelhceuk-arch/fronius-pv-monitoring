@@ -404,6 +404,65 @@ def check_notification_ready() -> dict:
     }
 
 
+# Metering-fähige Fritz!DECT-Steckdosen (Anzeige-Name für Stale-Hinweis).
+_FRITZDECT_METERING_DEVICES = {
+    'gefriertruhe': 'Gefriertruhe',
+    'klimaanlage': 'Klimaanlage',
+    'heizpatrone': 'Heizpatrone',
+    'lueftung': 'Lueftung',
+}
+# Steckdose ohne Messwert seit dieser Zeit gilt als nicht erreichbar (stale).
+FRITZDECT_STALE_WARN_S = 3600
+
+
+def check_fritzdect_freshness() -> dict:
+    """Prüft, ob die metering-fähigen Fritz!DECT-Steckdosen frische Werte liefern.
+
+    Nur Primary (Collector-Host). Eine Steckdose, deren jüngster
+    ``fritzdect_readings``-Eintrag älter als ``FRITZDECT_STALE_WARN_S`` ist,
+    gilt als 'Stale FritzSD-<Name>'. Der Tagesverbrauch wird dann later aus der
+    Box-Tagesstatistik (getbasicdevicestats) nachgezogen, sobald wieder
+    erreichbar. Der Hinweis erscheint im Sunset-Tagesbericht.
+    """
+    if _read_role() == 'failover':
+        return {'check': 'fritzdect_freshness', 'severity': OK, 'skipped': True,
+                'detail': 'nur auf primary relevant'}
+    conn = _db_readonly()
+    if conn is None:
+        return {'check': 'fritzdect_freshness', 'severity': OK, 'skipped': True,
+                'detail': 'DB nicht erreichbar'}
+    try:
+        cur = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='fritzdect_readings'")
+        if not cur.fetchone():
+            return {'check': 'fritzdect_freshness', 'severity': OK, 'skipped': True,
+                    'detail': 'fritzdect_readings nicht vorhanden'}
+        now = time.time()
+        ages = {}
+        stale = []
+        for dev_id, disp in _FRITZDECT_METERING_DEVICES.items():
+            row = conn.execute(
+                "SELECT MAX(ts) FROM fritzdect_readings "
+                "WHERE lower(COALESCE(device_id, '')) = ?", (dev_id,)).fetchone()
+            last_ts = row[0] if row else None
+            if last_ts is None:
+                stale.append(disp)
+                ages[dev_id] = None
+                continue
+            age = now - last_ts
+            ages[dev_id] = round(age)
+            if age > FRITZDECT_STALE_WARN_S:
+                stale.append(disp)
+        if stale:
+            return {'check': 'fritzdect_freshness', 'severity': WARN, 'ages_s': ages,
+                    'error': 'Stale FritzSD-' + ', Stale FritzSD-'.join(stale)}
+        return {'check': 'fritzdect_freshness', 'severity': OK, 'ages_s': ages}
+    except sqlite3.Error as exc:
+        return {'check': 'fritzdect_freshness', 'severity': FAIL, 'error': str(exc)}
+    finally:
+        conn.close()
+
+
 # ═══════════════════════════════════════════════════════════
 # Hauptlauf
 # ═══════════════════════════════════════════════════════════
@@ -433,6 +492,9 @@ def run_all() -> dict:
 
     # Benachrichtigung sende-bereit (Credential vorhanden?)
     checks.append(check_notification_ready())
+
+    # Fritz!DECT-Steckdosen frisch? (Stale-Hinweis für Tagesbericht)
+    checks.append(check_fritzdect_freshness())
 
     # Gesamtbewertung
     severity_order = {OK: 0, WARN: 1, CRIT: 2, FAIL: 3}
