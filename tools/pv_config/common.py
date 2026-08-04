@@ -62,13 +62,18 @@ def _wt(args: list[str], input_text: str = '', backtitle: str = '') -> Tuple[int
     """Whiptail aufrufen. Rückgabe: (returncode, stderr-Output)."""
     bt = backtitle or f'PV-System v{VERSION} | {config.PV_KWP_TOTAL} kWp | BYD {config.PV_BATTERY_KWH} kWh'
     cmd = ['whiptail', '--title', TITLE, '--backtitle', bt] + args
+    # whiptail rendert nach Locale-Codeset des Child-Prozesses. Bei kaputter
+    # System-Locale (Latin-1) würden UTF-8-Umlaute/Pfeile als Müll erscheinen,
+    # deshalb eine garantiert vorhandene UTF-8-Locale erzwingen.
+    env = dict(os.environ, LC_ALL='C.UTF-8', LANG='C.UTF-8')
     proc = subprocess.run(
         cmd,
-        input=input_text.encode() if input_text else None,
+        input=input_text.encode('utf-8') if input_text else None,
         stderr=subprocess.PIPE,
+        env=env,
     )
     # whiptail gibt Auswahl auf stderr aus
-    return proc.returncode, proc.stderr.decode().strip()
+    return proc.returncode, proc.stderr.decode('utf-8', 'replace').strip()
 
 
 def wt_menu(text: str, items: list[tuple[str, str]]) -> Optional[str]:

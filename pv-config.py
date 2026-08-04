@@ -27,6 +27,18 @@ import time
 from datetime import datetime, date, timedelta
 from typing import Optional
 
+# ── UTF-8-Resilienz (host-unabhängig) ──────────────────────────
+# pv-config ruft whiptail via subprocess; Python kodiert die argv mit
+# sys.getfilesystemencoding(). Ist die System-Locale kaputt (z. B.
+# LC_ALL=de_DE OHNE .UTF-8 → ISO-8859-1, wie auf frisch aufgesetzten
+# Hosts), crasht jedes Unicode-Zeichen (→ ✗ ✓ …) beim fork_exec.
+# Statt vom Host abzuhängen, erzwingen wir den UTF-8-Modus per Re-Exec.
+if sys.getfilesystemencoding().lower().replace('-', '') != 'utf8':
+    if os.environ.get('PYTHONUTF8') != '1':
+        os.environ['PYTHONUTF8'] = '1'
+        os.environ['PYTHONIOENCODING'] = 'utf-8'
+        os.execv(sys.executable, [sys.executable, *sys.argv])
+
 # ── Projekt-Root ermitteln ─────────────────────────────────────
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, PROJECT_ROOT)

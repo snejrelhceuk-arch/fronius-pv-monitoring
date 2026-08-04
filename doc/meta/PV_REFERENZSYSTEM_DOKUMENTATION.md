@@ -92,7 +92,33 @@ Diese Daten werden **gemeinfrei** zur Verfügung gestellt.
 
 > Summe Module: 62× 345 Wp + 36× 450 Wp = 21,39 + 16,20 = **37,59 kWp**  
 > Summe Wechselrichter: 12 + 10 + 4,5 = **26,5 kW** (+ 1 kW Smart Meter = 27,5 kW Systemleistung)  
-> Inverter-Clipping: Maximale Eingangsleistung 37,59 kWp wird auf 26,5 kW AC begrenzt
+
+Inverter-Clipping: Maximale Eingangsleistung 37,59 kWp wird auf 26,5 kW AC begrenzt
+
+#### Ergänzende String-Parameter (kanonische Werte)
+
+- Quelle (kanonische Definition): solar_geometry.py (PV_STRINGS)
+- Kanonische String-Namen und wichtigste Parameter:
+   - F1-S1 SSO-52° — Inverter: F1 — 6,90 kWp — Neigung: 52° — Azimut: -22.5° (≈150° Kompass) — 20×345 Wp (Satteldach Süd)
+   - F1-S2 NNW-52° — Inverter: F1 — 6,90 kWp — Neigung: 52° — Azimut: 157.5° (≈330° Kompass) — 20×345 Wp (Satteldach Nord)
+   - F1-S3 SSO-45° — Inverter: F1 — 2,76 kWp — Neigung: 45° — Azimut: -22.5° (≈150° Kompass) — 8×345 Wp (Gaube/Anbau Süd)
+   - F1-S4 NNW-45° — Inverter: F1 — 2,76 kWp — Neigung: 45° — Azimut: 157.5° (≈330° Kompass) — 8×345 Wp (Gaube/Anbau Nord)
+   - F2-S5 WSW-18° — Inverter: F2 — 6,75 kWp — Neigung: 18° — Azimut: 67.5° (≈240° Kompass) — 15×450 Wp (Flachdach West)
+   - F2-S6+7 WSW-90° — Inverter: F2 — 5,67 kWp — Neigung: 90° — Azimut: 67.5° (≈240° Kompass) — 8×450 + 6×345 Wp (Fassade West, mit Optimierern); physisch zwei Sub-Strings (S6, S7)
+   - F3-S8 SSO-90° — Inverter: F3 — 5,85 kWp — Neigung: 90° — Azimut: -22.5° (≈150° Kompass) — 13×450 Wp (Fassade Süd)
+
+- Wechselrichter-AC-Grenzen (INVERTER_LIMITS): F1 = 12.000 W, F2 = 10.000 W, F3 = 4.500 W
+
+- Wichtige, konfigurierbare Overrides (config/geometry_config.json):
+   - string_factors — per-String Korrekturfaktoren
+   - optimizer_gain — per-String Optimierer-Gain
+   - inverter_efficiency — Wirkungsgrade pro Wechselrichter
+   - forecast_adjustments — global_factor, cloud_enhancement, winter_boost, summer_factor
+   - azimuth_offset — globale Drehung aller Strings
+   - shading_mask — optionale Verschattungsmaske pro String
+   - clearsky_module_temp — saisonale Modultemperatur (Monate)
+
+Hinweis: Die obigen Angaben sind die kanonischen Einträge der Projektkonfiguration; bei Abweichungen zuerst die Datei config/geometry_config.json prüfen.
 
 ---
 
