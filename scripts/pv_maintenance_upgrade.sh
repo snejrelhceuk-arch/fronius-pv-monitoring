@@ -23,6 +23,15 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
+# --yes / -y: nicht-interaktiv (fuer koordinierten Multi-Host-Rollout).
+APT_CONFIRM=""
+export DEBIAN_FRONTEND=noninteractive
+for a in "$@"; do
+  case "$a" in
+    --yes|-y) APT_CONFIRM="-y" ;;
+  esac
+done
+
 echo "=== PV-Wartungs-Upgrade auf $(hostname) ==="
 echo "Repo: ${BASE}"
 
@@ -39,11 +48,11 @@ fi
 KREV_BEFORE="$(dpkg -l 'linux-image-*' 2>/dev/null | grep '^ii' | awk '{print $2"="$3}' | sort)"
 FW_BEFORE="$(dpkg -l 'raspi-firmware' 2>/dev/null | grep '^ii' | awk '{print $3}')"
 
-# --- 3. apt full-upgrade (mit Rueckfrage) --------------------------------
+# --- 3. apt full-upgrade (interaktiv, oder -y bei --yes) ------------------
 echo "→ 2/4 apt update…"
 apt-get update
-echo "→ 3/4 apt full-upgrade (bestaetigen; app-kritische Pakete werden mitgezogen)…"
-apt-get full-upgrade
+echo "→ 3/4 apt full-upgrade (app-kritische Pakete werden mitgezogen)…"
+apt-get ${APT_CONFIRM} full-upgrade
 apt-get --purge autoremove -y
 
 # --- 4. pip-Report (kein Auto-Upgrade) -----------------------------------
