@@ -45,8 +45,48 @@ EOF
 
 systemctl enable --now unattended-upgrades.service >/dev/null 2>&1 || true
 
+# --- Woechentlicher Wartungs-/Update-Melder (nur wo ein App-venv existiert) ---
+BASE="$(cd "$(dirname "$0")/.." && pwd)"
+RUN_USER="${SUDO_USER:-$(id -un)}"
+if [[ -x "${BASE}/.venv/bin/python" ]]; then
+  tee /etc/systemd/system/pv-weekly-maintenance.service >/dev/null <<EOF
+[Unit]
+Description=PV woechentlicher Wartungs-/Update-Melder (apt+pip Report per Mail)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=${RUN_USER}
+WorkingDirectory=${BASE}
+ExecStart=${BASE}/.venv/bin/python ${BASE}/scripts/pv_weekly_maintenance_report.py
+StandardOutput=journal
+StandardError=journal
+Nice=15
+EOF
+  tee /etc/systemd/system/pv-weekly-maintenance.timer >/dev/null <<EOF
+[Unit]
+Description=PV woechentlicher Wartungs-Melder — Trigger (So 09:00)
+
+[Timer]
+OnCalendar=Sun *-*-* 09:00:00
+Persistent=true
+RandomizedDelaySec=1800
+Unit=pv-weekly-maintenance.service
+
+[Install]
+WantedBy=timers.target
+EOF
+  systemctl daemon-reload
+  systemctl enable --now pv-weekly-maintenance.timer >/dev/null 2>&1 || true
+  WEEKLY_MSG="pv-weekly-maintenance.timer aktiv (So 09:00, apt+pip-Report per Mail)"
+else
+  WEEKLY_MSG="kein ${BASE}/.venv -> Wartungs-Melder uebersprungen (Host ohne App-venv)"
+fi
+
 echo "OK: production update policy applied."
 echo "- security unattended-upgrades enabled"
 echo "- app-critical pkgs (python/sqlite/kernel/firmware) excluded from UNATTENDED run only"
-echo "  -> update them regularly via confirmed: sudo apt upgrade"
+echo "  -> update them regularly via confirmed: sudo bash scripts/pv_maintenance_upgrade.sh"
 echo "- auto reboot disabled"
+echo "- ${WEEKLY_MSG}"

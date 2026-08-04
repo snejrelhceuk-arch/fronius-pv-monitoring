@@ -1,0 +1,11 @@
+[Unit]
+Description=PV woechentlicher Wartungs-Melder — Trigger (So 09:00)
+
+[Timer]
+OnCalendar=Sun *-*-* 09:00:00
+Persistent=true
+RandomizedDelaySec=1800
+Unit=pv-weekly-maintenance.service
+
+[Install]
+WantedBy=timers.target

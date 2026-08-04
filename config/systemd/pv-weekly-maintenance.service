@@ -1,0 +1,13 @@
+[Unit]
+Description=PV woechentlicher Wartungs-/Update-Melder (apt+pip Report per Mail)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=admin
+WorkingDirectory=/srv/pv-system
+ExecStart=/srv/pv-system/.venv/bin/python /srv/pv-system/scripts/pv_weekly_maintenance_report.py
+StandardOutput=journal
+StandardError=journal
+Nice=15
