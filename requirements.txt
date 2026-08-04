@@ -1,15 +1,16 @@
 # Fronius PV-Monitoring - Python-Abhängigkeiten
-# Installation: pip3 install -r requirements.txt
+# Installation: .venv/bin/pip install -r requirements.txt
 #
-# VERSIONS-PINNING (Stand: 2026-02-19)
+# VERSIONS-PINNING
 # =====================================
-# EXAKTE Versionen vom laufenden Pi4-Produktivsystem.
-# NICHT blind upgraden — siehe doc/SYSTEM_ARCHITECTURE.md Abschnitt "Updates".
+# App-Deps sind für venv-Reproduzierbarkeit gepinnt (== weiter unten).
+# Update-Politik: doc/system/SYSTEM_ARCHITECTURE.md Abschnitt "Update-Strategie".
 #
-# Hintergrund:
-# - Flask 1.1.2 + Werkzeug sind aufeinander abgestimmt
-# - numpy 1.19.5 ist letzte Version für Python 3.9 ohne Build-Probleme auf armv7l
-# - SQLite 3.45.1 wurde manuell kompiliert (nicht über pip/apt aktualisieren!)
+# Hinweis: Der frühere Sonderpfad (selbst kompiliertes SQLite, "nicht via apt
+# upgraden", Pi4/armv7l/Python 3.9) ist mit dem Umstieg auf Pi5/64-bit hinfällig.
+# SQLite + Python stammen jetzt aus Standard-Systempaketen und werden regulär
+# mitaktualisiert. pip-Pins gezielt (nicht blind) heben, Kompatibilität nach
+# einem Versions-Sprung kurz prüfen.
 #
 flask==1.1.2
 gunicorn==23.0.0

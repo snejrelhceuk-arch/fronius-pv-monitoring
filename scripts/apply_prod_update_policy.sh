@@ -1,5 +1,9 @@
 #!/bin/bash
-# Apply conservative production update policy: security auto-updates, no auto reboot.
+# Production update policy: security/routine updates run unattended on all hosts.
+# App-critical packages (python/sqlite/kernel/firmware) are excluded from the
+# UNATTENDED run only -- they are updated regularly via a confirmed interactive
+# `sudo apt upgrade` (the Rueckfrage). No auto reboot (persist tmpfs-DB first).
+# Since the Pi5/64-bit migration nothing is self-compiled anymore.
 set -euo pipefail
 
 if [[ $EUID -ne 0 ]]; then
@@ -23,6 +27,8 @@ Unattended-Upgrade::Origins-Pattern {
 };
 
 Unattended-Upgrade::Package-Blacklist {
+  // Nur aus dem UNBEAUFSICHTIGTEN Lauf ausgenommen (App-kritisch bzw. Reboot).
+  // Regelmaessig via bestaetigtem `sudo apt upgrade` (Rueckfrage) mitgezogen.
   "python3";
   "python3-*";
   "sqlite3";
@@ -41,5 +47,6 @@ systemctl enable --now unattended-upgrades.service >/dev/null 2>&1 || true
 
 echo "OK: production update policy applied."
 echo "- security unattended-upgrades enabled"
-echo "- python/sqlite/kernel packages blacklisted from unattended updates"
+echo "- app-critical pkgs (python/sqlite/kernel/firmware) excluded from UNATTENDED run only"
+echo "  -> update them regularly via confirmed: sudo apt upgrade"
 echo "- auto reboot disabled"
