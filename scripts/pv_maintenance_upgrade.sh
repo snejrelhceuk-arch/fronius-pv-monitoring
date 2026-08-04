@@ -53,7 +53,16 @@ echo "→ 2/4 apt update…"
 apt-get update
 echo "→ 3/4 apt full-upgrade (app-kritische Pakete werden mitgezogen)…"
 apt-get ${APT_CONFIRM} full-upgrade
-apt-get --purge autoremove -y
+
+# Verwaiste Pakete NUR melden — KEIN Auto-Remove! Nach einem Dist-Upgrade kann
+# `autoremove` echte Pakete verwaisen lassen (z.B. labwc/Wayland-Desktop auf
+# Kiosk-Hosts, Vorfall 2026-08-04). Bewusst manuell nach Sichtung.
+AUTOREM=$(LC_ALL=C apt-get --dry-run autoremove 2>/dev/null | grep -cE '^Remv ' || true)
+if [[ "${AUTOREM:-0}" -gt 0 ]]; then
+  echo "  Hinweis: ${AUTOREM} verwaiste Paket(e) moeglich — NICHT automatisch entfernt."
+  echo "  Vor dem Entfernen die Liste PRUEFEN:  apt-get --dry-run autoremove"
+  echo "  Dann gezielt:  sudo apt-get autoremove   (nie blind -y nach Dist-Upgrade)"
+fi
 
 # --- 4. pip-Report (kein Auto-Upgrade) -----------------------------------
 echo "→ 4/4 pip-Updates im venv (NUR Report — Pins manuell pflegen):"
