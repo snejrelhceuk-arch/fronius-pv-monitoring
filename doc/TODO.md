@@ -1,6 +1,6 @@
 # Zentrale TODO-Liste — PV-System
 
-**Stand:** 2026-06-29  
+**Stand:** 2026-08-04  
 **Regel:** Alle offenen Aufgaben gehoeren in DIESE Datei. Keine verteilten TODOs in Subdirectories. Ausschliesslich offene `- [ ]` ToDos — keine Audit-/Entwicklungsnotizen.
 
 ---
@@ -65,17 +65,12 @@ Longterm-Offload-Skript, Einmal-Skripte entfernt (Snapshot auf Pi5-FB).
 
 - [ ] **F1-Soft-Standby via SunSpec Model 123 `Conn`** (Disconnect/Connect, update-sicher) evaluieren — Schreibpfad zum GEN24 neu + risikobehaftet (Batterie-WR), erst nach Einzelvalidierung, gated, nie autonom.
 - [ ] **F2-Standby via eigenem Modbus (Model 123 `Conn`)** implementieren — F2 hat eigene IP + Modbus TCP:502 + Solar-API (verifiziert 2026-07-02, analog F1). Gated, Einzelvalidierung.
-- [x] **F3-Digitalzugang ermittelt** (2026-07-02): eigene IP im LAN, Modbus TCP:502 + Solar-API v1, SunSpec Model 123 `Conn` vorhanden (analog F1/F2). CustomName „F3", DT=111, UID 1029499.
 - [ ] **F3-IP in `.infra.local`** (`PV_TERTIARY_INVERTER_API`) + Collector-Monitoring aufnehmen; danach **F3-Standby via eigenem Modbus** (Model 123 `Conn`) implementieren — gated, Einzelvalidierung.
 - [ ] **Read-only WR-Link-Health-Check:** Fronius interne Config-API (Soft-Limit=0 W + Multi-WR-Limiting gesetzt?) + Runaway-Frühsignatur (F3 hoch trotz Einspeisung + Batt voll/gedeckelt + F1/F2 abgeregelt) → alarmieren, kein Aktor.
 - [ ] **Reset-Sequenz** (F3 aus → F2 aus → F1 Conn-Reset → +3 min F2 → F3) erst nach vorhandener Relais-HW/F3-Zugang implementieren + jeden Schritt einzeln verifizieren.
 
 ### Task C — Tagesdaten-Haltbarkeit / STATS-DB (IST: `doc/system/TAGESDATEN_HALTBARKEIT.md`)
 
-- [x] STATS-DB `data_stats.db` + `data_5min_permanent` (`tools/build_stats_db.py`). — 2026-07-02
-- [x] Backfill Jan 1 – Jul 2 aus Pi5-Backups (51 692 Buckets). — 2026-07-02
-- [x] Tages-Archiv-Cron `scripts/stats_archive_daily.sh` (00:20) + Sync Pi5/Failover. — 2026-07-02
-- [x] Web-Tag-Chart STATS-Fallback (`db_utils` ATTACH + `routes/helpers.py:tag_table`). — 2026-07-02
 - [ ] Optional: `DATA_1MIN_RETENTION_DAYS` senken (RAM entlasten) — jetzt möglich, bewusst offen gelassen.
 - [ ] STATS-DB in die reguläre GFS-Backup-Kette aufnehmen (nicht nur täglicher Direkt-Sync).
 
@@ -131,10 +126,6 @@ Longterm-Offload-Skript, Einmal-Skripte entfernt (Snapshot auf Pi5-FB).
 - [ ] **Tech-Code-Sync automatisieren:** Tech (`.181`) hat KEINEN automatischen Code-Abgleich und driftete ~1 Tag (Poller lief ohne Harmonik-Thread). Sync-Mechanismus Primary→Tech (analog `sync_code_to_peer.sh`, nur git-tracked, ohne Daten) + Poller-Restart-Hook etablieren.
 - [ ] **tmpfs-Schema-Migration robuster:** `open_db` nutzt `CREATE TABLE IF NOT EXISTS` → geaenderte tmpfs-Tabellen (z. B. `nq_raw_medium` `ts`→`ts_ms`) werden bei Poller-Neustart NICHT migriert (Insert-Fehler bis manuellem Drop). Versions-/Migrations-Check beim Poller-Start ergaenzen.
 - [ ] **NQ-Units in Standard-Deployment aufnehmen:** `install_nq_services.sh` in `install_services.sh` bzw. Provisionierung referenzieren, damit NQ nach Reinstall/Reboot nicht manuell vergessen wird.
-- [x] **Event-Snippet-Pipeline fertigstellen** (NQ2 WP4, 2026-07-14): `nq/transfer/nq_event_transfer.py` (event=1-RAW sofort Tech→Primary `nq_event_*`, vor Stale-Kappung), `has_snippet`/`peak_*` gesetzt, Endpoint `/api/nq/event/<event_id>`, Chart-Marker + 200-ms-Drill-down in `templates/nq_chart_view.html`.
-- [x] **Tote Stubs entfernt** (NQ2 WP0, 2026-07-14): `nq/collector/pac_client.py`, `nq/transfer/nq_export_tech.py`, `nq/transfer/nq_ingest_primary.py` per `git rm` entfernt; Collector-Card-Code-Anchor auf `pac_live.py`+`nq_poller.py` korrigiert.
-- [x] **Doku-Drift bereinigt** (NQ2 WP0, 2026-07-14): `retention.raw_hours`=12 vs. „72 h" in `nq_tech_schema.sql`/`nq_capping.py`/Collector-Card angeglichen; `transfer.primary_host="CHANGE_ME_PRIMARY"` entfernt (Pull-Modell dokumentiert).
-- [x] **Primary-Aggregate per API/Chart** (NQ2 WP5, 2026-07-14): `/api/nq/aggregates?range=5min|hourly|daily` (`tech_read.fetch_aggregates`, Primary-SD) + feste Chart-Seite `/netzqualitaet/chart`.
 
 ---
 
