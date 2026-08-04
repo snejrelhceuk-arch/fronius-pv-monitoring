@@ -27,7 +27,7 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 | **collector: FritzDECT, AIN-Mapping, Steckdosen-Polling** | [`collector-fritzdect-collector.card.md`](./cards/collector-fritzdect-collector.card.md) | stable |
 | **diagnos: Host-Health, Services, Freshness, Mirror/Backup-Alter** | [`diagnos-health.card.md`](./cards/diagnos-health.card.md) | stable |
 | **diagnos: Energiebilanz, Rollups, Gap-Scan, Config-Parse** | [`diagnos-integrity.card.md`](./cards/diagnos-integrity.card.md) | stable |
-| **diagnos: Tägliche Mails nicht mehr versendet** | [`diagnos-daily-mail.card.md`](./cards/diagnos-daily-mail.card.md) | experimental |
+| **diagnos: Tägliche Mail / Sunset-Tagesbericht, Alarm-Mails, SMTP-Credential** | [`diagnos-daily-mail.card.md`](./cards/diagnos-daily-mail.card.md) | stable |
 | **steuerbox: Operator-Intents, Guards, respekt_s, Override-Status** | [`steuerbox-intents.card.md`](./cards/steuerbox-intents.card.md) | stable |
 | **netzqualitaet: Export, DFD-Analyse, Tages-/Boundary-API** | [`netzqualitaet-analysis.card.md`](./cards/netzqualitaet-analysis.card.md) | stable |
 | **NQ (Rolle N): PAC4200-Collector, tmpfs, Block-Poller, Kappung (Tech)** | [`netzqualitaet-nq-collector.card.md`](./cards/netzqualitaet-nq-collector.card.md) | experimental |
@@ -63,7 +63,7 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 ### diagnos (Schicht D)
 - [`diagnos-health.card.md`](./cards/diagnos-health.card.md) — Host, Services, Freshness
 - [`diagnos-integrity.card.md`](./cards/diagnos-integrity.card.md) — Bilanz, Rollups, Gap-Scan
-- [`diagnos-daily-mail.card.md`](./cards/diagnos-daily-mail.card.md) — Tägliche Mails nicht mehr versendet
+- [`diagnos-daily-mail.card.md`](./cards/diagnos-daily-mail.card.md) — Sunset-Tagesbericht + Alarm-Mails, SMTP-Credential
 
 ### steuerbox (Schicht E)
 - [`steuerbox-intents.card.md`](./cards/steuerbox-intents.card.md) — Intents, Guards, Override-Lebenszyklus

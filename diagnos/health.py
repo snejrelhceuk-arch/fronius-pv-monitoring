@@ -362,6 +362,48 @@ def check_local_gfs_backup_age() -> dict:
         return {'check': 'backup_local_gfs_daily', 'severity': FAIL, 'error': str(exc)}
 
 
+# Machine-ID-gebundenes SMTP-Credential (Quelle: credential_store.STORE_DIR).
+# Pfad hier bewusst hartkodiert, damit Schicht D unabhängig von Schicht C bleibt.
+_SMTP_CRED_PATH = '/etc/pv-system/smtp_pass.key'
+
+
+def check_notification_ready() -> dict:
+    """Prüft, ob der E-Mail-Versand sende-bereit ist (nur Primary).
+
+    Erkennt den nach Host-Migration typischen Ausfall: SMTP-User + Mail-Events
+    sind konfiguriert, aber das Machine-ID-gebundene Credential
+    (``/etc/pv-system/smtp_pass.key``) fehlt. Folge: Sunset-Tagesbericht und
+    alle Alarm-Mails scheitern still (nur ERROR-Log). Dieser Check macht den
+    Zustand im Health-Report/Dashboard sichtbar.
+    """
+    role = _read_role()
+    if role == 'failover':
+        return {'check': 'notification_ready', 'role': role, 'severity': OK,
+                'skipped': True, 'detail': 'Failover nutzt eigenen Mail-Pfad'}
+    try:
+        import config as app_config
+        smtp_user = (getattr(app_config, 'NOTIFICATION_SMTP_USER', '') or '').strip()
+        events = getattr(app_config, 'NOTIFICATION_EVENTS', []) or []
+    except Exception as exc:
+        return {'check': 'notification_ready', 'severity': FAIL, 'error': str(exc)}
+
+    if not smtp_user or not events:
+        return {'check': 'notification_ready', 'severity': OK, 'skipped': True,
+                'detail': 'keine Mail-Benachrichtigung konfiguriert'}
+
+    if os.path.isfile(_SMTP_CRED_PATH):
+        return {'check': 'notification_ready', 'severity': OK, 'events': len(events)}
+
+    return {
+        'check': 'notification_ready',
+        'severity': CRIT,
+        'events': len(events),
+        'error': ('SMTP-Credential fehlt (%s) - Tages-/Alarm-Mails scheitern. '
+                  'Fix: sudo python3 pv-config.py -> Benachrichtigungen -> '
+                  'SMTP-Passwort setzen' % _SMTP_CRED_PATH),
+    }
+
+
 # ═══════════════════════════════════════════════════════════
 # Hauptlauf
 # ═══════════════════════════════════════════════════════════
@@ -388,6 +430,9 @@ def run_all() -> dict:
     # Backup / Failover-Mirror
     checks.append(check_mirror_sync_age())
     checks.append(check_local_gfs_backup_age())
+
+    # Benachrichtigung sende-bereit (Credential vorhanden?)
+    checks.append(check_notification_ready())
 
     # Gesamtbewertung
     severity_order = {OK: 0, WARN: 1, CRIT: 2, FAIL: 3}

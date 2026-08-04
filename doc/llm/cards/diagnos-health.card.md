@@ -3,9 +3,9 @@ title: Diagnos Health (Host, Services, Freshness)
 domain: diagnos
 role: D
 applyTo: "diagnos/health.py"
-tags: [health, services, freshness, mirror, backup]
+tags: [health, services, freshness, mirror, backup, notification]
 status: stable
-last_review: 2026-06-06
+last_review: 2026-08-04
 ---
 
 # Diagnos Health
@@ -19,6 +19,7 @@ Read-only Zustandspruefung fuer Host, Services und Datenfrische. Liefert eine sc
 - **Service-Checks:** `diagnos/health.py:check_all_services`
 - **Freshness:** `diagnos/health.py:check_freshness`
 - **Mirror/Backup:** `diagnos/health.py:check_mirror_sync_age`, `check_local_gfs_backup_age`
+- **Mail-Bereitschaft:** `diagnos/health.py:check_notification_ready` (SMTP-Credential vorhanden?)
 - **Schwellwerte/Tabellen:** `diagnos/config.py` (`SERVICES`, `FRESHNESS_TABLES`, Warn-/Crit-Grenzen)
 
 ## Inputs / Outputs
@@ -30,6 +31,7 @@ Read-only Zustandspruefung fuer Host, Services und Datenfrische. Liefert eine sc
 - Gesamtseverity ist immer die schlechteste Einzelseverity aus allen Checks.
 - Freshness-Schwellen werden zentral ueber `diagnos/config.py` gesteuert.
 - `mirror_sync_age` gilt nur fuer Rolle `failover`; auf `primary` wird bewusst `skipped` geliefert.
+- `notification_ready` prueft nur auf `primary` (Failover hat eigenen Mail-Pfad) und meldet CRIT, wenn SMTP-User+Events konfiguriert sind, aber `/etc/pv-system/smtp_pass.key` fehlt.
 
 ## No-Gos
 - Keine Service-Restarts, kein Auto-Healing, kein Kill von Prozessen in `diagnos/health.py`.
