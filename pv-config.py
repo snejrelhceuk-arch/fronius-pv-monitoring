@@ -1239,6 +1239,72 @@ def menu_handbuch():
 # Hauptmenü
 # ═══════════════════════════════════════════════════════════════
 
+def _nq_config_path() -> str:
+    return os.path.join(PROJECT_ROOT, 'config', 'nq_config.json')
+
+
+def _save_nq_config(path: str, cfg: dict) -> None:
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
+        f.write('\n')
+
+
+def menu_netzkriterien():
+    """Netzkriterien-Grenzwerte (NQ/PAC4200) bearbeiten -> config/nq_config.json."""
+    path = _nq_config_path()
+    try:
+        with open(path, encoding='utf-8') as f:
+            cfg = json.load(f)
+    except Exception as e:
+        wt_msgbox(f'nq_config.json nicht lesbar:\n{str(e)[:200]}')
+        return
+    gw = cfg.setdefault('grenzwerte', {})
+    lv = gw.setdefault('warning_levels', {})
+    lvl = gw.setdefault('warning_levels_load', {})
+
+    # (tag, label, container, key)
+    fields = [
+        ('i_max',  'Strom-Grenze i_max [A]',                 gw,  'i_max_a'),
+        ('p_max',  'Leistungs-Grenze p_max [W]',             gw,  'p_max_w'),
+        ('u_lo',   'Spannung L-L min [V]',                   gw,  'u_ll_min_v'),
+        ('u_hi',   'Spannung L-L max [V]',                   gw,  'u_ll_max_v'),
+        ('f_lo',   'Frequenz min [Hz]',                      gw,  'freq_min_hz'),
+        ('f_hi',   'Frequenz max [Hz]',                      gw,  'freq_max_hz'),
+        ('thd',    'THD-U max [%]',                          gw,  'thd_u_max_pct'),
+        ('nw',     'Warnstufe U/f/THD  warn [%]',            lv,  'warn_pct'),
+        ('nh',     'Warnstufe U/f/THD  hoch [%]',            lv,  'high_pct'),
+        ('nc',     'Warnstufe U/f/THD  kritisch [%]',        lv,  'crit_pct'),
+        ('lw',     'Warnstufe Strom/Leistung  warn [%]',     lvl, 'warn_pct'),
+        ('lh',     'Warnstufe Strom/Leistung  hoch [%]',     lvl, 'high_pct'),
+        ('lc',     'Warnstufe Strom/Leistung  kritisch [%]', lvl, 'crit_pct'),
+    ]
+    while True:
+        items = [(tag, f'{label}  [{cont.get(key, "—")}]') for tag, label, cont, key in fields]
+        choice = wt_menu(
+            'Netzkriterien-Grenzwerte (PAC4200/NQ)\n\n'
+            'Strom + Leistung = Anschlussgroessen (Warnstufen 80/100/120%).\n'
+            'Spannung/Frequenz/THD = Norm (Warnstufen 50/70/90%).\n'
+            'Wirkt sofort im Netzkriterien-Monitoring (kein Neustart noetig).',
+            items,
+        )
+        if not choice:
+            return
+        _tag, label, cont, key = next(f for f in fields if f[0] == choice)
+        val = wt_inputbox(f'{label}:', str(cont.get(key, '')))
+        if val is None:
+            continue
+        try:
+            num = float(val.strip().replace(',', '.'))
+        except ValueError:
+            wt_msgbox('Ungueltige Zahl.')
+            continue
+        cont[key] = num
+        try:
+            _save_nq_config(path, cfg)
+        except Exception as e:
+            wt_msgbox(f'Speichern fehlgeschlagen:\n{str(e)[:200]}')
+
+
 def hauptmenu():
     """Hauptmenü-Loop."""
     while True:
@@ -1256,6 +1322,7 @@ def hauptmenu():
             ('7', 'Schalt-Logbuch'),
             ('8', 'Benachrichtigungen (E-Mail)'),
             ('9', 'Handbuch anzeigen'),
+            ('n', 'Netzkriterien-Grenzwerte (NQ/PAC4200)'),
             ('q', 'Beenden'),
         ]:
             args.extend([tag, desc])
@@ -1283,6 +1350,8 @@ def hauptmenu():
             menu_benachrichtigung()
         elif choice == '9':
             menu_handbuch()
+        elif choice == 'n':
+            menu_netzkriterien()
 
 
 # ═══════════════════════════════════════════════════════════════

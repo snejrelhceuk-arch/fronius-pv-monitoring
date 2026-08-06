@@ -89,16 +89,18 @@
   },
 
   "grenzwerte": {
-    "_comment": "Normgrenzen fuer Software-Ueberwachung + Chart-Warnstufen. Warnstufen bei 50/70/90% der Spanne zum Endwert. i_max_a aus pv-config (SLS-Grenze).",
+    "_comment": "Normgrenzen fuer Software-Ueberwachung + Chart-Warnstufen. Spannung/Frequenz/THD nutzen warning_levels (50/70/90% der Spanne zum Endwert). Strom + Leistung (Anschlussgroessen) nutzen warning_levels_load (80/100/120% des Anschlusswerts: warn=Annaeherung, high=am Anschlusswert, crit=Ueberlast). i_max_a aus pv-config (SLS-Grenze), p_max_w = Anschlussleistung (3-phasig ~35A).",
     "u_ln_min_v": 207.0,
     "u_ln_max_v": 253.0,
     "u_ll_min_v": 360.0,
     "u_ll_max_v": 440.0,
     "i_max_a": 35.0,
+    "p_max_w": 24000.0,
     "freq_min_hz": 47.0,
     "freq_max_hz": 52.0,
     "thd_u_max_pct": 8.0,
-    "warning_levels": { "warn_pct": 50, "high_pct": 70, "crit_pct": 90 }
+    "warning_levels": { "warn_pct": 50, "high_pct": 70, "crit_pct": 90 },
+    "warning_levels_load": { "warn_pct": 80, "high_pct": 100, "crit_pct": 120 }
   },
 
   "monitoring_filter": {

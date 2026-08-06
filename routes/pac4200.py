@@ -821,25 +821,37 @@ def api_nq_netzkriterien():
     warn_pct = float(lv.get('warn_pct', 50))
     high_pct = float(lv.get('high_pct', 70))
     crit_pct = float(lv.get('crit_pct', 90))
+    lvl2 = gw.get('warning_levels_load', {})
+    warn_pct_l = float(lvl2.get('warn_pct', 80))
+    high_pct_l = float(lvl2.get('high_pct', 100))
+    crit_pct_l = float(lvl2.get('crit_pct', 120))
     u_ll_lo = float(gw.get('u_ll_min_v', 360.0))
     u_ll_hi = float(gw.get('u_ll_max_v', 440.0))
     f_lo = float(gw.get('freq_min_hz', 47.0))
     f_hi = float(gw.get('freq_max_hz', 52.0))
     i_hi = float(gw.get('i_max_a', 35.0))
     thd_hi = float(gw.get('thd_u_max_pct', 8.0))
+    p_hi = float(gw.get('p_max_w', 24000.0))
 
     datapoints = []
     warnings = []
     level_counts = {'warn': 0, 'high': 0, 'crit': 0}
 
-    def _level(pct: float | None) -> str | None:
+    # Strom + Leistung (Anschlussgrößen) nutzen die Last-Warnstufen (80/100/120%),
+    # Spannung/Frequenz/THD die Norm-Warnstufen (50/70/90%).
+    _LOAD_KINDS = {'i_max', 'p_max'}
+    _RANK = {'warn': 1, 'high': 2, 'crit': 3}
+
+    def _level(pct: float | None, kind: str | None = None) -> str | None:
         if pct is None:
             return None
-        if pct >= crit_pct:
+        w, h, c = ((warn_pct_l, high_pct_l, crit_pct_l) if kind in _LOAD_KINDS
+                   else (warn_pct, high_pct, crit_pct))
+        if pct >= c:
             return 'crit'
-        if pct >= high_pct:
+        if pct >= h:
             return 'high'
-        if pct >= warn_pct:
+        if pct >= w:
             return 'warn'
         return None
 
@@ -882,6 +894,12 @@ def api_nq_netzkriterien():
         thd_candidates = [v for v in (thd1, thd2, thd3, thd1_max, thd2_max, thd3_max) if v is not None]
         thd_pct_hi = ((max(thd_candidates) / thd_hi) * 100.0) if (thd_candidates and thd_hi > 0) else None
 
+        p_tot = _safe_float(r.get('P_tot'))
+        p_tot_min = _safe_float(r.get('P_tot_min'))
+        p_tot_max = _safe_float(r.get('P_tot_max'))
+        p_candidates = [abs(v) for v in (p_tot, p_tot_min, p_tot_max) if v is not None]
+        p_pct_hi = ((max(p_candidates) / p_hi) * 100.0) if (p_candidates and p_hi > 0) else None
+
         candidates = []
         if v_pct_hi is not None:
             candidates.append(('u_ll_max', v_pct_hi, max(v_candidates_hi) if v_candidates_hi else None))
@@ -895,23 +913,32 @@ def api_nq_netzkriterien():
             candidates.append(('i_max', i_pct_hi, max(i_candidates) if i_candidates else None))
         if thd_pct_hi is not None:
             candidates.append(('thd_u_max', thd_pct_hi, max(thd_candidates) if thd_candidates else None))
+        if p_pct_hi is not None:
+            candidates.append(('p_max', p_pct_hi, max(p_candidates) if p_candidates else None))
 
+        # Schlimmste Stufe wählen (je Kriterium eigene Warnstufen); bei Gleichstand höchstes %.
         warn_level = None
         warn_kind = None
         warn_pct_val = None
         warn_value = None
-        if candidates:
-            warn_kind, warn_pct_val, warn_value = max(candidates, key=lambda x: x[1])
-            warn_level = _level(warn_pct_val)
-            if warn_level:
-                level_counts[warn_level] += 1
-                warnings.append({
-                    'ts': ts,
-                    'level': warn_level,
-                    'kind': warn_kind,
-                    'pct': round(warn_pct_val, 1),
-                    'value': round(float(warn_value), 3) if warn_value is not None else None,
-                })
+        best_rank = 0
+        for kind, pct, val in candidates:
+            lvl = _level(pct, kind)
+            if not lvl:
+                continue
+            rank = _RANK[lvl]
+            if rank > best_rank or (rank == best_rank and (warn_pct_val is None or pct > warn_pct_val)):
+                best_rank = rank
+                warn_level, warn_kind, warn_pct_val, warn_value = lvl, kind, pct, val
+        if warn_level:
+            level_counts[warn_level] += 1
+            warnings.append({
+                'ts': ts,
+                'level': warn_level,
+                'kind': warn_kind,
+                'pct': round(warn_pct_val, 1),
+                'value': round(float(warn_value), 3) if warn_value is not None else None,
+            })
 
         datapoints.append({
             'ts': ts,
@@ -959,10 +986,11 @@ def api_nq_netzkriterien():
         'warnings': warnings,
         'warning_counts': level_counts,
         'warning_levels': {'warn_pct': warn_pct, 'high_pct': high_pct, 'crit_pct': crit_pct},
+        'warning_levels_load': {'warn_pct': warn_pct_l, 'high_pct': high_pct_l, 'crit_pct': crit_pct_l},
         'limits': {
             'u_ll_min_v': u_ll_lo, 'u_ll_max_v': u_ll_hi,
             'freq_min_hz': f_lo, 'freq_max_hz': f_hi,
-            'i_max_a': i_hi, 'thd_u_max_pct': thd_hi,
+            'i_max_a': i_hi, 'thd_u_max_pct': thd_hi, 'p_max_w': p_hi,
         },
         'maxima': maxima,
         'marks': raw.get('marks', []),
