@@ -5,7 +5,7 @@
 ## Übersicht
 
 **Gesamtgröße (Textdateien gezählt):** 1060 MB  
-**Gesamtzeilen (Code/Doku/Daten):** 278.600 Zeilen  
+**Gesamtzeilen (Code/Doku/Daten):** 278.749 Zeilen  
 **Gezählte Dateien:** 528  
 **Ausgeschlossene Verzeichnisse:** 25 (.venv, __pycache__, node_modules, .git …)
 
@@ -13,10 +13,10 @@
 
 | Sprache/Typ | Dateien | Zeilen | Anteil |
 |---|---|---|---|
-| **CSV** | 29 | 167.939 | 60.3% |
-| **Python** | 177 | 54.946 | 19.7% |
+| **CSV** | 29 | 167.955 | 60.3% |
+| **Python** | 177 | 55.029 | 19.7% |
 | **Markdown** | 139 | 24.279 | 8.7% |
-| **HTML** | 20 | 15.013 | 5.4% |
+| **HTML** | 20 | 15.063 | 5.4% |
 | **Shell** | 61 | 4.751 | 1.7% |
 | **JSON** | 19 | 4.082 | 1.5% |
 | **TXT** | 28 | 3.015 | 1.1% |
@@ -27,7 +27,7 @@
 | **systemd** | 31 | 538 | 0.2% |
 | **CONF** | 2 | 51 | 0.0% |
 | **TOML** | 1 | 24 | 0.0% |
-| **Total** | 528 | 278.600 | 100% |
+| **Total** | 528 | 278.749 | 100% |
 
 ## Python-Code nach ABCDEN-Rollen
 
@@ -35,7 +35,7 @@
 |---|---|---|---|
 | **C** Automation | `automation/` | 41 | 14.363 |
 | **A** Collector | `collector/` | 18 | 4.689 |
-| **B** Web-API | `routes/` | 19 | 9.875 |
+| **B** Web-API | `routes/` | 19 | 9.958 |
 | **D** Diagnos | `diagnos/` | 5 | 1.619 |
 | **E** Steuerbox | `steuerbox/` | 5 | 1.235 |
 | **N** Netzqualität | `nq/` | 29 | 6.262 |
@@ -50,8 +50,8 @@
 1. `automation/engine/regeln/waermepumpe.py` — 1.132 Zeilen
 1. `automation/engine/event_notifier.py` — 1.046 Zeilen
 1. `automation/engine/regeln/soc_steuerung.py` — 1.037 Zeilen
+1. `routes/realtime.py` — 1.000 Zeilen
 1. `routes/pac4200.py` — 956 Zeilen
-1. `routes/visualization.py` — 951 Zeilen
 
 ## Ausgeschlossene Bereiche
 

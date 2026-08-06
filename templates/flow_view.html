@@ -950,6 +950,33 @@
                         font-weight="600" id="value-f3">0 W</text>
                 </g>
 
+                <!-- ═══ GERÄTE-DIREKT-BUBBLES (unabhängige Quellen: PAC, F2, F3) ═══
+                     Halbtransparent, schräg nach unten versetzt VOR die Originale
+                     (Netz/F2/F3). Quellen: PAC4200 bzw. geräteeigene WR-APIs —
+                     bleiben auch bei F1-Ausfall/-Update verfügbar. pointer-events:none,
+                     damit darunterliegende Klick-/Navigationsziele erreichbar bleiben. -->
+                <g id="device-direct-bubbles" style="pointer-events:none;">
+                    <!-- PAC (unabhängige Netz-Quelle, PAC4200; Bezug +, Einspeisung -) -->
+                    <circle cx="224" cy="251" r="58" fill="rgba(20,184,166,0.13)"
+                            stroke="rgba(45,212,191,0.55)" stroke-width="2.5" id="node-pac"/>
+                    <text x="224" y="245" text-anchor="middle"
+                          fill="rgba(94,234,212,0.95)" font-size="14" font-weight="600">PAC</text>
+                    <text x="224" y="268" text-anchor="middle"
+                          fill="rgba(255,255,255,0.92)" font-size="16" font-weight="700" id="value-pac">-- W</text>
+
+                    <!-- F2 (geräteeigene WR-API) -->
+                    <circle cx="372" cy="37" r="39" fill="rgba(20,184,166,0.13)"
+                            stroke="rgba(45,212,191,0.5)" stroke-width="2" id="node-f2-dev"/>
+                    <text x="372" y="42" text-anchor="middle"
+                          fill="rgba(153,246,228,0.95)" font-size="13" font-weight="700" id="value-f2-dev">-- W</text>
+
+                    <!-- F3 (geräteeigene WR-API) -->
+                    <circle cx="472" cy="52" r="39" fill="rgba(20,184,166,0.13)"
+                            stroke="rgba(45,212,191,0.5)" stroke-width="2" id="node-f3-dev"/>
+                    <text x="472" y="57" text-anchor="middle"
+                          fill="rgba(153,246,228,0.95)" font-size="13" font-weight="700" id="value-f3-dev">-- W</text>
+                </g>
+
                 <!-- ═══ SUB-VERBRAUCHER (kurze Linien, Fluss immer → Verbraucher) ═══ -->
                 <g class="sub-consumers">
                                         <circle cx="665" cy="190" r="39" fill="none"
@@ -1518,6 +1545,27 @@
             updateStatus('error');
         } finally {
             isFlowFetchInFlight = false;
+        }
+    }
+
+    // Unabhängige Geräte-Direktwerte (PAC/F2/F3) für die Zusatz-Bubbles.
+    // Getrennt von fetchFlow, damit PV-Gesamt/Flow-Logik unberührt bleibt.
+    async function fetchFlowDevices() {
+        try {
+            const r = await fetch(apiUrl('/api/flow_devices'), { cache: 'no-store' });
+            if (!r.ok) throw new Error('API ' + r.status);
+            const d = await r.json();
+            const setVal = (id, node) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.textContent = (node && node.available && node.power !== null && node.power !== undefined)
+                    ? fmt(node.power) : '-- W';
+            };
+            setVal('value-pac', d.pac);       // Bezug +, Einspeisung - (fmt behält Vorzeichen)
+            setVal('value-f2-dev', d.f2);
+            setVal('value-f3-dev', d.f3);
+        } catch (e) {
+            console.warn('flow_devices:', e);
         }
     }
 
@@ -2132,11 +2180,13 @@
 
     initGauges();
     fetchFlow();
+    fetchFlowDevices();
     fetchBatteryDetail();
     fetchFailoverStatus();
     fetchBackupStatus();
     initInfoRowPinning();
     setInterval(fetchFlow, FLOW_POLL_MS);
+    setInterval(fetchFlowDevices, FLOW_POLL_MS);
     setInterval(fetchBatteryDetail, 10000);
     setInterval(fetchFailoverStatus, 60000);  // Failover-Check 1×/Min (SSH-basiert, Cache: 60s)
     setInterval(fetchBackupStatus, 600000);   // Backup-Check 1×/10 Min (SSH-basiert, Cache: 10 Min)

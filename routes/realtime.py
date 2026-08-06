@@ -825,6 +825,89 @@ def api_flow_realtime():
         return api_error_response(e, "Flow-API")
 
 
+# ── Unabhängige Geräte-Direktwerte für die Flow-Zusatz-Bubbles PAC/F2/F3 ──────
+# Quellen liegen NEBEN der Fronius-Primär-SM-Kette (Resilienz bei F1-Ausfall/-Update).
+_FLOW_DEVICES_CACHE = {"ts": 0.0, "data": None}
+_FLOW_DEVICES_TTL_S = 5.0
+# Fronius /components/readable: AC-Wirkleistung (Summe der 3 Phasen)
+_FRONIUS_AC_POWER_CHANNEL = "ACBRIDGE_POWERACTIVE_SUM_MEAN_F32"
+
+
+def _read_fronius_ac_power(api_url, timeout=1.5):
+    """AC-Wirkleistung [W] aus der geräteeigenen Fronius /components/readable-API.
+
+    Read-only HTTP GET (Rolle B). Gibt None zurück, wenn nicht konfiguriert,
+    nicht erreichbar oder kein Leistungskanal vorhanden.
+    """
+    if not api_url:
+        return None
+    try:
+        import requests
+        resp = requests.get(api_url, timeout=timeout)
+        if resp.status_code != 200:
+            return None
+        data = resp.json().get("Body", {}).get("Data", {})
+        inv_key = next((k for k in data if "Inverter" in k), None)
+        if inv_key is None:
+            return None
+        channels = data.get(inv_key, {}).get("channels", {})
+        val = channels.get(_FRONIUS_AC_POWER_CHANNEL)
+        return round(float(val), 0) if val is not None else None
+    except Exception as exc:
+        logging.debug(f"Fronius AC-Power read failed: {exc}")
+        return None
+
+
+@bp.route('/api/flow_devices')
+def api_flow_devices():
+    """Unabhängige Geräte-Direktwerte für die Flow-Zusatz-Bubbles PAC/F2/F3.
+
+    Rolle B, read-only. Ergänzt die aus der Fronius-Primär-SM-Kette abgeleiteten
+    Bubbles Netz/F2/F3 um geräteeigene Quellen (auch bei F1-Ausfall verfügbar):
+      - PAC: PAC4200 (Tech-tmpfs-Snapshot, P_tot; Bezug +, Einspeisung -)
+      - F2 : Wechselrichter F2, geräteeigene API (PV_SECONDARY_INVERTER_API)
+      - F3 : Wechselrichter F3, geräteeigene API (PV_TERTIARY_INVERTER_API)
+    Kurz-Cache (~5 s) verhindert Geräte-Last bei mehreren Clients.
+    """
+    now = time.time()
+    cached = _FLOW_DEVICES_CACHE
+    if cached["data"] is not None and (now - cached["ts"]) < _FLOW_DEVICES_TTL_S:
+        return jsonify(cached["data"])
+
+    import config
+
+    # PAC (unabhängige Netz-Quelle) aus Tech-tmpfs-Snapshot
+    pac = {"power": None, "available": False, "age_seconds": None}
+    try:
+        from nq import tech_read
+        snap = tech_read.fetch_tech_snapshot()
+        if snap.get("ok"):
+            p_tot = snap.get("values", {}).get("P_tot")
+            if p_tot is not None:
+                pac["power"] = round(float(p_tot), 0)
+                pac["available"] = True
+                snap_ts = snap.get("ts")
+                if snap_ts:
+                    pac["age_seconds"] = max(0, int(now) - int(snap_ts))
+    except Exception as exc:
+        logging.debug(f"PAC snapshot for flow_devices failed: {exc}")
+
+    # F2 / F3 aus geräteeigenen Wechselrichter-APIs
+    f2_power = _read_fronius_ac_power(
+        config.load_local_setting('PV_SECONDARY_INVERTER_API', ''))
+    f3_power = _read_fronius_ac_power(
+        config.load_local_setting('PV_TERTIARY_INVERTER_API', ''))
+
+    result = {
+        "pac": pac,
+        "f2": {"power": f2_power, "available": f2_power is not None},
+        "f3": {"power": f3_power, "available": f3_power is not None},
+    }
+    _FLOW_DEVICES_CACHE["ts"] = now
+    _FLOW_DEVICES_CACHE["data"] = result
+    return jsonify(result)
+
+
 @bp.route('/api/polling_data')
 def api_polling_data():
     """Raw Polling-Daten für einen bestimmten Zeitraum"""
