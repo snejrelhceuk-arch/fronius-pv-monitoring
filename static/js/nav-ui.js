@@ -40,14 +40,16 @@
         { href: '/analyse/amortisation', label: 'Amortisation', sub: true },
         { href: '/analyse/primaerenergie', label: '🌍 Primärenergie', sub: true, stale: true },
         { sep: true },
+        { heading: 'Netzqualität' },
+        { href: '/pac4200', label: 'PAC4200', sub: true },
+        { href: '/netzqualitaet/live', label: 'PAC-Screens', sub: true },
+        { href: '/netzqualitaet', label: 'Netzkriterien', sub: true },
+        { href: '/netzqualitaet/chart', label: 'Event-Chart', sub: true },
+        { href: '/netzqualitaet/analyse', label: 'Netzmusteranalyse', sub: true },
+        { sep: true },
         { href: '/maschinenraum', label: 'Darstellung aller Einzelwerte' },
         { href: '/maschinenraum', label: 'PV-System', sub: true },
         { href: '/maschinenraum?db=nq', label: 'PAC4200', sub: true, noctx: true },
-        { href: '/netzqualitaet/chart', label: 'NQ-Event-Chart', sub: true },
-        { href: '/netzqualitaet/live', label: 'NQ-Screens', sub: true },
-        { href: '/pac4200', label: 'PAC4200-Klon', sub: true },
-        { href: '/netzqualitaet', label: 'Netzkriterien', sub: true },
-        { href: '/netzqualitaet/analyse', label: 'Netzmusteranalyse', sub: true },
     ];
 
     function navQuery() {
