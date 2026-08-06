@@ -7,6 +7,7 @@ tags: [netzqualitaet, nq, transfer, aggregation, primary, rolle-n]
 status: experimental
 last_review: 2026-08-06
 changes:
+	- 2026-08-06 (Fixpunkt-Backfill): Neues Einmal-Werkzeug `nq/transfer/nq_energy_backfill.py:backfill` — füllt die NQ-Energie-Fixpunkte (`nq_energy_daily`/`nq_energy_checkpoint` + Monats-/Jahres-Rollup) für den Zeitraum VOR PAC-Start read-only aus der Produktions-`daily_data` (`W_Imp/Exp_Netz_*` → `wh_imp/wh_exp`, `src='pv_backfill'`). Idempotent, Dry-Run-Default, echte PAC-Zeilen (`counter`) werden nie überschrieben. Ausgeführt 2026-08-06: 189 Tage (2026-01-01…07-11), Monate 01–07 + Jahr 2026.
 	- 2026-08-06: Legacy-Verweis auf `nq/legacy/nq_export.py` umgestellt (Modul `netzqualitaet/` → `nq/legacy/` konsolidiert).
 	- 2026-07-25 (Read-Seite 10s/5min): `nq/tech_read.py:fetch_agg` mergt jetzt Primary-`nq_5min` (vollständige Historie) + Techs Live-Rand statt entweder/oder — Techs `nq_5min` wird nach jedem Transfer geleert und deckt nur den Rand ab (`source=nq_5min_merged`). Neu `fetch_agg_fast`: 10-s-Aggregat direkt aus Techs `nq_raw_fast`/`nq_raw_medium` (~12 h RAM-Retention) via SSH-SQL + 5-min-Baseline aus Primary davor (`hires_start` markiert den 10-s-Beginn). Kein neuer Schreibpfad; Rolle N bleibt read-only.
 	- 2026-07-14 (l): **10s-Architektur entfernt.** `nq/transfer/nq_agg_transfer.py` übernimmt jetzt `nq_5min` (Tech) statt `nq_agg_10s`; Primary-Retention auf `nq_5min` (`primary_5min_days`). `nq/aggregate/nq_aggregate.py` aggregiert bei Stage `5min` nur noch Harmonische (`nq_raw_slow -> nq_5min`), Skalare kommen bereits als 5-min-Buckets vom Tech-Collector.
@@ -33,6 +34,7 @@ fächert zu `hourly → daily` auf und hält Event-RAW dauerhaft.
 - **Event-Schnipsel-Pipeline (Primary):** `nq/transfer/nq_event_transfer.py:transfer_events` / `derive_event` / `ingest_snippets` / `_cap_event_log`
 - **GFS-Backup NQ-DB:** `scripts/backup_nq_gfs.sh` (daily/weekly/monthly, Integrität, Offsite rsync)
 - **Energie-Rollup (Primary):** `nq/transfer/nq_energy_rollup.py:rollup` (tägl. 00:05) / `rollup_month` / `rollup_year`
+- **Fixpunkt-Backfill (einmalig, Primary):** `nq/transfer/nq_energy_backfill.py:backfill` (PV-DB `daily_data` → NQ-Fixpunkte, `src='pv_backfill'`, Dry-Run-Default)
 - **Schema (Primary):** `nq/schema/nq_primary_schema.sql`
 - **Konfig (Retention/Transfer):** `config/nq_config.json`
 - **Muster/Vorbild:** `collector/aggregate/`, Legacy `nq/legacy/nq_export.py`

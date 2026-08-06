@@ -128,6 +128,19 @@ Bezug und Lieferung.
 **Master-SM read-only:** Nur lesend aus der Produktions-DB (Rolle N schreibt
 nie in `data.db`). Kein neuer Schreibpfad in die Produktionskette.
 
+### 5a. Rückwirkender Fixpunkt-Backfill (einmalig, 2026-08-06)
+
+Vor PAC-Start (echte PAC-Tagesfixpunkte ab **2026-07-12**) gibt es keine
+PAC-Energiewerte. Damit die NQ-Werte in den Monitoring-Tooltips (PV-Wert mit
+NQ-Wert in Klammern) auch rückwirkend sinnvoll sind, füllt
+[`nq/transfer/nq_energy_backfill.py`](../../nq/transfer/nq_energy_backfill.py)
+die NQ-Fixpunkte **einmalig** read-only aus der Produktions-`daily_data`
+(`W_Imp/Exp_Netz_*` → `wh_imp`/`wh_exp`, `src='pv_backfill'`). Idempotent,
+Dry-Run-Default; echte PAC-Zeilen (`src='counter'`) werden nie überschrieben.
+Ausgeführt 2026-08-06: 189 Tage (2026-01-01…07-11), Monate 01–07 + Jahr 2026.
+Reactive/Apparent (varh/vah) bleibt NULL (in der Produktions-DB nicht vorhanden).
+Danach dürfen PAC- und PV-Werte mit der Zeit divergieren (unterschiedliche Messung).
+
 ---
 
 ## 6. GFS-Backup (konsistent mit pv-system)

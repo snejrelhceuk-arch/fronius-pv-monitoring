@@ -5,17 +5,17 @@
 ## Übersicht
 
 **Gesamtgröße (Textdateien gezählt):** 1060 MB  
-**Gesamtzeilen (Code/Doku/Daten):** 278.749 Zeilen  
-**Gezählte Dateien:** 528  
+**Gesamtzeilen (Code/Doku/Daten):** 279.006 Zeilen  
+**Gezählte Dateien:** 529  
 **Ausgeschlossene Verzeichnisse:** 25 (.venv, __pycache__, node_modules, .git …)
 
 ## Nach Sprache/Typ
 
 | Sprache/Typ | Dateien | Zeilen | Anteil |
 |---|---|---|---|
-| **CSV** | 29 | 167.955 | 60.3% |
-| **Python** | 177 | 55.029 | 19.7% |
-| **Markdown** | 139 | 24.279 | 8.7% |
+| **CSV** | 29 | 167.976 | 60.2% |
+| **Python** | 178 | 55.250 | 19.8% |
+| **Markdown** | 139 | 24.294 | 8.7% |
 | **HTML** | 20 | 15.063 | 5.4% |
 | **Shell** | 61 | 4.751 | 1.7% |
 | **JSON** | 19 | 4.082 | 1.5% |
@@ -27,7 +27,7 @@
 | **systemd** | 31 | 538 | 0.2% |
 | **CONF** | 2 | 51 | 0.0% |
 | **TOML** | 1 | 24 | 0.0% |
-| **Total** | 528 | 278.749 | 100% |
+| **Total** | 529 | 279.006 | 100% |
 
 ## Python-Code nach ABCDEN-Rollen
 
@@ -38,7 +38,7 @@
 | **B** Web-API | `routes/` | 19 | 9.958 |
 | **D** Diagnos | `diagnos/` | 5 | 1.619 |
 | **E** Steuerbox | `steuerbox/` | 5 | 1.235 |
-| **N** Netzqualität | `nq/` | 29 | 6.262 |
+| **N** Netzqualität | `nq/` | 30 | 6.483 |
 
 ## Größte Python-Dateien (Top 10)
 
