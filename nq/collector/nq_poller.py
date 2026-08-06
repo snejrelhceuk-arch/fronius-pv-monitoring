@@ -36,6 +36,7 @@ Doku: doc/netzqualitaet/NQ_MODUL.md §4/§5, doc/netzqualitaet/MESSTECHNIK.md.
 from __future__ import annotations
 
 import argparse
+import math
 import signal
 import threading
 import time
@@ -43,7 +44,6 @@ import time
 from nq.nq_common import open_db, load_config, TECH_SCHEMA
 from nq.pac_live import read_fast_snapshot, read_harm_snapshot, read_max_snapshot
 from nq.collector.nq_capping import enforce_retention
-
 # ---------------------------------------------------------------------------
 # Skalare Charting-/Analyse-Größen → nq_5min (5-min-Bucket, meas=''/phase=0/ord=0)
 # ---------------------------------------------------------------------------
@@ -57,6 +57,83 @@ AGG_QUANTITIES = [
     "THDu_L12", "THDu_L23", "THDu_L31",
     "FREQ", "Unbal_U", "Unbal_I",
 ]
+
+# ---------------------------------------------------------------------------
+# Schreib-Seitige Plausibilität: finite-aber-absurde Modbus-Fehldekodierungen
+# (z. B. 1e23, Register-Bleed FREQ=55.0 / U=419.197, FREQ=0.007) VOR dem
+# Aggregieren verwerfen, damit nq_5min-min/max nicht korrumpiert werden.
+# `_f32` filtert nur NaN/Inf; endliche Ausreißer passieren sonst ungeprüft.
+# Korridore aus `config/nq_config.json:monitoring_filter.corridors` (dieselbe
+# physikalische Quelle wie der Display-Filter), mit sicheren Defaults.
+# ---------------------------------------------------------------------------
+_PLAUSIBLE_DEFAULT = {
+    "FREQ": (47.0, 53.0),
+    "U_LN": (150.0, 300.0),
+    "U_LL": (280.0, 520.0),
+    "I":    (-3000.0, 3000.0),
+    "P":    (-200000.0, 200000.0),
+    "Q":    (-200000.0, 200000.0),
+    "S":    (0.0, 250000.0),
+    "THD":  (0.0, 100.0),
+    "PF":   (-1.5, 1.5),
+    "UNBAL": (0.0, 300.0),
+}
+
+
+def _quantity_class(q: str) -> str | None:
+    qu = q.upper()
+    if qu == "FREQ":
+        return "FREQ"
+    if qu.startswith("THD"):
+        return "THD"
+    if qu.startswith("UNBAL"):
+        return "UNBAL"
+    if qu.startswith("PF") or qu.startswith("COSPHI"):
+        return "PF"
+    if qu.startswith("U_"):
+        return "U_LN" if qu.endswith("N") else "U_LL"
+    if qu.startswith("I_") or qu.startswith("IS_"):
+        return "I"
+    if qu.startswith("P"):
+        return "P"
+    if qu.startswith("Q"):
+        return "Q"
+    if qu.startswith("S"):
+        return "S"
+    return None
+
+
+def _build_plausible() -> dict[str, tuple]:
+    corr: dict = {}
+    try:
+        corr = (load_config().get("monitoring_filter", {}) or {}).get("corridors", {}) or {}
+    except Exception:
+        corr = {}
+    merged = dict(_PLAUSIBLE_DEFAULT)
+    for k, v in corr.items():
+        if isinstance(v, (list, tuple)) and len(v) == 2:
+            try:
+                merged[k] = (float(v[0]), float(v[1]))
+            except (TypeError, ValueError):
+                pass
+    out: dict[str, tuple] = {}
+    for q in AGG_QUANTITIES:
+        cls = _quantity_class(q)
+        if cls and cls in merged:
+            out[q] = merged[cls]
+    return out
+
+
+_PLAUSIBLE = _build_plausible()
+
+
+def _is_plausible(q: str, v) -> bool:
+    """True, wenn v endlich und im physikalischen Korridor von q liegt."""
+    if not isinstance(v, (int, float)) or not math.isfinite(v):
+        return False
+    corr = _PLAUSIBLE.get(q)
+    return not (corr and (v < corr[0] or v > corr[1]))
+
 
 # ---------------------------------------------------------------------------
 # Harmonische → nq_raw_slow (1-s-RAW, meas/phase/ord-Format)
@@ -132,6 +209,8 @@ class _Bucket:
             v = vals.get(q)
             if v is None:
                 continue
+            if not _is_plausible(q, v):
+                continue  # Schreib-Seite: absurde Fehldekodierung verwerfen
             a = self.acc.get(q)
             if a is None:
                 self.acc[q] = [v, v, v, 1, v * v]
