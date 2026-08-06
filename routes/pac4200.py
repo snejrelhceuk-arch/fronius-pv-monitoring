@@ -491,6 +491,44 @@ def _energy_payload_from_row(row) -> dict:
     }
 
 
+def _sum_daily_deltas(db_paths, day_like):
+    """Summiert nq_energy_daily-Deltas (5 Zähler) über die Tage eines Zeitraums.
+
+    Delta = Summe der Tages-Deltas (wie rollup_month), aber **live** direkt aus
+    den Tages-Fixpunkten — auch für noch nicht gerollte, aktuelle Monate/Jahre.
+    Rückgabe im Row-Format von ``_energy_payload_from_row`` oder ``None``.
+    """
+    agg = [0.0, 0.0, 0.0, 0.0, 0.0]
+    have = [False, False, False, False, False]
+    srcs: set[str] = set()
+    found = False
+    for path in db_paths:
+        conn = _open_legacy(path)
+        if not conn:
+            continue
+        try:
+            rows = conn.execute(
+                "SELECT wh_imp_delta, wh_exp_delta, varh_imp_delta, varh_exp_delta, vah_delta, src "
+                "FROM nq_energy_daily WHERE day LIKE ?", (day_like,)).fetchall()
+        except Exception:
+            rows = []
+        finally:
+            conn.close()
+        for r in rows:
+            found = True
+            for i in range(5):
+                if r[i] is not None:
+                    agg[i] += r[i]
+                    have[i] = True
+            if r[5]:
+                srcs.add(r[5])
+    if not found:
+        return None
+    out = [round(agg[i], 3) if have[i] else None for i in range(5)]
+    src = 'pv_backfill' if 'pv_backfill' in srcs else (next(iter(srcs)) if srcs else None)
+    return out + [src]
+
+
 @bp.route('/api/nq/energy/<period_type>/<period_key>')
 def api_nq_energy(period_type, period_key):
     """Read-only Zähler-Fixpunkte für Tooltip-Spiegelung (Tag/Monat/Jahr).
@@ -557,46 +595,23 @@ def api_nq_energy_map(period_type, period_key):
             by_key[row[0]] = _energy_payload_from_row(row[1:])
 
     elif period_type == 'month':
+        # Live-Summe der Tages-Deltas je Monat (auch aktueller, noch nicht gerollter Monat).
         for month in range(1, 13):
             month_key = f"{period_key}-{month:02d}"
-            conn = _open_legacy(_nq_primary_db(month_key))
-            if not conn:
-                continue
-            try:
-                row = conn.execute(
-                    "SELECT month, wh_imp_delta, wh_exp_delta, varh_imp_delta, varh_exp_delta, vah_delta, src "
-                    "FROM nq_energy_monthly WHERE month = ?",
-                    (month_key,),
-                ).fetchone()
-            except Exception:
-                row = None
-            finally:
-                conn.close()
+            row = _sum_daily_deltas([_nq_primary_db(month_key)], f"{month_key}-%")
             if row:
-                by_key[row[0]] = _energy_payload_from_row(row[1:])
+                by_key[month_key] = _energy_payload_from_row(row)
 
     elif period_type == 'year' and period_key == 'all':
-        seen: set[str] = set()
-        for db_path in sorted(glob(os.path.join(_NQ_PRIMARY_DIR, 'nq_*-01.db'))):
-            year_key = os.path.basename(db_path)[3:7]
-            if year_key in seen:
-                continue
-            seen.add(year_key)
-            conn = _open_legacy(db_path)
-            if not conn:
-                continue
-            try:
-                row = conn.execute(
-                    "SELECT year, wh_imp_delta, wh_exp_delta, varh_imp_delta, varh_exp_delta, vah_delta, src "
-                    "FROM nq_energy_yearly WHERE year = ?",
-                    (year_key,),
-                ).fetchone()
-            except Exception:
-                row = None
-            finally:
-                conn.close()
+        # Live-Summe der Tages-Deltas je Jahr über alle Monats-DBs (auch laufendes Jahr).
+        years: set[str] = set()
+        for db_path in glob(os.path.join(_NQ_PRIMARY_DIR, 'nq_*.db')):
+            years.add(os.path.basename(db_path)[3:7])
+        for year_key in sorted(years):
+            month_dbs = [os.path.join(_NQ_PRIMARY_DIR, f"nq_{year_key}-{m:02d}.db") for m in range(1, 13)]
+            row = _sum_daily_deltas(month_dbs, f"{year_key}-%")
             if row:
-                by_key[row[0]] = _energy_payload_from_row(row[1:])
+                by_key[year_key] = _energy_payload_from_row(row)
     else:
         return jsonify({'error': 'invalid period_type/key'}), 400
 
