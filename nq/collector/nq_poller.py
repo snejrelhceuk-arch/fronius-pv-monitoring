@@ -370,6 +370,10 @@ def _limit_specs(gw: dict) -> list:
     if i_max:
         for ph, key in (("l1", "I_L1"), ("l2", "I_L2"), ("l3", "I_L3")):
             specs.append((f"i_max_{ph}", key, "hi", 0.0, i_max))
+    p_max = gw.get("p_max_w")
+    if p_max:
+        # Anschlussleistung (Betrag P_tot, Bezug wie Einspeisung) — Anschlussgröße.
+        specs.append(("p_max_tot", "P_tot", "hi", 0.0, p_max))
     lo, hi = gw.get("freq_min_hz"), gw.get("freq_max_hz")
     if lo and hi:
         nom = (lo + hi) / 2.0
@@ -420,20 +424,26 @@ class LimitMonitor:
         self._since: dict[str, float] = {}
         self._last_mail: dict[str, float] = {}
 
-    def check(self, conn, vals: dict, ts: float) -> None:
+    def check(self, conn, vals: dict, ts: float) -> str | None:
+        """Prüft Grenzen; mailt bei dauerhafter Ausschöpfung. Gibt den Namen einer
+        NEU aktiv gewordenen Grenze zurück (für Event-Schnipsel-Markierung), sonst None."""
         if not self.specs:
-            return
+            return None
         active = _evaluate_limits(vals, self.specs, self.crit_pct)
         active_names = {a[0] for a in active}
         for name in list(self._since):
             if name not in active_names:
                 self._since.pop(name, None)
+        newly = None
         for name, qty, value, threshold, pct in active:
             since = self._since.get(name)
             if since is None:
                 self._since[name] = ts
+                if newly is None:
+                    newly = name  # neue Grenzausschöpfung -> Event-Schnipsel
             elif ts - since >= self.window_s:
                 self._raise(conn, name, qty, value, threshold, pct, ts)
+        return newly
 
     def _raise(self, conn, name, qty, value, threshold, pct, ts) -> None:
         if ts - self._last_mail.get(name, 0.0) < self.cooldown_s:
@@ -535,7 +545,12 @@ def poller_loop(db_path: str, cfg: dict) -> None:
 
                 # WP1: Grenzwertüberwachung (best-effort, non-blocking)
                 try:
-                    limit_mon.check(conn, v, now)
+                    limit_trig = limit_mon.check(conn, v, now)
+                    # 3e: Anschlussgrößen-Überschreitung -> Event-Schnipsel speichern.
+                    if limit_trig and ev == 0 and (t0 - last_event_ts) >= cooldown_s:
+                        ev = 1
+                        events += 1
+                        last_event_ts = t0
                 except Exception as e:
                     print(f"[nq_poller/limit] Check-Fehler: {e}")
 

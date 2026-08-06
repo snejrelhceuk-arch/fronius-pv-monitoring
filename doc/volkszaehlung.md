@@ -5,7 +5,7 @@
 ## Übersicht
 
 **Gesamtgröße (Textdateien gezählt):** 1061 MB  
-**Gesamtzeilen (Code/Doku/Daten):** 279.503 Zeilen  
+**Gesamtzeilen (Code/Doku/Daten):** 279.523 Zeilen  
 **Gezählte Dateien:** 530  
 **Ausgeschlossene Verzeichnisse:** 25 (.venv, __pycache__, node_modules, .git …)
 
@@ -13,9 +13,9 @@
 
 | Sprache/Typ | Dateien | Zeilen | Anteil |
 |---|---|---|---|
-| **CSV** | 29 | 168.062 | 60.1% |
-| **Python** | 178 | 55.543 | 19.9% |
-| **Markdown** | 140 | 24.391 | 8.7% |
+| **CSV** | 29 | 168.066 | 60.1% |
+| **Python** | 178 | 55.558 | 19.9% |
+| **Markdown** | 140 | 24.392 | 8.7% |
 | **HTML** | 20 | 15.063 | 5.4% |
 | **Shell** | 61 | 4.751 | 1.7% |
 | **JSON** | 19 | 4.103 | 1.5% |
@@ -27,7 +27,7 @@
 | **systemd** | 31 | 538 | 0.2% |
 | **CONF** | 2 | 51 | 0.0% |
 | **TOML** | 1 | 24 | 0.0% |
-| **Total** | 530 | 279.503 | 100% |
+| **Total** | 530 | 279.523 | 100% |
 
 ## Python-Code nach ABCDEN-Rollen
 
@@ -38,7 +38,7 @@
 | **B** Web-API | `routes/` | 19 | 10.011 |
 | **D** Diagnos | `diagnos/` | 5 | 1.619 |
 | **E** Steuerbox | `steuerbox/` | 5 | 1.235 |
-| **N** Netzqualität | `nq/` | 30 | 6.654 |
+| **N** Netzqualität | `nq/` | 30 | 6.669 |
 
 ## Größte Python-Dateien (Top 10)
 
