@@ -24,7 +24,8 @@
 4. **Wattpilot ≠ WP.** „WP" = Wärmepumpe (Dimplex). „Wattpilot" = EV-Lader (Fronius). Niemals verwechseln.
 5. **Keine destruktiven Git-Aktionen** (`push --force`, `reset --hard` auf Published, `--no-verify`) ohne explizite Freigabe.
 6. **Keine TODOs in Subdirectories.** Alle offenen Aufgaben gehören in `doc/TODO.md`.
-7. **Veröffentlichung:** Vor jedem Push prüft der Publish-Guard (s. `doc/system/PUBLISH_GUARD.md`). Niemals umgehen.8. **Rolle N ist read-only gegenüber Produktion.** PAC4200/NQ schreibt nur eigene NQ-DBs, niemals `data.db` oder Aktoren. Tech-Collector arbeitet RAM-first (tmpfs), SD nur selten.
+7. **Veröffentlichung:** Vor jedem Push prüft der Publish-Guard (s. `doc/system/PUBLISH_GUARD.md`). Niemals umgehen.
+8. **Rolle N ist read-only gegenüber Produktions-DATEN.** PAC4200/NQ schreibt nur eigene NQ-DBs, niemals `data.db` oder Aktoren. Tech-Collector arbeitet RAM-first (tmpfs), SD nur selten. (Betrifft **Runtime-Daten**, nicht Code-Deployment — s. Deployment-Policy unten.)
 ## Hosts (knapp)
 
 Nach der **REFORMATION** (Umzug der Produktion auf Pi5, 2026-07-11) gilt die Vier-Host-Topologie:
@@ -35,6 +36,16 @@ Nach der **REFORMATION** (Umzug der Produktion auf Pi5, 2026-07-11) gilt die Vie
 - **Pi4-Tech** `192.0.2.181` (admin) — WP/HW-Bridge (RS485, `WP_BACKEND_MODE=local`), **keine** Engine; **PAC4200-RAM-Collector (Rolle N)**. Pi 4 Rev 1.5 · Cortex-A72 4×1,8 GHz · 4 GB RAM · microSD 64 GB · Debian 13. UFW aktiv.
 
 Rollen werden über die `.role`-Datei (gitignored) gesteuert, nicht über divergenten Code.
+
+**Deployment-Policy (erlaubt & teils notwendig):** Entwickelt wird auf **Primary**; von dort wird per
+`rsync` zu den integrierten Hosts (Tech/FB/Küche) synchronisiert und der jeweilige Dienst neu gestartet.
+Code-Deployment + Service-Restart auf **allen** integrierten Pi's ist **autorisiert** — genau wie auf
+Primary (z. B. Rolle-N-Collector auf Tech, Ticker/LLM-Sync auf FB). Das berührt **nicht** No-Go #8:
+der Runtime-Read-only-Grundsatz (Rolle N schreibt keine Produktionsdaten/Aktoren) bleibt; hier geht es
+rein ums **Ausrollen von Code**. Auf den Hosts liegende pv-system-Programme/Skripte/Docs, die im
+Primary-Workspace fehlen, werden **in den Primary-Workspace integriert** (nicht der volkszaehlung-Hook
+angepasst) — Primary ist die vollständige Quelle. Deploy-Kommandos + Dienst→Host-Zuordnung:
+[`doc/llm/cards/system-hosts.card.md`](doc/llm/cards/system-hosts.card.md).
 
 ## Lade-Hierarchie für deine Aufgabe
 
