@@ -95,7 +95,7 @@
     </div>
 
     <div id="chart"></div>
-    <div class="hint" id="hint">Feste Darstellung · Tag = 5-min-Raster · Marker ⚡ = Event (Klick → 200-ms-Schnipsel). Quelle: PAC4200-Aggregate (Primary-SD).</div>
+    <div class="hint" id="hint">Feste Tag-Ansicht (5-min-Raster). Marker ⚡ anklicken → Messgröße am Event-Zeitpunkt; reinzoomen (Scrollen/Slider) → 200-ms-Schnipsel. Quelle: PAC4200-Aggregate (Primary-SD).</div>
 
     <div class="overlay-backdrop" id="ovBackdrop"></div>
     <div class="overlay" id="overlay">
@@ -123,6 +123,11 @@
     if (!ctx.period) ctx.period = 'tag';
     let curQty = 'U_L1N';
     let events = [];
+    let currentRows = [];
+    let focusEvent = null;      // aktuell fokussiertes Event (Marker-Klick)
+    let lastSnippetEid = null;  // zuletzt bei Zoom eingeblendeter Schnipsel
+    let pendingFocus = null;    // Fokus nach Auflösungswechsel nachziehen
+    let dzTimer = null;
 
     function setStatus(ok, msg) {
         $('dot').className = 'dot ' + (ok ? 'ok' : 'err');
@@ -204,21 +209,40 @@
         const mx = rows.map(r => (r[qty + '_max'] == null ? null : +r[qty + '_max'].toFixed(3)));
         const band = mx.map((v, i) => (v == null || mn[i] == null) ? null : +(v - mn[i]).toFixed(3));
         const markPoints = eventMarkPoints(qty, rows);
+        const isDay = ctx.period === 'tag';
         return {
             backgroundColor: 'transparent',
-            grid: { left: 56, right: 20, top: 20, bottom: 46 },
+            grid: { left: 56, right: 20, top: 20, bottom: isDay ? 64 : 46 },
             tooltip: PVChart.tooltipResponsive({ trigger: 'axis' }),
             xAxis: { type: 'time', axisLine: { lineStyle: { color: '#334155' } }, axisLabel: { color: '#94a3b8' } },
             yAxis: { type: 'value', scale: true, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } }, axisLabel: { color: '#94a3b8' } },
+            dataZoom: isDay ? [
+                { type: 'inside', filterMode: 'none', zoomOnMouseWheel: true, moveOnMouseMove: false },
+                { type: 'slider', height: 16, bottom: 22, filterMode: 'none', brushSelect: false,
+                  borderColor: 'rgba(255,255,255,0.12)', fillerColor: 'rgba(96,165,250,0.15)',
+                  handleStyle: { color: '#60a5fa' }, dataBackground: { lineStyle: { color: '#334155' } },
+                  textStyle: { color: '#94a3b8', fontSize: 10 } }
+            ] : undefined,
             series: [
                 { name: 'min', type: 'line', data: xs.map((x, i) => [x, mn[i]]), lineStyle: { opacity: 0 }, symbol: 'none', stack: 'band', silent: true },
                 { name: 'Spanne', type: 'line', data: xs.map((x, i) => [x, band[i]]), lineStyle: { opacity: 0 }, areaStyle: { color: 'rgba(96,165,250,0.18)' }, symbol: 'none', stack: 'band', silent: true },
                 {
                     name: qty, type: 'line', data: xs.map((x, i) => [x, avg[i]]), showSymbol: false,
                     lineStyle: { color: '#60a5fa', width: 1.5 }, connectNulls: false,
-                    markPoint: markPoints
+                    markPoint: markPoints, markLine: focusMarkLine()
                 }
             ]
+        };
+    }
+
+    // Gestrichelte Linie am fokussierten Event (nach Marker-Klick).
+    function focusMarkLine() {
+        if (ctx.period !== 'tag' || !focusEvent) return undefined;
+        return {
+            silent: true, symbol: 'none',
+            lineStyle: { color: '#f59e0b', width: 1, type: 'dashed' },
+            label: { show: false },
+            data: [{ xAxis: new Date(focusEvent.ts * 1000) }]
         };
     }
 
@@ -237,7 +261,7 @@
                     xAxis: new Date(e.ts * 1000), yAxis: (y == null ? undefined : y),
                     value: '⚡', itemStyle: { color: e.has_snippet ? '#f59e0b' : '#64748b' },
                     label: { formatter: '⚡', color: '#111' },
-                    _eid: e.event_id, _month: e.month, _snip: e.has_snippet
+                    _eid: e.event_id, _month: e.month, _snip: e.has_snippet, _ts: e.ts, _pq: e.peak_qty
                 };
             })
         };
@@ -246,18 +270,24 @@
     async function load() {
         setStatus(true, 'Lade…');
         const b = windowBounds();
+        // Genug Event-Historie laden, damit der betrachtete Tag Marker zeigt (Cap 60 d).
+        const evDays = Math.min(60, Math.max(2, Math.ceil((Date.now() / 1000 - b.start) / 86400) + 1));
         try {
             const [aggRes, evRes] = await Promise.all([
                 fetch(`/api/nq/aggregates?range=${b.range}&start=${b.start}&end=${b.end}`).then(r => r.json()),
-                ctx.period === 'tag' ? fetch(`/api/nq/analyse/events?days=2`).then(r => r.json()) : Promise.resolve({ events: [] })
+                ctx.period === 'tag' ? fetch(`/api/nq/analyse/events?days=${evDays}`).then(r => r.json()) : Promise.resolve({ events: [] })
             ]);
             events = evRes.events || [];
             const rows = aggRes.data || [];
+            currentRows = rows;
+            lastSnippetEid = null;
             const qs = (aggRes.quantities || []);
             populateQty(qs);
             if (!rows.length) { chart.clear(); setStatus(false, 'Keine Daten'); return; }
+            if (!pendingFocus) focusEvent = null;
             chart.setOption(bandOption(rows, curQty), true);
             setStatus(true, `${rows.length} Punkte · ${b.range}` + (events.length ? ` · ${events.length} Events` : ''));
+            if (pendingFocus) { const e = pendingFocus; pendingFocus = null; applyFocus(e); }
         } catch (e) {
             setStatus(false, 'Fehler: ' + e.message);
         }
@@ -274,7 +304,49 @@
         sel.value = curQty;
         sel.dataset.filled = '1';
     }
+    // ── Event-Fokus (Marker-Klick → Messgröße am Event-Zeitpunkt, Tag) ─────
+    function focusOnEvent(e) {
+        if (!e) return;
+        const evDate = new Date(e.ts * 1000);
+        const sameDay = ctx.period === 'tag' && ctx.date === NC.formatDateISO(evDate);
+        if (!sameDay) {
+            ctx = { period: 'tag', date: NC.formatDateISO(evDate) };
+            pendingFocus = e;
+            commitAndLoad();
+        } else {
+            applyFocus(e);
+        }
+    }
 
+    function applyFocus(e) {
+        focusEvent = e;
+        const sel = $('qty');
+        const opts = Array.from(sel.options).map(o => o.value);
+        // Legacy-Kurznamen (z. B. 'f') auf Chart-Größen mappen.
+        const ALIAS = { f: 'FREQ', freq: 'FREQ', u_l1n: 'U_L1N', u_l2n: 'U_L2N', u_l3n: 'U_L3N' };
+        let pq = e.peak_qty;
+        if (pq && !opts.includes(pq) && ALIAS[String(pq).toLowerCase()]) pq = ALIAS[String(pq).toLowerCase()];
+        if (pq && opts.includes(pq)) { curQty = pq; sel.value = curQty; }
+        chart.setOption(bandOption(currentRows, curQty), true);
+        const t = e.ts * 1000;
+        chart.dispatchAction({ type: 'dataZoom', startValue: t - 30 * 60000, endValue: t + 30 * 60000 });
+        const hhmm = new Date(t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+        $('hint').textContent = `⚡ ${hhmm} · ${e.kind || 'Event'}${e.peak_qty ? ' · ' + e.peak_qty : ''}` +
+            (e.has_snippet ? ' — weiter reinzoomen (Scrollen/Slider) blendet den 200-ms-Schnipsel ein.'
+                           : ' (kein Schnipsel gespeichert).');
+    }
+
+    // Reinzoomen auf ein Snippet-Event blendet den 200-ms-Schnipsel ein.
+    function onZoom() {
+        if (ctx.period !== 'tag') return;
+        let ext;
+        try { ext = chart.getModel().getComponent('xAxis', 0).axis.scale.getExtent(); }
+        catch (_) { return; }
+        const spanMin = (ext[1] - ext[0]) / 60000;
+        if (spanMin > 12) { lastSnippetEid = null; return; }
+        const ev = events.find(x => x.has_snippet && x.ts * 1000 >= ext[0] && x.ts * 1000 <= ext[1]);
+        if (ev && ev.event_id !== lastSnippetEid) { lastSnippetEid = ev.event_id; openEvent(ev.event_id, ev.month); }
+    }
     // ── Event-Drill-down (Overlay) ─────────────────────────────
     let ovSegs = [], ovSeg = 0;
     function openEvent(eid, month) {
@@ -325,8 +397,14 @@
 
     // ── Events / Interaktion ───────────────────────────────────
     chart.on('click', p => {
-        if (p.componentType === 'markPoint' && p.data && p.data._eid != null) openEvent(p.data._eid, p.data._month);
+        if (p.componentType === 'markPoint' && p.data && p.data._ts != null) {
+            focusOnEvent({
+                ts: p.data._ts, event_id: p.data._eid, month: p.data._month,
+                has_snippet: p.data._snip, peak_qty: p.data._pq
+            });
+        }
     });
+    chart.on('dataZoom', () => { clearTimeout(dzTimer); dzTimer = setTimeout(onZoom, 300); });
     $('ovClose').addEventListener('click', closeOverlay);
     $('ovBackdrop').addEventListener('click', closeOverlay);
     $('segPrev').addEventListener('click', () => { if (ovSeg > 0) { ovSeg--; renderSeg(); } });
