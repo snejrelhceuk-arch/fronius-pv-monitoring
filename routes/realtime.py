@@ -834,10 +834,12 @@ _FRONIUS_AC_POWER_CHANNEL = "ACBRIDGE_POWERACTIVE_SUM_MEAN_F32"
 
 
 def _read_fronius_ac_power(api_url, timeout=1.5):
-    """AC-Wirkleistung [W] aus der geräteeigenen Fronius /components/readable-API.
+    """AC-Wirkleistung [W] aus der geräteeigenen Fronius-API (Rolle B, read-only).
 
-    Read-only HTTP GET (Rolle B). Gibt None zurück, wenn nicht konfiguriert,
-    nicht erreichbar oder kein Leistungskanal vorhanden.
+    Erkennt zwei Formate automatisch:
+      - Solar-API ``GetInverterRealtimeData`` → ``Body.Data.PAC.Value`` (z. B. F3, DT=111)
+      - Gen24 ``/components/readable`` → ``…channels.ACBRIDGE_POWERACTIVE_SUM_MEAN_F32`` (z. B. F2)
+    Gibt None zurück, wenn nicht konfiguriert, nicht erreichbar oder kein Leistungsfeld.
     """
     if not api_url:
         return None
@@ -847,12 +849,18 @@ def _read_fronius_ac_power(api_url, timeout=1.5):
         if resp.status_code != 200:
             return None
         data = resp.json().get("Body", {}).get("Data", {})
+        # Solar-API (CommonInverterData): Body.Data.PAC.Value
+        pac = data.get("PAC")
+        if isinstance(pac, dict) and pac.get("Value") is not None:
+            return round(float(pac["Value"]), 0)
+        # Gen24 /components/readable: Body.Data.<Inverter*>.channels.<AC-Power-Kanal>
         inv_key = next((k for k in data if "Inverter" in k), None)
-        if inv_key is None:
-            return None
-        channels = data.get(inv_key, {}).get("channels", {})
-        val = channels.get(_FRONIUS_AC_POWER_CHANNEL)
-        return round(float(val), 0) if val is not None else None
+        if inv_key is not None:
+            channels = data.get(inv_key, {}).get("channels", {})
+            val = channels.get(_FRONIUS_AC_POWER_CHANNEL)
+            if val is not None:
+                return round(float(val), 0)
+        return None
     except Exception as exc:
         logging.debug(f"Fronius AC-Power read failed: {exc}")
         return None

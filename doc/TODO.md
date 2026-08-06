@@ -65,7 +65,7 @@ Longterm-Offload-Skript, Einmal-Skripte entfernt (Snapshot auf Pi5-FB).
 
 - [ ] **F1-Soft-Standby via SunSpec Model 123 `Conn`** (Disconnect/Connect, update-sicher) evaluieren — Schreibpfad zum GEN24 neu + risikobehaftet (Batterie-WR), erst nach Einzelvalidierung, gated, nie autonom.
 - [ ] **F2-Standby via eigenem Modbus (Model 123 `Conn`)** implementieren — F2 hat eigene IP + Modbus TCP:502 + Solar-API (verifiziert 2026-07-02, analog F1). Gated, Einzelvalidierung.
-- [ ] **F3-IP in `.infra.local`** (`PV_TERTIARY_INVERTER_API`) + Collector-Monitoring aufnehmen; danach **F3-Standby via eigenem Modbus** (Model 123 `Conn`) implementieren — gated, Einzelvalidierung.
+- [ ] **F3-Standby via eigenem Modbus (Model 123 `Conn`)** implementieren — F3-IP gesetzt (`PV_TERTIARY_INVERTER_API`, .124; Solar-API `PAC`, Flow-Bubble aktiv seit 2026-08-06); Standby analog F1/F2, gated, Einzelvalidierung.
 - [ ] **Read-only WR-Link-Health-Check:** Fronius interne Config-API (Soft-Limit=0 W + Multi-WR-Limiting gesetzt?) + Runaway-Frühsignatur (F3 hoch trotz Einspeisung + Batt voll/gedeckelt + F1/F2 abgeregelt) → alarmieren, kein Aktor.
 - [ ] **Reset-Sequenz** (F3 aus → F2 aus → F1 Conn-Reset → +3 min F2 → F3) erst nach vorhandener Relais-HW/F3-Zugang implementieren + jeden Schritt einzeln verifizieren.
 

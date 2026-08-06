@@ -24,6 +24,7 @@ PV_PRIMARY_DB_PATH=/srv/pv-system/data.db
 
 PV_WATTPILOT_IP=192.0.2.176
 PV_SECONDARY_INVERTER_API=http://192.0.2.123/components/readable
+PV_TERTIARY_INVERTER_API=http://192.0.2.124/solar_api/v1/GetInverterRealtimeData.cgi?Scope=Device&DeviceId=1&DataCollection=CommonInverterData
 
 PV_PI5_BACKUP_HOST=backup-user@backup-host
 PV_PI5_BACKUP_DB_PATH=/srv/pv-system/data.db
