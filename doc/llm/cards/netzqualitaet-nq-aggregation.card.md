@@ -7,6 +7,7 @@ tags: [netzqualitaet, nq, transfer, aggregation, primary, rolle-n]
 status: experimental
 last_review: 2026-08-06
 changes:
+	- 2026-08-06 (Musteranalyse-Datensatz-Tabelle): Neue Primary-Tabelle `nq_pattern_5min` (`nq/schema/nq_primary_schema.sql`) — residual-bereinigter Netz-Signaldatensatz (u_clean/u_meas je Phase, freq, pf, phi, i, du_int_max, origin). Erzeuger `nq/analysis/nq_pattern.py`.
 	- 2026-08-06 (Fixpunkt-Backfill): Neues Einmal-Werkzeug `nq/transfer/nq_energy_backfill.py:backfill` — füllt die NQ-Energie-Fixpunkte (`nq_energy_daily`/`nq_energy_checkpoint` + Monats-/Jahres-Rollup) für den Zeitraum VOR PAC-Start read-only aus der Produktions-`daily_data` (`W_Imp/Exp_Netz_*` → `wh_imp/wh_exp`, `src='pv_backfill'`). Idempotent, Dry-Run-Default, echte PAC-Zeilen (`counter`) werden nie überschrieben. Ausgeführt 2026-08-06: 189 Tage (2026-01-01…07-11), Monate 01–07 + Jahr 2026.
 	- 2026-08-06: Legacy-Verweis auf `nq/legacy/nq_export.py` umgestellt (Modul `netzqualitaet/` → `nq/legacy/` konsolidiert).
 	- 2026-07-25 (Read-Seite 10s/5min): `nq/tech_read.py:fetch_agg` mergt jetzt Primary-`nq_5min` (vollständige Historie) + Techs Live-Rand statt entweder/oder — Techs `nq_5min` wird nach jedem Transfer geleert und deckt nur den Rand ab (`source=nq_5min_merged`). Neu `fetch_agg_fast`: 10-s-Aggregat direkt aus Techs `nq_raw_fast`/`nq_raw_medium` (~12 h RAM-Retention) via SSH-SQL + 5-min-Baseline aus Primary davor (`hires_start` markiert den 10-s-Beginn). Kein neuer Schreibpfad; Rolle N bleibt read-only.

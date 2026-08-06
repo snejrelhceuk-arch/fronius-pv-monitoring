@@ -309,6 +309,13 @@ def analyze_day(day: str, data_db: str | None = None) -> int:
     ts_start = int(day_dt.timestamp())
     ts_end = ts_start + 86400
 
+    # Sauberen Musteranalyse-Datensatz (nq_pattern_5min) mitführen (best-effort).
+    try:
+        from nq.analysis import nq_pattern
+        nq_pattern.build_day(day)
+    except Exception as _pe:
+        print(f"[nq_events] Pattern-Datensatz übersprungen: {_pe}")
+
     return analyze_window(ts_start, ts_end, data_db=data_db)
 
 

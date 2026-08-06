@@ -212,6 +212,33 @@ Ziel: belastbare Aussagen zu drei Ebenen (Details siehe
 - **Sehr niederfrequent (VLF):** Tages-/Wochen-/Saisonprofile, langsame Drift
   von U/f/THD, Changepoints, Kalenderprofile.
 
+### 8a. Sauberer Musteranalyse-Datensatz (`nq_pattern_5min`)
+
+Für die eigentliche Netz-Musteranalyse (Aufschwingen im europäischen Netz,
+Reflexionen an Netzgrenzen, LF-Schwingungspakete) muss das **interne** Signal
+(hinter dem Netzanschlusspunkt: Lastsprünge, PF/U/S/Q-Änderungen) entfernt sein.
+
+[`nq/analysis/nq_pattern.py`](../../nq/analysis/nq_pattern.py) erzeugt daraus den
+**permanenten, bereinigten** Datensatz `nq_pattern_5min` (Primary-SD) aus `nq_5min`.
+Wissenschaftliche Methode = **Residual-/Deconvolution-Filter** (Ohmsches Gesetz +
+Superposition, Standard-Netzspannungsabfall-Formel):
+
+```
+ΔU_intern_Lx = I_Lx · (R·cosφ_Lx + X·sinφ_Lx)
+U_grid_Lx    = U_gemessen_Lx + ΔU_intern_Lx        (interner IR-Abfall zurück-addiert)
+```
+
+mit der gemessenen Schleifenimpedanz Z=R+jX aus [`config/nq_impedance.json`](../../config/nq_impedance.json).
+Ergebnis-Spalten: netzseitige `u_clean_lx`, Referenz `u_meas_lx`, `freq` (systemweit,
+keine Korrektur), `pf_lx`, `phi_lx`, Referenz `i_lx`, `du_int_max`, `origin`
+(`intern`/`extern` je Bucket-Dominanz). Rohdaten (`nq_5min`) bleiben unverändert.
+
+- Rückwirkend: `python3 -m nq.analysis.nq_pattern --from … --to …` (einmalig aus PAC-Daten).
+- Laufend: `nq_events.analyze_day` triggert `nq_pattern.build_day` (täglich, best-effort).
+- Read-only-API: `/api/nq/pattern?day=YYYY-MM-DD` (oder `start=&end=`).
+- **Offen (Ausbau):** ggf. THD/Harmonik + `df/dt` als weitere Musteranalyse-Größen
+  ergänzen; Frontend `nq_analyse_view.html` auf diesen Datensatz mit Zeitkontext umstellen.
+
 ---
 
 ## 9. Implementierungsphasen (eigene Chats)

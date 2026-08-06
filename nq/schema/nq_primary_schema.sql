@@ -219,6 +219,29 @@ CREATE TABLE IF NOT EXISTS nq_energy_compare (
 );
 
 -- ---------------------------------------------------------------------------
+-- Musteranalyse-Datensatz (NQ2/WP6): permanenter "sauberer" Netz-Signaldatensatz.
+-- Grid-seitige Spannung = gemessene PCC-Spannung + interner IR-Abfall zurueck-
+-- addiert (dU_int = I*(R*cos_phi + X*sin_phi), Z aus config/nq_impedance.json).
+-- Damit sind hinter dem Netzanschlusspunkt liegende (interne) Lasteffekte
+-- entfernt; uebrig bleibt das netzseitige (externe) Signal fuer Aufschwing-/
+-- Reflexions-/LF-Paket-Analyse. f ist systemweit (keine Korrektur). Quelle: nq_5min.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS nq_pattern_5min (
+    ts          INTEGER PRIMARY KEY,   -- 5-min-Bucket (wie nq_5min)
+    u_clean_l1  REAL, u_clean_l2 REAL, u_clean_l3 REAL,   -- netzseitige U_LN [V] (intern bereinigt)
+    u_meas_l1   REAL, u_meas_l2  REAL, u_meas_l3  REAL,   -- Referenz: gemessene PCC-U_LN [V]
+    freq        REAL,                                     -- Netzfrequenz [Hz] (systemweit)
+    pf_l1       REAL, pf_l2 REAL, pf_l3 REAL,             -- Leistungsfaktor (signiert, cos_phi)
+    phi_l1      REAL, phi_l2 REAL, phi_l3 REAL,           -- Phasenwinkel phi [grad]
+    i_l1        REAL, i_l2 REAL, i_l3 REAL,               -- Referenz: signierter Strom [A]
+    du_int_max  REAL,                                     -- max |dU_int| ueber die Phasen [V]
+    origin      TEXT,                                     -- 'extern' | 'intern' (Bucket-Dominanz)
+    n_samples   INTEGER,
+    src         TEXT,                                     -- 'pac_residual'
+    created_ts  INTEGER NOT NULL
+);
+
+-- ---------------------------------------------------------------------------
 -- Ingest-Log
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS nq_ingest_log (

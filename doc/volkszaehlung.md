@@ -5,29 +5,29 @@
 ## Übersicht
 
 **Gesamtgröße (Textdateien gezählt):** 1061 MB  
-**Gesamtzeilen (Code/Doku/Daten):** 279.792 Zeilen  
-**Gezählte Dateien:** 530  
+**Gesamtzeilen (Code/Doku/Daten):** 280.146 Zeilen  
+**Gezählte Dateien:** 531  
 **Ausgeschlossene Verzeichnisse:** 25 (.venv, __pycache__, node_modules, .git …)
 
 ## Nach Sprache/Typ
 
 | Sprache/Typ | Dateien | Zeilen | Anteil |
 |---|---|---|---|
-| **CSV** | 29 | 168.253 | 60.1% |
-| **Python** | 178 | 55.558 | 19.9% |
-| **Markdown** | 140 | 24.394 | 8.7% |
+| **CSV** | 29 | 168.262 | 60.1% |
+| **Python** | 179 | 55.849 | 19.9% |
+| **Markdown** | 140 | 24.425 | 8.7% |
 | **HTML** | 20 | 15.141 | 5.4% |
 | **Shell** | 61 | 4.751 | 1.7% |
 | **JSON** | 19 | 4.103 | 1.5% |
 | **TXT** | 28 | 3.015 | 1.1% |
-| **SQL** | 10 | 1.387 | 0.5% |
+| **SQL** | 10 | 1.410 | 0.5% |
 | **CSS** | 4 | 1.108 | 0.4% |
 | **JavaScript** | 4 | 907 | 0.3% |
 | **YAML** | 3 | 562 | 0.2% |
 | **systemd** | 31 | 538 | 0.2% |
 | **CONF** | 2 | 51 | 0.0% |
 | **TOML** | 1 | 24 | 0.0% |
-| **Total** | 530 | 279.792 | 100% |
+| **Total** | 531 | 280.146 | 100% |
 
 ## Python-Code nach ABCDEN-Rollen
 
@@ -35,10 +35,10 @@
 |---|---|---|---|
 | **C** Automation | `automation/` | 41 | 14.363 |
 | **A** Collector | `collector/` | 18 | 4.689 |
-| **B** Web-API | `routes/` | 19 | 10.011 |
+| **B** Web-API | `routes/` | 19 | 10.065 |
 | **D** Diagnos | `diagnos/` | 5 | 1.619 |
 | **E** Steuerbox | `steuerbox/` | 5 | 1.235 |
-| **N** Netzqualität | `nq/` | 30 | 6.669 |
+| **N** Netzqualität | `nq/` | 31 | 6.906 |
 
 ## Größte Python-Dateien (Top 10)
 
@@ -48,10 +48,10 @@
 1. `routes/verbraucher.py` — 1.352 Zeilen
 1. `solar_forecast.py` — 1.143 Zeilen
 1. `automation/engine/regeln/waermepumpe.py` — 1.132 Zeilen
+1. `routes/pac4200.py` — 1.055 Zeilen
 1. `automation/engine/event_notifier.py` — 1.046 Zeilen
 1. `automation/engine/regeln/soc_steuerung.py` — 1.037 Zeilen
 1. `routes/realtime.py` — 1.008 Zeilen
-1. `routes/pac4200.py` — 1.001 Zeilen
 
 ## Ausgeschlossene Bereiche
 

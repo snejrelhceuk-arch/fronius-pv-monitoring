@@ -625,6 +625,60 @@ def api_nq_energy_map(period_type, period_key):
 
 
 # ---------------------------------------------------------------------------
+# Musteranalyse-Datensatz (residual-bereinigt, nq_pattern_5min) — read-only
+# ---------------------------------------------------------------------------
+
+def _months_in_range(start, end):
+    import datetime as _dt
+    out = []
+    d = _dt.date.fromtimestamp(start).replace(day=1)
+    last = _dt.date.fromtimestamp(max(start, end - 1))
+    while d <= last:
+        out.append(d.strftime('%Y-%m'))
+        d = (d.replace(day=28) + _dt.timedelta(days=4)).replace(day=1)
+    return out
+
+
+@bp.route('/api/nq/pattern')
+def api_nq_pattern():
+    """Sauberer Musteranalyse-Datensatz (`nq_pattern_5min`): netzseitige U, f, PF, phi.
+
+    Read-only. Parameter: ``?day=YYYY-MM-DD`` ODER ``?start=&end=`` (Unix-s).
+    Interne (hinter dem PCC liegende) Lasteffekte sind residual-bereinigt.
+    """
+    day = request.args.get('day')
+    if day:
+        try:
+            t = _time.strptime(day, '%Y-%m-%d')
+            start = int(_time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1)))
+            end = start + 86400
+        except Exception:
+            return jsonify({'error': 'invalid day'}), 400
+    else:
+        end = request.args.get('end', type=int) or int(_time.time())
+        start = request.args.get('start', type=int) or (end - 86400)
+    cols = ['ts', 'u_clean_l1', 'u_clean_l2', 'u_clean_l3', 'u_meas_l1', 'u_meas_l2', 'u_meas_l3',
+            'freq', 'pf_l1', 'pf_l2', 'pf_l3', 'phi_l1', 'phi_l2', 'phi_l3', 'du_int_max', 'origin']
+    data = []
+    for month in _months_in_range(start, end):
+        conn = _open_legacy(_nq_primary_db(month))
+        if not conn:
+            continue
+        try:
+            rows = conn.execute(
+                f"SELECT {','.join(cols)} FROM nq_pattern_5min WHERE ts >= ? AND ts < ? ORDER BY ts",
+                (start, end)).fetchall()
+        except Exception:
+            rows = []
+        finally:
+            conn.close()
+        for r in rows:
+            data.append(dict(zip(cols, r)))
+    return jsonify({'data': data, 'points': len(data), 'start': start, 'end': end,
+                    'source': 'nq_pattern_5min', 'columns': cols})
+
+
+# ---------------------------------------------------------------------------
 # NQ2 WP4: Event-Schnipsel-Drill-down (200-ms-RAW-Serie je Event)
 # ---------------------------------------------------------------------------
 

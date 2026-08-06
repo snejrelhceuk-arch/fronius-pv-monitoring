@@ -7,6 +7,7 @@ tags: [netzqualitaet, nq, analyse, events, harmonische, frequenz, rolle-n]
 status: stable
 last_review: 2026-08-06
 changes:
+	- 2026-08-06 (Musteranalyse-Datensatz): Neuer **sauberer Netz-Signaldatensatz** `nq/analysis/nq_pattern.py:build_range`/`build_day`/`backfill` → `nq_pattern_5min` (Primary). Residual-Deconvolution (ΔU_int = I·(R·cosφ + X·sinφ), Z aus `nq_impedance.json`) entfernt **interne** (hinter-PCC) Lasteffekte → netzseitige U + f + PF + φ + `origin` (intern/extern). `analyze_day` triggert `build_day` (best-effort). Rückwirkend erzeugt (6526 Buckets, 2026-07-12…08-06). API `routes/pac4200.py:/api/nq/pattern`.
 	- 2026-08-06: Methodik-Verweis auf `nq/legacy/nq_analysis.py` umgestellt (Modul `netzqualitaet/` → `nq/legacy/` konsolidiert); Kommentar in `nq/analysis/nq_nf.py` nachgezogen.
 	- 2026-07-16 (l): **Dual-Modus: 4h HF/NF + täglich VLF.** `nq/analysis/nq_events.py` Refactor: neue `analyze_window(ts_start, ts_end, bands=[...])` für Fenster-basierte Analysen (HF/NF alle 4h), alte `analyze_day(day)` → Backward-Compat-Wrapper; CLI: `--hours N --bands HF_local,NF_global` für 4h-Läufe. Systemd: `pv-nq-analysis` = VLF täglich 00:30 (Vortag), `pv-nq-analysis-hf-nf` = HF/NF alle 4h (00:30,04:30,...,20:30, aktuelle Daten). Idempotent per INSERT OR REPLACE; Duplikat-Key bleibt Trigger+Stunden-Bucket.
 	- 2026-07-14 (d): **Events lesen keine 10s-Skalare mehr.** `nq/analysis/nq_events.py:_load_ts_series` nutzt jetzt `nq_5min` (meas='', phase=0, ord=0) als Skalarquelle; Meldungstexte entsprechend angepasst.
@@ -33,6 +34,7 @@ global-niederfrequent (`NF_global`), sehr niederfrequent (`VLF`).
 - **Ereignis-Katalog + Datenquellen:** `nq/schema/nq_primary_schema.sql` (`nq_events`, `nq_5min`, `nq_hourly`, `nq_daily`, `nq_event_*`)
 - **Konfiguration:** `config/nq_config.json` → `analysis`-Block
 - **Impedanz:** `config/nq_impedance.json` (R=163 mΩ, X=251 mΩ, Z=299 mΩ)
+- **Musteranalyse-Datensatz (residual-bereinigt):** `nq/analysis/nq_pattern.py:build_range` → `nq_pattern_5min` (netzseitige U/f/PF/φ, `origin`); Serve: `routes/pac4200.py:api_nq_pattern` (`/api/nq/pattern`)
 - **Gemeinsame Helfer:** `nq/nq_common.py`
 - **Methodik-Vorbild:** Legacy `nq/legacy/nq_analysis.py` (DFD, Boundary-Events)
 
