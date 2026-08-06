@@ -18,7 +18,7 @@ import config
 
 bp = Blueprint('netzqualitaet', __name__)
 
-NQ_DB_DIR = os.path.join(config.BASE_DIR, 'netzqualitaet', 'db')
+NQ_DB_DIR = os.path.join(config.BASE_DIR, 'nq', 'legacy', 'db')
 SQRT3 = math.sqrt(3)
 # Plausibility corridors
 VOLTAGE_MIN = 200.0
@@ -811,7 +811,7 @@ def api_netzqualitaet_analyse():
     """15-min-Analyse-Overlay: Blockgrenzen + DFD-Events + Tageszusammenfassung.
 
     Parameter: ?date=YYYY-MM-DD (optional, default heute)
-    Quelle: netzqualitaet/db/nq_YYYY-MM.db (aus nq_analysis.py)
+    Quelle: nq/legacy/db/nq_YYYY-MM.db (aus nq_analysis.py)
     """
     try:
         date_param = request.args.get('date')

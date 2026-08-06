@@ -87,7 +87,7 @@ Konvention ist konsistent zwischen Live-Snapshot, Screens und Poller.
 - **Primary-Pipeline dormant:** In `/etc/systemd/system` war **nur**
   `pv-nq-energy-rollup` installiert. `pv-nq-agg-transfer.timer` und
   `pv-nq-aggregate.timer` **fehlten** → Transfer/Aggregation liefen nie.
-  Cron enthält nur die **Legacy**-Jobs (`netzqualitaet/nq_export.py`,
+  Cron enthält nur die **Legacy**-Jobs (`nq/legacy/nq_export.py`,
   `nq_analysis.py`), nicht die Rolle-N-Pipeline.
 - **Folge:** `nq_agg_10s`, `nq_5min`, `nq_hourly`, `nq_daily`, `nq_events`,
   `nq_ingest_log` in `nq/db/nq_2026-07.db` = **0 Zeilen**.

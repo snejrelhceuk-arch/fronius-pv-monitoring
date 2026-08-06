@@ -26,7 +26,7 @@ nach `nq_events` schreiben (Band `HF_local` | `NF_global` | `VLF`).
   - **Korrelation U↔I_lokal**: unterscheidet lokale Rückwirkung (eigene Last/PV) von netzseitiger Ursache (Strom-getrieben vs. Spannungs-getrieben).
 - **Global / niederfrequent (NF_global):**
   - Frequenz- und RMS-Muster im s–min-Bereich; Nadir/Gradienten (df/dt).
-  - **DFD an 15-min-Handelsgrenzen** (Muster aus Legacy `netzqualitaet/nq_analysis.py` / METHODEN.md).
+  - **DFD an 15-min-Handelsgrenzen** (Muster aus Legacy `nq/legacy/nq_analysis.py` / METHODEN.md).
 - **Sehr niederfrequent (VLF):**
   - Tages-/Wochen-/Saisonprofile von U/f/THD; langsame Drift; Changepoints; Kalenderprofile.
 

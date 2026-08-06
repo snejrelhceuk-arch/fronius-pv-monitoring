@@ -163,7 +163,7 @@ class NQNotifier:
 
         if stale > 0:
             lines.append(
-                f'  ({stale} stabile NQ-Befund(e) unterdrueckt — siehe netzqualitaet/nq_analysis.py)'
+                f'  ({stale} stabile NQ-Befund(e) unterdrueckt — siehe nq/legacy/nq_analysis.py)'
             )
 
         return lines

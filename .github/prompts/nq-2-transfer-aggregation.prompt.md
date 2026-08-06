@@ -13,7 +13,7 @@ Du bist Senior-Entwickler am **PV-System**, Rolle **N**. Hosts: **Tech** (Export
 3. [`doc/llm/cards/netzqualitaet-nq-aggregation.card.md`](../../doc/llm/cards/netzqualitaet-nq-aggregation.card.md) — Invarianten, Anchor.
 4. **Vorbild-Code (Muster übernehmen):**
    - [`collector/aggregate/`](../../collector/aggregate) — Kaskade raw → 1min → daily → monthly, Cron-Staffelung, min/avg/max.
-   - Legacy [`netzqualitaet/nq_export.py`](../../netzqualitaet/nq_export.py) — read-only Monats-DB-Export-Muster.
+   - Legacy [`nq/legacy/nq_export.py`](../../nq/legacy/nq_export.py) — read-only Monats-DB-Export-Muster.
 
 ## Ziel
 1. **Tech-Export (1×/Tag):** nur `nq_agg_10s` (Vortag) + **Event-markierte RAW-Segmente** nach Primary transferieren. Löschen aus tmpfs **erst nach quittiertem Transfer** (At-least-once).
@@ -30,7 +30,7 @@ Du bist Senior-Entwickler am **PV-System**, Rolle **N**. Hosts: **Tech** (Export
 - **Transport über LAN** (Tech↔Primary). Batch klein (~1–2 MB/Tag Aggregat; Events selten). Kein Streaming nötig.
 - **At-least-once + Idempotenz:** Ingest muss doppelte Übernahme tolerieren (PKs, `INSERT OR REPLACE`/`ON CONFLICT`). Erst nach Ingest-Quittung löscht Tech die transferierten tmpfs-Zeilen. Protokoll: `nq_transfer_log` (Tech) / `nq_ingest_log` (Primary).
 - **Zeitbasis:** Bucket-Grenzen über `localtime` (konsistent mit Produktion). Daily-Key `YYYY-MM-DD`.
-- **Monats-DB-Rotation:** neue Datei je Monat, Muster wie Legacy `netzqualitaet/db/`.
+- **Monats-DB-Rotation:** neue Datei je Monat, Muster wie Legacy `nq/legacy/db/`.
 - **Retention-Enforcement** je Stufe (`primary_agg10s_hours`, `primary_5min_days`, `primary_hourly_days`, `primary_daily_days`).
 - **Energie / Differenzmethode:** täglich `nq_energy_daily` aus den Tech-`nq_energy_raw`-Snapshots via `nq/collector/nq_energy.py:compute_daily` (start/end/delta + Reset-Erkennung) schreiben; `nq_energy_checkpoint` am day_start fixieren. Aggregation = **Summe der Deltas** (nicht min/avg/max). Siehe [`doc/netzqualitaet/NQ_TESTS_UND_DB.md`](../../doc/netzqualitaet/NQ_TESTS_UND_DB.md) §4.
 - **Zählervergleich:** `nq_energy_compare` je Tag aus PAC (`nq_energy_daily`), Master-SM (Fronius Primär-SM `W_Imp/Exp_Netz`, **read-only** aus Produktions-DB) und iMS (`nq_ims_reading`, manuell). Abweichungen PAC−MasterSM / PAC−iMS ablegen (§5). **Wh_exp=0-Befund** im Blick behalten.

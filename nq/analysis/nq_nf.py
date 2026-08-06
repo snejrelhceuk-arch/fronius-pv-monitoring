@@ -57,7 +57,7 @@ def detect_dfd_events(
 ) -> list[dict]:
     """DFD an den 15-min-Handelsgrenzen.
 
-    Adaptiert aus netzqualitaet/nq_analysis.py:analyze_boundary.
+    Adaptiert aus nq/legacy/nq_analysis.py:analyze_boundary.
     Alle Grenzereignisse werden geschrieben (kind='dfd_normal' oder 'dfd_anomaly').
     DFD-Anomalie: |f_post_avg − f_pre_avg| > dfd_anomaly_hz.
     """

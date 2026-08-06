@@ -80,7 +80,7 @@ Konkrete Wirkung fuer eure Anwendung:
 ## Performance und Rechneranforderungen
 
 Ist-Zustand (gemessen):
-- Script: netzqualitaet/nq_trade_switch_detect.py
+- Script: nq/legacy/nq_trade_switch_detect.py
 - Periodensuche 300..1800s, coarse 15s, fine +-15s
 - Laufzeit auf aktuellem System: ca. 10.2s pro Tag
 

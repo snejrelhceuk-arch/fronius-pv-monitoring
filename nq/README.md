@@ -20,6 +20,7 @@ nq/
   transfer/                  # Tech-Export + Primary-Ingest (täglich)
   aggregate/                 # Primary: 3-10s → 5min → hourly → daily
   analysis/                  # Primary: Netzereignis-Tools (HF/NF/VLF)
+  legacy/                    # Rolle B: Fronius-SM-abgeleitete NQ (nq_export/analysis/trade_switch + db/)
   db/                        # Monats-DBs auf Primary (gitignored)
 ```
 
@@ -30,11 +31,13 @@ Die verifizierten PAC4200-Messwerte sind live unter **`/pac4200`** sichtbar
 über [`routes/pac4200.py`](../routes/pac4200.py). Reiner Modbus-**Read**, kein
 Schreibpfad zum Gerät (Muster wie `FroniusReadOnly`).
 
-## Abgrenzung zu `netzqualitaet/`
+## Abgrenzung: `nq/legacy/` (Rolle B) vs. `nq/` (Rolle N)
 
-`netzqualitaet/` (Legacy, Rolle B) leitet NQ aus vorhandenen Fronius-Smart-Meter-
-Daten ab. `nq/` (Rolle N) nutzt ein eigenes **PAC4200**-Messgerät. Beide bestehen
-parallel, kein gemeinsames Schema.
+`nq/legacy/` (Rolle B) leitet NQ aus vorhandenen Fronius-Smart-Meter-Daten ab
+(Monats-DBs `nq/legacy/db/nq_YYYY-MM.db`). `nq/` (Rolle N) nutzt ein eigenes
+**PAC4200**-Messgerät (Monats-DBs `nq/db/`). Beide bestehen parallel, kein
+gemeinsames Schema. `nq/legacy/` wurde 2026-08-06 aus dem früheren Top-Level-
+Ordner `netzqualitaet/` hierher konsolidiert.
 
 ## Konfiguration
 

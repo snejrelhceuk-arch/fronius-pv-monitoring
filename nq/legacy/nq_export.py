@@ -3,13 +3,13 @@
 nq_export.py — Täglicher Export von Netzqualitäts-Rohdaten in schlanke Monats-DBs.
 
 Liest aus der Haupt-DB (raw_data) die netzrelevanten Spalten und schreibt sie
-in monatliche SQLite-Dateien: netzqualitaet/db/nq_YYYY-MM.db
+in monatliche SQLite-Dateien: nq/legacy/db/nq_YYYY-MM.db
 
 Spalten: ts, f_netz, u_l1_l2, u_l2_l3, u_l3_l1, i_l1, i_l2, i_l3
 Auflösung: Original 3-Sekunden-Intervall (wie im SmartMeter)
 
 Cron-Empfehlung:
-  10 1 * * *  cd <PV_REPO> && .venv/bin/python netzqualitaet/nq_export.py >> /tmp/nq_export.log 2>&1
+  10 1 * * *  cd <PV_REPO> && .venv/bin/python nq/legacy/nq_export.py >> /tmp/nq_export.log 2>&1
 
 ABCD-Rollenmodell: Säule B (read-only auf Haupt-DB, write auf NQ-DB).
 """
@@ -21,13 +21,13 @@ import time
 from datetime import datetime, timedelta
 
 # Projektpfad einbinden
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 import config
 
 logger = logging.getLogger('nq_export')
 
 # --- Konfiguration ---
-NQ_DB_DIR = os.path.join(config.BASE_DIR, 'netzqualitaet', 'db')
+NQ_DB_DIR = os.path.join(config.BASE_DIR, 'nq', 'legacy', 'db')
 EXPORT_DAYS_BACK = 2  # Standardmäßig 2 Tage zurück (Sicherheitspuffer)
 
 # Spalten, die aus raw_data extrahiert werden

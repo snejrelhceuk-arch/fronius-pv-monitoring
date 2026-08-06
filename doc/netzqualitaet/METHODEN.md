@@ -14,7 +14,7 @@ Ausgangspunkt ist die aktuelle Datenbasis:
 - Signale: L-L-Spannungen, L-N-Spannungen, Phasenströme, Frequenz, Wirkleistung,
   Blindleistung, Leistungsfaktor
 - Produktions-Polling: `POLL_INTERVAL = 3s`
-- NQ-Export: eigene Monats-DBs in `netzqualitaet/db/`
+- NQ-Export: eigene Monats-DBs in `nq/legacy/db/`
 
 ## Grundsatz
 

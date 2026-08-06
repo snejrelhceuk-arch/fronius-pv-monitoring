@@ -2,11 +2,12 @@
 title: Netzqualitaet Analyse (Export, DFD, API)
 domain: netzqualitaet
 role: B
-applyTo: "netzqualitaet/**"
-tags: [netzqualitaet, dfd, export, analyse, api]
+applyTo: "nq/legacy/**"
+tags: [netzqualitaet, nq, legacy, dfd, export, analyse, api]
 status: stable
-last_review: 2026-06-06
+last_review: 2026-08-06
 changes:
+	- 2026-08-06: Legacy-Modul `netzqualitaet/` nach `nq/legacy/` konsolidiert (Code + Monats-DBs). Alle Pfade/Anchors/Cron auf `nq/legacy/` umgestellt; URLs (`/netzqualitaet`, `/api/netzqualitaet/*`) und Blueprint-Name unverändert.
 	- 2026-05-17: UI: removed Min/Max info line from Netzqualitaet view; Backend: ignore implausible extrema in maxima collector (U 200-600 V, f 40-60 Hz); Chart: fixed mobile legend overlap; webserver restarted to apply changes.
 ---
 
@@ -20,17 +21,17 @@ Separates NQ-Teilprojekt im PV-System: Export netzrelevanter Rohdaten, 15min-DFD
 - **Zeitraum-API (Auto-Fallback):** `routes/netzqualitaet.py:api_netzqualitaet_zeitraum`
 - **Maxima-API (Sammler):** `routes/netzqualitaet.py:api_netzqualitaet_maxima`
 - **Analyse-API:** `routes/netzqualitaet.py:api_netzqualitaet_analyse`
-- **Exportlauf:** `netzqualitaet/nq_export.py:run_export`
-- **Analyse-Lauf:** `netzqualitaet/nq_analysis.py:run_analysis`
-- **Trade-Switch-Detektion:** `netzqualitaet/nq_trade_switch_detect.py:run_day`
-- **NQ-DB-Pfad:** `netzqualitaet/db/nq_YYYY-MM.db`
+- **Exportlauf:** `nq/legacy/nq_export.py:run_export`
+- **Analyse-Lauf:** `nq/legacy/nq_analysis.py:run_analysis`
+- **Trade-Switch-Detektion:** `nq/legacy/nq_trade_switch_detect.py:run_day`
+- **NQ-DB-Pfad:** `nq/legacy/db/nq_YYYY-MM.db`
 
 ## Inputs / Outputs
 - **Inputs:** `raw_data`-Felder (`f_Netz`, `U_L*_L*_Netz`, `I_L*_Netz`) aus Haupt-DB, Tagesparameter `date=YYYY-MM-DD`.
 - **Outputs:** Monatsdatenbanken mit `nq_samples` und Analyse-Tabellen (`nq_15min_blocks`, `nq_boundary_events`, `nq_daily_summary`) sowie JSON fuer `/api/netzqualitaet/*` inkl. Zeitraumdaten (`period=tag|monat|jahr|gesamt`) und Extrema (Min+Max fuer L-L-Spannung und Frequenz inkl. Zeitstempel) ueber `/api/netzqualitaet/maxima`.
 
 ## Invarianten
-- NQ schreibt ausschliesslich in eigene DBs unter `netzqualitaet/db/`.
+- NQ schreibt ausschliesslich in eigene DBs unter `nq/legacy/db/`.
 - Haupt-DB wird von NQ-Skripten nur read-only gelesen (`mode=ro` in Export).
 - Tages-API liefert 5min-Buckets aus `raw_data` (keine Aktorik, keine Schreibpfade).
 - Zeitraum-API springt bei Historie automatisch ueber Aggregationsstufen (RAW -> 1min -> 15min -> monthly), bleibt dabei read-only.
@@ -43,7 +44,7 @@ Separates NQ-Teilprojekt im PV-System: Export netzrelevanter Rohdaten, 15min-DFD
 
 ## Häufige Aufgaben
 - Neues Signal aufnehmen -> `nq_export.py:RAW_COLUMNS` + `NQ_SCHEMA` + API-Response in `routes/netzqualitaet.py` erweitern.
-- Historischen Backfill fahren -> `python netzqualitaet/nq_export.py --full` und anschliessend Analyse laufen lassen.
+- Historischen Backfill fahren -> `python nq/legacy/nq_export.py --full` und anschliessend Analyse laufen lassen.
 - DFD-Parameter kalibrieren -> Konstanten in `nq_analysis.py` (`BOUNDARY_WINDOW_S`, `MIN_SAMPLES_*`) anpassen.
 
 ## Bekannte Fallstricke

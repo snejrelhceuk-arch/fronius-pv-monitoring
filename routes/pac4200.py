@@ -30,7 +30,7 @@ from nq.nq_common import load_config as _load_nq_config
 bp = Blueprint('pac4200', __name__)
 
 # Legacy NQ DB-Verzeichnis
-_NQ_LEGACY_DIR = os.path.join(config.BASE_DIR, 'netzqualitaet', 'db')
+_NQ_LEGACY_DIR = os.path.join(config.BASE_DIR, 'nq', 'legacy', 'db')
 # Neue PAC4200 NQ DB-Verzeichnis
 _NQ_PRIMARY_DIR = os.path.join(config.BASE_DIR, 'nq', 'db')
 

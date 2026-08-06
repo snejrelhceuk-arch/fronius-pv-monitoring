@@ -12,7 +12,7 @@
 |---|---|---|
 | Quelle | Fronius Smart Meter aus Produktions-`raw_data` (3 s) | dediziertes **Siemens PAC4200** am PCC (Modbus TCP) |
 | Zweck | Ableitung NQ aus vorhandenen Bilanzdaten | Vollerfassung Netzbeschaffenheit inkl. THD/Harmonische |
-| Schreibpfad | eigene Monats-DBs (`netzqualitaet/db/`) | eigene NQ-DBs (`nq/db/`, tmpfs auf Tech) |
+| Schreibpfad | eigene Monats-DBs (`nq/legacy/db/`) | eigene NQ-DBs (`nq/db/`, tmpfs auf Tech) |
 | Host | Primary (read-only Web/API) | **Tech** (Collector) + **Primary** (Aggregation/Analyse) |
 
 Beide bleiben bestehen. Das Legacy-Modul liefert weiter die Web-/DFD-Ansicht aus

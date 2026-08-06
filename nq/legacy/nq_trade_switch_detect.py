@@ -26,11 +26,11 @@ from datetime import datetime, timedelta
 
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 import config
 
 
-NQ_DB_DIR = os.path.join(config.BASE_DIR, 'netzqualitaet', 'db')
+NQ_DB_DIR = os.path.join(config.BASE_DIR, 'nq', 'legacy', 'db')
 
 PHASE_BIN_S = 3
 BOUNDARY_HALF_WINDOW_S = 45

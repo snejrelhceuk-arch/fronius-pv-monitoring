@@ -18,10 +18,10 @@ Analyse-Bausteine:
   C) Lokale Rückwirkung (Korrelation Strom↔Spannung)
   D) Tages- und Wochenmuster
 
-Datenquelle: netzqualitaet/db/nq_YYYY-MM.db (aus nq_export.py)
+Datenquelle: nq/legacy/db/nq_YYYY-MM.db (aus nq_export.py)
 
 Cron-Empfehlung:
-  20 1 * * *  cd <PV_REPO> && .venv/bin/python netzqualitaet/nq_analysis.py >> /tmp/nq_analysis.log 2>&1
+  20 1 * * *  cd <PV_REPO> && .venv/bin/python nq/legacy/nq_analysis.py >> /tmp/nq_analysis.log 2>&1
 
 ABCD-Rollenmodell: Säule A (Analyse, read-only auf NQ-DB, write Ergebnistabellen).
 """
@@ -34,12 +34,12 @@ from datetime import datetime, timedelta
 
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 import config
 
 logger = logging.getLogger('nq_analysis')
 
-NQ_DB_DIR = os.path.join(config.BASE_DIR, 'netzqualitaet', 'db')
+NQ_DB_DIR = os.path.join(config.BASE_DIR, 'nq', 'legacy', 'db')
 
 # --- Analyse-Parameter ---
 BLOCK_SECONDS = 900            # 15-Minuten-Block

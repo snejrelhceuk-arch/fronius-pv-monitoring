@@ -70,7 +70,7 @@ Dabei gelten folgende **Prämissen**:
 - [config.py](config.py#L146) — Standard-Policys für Polling & Flush
 - [modbus_v3.py](modbus_v3.py#L1055) — Aktuelles Polling-Muster, Modbus-Zyklus-Grenzen
 - [doc/collector/DB_SCHEMA.md](doc/collector/DB_SCHEMA.md) — Schema- und Retention-Referenz
-- [netzqualitaet/nq_export.py](netzqualitaet/nq_export.py#L24) — NQ-Spalten und Pipeline als Referenz
+- [nq/legacy/nq_export.py](nq/legacy/nq_export.py#L24) — NQ-Spalten und Pipeline als Referenz
 
 ---
 

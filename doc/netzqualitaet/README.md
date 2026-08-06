@@ -16,9 +16,9 @@ Netzfrequenz und (perspektivisch) Muster in der Netzqualität.
 
 - **Route:** `/netzqualitaet` → `templates/netzqualitaet_view.html`
 - **API:** `/api/netzqualitaet/tag` → `routes/netzqualitaet.py`
-- **NQ-Datenbank:** `netzqualitaet/db/nq_YYYY-MM.db` (monatliche SQLite-Dateien, ~20 MB/Monat)
-- **Export:** `netzqualitaet/nq_export.py` (Cron, täglich 01:10)
-- **Analyse:** `netzqualitaet/nq_analysis.py` (Cron, täglich 01:20)
+- **NQ-Datenbank:** `nq/legacy/db/nq_YYYY-MM.db` (monatliche SQLite-Dateien, ~20 MB/Monat)
+- **Export:** `nq/legacy/nq_export.py` (Cron, täglich 01:10)
+- **Analyse:** `nq/legacy/nq_analysis.py` (Cron, täglich 01:20)
 - **Daten:** raw_data (3s) resampelt auf 5min-Raster; Fallback data_1min (L-N × √3)
 - **Einstieg UI:** Flow → Maschinenraum → Button „Netzqualität"
 
@@ -127,8 +127,8 @@ doc/netzqualitaet/               — Projektdokumentation
 
 ```bash
 # NQ-Export: täglich 01:10, volle 2 Tage Puffer
-10 1 * * *  cd ~/Dokumente/PVAnlage/pv-system && .venv/bin/python netzqualitaet/nq_export.py >> /tmp/nq_export.log 2>&1
+10 1 * * *  cd ~/Dokumente/PVAnlage/pv-system && .venv/bin/python nq/legacy/nq_export.py >> /tmp/nq_export.log 2>&1
 
 # NQ-Analyse: täglich 01:20 (nach Export)
-20 1 * * *  cd ~/Dokumente/PVAnlage/pv-system && .venv/bin/python netzqualitaet/nq_analysis.py >> /tmp/nq_analysis.log 2>&1
+20 1 * * *  cd ~/Dokumente/PVAnlage/pv-system && .venv/bin/python nq/legacy/nq_analysis.py >> /tmp/nq_analysis.log 2>&1
 ```

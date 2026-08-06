@@ -10,7 +10,7 @@ Ausgeschlossen sind explizit:
 - `backup/`
 - Datenbanken (`*.db`, `*.db-*`) und Backup-Archive (`*.gz`)
 - Laufzeit-/Build-Artefakte (`*.pyc`, `*.pid`)
-- `logs/`, `reports/`, `tmp/`, `__pycache__/`, `.ruff_cache/`, `.state/`, `netzqualitaet/db/`
+- `logs/`, `reports/`, `tmp/`, `__pycache__/`, `.ruff_cache/`, `.state/`, `nq/legacy/db/`
 - `.git/`, `.venv/`
 
 ## Schnellueberblick

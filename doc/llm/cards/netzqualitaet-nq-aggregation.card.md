@@ -5,8 +5,9 @@ role: N
 applyTo: "nq/transfer/**,nq/aggregate/**"
 tags: [netzqualitaet, nq, transfer, aggregation, primary, rolle-n]
 status: experimental
-last_review: 2026-07-25
+last_review: 2026-08-06
 changes:
+	- 2026-08-06: Legacy-Verweis auf `nq/legacy/nq_export.py` umgestellt (Modul `netzqualitaet/` → `nq/legacy/` konsolidiert).
 	- 2026-07-25 (Read-Seite 10s/5min): `nq/tech_read.py:fetch_agg` mergt jetzt Primary-`nq_5min` (vollständige Historie) + Techs Live-Rand statt entweder/oder — Techs `nq_5min` wird nach jedem Transfer geleert und deckt nur den Rand ab (`source=nq_5min_merged`). Neu `fetch_agg_fast`: 10-s-Aggregat direkt aus Techs `nq_raw_fast`/`nq_raw_medium` (~12 h RAM-Retention) via SSH-SQL + 5-min-Baseline aus Primary davor (`hires_start` markiert den 10-s-Beginn). Kein neuer Schreibpfad; Rolle N bleibt read-only.
 	- 2026-07-14 (l): **10s-Architektur entfernt.** `nq/transfer/nq_agg_transfer.py` übernimmt jetzt `nq_5min` (Tech) statt `nq_agg_10s`; Primary-Retention auf `nq_5min` (`primary_5min_days`). `nq/aggregate/nq_aggregate.py` aggregiert bei Stage `5min` nur noch Harmonische (`nq_raw_slow -> nq_5min`), Skalare kommen bereits als 5-min-Buckets vom Tech-Collector.
 	- 2026-07-14 (k): **NQ2 WP2 + WP4.** Fixpunkt-Zähler `nq_energy_monthly`/`nq_energy_yearly` + `nq_energy_rollup.rollup_month`/`rollup_year` (aus Tages-Deltas, idempotent) + Timer `pv-nq-energy-rollup-month`(1.§00:10)/`-year`(1.1.§00:10). **Transienten:** `nq/aggregate/nq_transients.py` (5-min-Fenster aus `nq_raw_fast` auf Tech → `nq_transient_5min`), `nq_agg_transfer` triggert Berechnung + übernimmt Zeilen. **Event-Pipeline** `nq/transfer/nq_event_transfer.py`: Sofort-Transfer der `event=1`-Schnipsel (pre/post-Window, max_duration_s=300), `derive_event`/`ingest_snippets` setzen `has_snippet`/`peak_*`/`severity`, Cooldown 120s + Ähnlichkeits-Dedup (<24h → kein Snippet), Log-Cap `event_max_count`=10000. Retention 72h→12h angeglichen.
@@ -34,7 +35,7 @@ fächert zu `hourly → daily` auf und hält Event-RAW dauerhaft.
 - **Energie-Rollup (Primary):** `nq/transfer/nq_energy_rollup.py:rollup` (tägl. 00:05) / `rollup_month` / `rollup_year`
 - **Schema (Primary):** `nq/schema/nq_primary_schema.sql`
 - **Konfig (Retention/Transfer):** `config/nq_config.json`
-- **Muster/Vorbild:** `collector/aggregate/`, Legacy `netzqualitaet/nq_export.py`
+- **Muster/Vorbild:** `collector/aggregate/`, Legacy `nq/legacy/nq_export.py`
 
 ## Inputs / Outputs
 - **Inputs:** Tech-`nq_5min` (Skalare) + `nq_raw_*` mit `event=1`.
@@ -45,7 +46,7 @@ fächert zu `hourly → daily` auf und hält Event-RAW dauerhaft.
 - **Idempotenter Ingest:** doppelte Übernahme verändert das Ergebnis nicht (PKs, `INSERT OR REPLACE`/`ON CONFLICT`).
 - NQ schreibt ausschließlich in `nq/db/` — **niemals** in `data.db`/Produktionstabellen.
 - **Event-RAW wird nicht aggregiert** und dauerhaft aufbewahrt (Transienten-Rekonstruktion).
-- Bucket-Grenzen über `localtime`; Monats-DB-Rotation wie Legacy `netzqualitaet/db/`.
+- Bucket-Grenzen über `localtime`; Monats-DB-Rotation wie Legacy `nq/legacy/db/`.
 
 ## No-Gos
 - Kein Löschen nicht-quittierter Daten auf Tech.

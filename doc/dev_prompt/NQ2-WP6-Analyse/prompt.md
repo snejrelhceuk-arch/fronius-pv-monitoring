@@ -91,7 +91,7 @@ a) **Frequenz-Gradienten (df/dt):**
    - Severity: `abs(df/dt) / 0.1` (normalisiert auf 0..1).
 
 b) **DFD an 15min-Handelsgrenzen:**
-   - Legacy `netzqualitaet/nq_analysis.py:_detect_dfd` adaptieren.
+   - Legacy `nq/legacy/nq_analysis.py:_detect_dfd` adaptieren.
    - At :00 :15 :30 :45 regelmäßig kleine f-Sprünge durch Fahrplanwechsel.
    - Filter: Wenn f-Sprung <0.5 Hz AND Uhrzeit ∈ [HH:00, HH:15, HH:30, HH:45] ± 5min: markiere als `kind='dfd_normal'` (nicht anomale).
    - Wenn Sprung außerhalb Muster: `kind='dfd_anomaly'` → Event.

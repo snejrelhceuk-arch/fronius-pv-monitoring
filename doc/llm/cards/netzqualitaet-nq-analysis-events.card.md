@@ -5,8 +5,9 @@ role: N
 applyTo: "nq/analysis/**"
 tags: [netzqualitaet, nq, analyse, events, harmonische, frequenz, rolle-n]
 status: stable
-last_review: 2026-07-23
+last_review: 2026-08-06
 changes:
+	- 2026-08-06: Methodik-Verweis auf `nq/legacy/nq_analysis.py` umgestellt (Modul `netzqualitaet/` → `nq/legacy/` konsolidiert); Kommentar in `nq/analysis/nq_nf.py` nachgezogen.
 	- 2026-07-16 (l): **Dual-Modus: 4h HF/NF + täglich VLF.** `nq/analysis/nq_events.py` Refactor: neue `analyze_window(ts_start, ts_end, bands=[...])` für Fenster-basierte Analysen (HF/NF alle 4h), alte `analyze_day(day)` → Backward-Compat-Wrapper; CLI: `--hours N --bands HF_local,NF_global` für 4h-Läufe. Systemd: `pv-nq-analysis` = VLF täglich 00:30 (Vortag), `pv-nq-analysis-hf-nf` = HF/NF alle 4h (00:30,04:30,...,20:30, aktuelle Daten). Idempotent per INSERT OR REPLACE; Duplikat-Key bleibt Trigger+Stunden-Bucket.
 	- 2026-07-14 (d): **Events lesen keine 10s-Skalare mehr.** `nq/analysis/nq_events.py:_load_ts_series` nutzt jetzt `nq_5min` (meas='', phase=0, ord=0) als Skalarquelle; Meldungstexte entsprechend angepasst.
 	- 2026-07-14 (c): **NQ2 WP4.** Der `nq_events`-Katalog wird zusätzlich vom Schnipsel-Transfer `nq/transfer/nq_event_transfer.py` befüllt (`derive_event`): `has_snippet`, `peak_quantity`/`peak_value`, normierte `severity`, Cooldown- + Ähnlichkeits-Dedup (<24 h → nur Beschreibung), Log-Cap `event_max_count`=10000. Drill-down-RAW liegt in `nq_event_fast`/`nq_event_medium` (API `/api/nq/event/<id>`). `analyze_day` (HF/NF/VLF) bleibt unverändert der Tages-Klassifikator.
@@ -33,7 +34,7 @@ global-niederfrequent (`NF_global`), sehr niederfrequent (`VLF`).
 - **Konfiguration:** `config/nq_config.json` → `analysis`-Block
 - **Impedanz:** `config/nq_impedance.json` (R=163 mΩ, X=251 mΩ, Z=299 mΩ)
 - **Gemeinsame Helfer:** `nq/nq_common.py`
-- **Methodik-Vorbild:** Legacy `netzqualitaet/nq_analysis.py` (DFD, Boundary-Events)
+- **Methodik-Vorbild:** Legacy `nq/legacy/nq_analysis.py` (DFD, Boundary-Events)
 
 ## Inputs / Outputs
 - **Inputs (read-only):** `nq_5min`/`nq_hourly`/`nq_daily` + `nq_event_*` aus `nq/db/`.

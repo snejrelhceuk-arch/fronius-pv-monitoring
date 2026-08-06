@@ -65,7 +65,7 @@ Zwei-Host-Muster (wie [`NQ_MODUL.md`](NQ_MODUL.md)): **Tech** sammelt RAM-first,
 - Event-RAW `nq_event_*` (Originalauflösung, dauerhaft).
 - **Energie/Differenzmethode:** `nq_energy_daily`, `nq_energy_checkpoint`,
   `nq_ims_reading`, `nq_energy_compare` (siehe §4/§5).
-- Monatsdatei `nq/db/nq_YYYY-MM.db` (Rotation wie Legacy `netzqualitaet/db/`).
+- Monatsdatei `nq/db/nq_YYYY-MM.db` (Rotation wie Legacy `nq/legacy/db/`).
 
 ---
 

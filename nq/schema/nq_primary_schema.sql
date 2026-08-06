@@ -3,7 +3,7 @@
 -- Aggregationskaskade analog Produktion (5 min → hourly → daily),
 -- Event-RAW dauerhaft in Originalauflösung.
 --
--- Monatsdatei: nq/db/nq_YYYY-MM.db (wie Legacy netzqualitaet/db-Muster).
+-- Monatsdatei: nq/db/nq_YYYY-MM.db (wie Legacy nq/legacy/db-Muster).
 
 PRAGMA journal_mode=WAL;
 PRAGMA synchronous=NORMAL;
