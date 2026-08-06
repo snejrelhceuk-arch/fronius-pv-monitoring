@@ -99,5 +99,24 @@
     "freq_max_hz": 52.0,
     "thd_u_max_pct": 8.0,
     "warning_levels": { "warn_pct": 50, "high_pct": 70, "crit_pct": 90 }
+  },
+
+  "monitoring_filter": {
+    "_comment": "Display-seitige Jitter-/Extrema-Bereinigung fuer Monitoring/Analyse (Netzkriterien). ROHDATEN in der NQ-DB bleiben UNBERUEHRT. Aus PV-DB-Methode uebernommen: harte Plausibilitaetskorridore (bewusst WEITER als 'grenzwerte' -> nur physikalisch unmoegliche Muell-/Jitter-Werte, NICHT echte Norm-Verletzungen). Zusaetzlich Nachbar-Faktor-Filter (jitter_factor) NUR fuer stabile Groessen (U/FREQ/THD/PF/UNBAL) -> Wert > factor*|Median der Nachbarn| = Jitter-Muell. P/Q/S/I schwingen breit -> nur Korridor. Ausreisser werden durch das Mittel gueltiger Nachbarn ersetzt und in 'marks' markiert.",
+    "enabled": true,
+    "jitter_factor": 100.0,
+    "neighbor_window": 3,
+    "corridors": {
+      "FREQ": [47.0, 53.0],
+      "U_LN": [150.0, 300.0],
+      "U_LL": [280.0, 520.0],
+      "I": [-3000.0, 3000.0],
+      "P": [-200000.0, 200000.0],
+      "Q": [-200000.0, 200000.0],
+      "S": [0.0, 250000.0],
+      "THD": [0.0, 100.0],
+      "PF": [-1.5, 1.5],
+      "UNBAL": [0.0, 300.0]
+    }
   }
 }

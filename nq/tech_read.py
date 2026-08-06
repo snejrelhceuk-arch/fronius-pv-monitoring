@@ -11,7 +11,9 @@ Primary-lokale NQ-DB umgestellt werden. Rolle N, kein Schreibpfad.
 from __future__ import annotations
 
 import json
+import math
 import os
+import statistics
 import subprocess
 import time
 
@@ -483,11 +485,94 @@ def _primary_month_dbs(start: int, end: int) -> list:
     return dbs
 
 
-def fetch_aggregates(rng: str, start: int, end: int) -> dict:
+# ── Display-seitige Jitter-/Extrema-Bereinigung (Rohdaten in DB unberührt) ────
+# Nachbar-Faktor-Filter nur für stabile Größen; P/Q/S/I schwingen breit → nur Korridor.
+_STABLE_CLASSES = {"FREQ", "U_LN", "U_LL", "THD", "PF", "UNBAL"}
+
+
+def _quantity_class(q: str) -> str | None:
+    qu = q.upper()
+    if qu == "FREQ":
+        return "FREQ"
+    if qu.startswith("THD"):
+        return "THD"
+    if qu.startswith("UNBAL"):
+        return "UNBAL"
+    if qu.startswith("PF") or qu.startswith("COSPHI"):
+        return "PF"
+    if qu.startswith("U_"):
+        return "U_LN" if qu.endswith("N") else "U_LL"
+    if qu.startswith("I_") or qu.startswith("IS_"):
+        return "I"
+    if qu.startswith("P"):
+        return "P"
+    if qu.startswith("Q"):
+        return "Q"
+    if qu.startswith("S"):
+        return "S"
+    return None
+
+
+def clean_wide_aggregates(data: list, quantities: list, cfg: dict) -> tuple[list, list]:
+    """Ersetzt Jitter-/Extrema-Müll (Korridor + Nachbar-Faktor) durch das Mittel
+    gültiger Nachbarn und liefert (bereinigte Daten, marks=[{ts,key,raw}]).
+
+    Korridore = physikalisch unmögliche Werte (PV-DB-Methode). Nachbar-Faktor nur
+    für stabile Größen (U/FREQ/THD/PF/UNBAL). Rohdaten in der NQ-DB bleiben unberührt.
+    """
+    mf = (cfg or {}).get("monitoring_filter", {})
+    if not mf.get("enabled", True) or not data:
+        return data, []
+    factor = float(mf.get("jitter_factor", 100.0))
+    win = max(1, int(mf.get("neighbor_window", 3)))
+    corridors = mf.get("corridors", {})
+    n = len(data)
+    marks: list = []
+
+    def _ok(v, corr):
+        if v is None or not isinstance(v, (int, float)) or not math.isfinite(v):
+            return False
+        if corr and (v < corr[0] or v > corr[1]):
+            return False
+        return True
+
+    for q in quantities:
+        klass = _quantity_class(q)
+        corr = corridors.get(klass) if klass else None
+        use_factor = klass in _STABLE_CLASSES
+        for suffix in ("", "_min", "_max"):
+            key = q + suffix
+            series = [row.get(key) for row in data]
+            valid = [v if _ok(v, corr) else None for v in series]
+            for i, v in enumerate(series):
+                if v is None:
+                    continue
+                bad = not _ok(v, corr)
+                if not bad and use_factor:
+                    neigh = [valid[j] for j in range(max(0, i - win), min(n, i + win + 1))
+                             if j != i and valid[j] is not None]
+                    if neigh:
+                        med = statistics.median([abs(x) for x in neigh])
+                        if med > 1e-9 and abs(v) > factor * med:
+                            bad = True
+                if bad:
+                    neigh = [valid[j] for j in range(max(0, i - win), min(n, i + win + 1))
+                             if j != i and valid[j] is not None]
+                    data[i][key] = round(statistics.fmean(neigh), 4) if neigh else None
+                    marks.append({"ts": data[i].get("ts"), "key": key,
+                                  "raw": v if (isinstance(v, (int, float)) and math.isfinite(v)) else None})
+    return data, marks
+
+
+def fetch_aggregates(rng: str, start: int, end: int, clean: bool = True) -> dict:
     """Wide-Format-Aggregate der Primary-SD. rng ∈ {5min, hourly, daily}.
 
     Returns ``{data:[{ts, U_L1N, U_L1N_min, U_L1N_max, ...}], quantities, resolution,
     points, start, end, source}``. Nur Skalare (quantity != '').
+
+    ``clean=True`` (Default) bereinigt Jitter-/Extrema-Müll display-seitig (Korridore +
+    Nachbar-Faktor, `config/nq_config.json:monitoring_filter`) und liefert `marks`;
+    die Rohdaten in der NQ-DB bleiben unberührt.
     """
     import sqlite3
     from datetime import datetime
@@ -532,5 +617,12 @@ def fetch_aggregates(rng: str, start: int, end: int) -> dict:
         finally:
             conn.close()
     data = [buckets[k] for k in sorted(buckets)]
+    marks: list = []
+    if clean:
+        try:
+            data, marks = clean_wide_aggregates(data, sorted(quantities), load_config())
+        except Exception:
+            marks = []
     return {"data": data, "quantities": sorted(quantities), "resolution": rng,
-            "points": len(data), "start": start, "end": end, "source": "nq_primary_agg"}
+            "points": len(data), "start": start, "end": end, "source": "nq_primary_agg",
+            "marks": marks, "filtered": bool(clean)}

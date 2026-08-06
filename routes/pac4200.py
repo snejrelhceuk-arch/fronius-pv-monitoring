@@ -965,6 +965,8 @@ def api_nq_netzkriterien():
             'i_max_a': i_hi, 'thd_u_max_pct': thd_hi,
         },
         'maxima': maxima,
+        'marks': raw.get('marks', []),
+        'filtered': raw.get('filtered', False),
         'available': bool(datapoints),
         'source': source,
     })

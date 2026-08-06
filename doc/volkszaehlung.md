@@ -5,7 +5,7 @@
 ## Übersicht
 
 **Gesamtgröße (Textdateien gezählt):** 1060 MB  
-**Gesamtzeilen (Code/Doku/Daten):** 279.035 Zeilen  
+**Gesamtzeilen (Code/Doku/Daten):** 279.160 Zeilen  
 **Gezählte Dateien:** 529  
 **Ausgeschlossene Verzeichnisse:** 25 (.venv, __pycache__, node_modules, .git …)
 
@@ -13,12 +13,12 @@
 
 | Sprache/Typ | Dateien | Zeilen | Anteil |
 |---|---|---|---|
-| **CSV** | 29 | 167.989 | 60.2% |
-| **Python** | 178 | 55.265 | 19.8% |
-| **Markdown** | 139 | 24.295 | 8.7% |
+| **CSV** | 29 | 168.000 | 60.2% |
+| **Python** | 178 | 55.359 | 19.8% |
+| **Markdown** | 139 | 24.296 | 8.7% |
 | **HTML** | 20 | 15.063 | 5.4% |
 | **Shell** | 61 | 4.751 | 1.7% |
-| **JSON** | 19 | 4.082 | 1.5% |
+| **JSON** | 19 | 4.101 | 1.5% |
 | **TXT** | 28 | 3.015 | 1.1% |
 | **SQL** | 10 | 1.387 | 0.5% |
 | **CSS** | 4 | 1.108 | 0.4% |
@@ -27,7 +27,7 @@
 | **systemd** | 31 | 538 | 0.2% |
 | **CONF** | 2 | 51 | 0.0% |
 | **TOML** | 1 | 24 | 0.0% |
-| **Total** | 529 | 279.035 | 100% |
+| **Total** | 529 | 279.160 | 100% |
 
 ## Python-Code nach ABCDEN-Rollen
 
@@ -35,10 +35,10 @@
 |---|---|---|---|
 | **C** Automation | `automation/` | 41 | 14.363 |
 | **A** Collector | `collector/` | 18 | 4.689 |
-| **B** Web-API | `routes/` | 19 | 9.973 |
+| **B** Web-API | `routes/` | 19 | 9.975 |
 | **D** Diagnos | `diagnos/` | 5 | 1.619 |
 | **E** Steuerbox | `steuerbox/` | 5 | 1.235 |
-| **N** Netzqualität | `nq/` | 30 | 6.483 |
+| **N** Netzqualität | `nq/` | 30 | 6.575 |
 
 ## Größte Python-Dateien (Top 10)
 
@@ -51,7 +51,7 @@
 1. `automation/engine/event_notifier.py` — 1.046 Zeilen
 1. `automation/engine/regeln/soc_steuerung.py` — 1.037 Zeilen
 1. `routes/realtime.py` — 1.000 Zeilen
-1. `routes/pac4200.py` — 971 Zeilen
+1. `routes/pac4200.py` — 973 Zeilen
 
 ## Ausgeschlossene Bereiche
 
