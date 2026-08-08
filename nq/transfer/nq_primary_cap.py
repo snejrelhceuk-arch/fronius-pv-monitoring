@@ -102,6 +102,21 @@ def run_cap(db_path: str | None = None) -> list[dict]:
                   f"age_deleted={st.get('age_deleted', 0)} "
                   f"count_deleted={st.get('count_deleted', 0)} "
                   f"remaining={st.get('events_remaining', '?')}")
+
+    # Speicher-Reclaim eingefrorener Monate (tote nq_agg_10s + ephemeres
+    # nq_raw_slow) + bedarfsweises VACUUM. Best-effort: darf die Event-Kappung
+    # nie stoeren. Laeuft taeglich mit diesem Timer (SD-schonend via Freelist-Guard).
+    try:
+        from nq.aggregate import nq_prune_months
+        for r in nq_prune_months.prune(commit=True):
+            if r.get("vacuumed") or r.get("dead_dropped") or r.get("raw_slow_deleted"):
+                print(f"[nq_primary_cap] prune {r['db']}: "
+                      f"raw_slow={r.get('raw_slow_deleted', 0)} "
+                      f"dead={r.get('dead_dropped', [])} "
+                      f"vacuum={r.get('vacuumed', False)} "
+                      f"{r.get('mb_before')}→{r.get('mb_after')} MB")
+    except Exception as exc:
+        print(f"[nq_primary_cap] prune uebersprungen: {exc}")
     return results
 
 

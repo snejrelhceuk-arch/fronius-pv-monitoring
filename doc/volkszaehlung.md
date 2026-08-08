@@ -4,30 +4,30 @@
 
 ## Übersicht
 
-**Gesamtgröße (Textdateien gezählt):** 1407 MB
-**Gesamtzeilen (Code/Doku/Daten):** 285.755 Zeilen
-**Gezählte Dateien:** 539
+**Gesamtgröße (Textdateien gezählt):** 1227 MB
+**Gesamtzeilen (Code/Doku/Daten):** 286.455 Zeilen
+**Gezählte Dateien:** 542
 **Ausgeschlossene Verzeichnisse:** 27 (.venv, __pycache__, node_modules, .git …)
 
 ## Nach Sprache/Typ
 
 | Sprache/Typ | Dateien | Zeilen | Anteil |
 |---|---|---|---|
-| **CSV** | 29 | 171.470 | 60.0% |
-| **Python** | 183 | 57.727 | 20.2% |
-| **Markdown** | 143 | 24.906 | 8.7% |
+| **CSV** | 29 | 171.597 | 59.9% |
+| **Python** | 185 | 58.178 | 20.3% |
+| **Markdown** | 144 | 25.010 | 8.7% |
 | **HTML** | 21 | 15.086 | 5.3% |
 | **Shell** | 61 | 4.751 | 1.7% |
 | **JSON** | 19 | 4.120 | 1.4% |
-| **TXT** | 28 | 3.094 | 1.1% |
-| **SQL** | 10 | 1.410 | 0.5% |
+| **TXT** | 28 | 3.095 | 1.1% |
+| **SQL** | 10 | 1.427 | 0.5% |
 | **CSS** | 4 | 1.108 | 0.4% |
 | **JavaScript** | 4 | 908 | 0.3% |
 | **YAML** | 3 | 562 | 0.2% |
 | **systemd** | 31 | 538 | 0.2% |
 | **CONF** | 2 | 51 | 0.0% |
 | **TOML** | 1 | 24 | 0.0% |
-| **Total** | 539 | 285.755 | 100% |
+| **Total** | 542 | 286.455 | 100% |
 
 ## Python-Code nach ABCDEN-Rollen
 
@@ -35,16 +35,16 @@
 |---|---|---|---|
 | **C** Automation | `automation/` | 41 | 14.363 |
 | **A** Collector | `collector/` | 18 | 4.712 |
-| **B** Web-API | `routes/` | 19 | 10.643 |
+| **B** Web-API | `routes/` | 19 | 10.753 |
 | **D** Diagnos | `diagnos/` | 6 | 1.629 |
 | **E** Steuerbox | `steuerbox/` | 5 | 1.235 |
-| **N** Netzqualität | `nq/` | 34 | 8.173 |
+| **N** Netzqualität | `nq/` | 36 | 8.514 |
 
 ## Größte Python-Dateien (Top 10)
 
 1. `automation/engine/regeln/geraete.py` — 2.300 Zeilen
 1. `solar_geometry.py` — 1.980 Zeilen
-1. `routes/pac4200.py` — 1.453 Zeilen
+1. `routes/pac4200.py` — 1.563 Zeilen
 1. `pv-config.py` — 1.393 Zeilen
 1. `routes/verbraucher.py` — 1.352 Zeilen
 1. `solar_forecast.py` — 1.143 Zeilen

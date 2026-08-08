@@ -66,6 +66,23 @@ CREATE TABLE IF NOT EXISTS nq_daily (
 ) WITHOUT ROWID;
 
 -- ---------------------------------------------------------------------------
+-- SM-Netzqualitaets-Historie (15-min, PERMANENT) — Vor-PAC-Zeitraum aus dem
+-- primaeren Smart-Meter (data_15min). Fuellt die Luecke, bevor der PAC4200 als
+-- Quelle lief (< 2026-07). NICHT von der Aggregations-Retention beruehrt (die
+-- loescht nur nq_5min/nq_hourly/nq_daily) und NICHT Teil der PAC-Kaskade.
+-- Spannungen sind Leiter-Leiter (L-N x sqrt(3), wie der Netzkriterien-Fallback).
+-- Backfill: nq/transfer/nq_sm_backfill.py.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS nq_sm_15min (
+    ts        INTEGER PRIMARY KEY,   -- 15-min-Bucket-Start (localtime-Epoch)
+    u_l12 REAL, u_l12_min REAL, u_l12_max REAL,
+    u_l23 REAL, u_l23_min REAL, u_l23_max REAL,
+    u_l31 REAL, u_l31_min REAL, u_l31_max REAL,
+    freq  REAL, freq_min  REAL, freq_max  REAL,
+    origin    TEXT NOT NULL DEFAULT 'sm_15min'
+);
+
+-- ---------------------------------------------------------------------------
 -- Event-RAW (Originalauflösung, dauerhaft) — für Transienten-Rekonstruktion.
 -- Spiegelt die Tech-RAW-Blöcke; nur Event-markierte Segmente werden übernommen.
 -- ---------------------------------------------------------------------------

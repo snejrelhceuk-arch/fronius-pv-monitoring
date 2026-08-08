@@ -1221,7 +1221,11 @@ def _core_fallback_rows(start: int, end: int) -> list[dict]:
         return rows_out
     try:
         rows = conn.execute(
-            "SELECT ts, U_L1_N_Netz, U_L2_N_Netz, U_L3_N_Netz, f_Netz "
+            "SELECT ts, "
+            "U_L1_N_Netz_avg, U_L1_N_Netz_min, U_L1_N_Netz_max, "
+            "U_L2_N_Netz_avg, U_L2_N_Netz_min, U_L2_N_Netz_max, "
+            "U_L3_N_Netz_avg, U_L3_N_Netz_min, U_L3_N_Netz_max, "
+            "f_Netz_avg, f_Netz_min, f_Netz_max "
             "FROM data_15min WHERE ts >= ? AND ts < ? ORDER BY ts",
             (start, end),
         ).fetchall()
@@ -1230,17 +1234,109 @@ def _core_fallback_rows(start: int, end: int) -> list[dict]:
     finally:
         conn.close()
     rt3 = 1.7320508075688772
-    for ts, u1n, u2n, u3n, f in rows:
-        u12 = (u1n * rt3) if u1n is not None else None
-        u23 = (u2n * rt3) if u2n is not None else None
-        u31 = (u3n * rt3) if u3n is not None else None
+    for ts, u1n_avg, u1n_min, u1n_max, u2n_avg, u2n_min, u2n_max, u3n_avg, u3n_min, u3n_max, f_avg, f_min, f_max in rows:
+        u12_avg = (u1n_avg * rt3) if u1n_avg is not None else None
+        u12_min = (u1n_min * rt3) if u1n_min is not None else None
+        u12_max = (u1n_max * rt3) if u1n_max is not None else None
+        u23_avg = (u2n_avg * rt3) if u2n_avg is not None else None
+        u23_min = (u2n_min * rt3) if u2n_min is not None else None
+        u23_max = (u2n_max * rt3) if u2n_max is not None else None
+        u31_avg = (u3n_avg * rt3) if u3n_avg is not None else None
+        u31_min = (u3n_min * rt3) if u3n_min is not None else None
+        u31_max = (u3n_max * rt3) if u3n_max is not None else None
         rows_out.append({
             'ts': int(ts),
-            'U_L12': u12, 'U_L23': u23, 'U_L31': u31,
-            'U_L12_min': u12, 'U_L12_max': u12,
-            'U_L23_min': u23, 'U_L23_max': u23,
-            'U_L31_min': u31, 'U_L31_max': u31,
-            'FREQ': _safe_float(f), 'FREQ_min': _safe_float(f), 'FREQ_max': _safe_float(f),
+            'U_L12': u12_avg, 'U_L23': u23_avg, 'U_L31': u31_avg,
+            'U_L12_min': u12_min, 'U_L12_max': u12_max,
+            'U_L23_min': u23_min, 'U_L23_max': u23_max,
+            'U_L31_min': u31_min, 'U_L31_max': u31_max,
+            'FREQ': _safe_float(f_avg), 'FREQ_min': _safe_float(f_min), 'FREQ_max': _safe_float(f_max),
+        })
+    return rows_out
+
+
+def _nq_sm_history_rows(start: int, end: int, rng: str) -> list[dict]:
+    """Permanente SM-Netzqualitaets-Historie (nq_sm_15min) fuer den Vor-PAC-Zeitraum.
+
+    Liest die retention-freie SM-15-min-Historie aus den NQ-Monats-DBs
+    (`nq/db/nq_YYYY-MM.db`, Tabelle `nq_sm_15min`, gefuellt via
+    `nq/transfer/nq_sm_backfill.py`) und verdichtet sie auf die Zielaufloesung:
+    5min→15-min-Durchreichung, hourly→Stundenbuckets, daily→Tagesbuckets
+    (min/avg/max energieneutral gemerged). Wide-Format wie `_core_fallback_rows`.
+    """
+    # Monats-DBs im Fenster einsammeln.
+    month_dbs: list[str] = []
+    d = datetime.fromtimestamp(start).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    end_dt = datetime.fromtimestamp(end)
+    guard = 0
+    while d <= end_dt and guard < 130:
+        guard += 1
+        p = os.path.join(_NQ_PRIMARY_DIR, f"nq_{d.strftime('%Y-%m')}.db")
+        if os.path.exists(p):
+            month_dbs.append(p)
+        d = d.replace(year=d.year + 1, month=1) if d.month == 12 else d.replace(month=d.month + 1)
+
+    raw: list[tuple] = []
+    for db_path in month_dbs:
+        try:
+            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5.0)
+        except Exception:
+            continue
+        try:
+            raw.extend(conn.execute(
+                "SELECT ts, u_l12,u_l12_min,u_l12_max, u_l23,u_l23_min,u_l23_max, "
+                "u_l31,u_l31_min,u_l31_max, freq,freq_min,freq_max "
+                "FROM nq_sm_15min WHERE ts >= ? AND ts < ? ORDER BY ts",
+                (start, end),
+            ).fetchall())
+        except Exception:
+            pass
+        finally:
+            conn.close()
+    if not raw:
+        return []
+
+    def _bucket_ts(ts: int) -> int:
+        if rng == 'hourly':
+            return ts - (ts % 3600)
+        if rng == 'daily':
+            dt = datetime.fromtimestamp(ts)
+            return int(datetime(dt.year, dt.month, dt.day).timestamp())
+        return int(ts)  # 5min: 15-min-Raster durchreichen
+
+    # Bucket-Aggregation: avg = Mittel der avg, min = min der min, max = max der max.
+    acc: dict[int, dict] = {}
+    for (ts, u12, u12n, u12x, u23, u23n, u23x, u31, u31n, u31x, f, fn, fx) in raw:
+        bts = _bucket_ts(int(ts))
+        b = acc.setdefault(bts, {'ts': bts, '_n': 0,
+                                 'u12': [], 'u23': [], 'u31': [], 'f': [],
+                                 'u12n': [], 'u12x': [], 'u23n': [], 'u23x': [],
+                                 'u31n': [], 'u31x': [], 'fn': [], 'fx': []})
+        b['_n'] += 1
+        for key, val in (('u12', u12), ('u23', u23), ('u31', u31), ('f', f),
+                         ('u12n', u12n), ('u12x', u12x), ('u23n', u23n), ('u23x', u23x),
+                         ('u31n', u31n), ('u31x', u31x), ('fn', fn), ('fx', fx)):
+            if val is not None:
+                b[key].append(val)
+
+    def _avg(xs):
+        return (sum(xs) / len(xs)) if xs else None
+
+    rows_out: list[dict] = []
+    for bts in sorted(acc):
+        b = acc[bts]
+        rows_out.append({
+            'ts': bts,
+            'U_L12': _avg(b['u12']), 'U_L23': _avg(b['u23']), 'U_L31': _avg(b['u31']),
+            'U_L12_min': min(b['u12n']) if b['u12n'] else None,
+            'U_L12_max': max(b['u12x']) if b['u12x'] else None,
+            'U_L23_min': min(b['u23n']) if b['u23n'] else None,
+            'U_L23_max': max(b['u23x']) if b['u23x'] else None,
+            'U_L31_min': min(b['u31n']) if b['u31n'] else None,
+            'U_L31_max': max(b['u31x']) if b['u31x'] else None,
+            'FREQ': _avg(b['f']),
+            'FREQ_min': min(b['fn']) if b['fn'] else None,
+            'FREQ_max': max(b['fx']) if b['fx'] else None,
         })
     return rows_out
 
@@ -1260,12 +1356,26 @@ def api_nq_netzkriterien():
     rng = {'tag': '5min', 'monat': 'hourly', 'jahr': 'daily', 'gesamt': 'daily'}[period]
 
     raw = tech_read.fetch_aggregates(rng, start, end)
-    rows = raw.get('data', [])
-    source = raw.get('source', f'nq_{rng}')
-    if not rows:
+    pac_rows = raw.get('data', [])
+    sm_rows = _nq_sm_history_rows(start, end, rng)
+    if pac_rows and sm_rows:
+        # SM-Historie (Vor-PAC) als Basis, echte PAC-Aggregate ueberlagern je ts
+        # (PAC ist ab Inbetriebnahme die autoritative Quelle). Deckt Perioden ab,
+        # die die PAC-Grenze ueberspannen (z. B. Juni mit PAC-Anlaufzeile 30.06).
+        by_ts = {int(r['ts']): r for r in sm_rows}
+        for r in pac_rows:
+            by_ts[int(r['ts'])] = r
+        rows = [by_ts[k] for k in sorted(by_ts)]
+        source = 'nq_primary_agg+sm_15min'
+    elif pac_rows:
+        rows = pac_rows
+        source = raw.get('source', f'nq_{rng}')
+    elif sm_rows:
+        rows = sm_rows
+        source = 'nq_sm_15min'
+    else:
         rows = _core_fallback_rows(start, end)
-        if rows:
-            source = 'core_data15min_fallback'
+        source = 'core_data15min_fallback' if rows else raw.get('source', f'nq_{rng}')
 
     cfg = _load_nq_config()
     gw = cfg.get('grenzwerte', {})
