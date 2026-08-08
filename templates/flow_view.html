@@ -1630,17 +1630,17 @@
 
         const bp = d.battery.power;
         document.getElementById('value-battery').textContent = fmt(Math.abs(bp));
-        document.getElementById('sub-battery-soc').textContent = `SOC: ${d.battery.soc}%`;
+        document.getElementById('sub-battery-soc').textContent = `SOC: ${String(d.battery.soc).replace('.', ',')}%`;
 
         const gp = d.grid.power;
         document.getElementById('value-netz').textContent = `${fmt(d.grid.importing ? gp : -gp).replace(/ (W|kW)/, '')}/${flowDevicesData.pac?.power !== null && flowDevicesData.pac?.power !== undefined ? fmt(flowDevicesData.pac.power) : '--W'}`;
-        document.getElementById('sub-netz').textContent = `${d.grid.import_today_kwh} kWh`;
+        document.getElementById('sub-netz').textContent = `${String(d.grid.import_today_kwh).replace('.', ',')} kWh`;
 
         document.getElementById('value-consumption').textContent = fmt(Math.max(0, d.consumption.total));
-        document.getElementById('sub-consumption').textContent = `${d.consumption.total_today_kwh} kWh`;
+        document.getElementById('sub-consumption').textContent = `${String(d.consumption.total_today_kwh).replace('.', ',')} kWh`;
         document.getElementById('value-household').textContent   = fmt(Math.max(0, d.consumption.household));
         document.getElementById('value-wattpilot').textContent   = fmt(Math.max(0, d.consumption.wattpilot));
-        document.getElementById('sub-wattpilot').textContent     = flowDevicesData.wattpilot?.energy_session_kwh !== null && flowDevicesData.wattpilot?.energy_session_kwh !== undefined ? `${flowDevicesData.wattpilot.energy_session_kwh} kWh` : '';
+        document.getElementById('sub-wattpilot').textContent     = flowDevicesData.wattpilot?.energy_session_kwh !== null && flowDevicesData.wattpilot?.energy_session_kwh !== undefined ? `${String(flowDevicesData.wattpilot.energy_session_kwh).replace('.', ',')} kWh` : '';
         document.getElementById('value-heatpump').textContent    = fmt(Math.max(0, d.consumption.heatpump));
         document.getElementById('value-heizpatrone').textContent = fmt(Math.max(0, d.consumption.heizpatrone));
         document.getElementById('value-klima').textContent       = fmt(Math.max(0, d.consumption.klima));
