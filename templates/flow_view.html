@@ -1606,7 +1606,7 @@
         if (wrOffline.f2) d.producers.f2 = 0;
         if (wrOffline.f3) d.producers.f3 = 0;
 
-        document.getElementById('value-f1').textContent = wrOffline.f1 ? '--' : fmt(d.producers.f1).replace(/ (W|kW)/, '');
+        document.getElementById('value-f1').textContent = wrOffline.f1 ? '--' : fmt(d.producers.f1);
         document.getElementById('value-f2').textContent = wrOffline.f2 ? '--' : `${fmt(d.producers.f2).replace(/ (W|kW)/, '')}/${flowDevicesData.f2?.power !== null && flowDevicesData.f2?.power !== undefined ? fmt(flowDevicesData.f2.power) : '--W'}`;
         document.getElementById('value-f3').textContent = wrOffline.f3 ? '--' : `${fmt(d.producers.f3).replace(/ (W|kW)/, '')}/${flowDevicesData.f3?.power !== null && flowDevicesData.f3?.power !== undefined ? fmt(flowDevicesData.f3.power) : '--W'}`;
 
