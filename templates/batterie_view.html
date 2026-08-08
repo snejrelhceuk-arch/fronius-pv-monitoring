@@ -10,40 +10,54 @@
     <link rel="stylesheet" href="/static/css/monitoring.css">
     <link rel="stylesheet" href="/static/css/nav-ui.css">
     <style>
-        body { background: #f6f7fb; }
-        .container { max-width: 1200px; margin: 0 auto; padding: 12px; }
-        .page-head { margin: 2px 2px 10px; }
-        .page-head h1 { font-size: 20px; margin: 0; color: #0f172a; }
-        .page-head p { font-size: 12px; color: #64748b; margin: 4px 0 0; }
-        .top-nav-bar { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px; }
-        .nav-left, .nav-center, .nav-right { display:flex; align-items:center; gap:6px; }
-        .nav-left button, .nav-center button, .btn-jetzt { border:1px solid #d0d7de; background:#fff; padding:6px 10px; border-radius:6px; cursor:pointer; }
-        .nav-left button.active { background:#2563eb; color:#fff; border-color:#2563eb; }
-        .chart-area { background:white; border-radius:10px; padding:12px; min-height:420px; }
-        .status-bar { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px; margin-bottom:10px; }
-        .status-chip { background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 10px; color:#0f172a; }
-        #thresholdInfo { background:#0f172a; color:#f8fafc; border-color:#334155; }
-        #batteryChart { width:100%; height:420px; }
-        .loading, .error { padding:16px; color:#475569; }
-        .error { color:#b91c1c; }
-        #batteryHeader { margin-bottom:10px; }
-        #batteryHeader .status-chip { border-left:3px solid #2563eb; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0f172a; color: #e2e8f0;
+            min-height: 100vh; display: flex; flex-direction: column;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 12px; width: 100%; }
+        .top-nav-bar {
+            display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px;
+            background: rgba(30,41,59,0.6); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px; padding: 10px 14px; backdrop-filter: blur(6px);
+        }
+        .nav-left, .nav-center, .nav-right { display: flex; align-items: center; gap: 6px; }
+        .nav-left button, .nav-center button, .btn-jetzt {
+            border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.7); padding: 6px 10px; border-radius: 6px; cursor: pointer;
+            transition: all .15s;
+        }
+        .nav-left button:hover, .nav-center button:hover, .btn-jetzt:hover {
+            background: rgba(255,255,255,0.12); color: #fff;
+        }
+        .nav-left button.active { background: rgba(99,102,241,0.25); color: #a5b4fc; border-color: rgba(99,102,241,0.5); }
+        .chart-area {
+            background: rgba(30,41,59,0.5); border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 12px; padding: 16px; min-height: 420px;
+        }
+        .status-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 10px; }
+        .status-chip {
+            background: rgba(15,23,42,0.7); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px; padding: 10px 12px; color: #e2e8f0;
+        }
+        #thresholdInfo { background: #0f172a; color: #f8fafc; border-color: rgba(255,255,255,0.12); }
+        #batteryChart { width: 100%; height: 420px; }
+        .loading, .error { padding: 16px; color: #94a3b8; text-align: center; }
+        .error { color: #f87171; }
+        #batteryHeader { margin-bottom: 10px; }
+        #batteryHeader .status-chip { border-left: 3px solid #6366f1; }
         @media (max-width: 640px) {
-            .container { padding:8px; }
-            .top-nav-bar { flex-wrap:wrap; }
-            .nav-left, .nav-center { flex-wrap:wrap; }
-            #batteryChart { height:320px; }
-            .status-bar { grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); }
+            .container { padding: 8px; }
+            .top-nav-bar { flex-wrap: wrap; }
+            .nav-left, .nav-center { flex-wrap: wrap; }
+            #batteryChart { height: 320px; }
+            .status-bar { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="page-head">
-            <h1>Akku-Stress-Analyse</h1>
-            <p>SOC-Verlauf und Stress-Anteil in den Belastungszonen (Vollladung &gt;95&nbsp;%, Tiefentladung &lt;10&nbsp;%).</p>
-        </div>
-        <div id="batteryHeader" class="status-bar" style="display:none;"></div>
         <div class="top-nav-bar">
             <div class="nav-left">
                 <button class="active" id="btnViewTag" onclick="switchView('tag')">Tag</button>
@@ -74,6 +88,7 @@
             </div>
             <div class="nav-right"></div>
         </div>
+        <div id="batteryHeader" class="status-bar" style="display:none;"></div>
 
         <div class="chart-area">
             <div id="summaryGrid" class="status-bar" style="display:none;"></div>
@@ -201,11 +216,9 @@
             const eff = summary.efficiency_pct;
             const pctTxt = v => (v != null ? `${v.toFixed(1)} %` : '--');
             const chips = [
-                { label: 'Aktueller SOC', value: pctTxt(summary.current) },
+                { label: 'SOC', value: pctTxt(summary.current) },
+                { label: 'Wirkungsgrad', value: pctTxt(eff), accent: eff != null ? '#0891b2' : undefined },
                 { label: 'Stress-Anteil', value: pctTxt(summary.stress_pct), accent: '#b45309', big: true },
-                { label: `Hoch-Stress >${thr.high} %`, value: `${fmtDuration(summary.high_stress_minutes)}${summary.high_stress_pct != null ? ` \u00B7 ${summary.high_stress_pct.toFixed(1)} %` : ''}`, accent: COLORS.high },
-                { label: `Tief-Stress <${thr.low} %`, value: `${fmtDuration(summary.low_stress_minutes)}${summary.low_stress_pct != null ? ` \u00B7 ${summary.low_stress_pct.toFixed(1)} %` : ''}`, accent: COLORS.low },
-                { label: 'Wirkungsgrad (Entl./Lad.)', value: pctTxt(eff), accent: eff != null ? '#0891b2' : undefined },
             ];
             const grid = document.getElementById('summaryGrid');
             grid.innerHTML = chips.map(c => `<div class="status-chip"><div style="font-size:11px;opacity:0.7;">${c.label}</div><div style="font-size:${c.big ? 20 : 16}px;font-weight:700;${c.accent ? `color:${c.accent};` : ''}">${c.value}</div></div>`).join('');
@@ -215,8 +228,8 @@
             const avail = summary.available_hours != null ? `${summary.available_hours.toFixed(1)}\u2009h` : '--';
             info.innerHTML = `<div style="font-size:11px; opacity:0.8; text-transform:uppercase; letter-spacing:0.04em;">Stress-Anteil an der ausgewerteten Zeit (${avail})</div>`
                 + `<div style="font-size:16px; font-weight:700; margin-top:3px;">`
-                + `${summary.stress_pct != null ? summary.stress_pct.toFixed(1) : '--'}&#8201;%`
-                + ` <span style="font-weight:500; opacity:0.85;">(`
+                + `${summary.stress_pct != null ? summary.stress_pct.toFixed(1) : '--'}&#8201;% `
+                + `<span style="font-weight:500; opacity:0.85;">(`
                 + `<span style="color:${COLORS.high};">Hoch ${fmtDuration(summary.high_stress_minutes)}</span>`
                 + ` &#183; `
                 + `<span style="color:${COLORS.low};">Tief ${fmtDuration(summary.low_stress_minutes)}</span>)</span></div>`;
