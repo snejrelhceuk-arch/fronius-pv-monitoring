@@ -1607,8 +1607,8 @@
         if (wrOffline.f3) d.producers.f3 = 0;
 
         document.getElementById('value-f1').textContent = wrOffline.f1 ? '--' : fmt(d.producers.f1).replace(/ (W|kW)/, '');
-        document.getElementById('value-f2').textContent = wrOffline.f2 ? '--' : `${fmt(d.producers.f2)}/${flowDevicesData.f2?.power !== null && flowDevicesData.f2?.power !== undefined ? fmt(flowDevicesData.f2.power) : '--'}`;
-        document.getElementById('value-f3').textContent = wrOffline.f3 ? '--' : `${fmt(d.producers.f3)}/${flowDevicesData.f3?.power !== null && flowDevicesData.f3?.power !== undefined ? fmt(flowDevicesData.f3.power) : '--'}`;
+        document.getElementById('value-f2').textContent = wrOffline.f2 ? '--' : `${fmt(d.producers.f2).replace(/ (W|kW)/, '')}/${flowDevicesData.f2?.power !== null && flowDevicesData.f2?.power !== undefined ? fmt(flowDevicesData.f2.power) : '--W'}`;
+        document.getElementById('value-f3').textContent = wrOffline.f3 ? '--' : `${fmt(d.producers.f3).replace(/ (W|kW)/, '')}/${flowDevicesData.f3?.power !== null && flowDevicesData.f3?.power !== undefined ? fmt(flowDevicesData.f3.power) : '--W'}`;
 
         const WR_TEXT_OK = 'rgba(255,255,255,0.7)';
         const WR_TEXT_DOWN = '#ef4444';
@@ -1630,7 +1630,7 @@
         document.getElementById('sub-battery-soc').textContent = `SOC: ${d.battery.soc}%`;
 
         const gp = d.grid.power;
-        document.getElementById('value-netz').textContent = `${fmt(d.grid.importing ? gp : -gp)}/${flowDevicesData.pac?.power !== null && flowDevicesData.pac?.power !== undefined ? fmt(flowDevicesData.pac.power) : '--'}`;
+        document.getElementById('value-netz').textContent = `${fmt(d.grid.importing ? gp : -gp).replace(/ (W|kW)/, '')}/${flowDevicesData.pac?.power !== null && flowDevicesData.pac?.power !== undefined ? fmt(flowDevicesData.pac.power) : '--W'}`;
         document.getElementById('sub-netz').textContent = `${d.grid.import_today_kwh} kWh`;
 
         document.getElementById('value-consumption').textContent = fmt(Math.max(0, d.consumption.total));
