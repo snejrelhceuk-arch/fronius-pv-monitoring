@@ -475,6 +475,8 @@ def _aggregate_fritzdect_device_daily(c, device_id, table):
     Absicherungen:
       - Negativ-Guard: energy_wh = max(0, MAX−MIN) — Zähler-Resets erzeugen nie
         negative Tageswerte.
+      - Plausibilitäts-Guard: Unrealistisch hohe Tageswerte (z.B. nach Zähler-
+        Reset mit MIN=0) werden auf 0 gesetzt und mit Warnhinweis protokolliert.
       - Interday-Fallback gegen Zähler-Freeze: liefert die Steckdose an einem Tag
         nur einen konstanten Zählerstand (Intraday-Delta 0), wird der echte
         Verbrauch aus der Differenz zum START-Zähler des Folgetags gebildet
@@ -505,11 +507,32 @@ def _aggregate_fritzdect_device_daily(c, device_id, table):
             continue
         parsed.append((day_local, float(e_start), float(e_end), n_readings))
 
+    # Plausibilitätsgrenzen pro Gerät (kWh/Tag) — Schutz gegen Zähler-Resets
+    PLAUSIBILITY_LIMITS = {
+        'heizpatrone': 200,    # 6 kW × 24h max, faktisch kaum erreicht
+        'klimaanlage': 100,    # 3 kW × 24h max
+        'lueftung': 50,        # ~30 W × 24h = 0.7 kWh, Reserve für Heizmodus
+        'gefriertruhe': 20,    # ~100 W × 24h = 2.4 kWh, Reserve für Abtauen
+    }
+    max_plausible_wh = PLAUSIBILITY_LIMITS.get(device_id, 500) * 1000  # Default 500 kWh
+
     inserted = updated = skipped = 0
     for i, (day_local, e_start, e_end, n_readings) in enumerate(parsed):
         delta_wh = max(0.0, e_end - e_start)   # Negativ-Guard
         source_tag = 'counter_auto'
         note = f"Fritz counter delta ({n_readings} Messungen, {e_start:.0f}→{e_end:.0f} Wh)"
+
+        # Plausibilitäts-Guard (z.B. Zähler-Reset mit MIN=0)
+        if delta_wh > max_plausible_wh:
+            logging.warning(
+                f"Fritz-Daily {device_id} {day_local}: unrealistisch hoher Wert "
+                f"{delta_wh/1000:.1f} kWh (MIN={e_start:.0f}, MAX={e_end:.0f} Wh) "
+                f"— vermutlich Zähler-Reset, setze auf 0"
+            )
+            delta_wh = 0.0
+            note = (f"Plausibilitäts-Guard: {e_start:.0f}→{e_end:.0f} Wh "
+                    f"({delta_wh/1000:.1f} kWh > Limit {max_plausible_wh/1000:.0f} kWh/Tag), "
+                    f"Reset vermutet, auf 0 gesetzt")
 
         # Interday-Fallback gegen Zähler-Freeze
         if delta_wh < 0.1 and i + 1 < len(parsed):
