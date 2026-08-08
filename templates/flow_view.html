@@ -1668,7 +1668,7 @@
     }
 
     function fmt(w) {
-        return Math.abs(w) >= 1000 ? `${(w/1000).toFixed(1)} kW` : `${Math.round(w)} W`;
+        return Math.abs(w) >= 1000 ? `${(w/1000).toFixed(1).replace('.', ',')} kW` : `${Math.round(w)} W`;
     }
 
     function updateStatus(s) {
