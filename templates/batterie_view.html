@@ -36,13 +36,12 @@
             background: rgba(30,41,59,0.5); border: 1px solid rgba(255,255,255,0.07);
             border-radius: 12px; padding: 16px; min-height: 420px;
         }
-        .status-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 10px; }
+        .status-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
         .status-chip {
             background: rgba(15,23,42,0.7); border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 8px; padding: 10px 12px; color: #e2e8f0;
+            border-radius: 8px; padding: 6px 10px; color: #e2e8f0; flex: 0 0 auto;
         }
-        #thresholdInfo { background: #0f172a; color: #f8fafc; border-color: rgba(255,255,255,0.12); }
-        #batteryChart { width: 100%; height: 420px; }
+        #batteryChart { width: 100%; height: 420px; background: white; border-radius: 8px; }
         .loading, .error { padding: 16px; color: #94a3b8; text-align: center; }
         .error { color: #f87171; }
         #batteryHeader { margin-bottom: 10px; }
@@ -91,8 +90,6 @@
         <div id="batteryHeader" class="status-bar" style="display:none;"></div>
 
         <div class="chart-area">
-            <div id="summaryGrid" class="status-bar" style="display:none;"></div>
-            <div id="thresholdInfo" class="status-chip" style="display:none; margin-bottom:10px;"></div>
             <div id="chartLoading" class="loading">Lade SOC-Daten...</div>
             <div id="chartError" class="error" style="display:none;"></div>
             <div id="batteryChart" style="display:none;"></div>
@@ -106,6 +103,7 @@
         let currentYear = currentDate.getFullYear();
         let currentMonth = currentDate.getMonth() + 1;
         let chart = null;
+        let batteryData = null;  // Store current battery data for header
 
         const MONTHS_DE = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
 
@@ -211,29 +209,8 @@
         }
 
         function renderSummary(data) {
-            const summary = data.summary || {};
-            const thr = data.thresholds || { high: 95, low: 10 };
-            const eff = summary.efficiency_pct;
-            const pctTxt = v => (v != null ? `${v.toFixed(1)} %` : '--');
-            const chips = [
-                { label: 'SOC', value: pctTxt(summary.current) },
-                { label: 'Wirkungsgrad', value: pctTxt(eff), accent: eff != null ? '#0891b2' : undefined },
-                { label: 'Stress-Anteil', value: pctTxt(summary.stress_pct), accent: '#b45309', big: true },
-            ];
-            const grid = document.getElementById('summaryGrid');
-            grid.innerHTML = chips.map(c => `<div class="status-chip"><div style="font-size:11px;opacity:0.7;">${c.label}</div><div style="font-size:${c.big ? 20 : 16}px;font-weight:700;${c.accent ? `color:${c.accent};` : ''}">${c.value}</div></div>`).join('');
-            grid.style.display = 'grid';
-
-            const info = document.getElementById('thresholdInfo');
-            const avail = summary.available_hours != null ? `${summary.available_hours.toFixed(1)}\u2009h` : '--';
-            info.innerHTML = `<div style="font-size:11px; opacity:0.8; text-transform:uppercase; letter-spacing:0.04em;">Stress-Anteil an der ausgewerteten Zeit (${avail})</div>`
-                + `<div style="font-size:16px; font-weight:700; margin-top:3px;">`
-                + `${summary.stress_pct != null ? summary.stress_pct.toFixed(1) : '--'}&#8201;% `
-                + `<span style="font-weight:500; opacity:0.85;">(`
-                + `<span style="color:${COLORS.high};">Hoch ${fmtDuration(summary.high_stress_minutes)}</span>`
-                + ` &#183; `
-                + `<span style="color:${COLORS.low};">Tief ${fmtDuration(summary.low_stress_minutes)}</span>)</span></div>`;
-            info.style.display = 'block';
+            batteryData = data;  // Store for header
+            fetchHeader();
         }
 
         function buildTagSeriesData(points) {
@@ -296,12 +273,14 @@
 
         function renderStressBars(data) {
             const thr = data.thresholds || { high: 95, low: 10 };
+            const summary = data.summary || {};
             const cps = data.chart_points || [];
             const labels = cps.map(c => c.label);
             const highHours = cps.map(c => c.high_stress_minutes != null ? +(c.high_stress_minutes / 60).toFixed(2) : 0);
             const lowHours = cps.map(c => c.low_stress_minutes != null ? +(c.low_stress_minutes / 60).toFixed(2) : 0);
             const highName = `Hoch-Stress >${thr.high} %`;
             const lowName = `Tief-Stress <${thr.low} %`;
+            const titleText = `Stress-Anteil ${summary.stress_pct != null ? summary.stress_pct.toFixed(1) : '--'}% (${fmtDuration(summary.high_stress_minutes)}>${thr.high}% ${fmtDuration(summary.low_stress_minutes)}<${thr.low}%)`;
             chart.setOption({
                 tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: params => {
                     const rows = Array.isArray(params) ? params : [params];
@@ -313,8 +292,9 @@
                         + `<br/><span style="color:${COLORS.low}">\u25A0</span> Tief-Stress &lt;${thr.low}&#8201;%: ${fmtDuration(cp.low_stress_minutes)}`
                         + socLine;
                 } },
+                title: { text: titleText, left: 'center', top: 8, textStyle: { fontSize: 13, color: '#334155', fontWeight: 600 } },
                 legend: { bottom: 0, data: [highName, lowName] },
-                grid: { left: 48, right: 16, top: 16, bottom: 40, containLabel: true },
+                grid: { left: 48, right: 16, top: 40, bottom: 40, containLabel: true },
                 xAxis: { type: 'category', data: labels, axisLabel: { interval: 0, fontSize: labels.length > 16 ? 9 : 11 } },
                 yAxis: { type: 'value', name: 'Std.', min: 0, minInterval: 1 },
                 series: [
@@ -339,7 +319,6 @@
             document.getElementById('chartLoading').style.display = 'block';
             document.getElementById('chartError').style.display = 'none';
             document.getElementById('batteryChart').style.display = 'none';
-            document.getElementById('summaryGrid').style.display = 'none';
 
             let url = `/api/verbraucher/batterie?period=${currentView}`;
             if (currentView === 'tag') {
@@ -375,31 +354,40 @@
         async function fetchHeader() {
             try {
                 const r = await fetch('/api/flow_status', { headers: { Accept: 'application/json' } });
-                if (!r.ok) return;
-                const d = await r.json();
+                const d = r.ok ? await r.json() : {};
                 const chips = [];
-                if (d.soh != null) {
-                    const src = d.soh_source ? `<span style="font-size:10px;opacity:0.6;"> (${d.soh_source})</span>` : '';
-                    chips.push(`<div class="status-chip"><div style="font-size:11px;opacity:0.7;">Batterie-Gesundheit (SOH)${src}</div><div style="font-size:16px;font-weight:700;">${Number(d.soh).toFixed(1)} %</div></div>`);
+                
+                // SOC from battery data or flow_status
+                const soc = batteryData?.summary?.current ?? d.soc;
+                if (soc != null) {
+                    chips.push(`<div class="status-chip"><div style="font-size:10px;opacity:0.7;">SOC</div><div style="font-size:14px;font-weight:700;">${Number(soc).toFixed(1)}%</div></div>`);
                 }
+                
+                // Schaltband from flow_status
                 if (d.soc_min != null && d.soc_max != null) {
-                    const mode = d.soc_mode ? `<span style="font-size:10px;opacity:0.6;"> (${d.soc_mode})</span>` : '';
-                    chips.push(`<div class="status-chip"><div style="font-size:11px;opacity:0.7;">SOC-Schaltband${mode}</div><div style="font-size:16px;font-weight:700;">${Math.round(d.soc_min)}\u2013${Math.round(d.soc_max)} %</div></div>`);
+                    chips.push(`<div class="status-chip"><div style="font-size:10px;opacity:0.7;">Schaltband</div><div style="font-size:14px;font-weight:700;">${Math.round(d.soc_min)}\u2013${Math.round(d.soc_max)}%</div></div>`);
                 }
+                
+                // Wirkungsgrad from battery data
+                if (batteryData?.summary?.efficiency_pct != null) {
+                    chips.push(`<div class="status-chip"><div style="font-size:10px;opacity:0.7;">Wirkungsgrad</div><div style="font-size:14px;font-weight:700;color:#0891b2;">${Number(batteryData.summary.efficiency_pct).toFixed(1)}%</div></div>`);
+                }
+                
+                // Temperatur from flow_status
                 if (d.battery_temp != null) {
                     const t = Number(d.battery_temp);
-                    const delta = _prevBattTemp != null ? (t - _prevBattTemp) : null;
-                    _prevBattTemp = t;
-                    const deltaTxt = delta != null
-                        ? ` <span style="font-size:11px;opacity:0.75;">${_trendArrow(delta)} ${delta >= 0 ? '+' : ''}${delta.toFixed(1)}\u2009\u00B0C</span>`
-                        : ` <span style="font-size:11px;opacity:0.45;">${_trendArrow(delta)}</span>`;
-                    const maxTxt = d.battery_temp_max != null ? `<span style="font-size:10px;opacity:0.6;"> \u00B7 max ${Number(d.battery_temp_max).toFixed(1)}\u2009\u00B0C</span>` : '';
-                    chips.push(`<div class="status-chip"><div style="font-size:11px;opacity:0.7;">Batterie-Temperatur${maxTxt}</div><div style="font-size:16px;font-weight:700;">${t.toFixed(1)}\u2009\u00B0C${deltaTxt}</div></div>`);
+                    chips.push(`<div class="status-chip"><div style="font-size:10px;opacity:0.7;">Temperatur</div><div style="font-size:14px;font-weight:700;">${t.toFixed(1)}\u00b0C</div></div>`);
                 }
+                
+                // SOH from flow_status
+                if (d.soh != null) {
+                    chips.push(`<div class="status-chip"><div style="font-size:10px;opacity:0.7;">SOH</div><div style="font-size:14px;font-weight:700;">${Number(d.soh).toFixed(1)}%</div></div>`);
+                }
+                
                 const el = document.getElementById('batteryHeader');
                 if (chips.length) {
                     el.innerHTML = chips.join('');
-                    el.style.display = 'grid';
+                    el.style.display = 'flex';
                 }
             } catch (e) { /* Kopfzeile ist optional */ }
         }
