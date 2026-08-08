@@ -950,32 +950,7 @@
                         font-weight="600" id="value-f3">0 W</text>
                 </g>
 
-                <!-- ═══ GERÄTE-DIREKT-BUBBLES (unabhängige Quellen: PAC, F2, F3) ═══
-                     Halbtransparent, schräg nach unten versetzt VOR die Originale
-                     (Netz/F2/F3). Quellen: PAC4200 bzw. geräteeigene WR-APIs —
-                     bleiben auch bei F1-Ausfall/-Update verfügbar. pointer-events:none,
-                     damit darunterliegende Klick-/Navigationsziele erreichbar bleiben. -->
-                <g id="device-direct-bubbles" style="pointer-events:none;">
-                    <!-- PAC (unabhängige Netz-Quelle, PAC4200; Bezug +, Einspeisung -) -->
-                    <circle cx="224" cy="251" r="58" fill="rgba(20,184,166,0.13)"
-                            stroke="rgba(45,212,191,0.55)" stroke-width="2.5" id="node-pac"/>
-                    <text x="224" y="245" text-anchor="middle"
-                          fill="rgba(94,234,212,0.95)" font-size="14" font-weight="600">PAC</text>
-                    <text x="224" y="268" text-anchor="middle"
-                          fill="rgba(255,255,255,0.92)" font-size="16" font-weight="700" id="value-pac">-- W</text>
 
-                    <!-- F2 (geräteeigene WR-API) -->
-                    <circle cx="372" cy="37" r="39" fill="rgba(20,184,166,0.13)"
-                            stroke="rgba(45,212,191,0.5)" stroke-width="2" id="node-f2-dev"/>
-                    <text x="372" y="42" text-anchor="middle"
-                          fill="rgba(153,246,228,0.95)" font-size="13" font-weight="700" id="value-f2-dev">-- W</text>
-
-                    <!-- F3 (geräteeigene WR-API) -->
-                    <circle cx="472" cy="52" r="39" fill="rgba(20,184,166,0.13)"
-                            stroke="rgba(45,212,191,0.5)" stroke-width="2" id="node-f3-dev"/>
-                    <text x="472" y="57" text-anchor="middle"
-                          fill="rgba(153,246,228,0.95)" font-size="13" font-weight="700" id="value-f3-dev">-- W</text>
-                </g>
 
                 <!-- ═══ SUB-VERBRAUCHER (kurze Linien, Fluss immer → Verbraucher) ═══ -->
                 <g class="sub-consumers">
@@ -1351,6 +1326,7 @@
     let smoothedData = null;
     let activeFlows  = [];
     let animId       = null;
+    let flowDevicesData = { pac: null, f2: null, f3: null };
 
     // ══════════════════════════════════════════════════════════
     //  Pfad-Geometrie
@@ -1555,17 +1531,11 @@
             const r = await fetch(apiUrl('/api/flow_devices'), { cache: 'no-store' });
             if (!r.ok) throw new Error('API ' + r.status);
             const d = await r.json();
-            const setVal = (id, node) => {
-                const el = document.getElementById(id);
-                if (!el) return;
-                el.textContent = (node && node.available && node.power !== null && node.power !== undefined)
-                    ? fmt(node.power) : '-- W';
-            };
-            setVal('value-pac', d.pac);       // Bezug +, Einspeisung - (fmt behält Vorzeichen)
-            setVal('value-f2-dev', d.f2);
-            setVal('value-f3-dev', d.f3);
+            // Speichere die Daten global, damit updateLabels() darauf zugreifen kann
+            flowDevicesData = d;
         } catch (e) {
             console.warn('flow_devices:', e);
+            flowDevicesData = { pac: null, f2: null, f3: null };
         }
     }
 
@@ -1636,9 +1606,9 @@
         if (wrOffline.f2) d.producers.f2 = 0;
         if (wrOffline.f3) d.producers.f3 = 0;
 
-        document.getElementById('value-f1').textContent = wrOffline.f1 ? '-- W' : fmt(d.producers.f1);
-        document.getElementById('value-f2').textContent = wrOffline.f2 ? '-- W' : fmt(d.producers.f2);
-        document.getElementById('value-f3').textContent = wrOffline.f3 ? '-- W' : fmt(d.producers.f3);
+        document.getElementById('value-f1').textContent = wrOffline.f1 ? '--' : fmt(d.producers.f1).replace(/ (W|kW)/, '');
+        document.getElementById('value-f2').textContent = wrOffline.f2 ? '--' : `${fmt(d.producers.f2).replace(/ (W|kW)/, '')}/${flowDevicesData.f2?.power !== null && flowDevicesData.f2?.power !== undefined ? fmt(flowDevicesData.f2.power).replace(/ (W|kW)/, '') : '--'}`;
+        document.getElementById('value-f3').textContent = wrOffline.f3 ? '--' : `${fmt(d.producers.f3).replace(/ (W|kW)/, '')}/${flowDevicesData.f3?.power !== null && flowDevicesData.f3?.power !== undefined ? fmt(flowDevicesData.f3.power).replace(/ (W|kW)/, '') : '--'}`;
 
         const WR_TEXT_OK = 'rgba(255,255,255,0.7)';
         const WR_TEXT_DOWN = '#ef4444';
@@ -1660,7 +1630,7 @@
         document.getElementById('sub-battery-soc').textContent = `SOC: ${d.battery.soc}%`;
 
         const gp = d.grid.power;
-        document.getElementById('value-netz').textContent = fmt(Math.abs(gp));
+        document.getElementById('value-netz').textContent = `${fmt(d.grid.importing ? gp : -gp).replace(/ (W|kW)/, '')}/${flowDevicesData.pac?.power !== null && flowDevicesData.pac?.power !== undefined ? fmt(flowDevicesData.pac.power).replace(/ (W|kW)/, '') : '--'}`;
         document.getElementById('sub-netz').textContent = `${d.grid.import_today_kwh} kWh`;
 
         document.getElementById('value-consumption').textContent = fmt(Math.max(0, d.consumption.total));
