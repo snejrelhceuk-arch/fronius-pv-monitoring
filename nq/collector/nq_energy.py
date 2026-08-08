@@ -113,6 +113,101 @@ def compute_daily(rows: list[tuple]) -> dict | None:
     return out
 
 
+def _interp_at(samples: list[tuple], boundary_ts: int, max_gap_s: float):
+    """Kumulativen Zählerstand am ``boundary_ts`` aus (ts, val)-Stützstellen schätzen.
+
+    ``samples``: aufsteigend sortierte Liste ``(ts, val)`` mit ``val`` != None.
+    Returns ``(value|None, quality)`` — ``quality`` ∈ {'interp' (bracketiert,
+    linear), 'edge' (nur eine Seite bzw. Bracket zu breit → nächster Randwert),
+    'none' (keine Stützstelle im Toleranzfenster)}.
+
+    Energieerhaltend: Der Wert an einer Grenze hängt nur von den umgebenden
+    Stützstellen + Regel ab → Tagesende(D) == Tagesanfang(D+1).
+    """
+    before = after = None
+    for ts, val in samples:
+        if ts <= boundary_ts:
+            before = (ts, val)
+        else:
+            after = (ts, val)
+            break
+    if before and after:
+        (tb, vb), (ta, va) = before, after
+        if ta > tb and (ta - tb) <= max_gap_s:
+            frac = (boundary_ts - tb) / (ta - tb)
+            return (vb + (va - vb) * frac, "interp")
+        near = before if (boundary_ts - tb) <= (ta - boundary_ts) else after
+        return (near[1], "edge") if abs(near[0] - boundary_ts) <= max_gap_s else (None, "none")
+    cand = before or after
+    if cand and abs(cand[0] - boundary_ts) <= max_gap_s:
+        return (cand[1], "edge")
+    return (None, "none")
+
+
+def compute_daily_boundary(rows: list[tuple], t0: int, t1: int,
+                           max_gap_s: float = 1800.0,
+                           min_samples_ok: int = 200) -> dict | None:
+    """Tages-Delta per **Randwert-Interpolation** auf die exakten Mitternachts-
+    grenzen ``t0`` (Tagesanfang) und ``t1`` (Tagesende = nächste Mitternacht).
+
+    Behebt den Verlust der Differenzmethode ``compute_daily`` (delta =
+    letzter − erster Snapshot **innerhalb** des Tages), die die Energie in der
+    Lücke zwischen letztem Snapshot eines Tages und erstem des Folgetages
+    verliert — bei dünnem 5-min-Takt (und erst recht bei Collector-Ausfall)
+    systematisch. Der interpolierte Grenzwert ist für aufeinanderfolgende Tage
+    identisch → **energieerhaltend** (Monats-/Jahressumme = Zählerfortschritt).
+
+    ``rows``: ``(ts, wh_imp, wh_exp, varh_imp, varh_exp, vah)`` aufsteigend, darf
+    (und soll) über ``[t0, t1)`` hinausreichen (Rand-Bracketing). Reine Funktion.
+    """
+    if not rows:
+        return None
+    n_in_day = sum(1 for r in rows if t0 <= r[0] < t1)
+    out: dict = {"n_samples": n_in_day}
+    src_overall = "counter"
+    qual = []
+    for idx, c in enumerate(COUNTERS, start=1):
+        samples = [(r[0], r[idx]) for r in rows if r[idx] is not None]
+        in_day = [(ts, v) for ts, v in samples if t0 <= ts < t1]
+        sum_partial = 0.0
+        for i in range(1, len(in_day)):
+            d = in_day[i][1] - in_day[i - 1][1]
+            if d > 0:
+                sum_partial += d
+        if not samples:
+            out[f"{c}_start"] = out[f"{c}_end"] = out[f"{c}_delta"] = None
+            src_overall = "partial"
+            qual.append("none")
+            continue
+        v0, q0 = _interp_at(samples, t0, max_gap_s)
+        v1, q1 = _interp_at(samples, t1, max_gap_s)
+        if v0 is None or v1 is None:
+            # kein sauberer Rand → within-day-Fallback (wie compute_daily), markiert partial
+            s = in_day[0][1] if in_day else None
+            e = in_day[-1][1] if in_day else None
+            delta, _ = _reset_aware_delta(s, e, sum_partial if sum_partial > 0 else None)
+            out[f"{c}_start"], out[f"{c}_end"], out[f"{c}_delta"] = s, e, delta
+            src_overall = "partial"
+            qual.append("none")
+            continue
+        delta, src = _reset_aware_delta(v0, v1, sum_partial if sum_partial > 0 else None)
+        out[f"{c}_start"], out[f"{c}_end"], out[f"{c}_delta"] = v0, v1, delta
+        if src != "counter":
+            src_overall = src if src_overall == "counter" else src_overall
+            qual.append("reset")
+        elif q0 == "interp" and q1 == "interp":
+            qual.append("interp")
+        else:
+            qual.append("edge")
+            if src_overall == "counter":
+                src_overall = "counter_edge"
+    # Konfidenz: sauber nur bei durchgehender Interpolation + genügend Tagesdeckung
+    clean = all(q == "interp" for q in qual) and n_in_day >= min_samples_ok
+    out["quality"] = "clean" if clean else ("estimated" if any(q in ("interp", "edge") for q in qual) else "none")
+    out["src"] = src_overall
+    return out
+
+
 def run(db_path: str, interval_s: float, host: str | None = None) -> None:
     """Snapshotter-Loop (Tech): schreibt Energiezähler in langsamem Takt."""
     signal.signal(signal.SIGINT, _handle_stop)

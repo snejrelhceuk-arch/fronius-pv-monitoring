@@ -40,6 +40,13 @@
     "grid_s": 300
   },
 
+  "energy": {
+    "boundary_margin_s": 7200,
+    "boundary_max_gap_s": 1800,
+    "min_samples_ok": 200,
+    "_comment": "Randwert-Interpolation der kumulativen PAC-Energiezaehler auf exakte Mitternacht (energieerhaltend, luecken-robust). boundary_margin_s = Fetch-Fenster ueber [t0,t1] hinaus fuers Rand-Bracketing; boundary_max_gap_s = max. Stuetzstellen-Abstand fuer lineare Interpolation, sonst naechster Randwert (estimated); min_samples_ok = Tagesdeckung fuer 'clean'-Konfidenz."
+  },
+
   "event_filter": {
     "enabled": true,
     "du_step_v": 3.0,

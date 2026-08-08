@@ -23,7 +23,7 @@ import subprocess
 import time
 
 from nq.nq_common import load_config, open_db, PRIMARY_SCHEMA, BASE_DIR
-from nq.collector.nq_energy import compute_daily, COUNTERS
+from nq.collector.nq_energy import compute_daily_boundary, COUNTERS
 
 try:
     import config as _pvconfig
@@ -51,14 +51,21 @@ def _day_bounds(day: str) -> tuple[int, int]:
     return t0, t0 + 86400
 
 
-def fetch_tech_rows(host: str, tmpfs_db: str, t0: int, t1: int) -> list[tuple]:
-    """Holt read-only die Energiezähler-Snapshots [t0,t1) von Tech (SSH+Python)."""
+def fetch_tech_rows(host: str, tmpfs_db: str, t0: int, t1: int,
+                    margin_s: int = 0) -> list[tuple]:
+    """Holt read-only die Energiezähler-Snapshots von Tech (SSH+Python).
+
+    Fenster ``[t0 - margin_s, t1 + margin_s)`` — der Rand über die Tagesgrenzen
+    hinaus ist nötig, damit die Mitternachts-Randwerte **bracketiert** und linear
+    interpoliert werden können (energieerhaltend, siehe compute_daily_boundary).
+    """
     cols = ", ".join(["ts"] + COUNTERS)
+    lo, hi = t0 - int(margin_s), t1 + int(margin_s)
     remote = (
         "import sqlite3,json,sys;"
         f"c=sqlite3.connect('file:{tmpfs_db}?mode=ro',uri=True);"
         f"print(json.dumps(c.execute('SELECT {cols} FROM nq_energy_raw "
-        f"WHERE ts>=? AND ts<? ORDER BY ts',({t0},{t1})).fetchall()))"
+        f"WHERE ts>=? AND ts<? ORDER BY ts',({lo},{hi})).fetchall()))"
     )
     # Remote-Repo-Pfad zur Laufzeit (gleicher Pfad auf beiden Hosts; via
     # PV_REPO_DIR überschreibbar) — kein hostspezifischer Literal im Code.
@@ -74,8 +81,10 @@ def fetch_tech_rows(host: str, tmpfs_db: str, t0: int, t1: int) -> list[tuple]:
 
 
 def master_sm_day(t0: int, t1: int) -> dict | None:
-    """Best-effort: Master-SM (Fronius Primär-SM) Tages-Bezug/Lieferung in kWh
-    aus der Produktions-DB (read-only). None bei Nichtverfügbarkeit."""
+    """Best-effort: Master-SM (Fronius Primär-SM) Tages-Bezug/Lieferung in kWh aus
+    dem **autoritativen Tages-Fixpunkt** ``daily_data`` (read-only, W_Imp/Exp_Netz
+    _start/_end = Zählerstand an den Tagesgrenzen). Fällt bei fehlenden Fixpunkten
+    auf die 1-min-Delta-Summe zurück. None bei Nichtverfügbarkeit."""
     if _pvconfig is None:
         return None
     db = getattr(_pvconfig, "DB_PATH", None)
@@ -84,6 +93,16 @@ def master_sm_day(t0: int, t1: int) -> dict | None:
     import sqlite3
     try:
         c = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5.0)
+        row = c.execute(
+            "SELECT W_Imp_Netz_start, W_Imp_Netz_end, W_Exp_Netz_start, W_Exp_Netz_end "
+            "FROM daily_data WHERE ts>=? AND ts<? ORDER BY ts LIMIT 1", (t0, t1)
+        ).fetchone()
+        if row and row[0] is not None and row[1] is not None:
+            c.close()
+            imp = (row[1] - row[0]) / 1000.0
+            exp = abs((row[3] or 0.0) - (row[2] or 0.0)) / 1000.0
+            return {"imp_kwh": round(imp, 3), "exp_kwh": round(exp, 3)}
+        # Fallback: 1-min-Deltas summieren (weniger genau als die Fixpunkte)
         row = c.execute(
             "SELECT SUM(W_Imp_Netz_delta), SUM(W_Exp_Netz_delta) "
             "FROM data_1min WHERE ts>=? AND ts<?", (t0, t1)
@@ -101,9 +120,13 @@ def master_sm_day(t0: int, t1: int) -> dict | None:
 def rollup(day: str) -> dict:
     cfg = load_config()
     host = _tech_host(cfg)
+    ecfg = cfg.get("energy", {})
+    margin = int(ecfg.get("boundary_margin_s", 7200))
+    max_gap = float(ecfg.get("boundary_max_gap_s", 1800))
+    min_ok = int(ecfg.get("min_samples_ok", 200))
     t0, t1 = _day_bounds(day)
-    rows = fetch_tech_rows(host, cfg["tmpfs"]["db_path"], t0, t1)
-    daily = compute_daily(rows)
+    rows = fetch_tech_rows(host, cfg["tmpfs"]["db_path"], t0, t1, margin_s=margin)
+    daily = compute_daily_boundary(rows, t0, t1, max_gap_s=max_gap, min_samples_ok=min_ok)
     if daily is None:
         return {"day": day, "written": False, "reason": "keine Tech-Snapshots"}
 

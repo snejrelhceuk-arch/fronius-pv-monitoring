@@ -4,10 +4,11 @@ Blueprint: PAC4200 Netzqualitäts-Messgerät (read-only Live-Anzeige).
 Enthält:
   /pac4200               — Gerätenachbildung (Live)
   /netzqualitaet/live    — Messwert-Tableau
-  /netzqualitaet/analyse — Muster-Analyse (DFD, Tagesprofil, Wochenprofil)
+  /netzqualitaet/analyse — Spektralanalyse (Oberschwingungen, Lomb-Scargle, Welch-PSD, STFT/CWT)
   /api/pac4200/live      — Live-Snapshot JSON
     /api/nq/realtime_smart — 5min-Aggregat für Maschinenraum-Chart
   /api/nq/analyse/*      — Analyse-Daten (DFD, Tagesprofil, Wochenprofil, Events)
+  /api/nq/spectral/*     — Spektralanalyse (harmonics, periodogram, psd, spectrogram)
 
 ABCD(EN)-Rollenmodell: Säule B (read-only Anzeige).
 """
@@ -88,7 +89,8 @@ def nq_live_page():
 
 @bp.route('/netzqualitaet/analyse')
 def nq_analyse_page():
-    """NQ-Analyse — Musterseite (DFD, Tagesprofil, Wochenprofil, Events)."""
+    """NQ-Spektralanalyse — Oberschwingungen, Lomb-Scargle-Periodogramm, Welch-PSD,
+    Transienten-Spektrogramm (STFT/Morlet-CWT). Rechenkern nq.analysis.nq_spectral."""
     return render_template('nq_analyse_view.html')
 
 
@@ -625,6 +627,138 @@ def api_nq_energy_map(period_type, period_key):
 
 
 # ---------------------------------------------------------------------------
+# Energie-Vergleich PAC4200 ↔ Master-SM (Fronius Primär-SM) — read-only (Säule B)
+# ---------------------------------------------------------------------------
+
+def _local_day_bounds(day: str) -> tuple[int, int]:
+    t = _time.strptime(day, '%Y-%m-%d')
+    t0 = int(_time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1)))
+    return t0, t0 + 86400
+
+
+def _sm_day_kwh(t0: int, t1: int) -> dict | None:
+    """Autoritativer Master-SM-Tageswert (Fronius Primär-SM) aus ``daily_data``
+    (read-only): Import/Export in kWh aus den Zähler-Fixpunkten der Tagesgrenzen
+    (``W_Imp/Exp_Netz_start/-end``)."""
+    db = getattr(config, 'DB_PATH', None)
+    if not db or not os.path.exists(db):
+        return None
+    try:
+        c = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5.0)
+        row = c.execute(
+            "SELECT W_Imp_Netz_start, W_Imp_Netz_end, W_Exp_Netz_start, W_Exp_Netz_end "
+            "FROM daily_data WHERE ts>=? AND ts<? ORDER BY ts LIMIT 1", (t0, t1)).fetchone()
+        c.close()
+    except Exception:
+        return None
+    if not row or row[0] is None or row[1] is None:
+        return None
+    return {'imp_kwh': round((row[1] - row[0]) / 1000.0, 3),
+            'exp_kwh': round(abs((row[3] or 0.0) - (row[2] or 0.0)) / 1000.0, 3)}
+
+
+def _metric_class(pac, sm, low_cov, thr):
+    """Bewertung einer Metrik: 'na' (kein SM), 'low' (geringe Deckung),
+    'outlier' (|Abw.| > thr trotz Deckung), sonst 'ok'. + Δ + Δ%."""
+    if sm is None:
+        return None, None, ('low' if low_cov else 'na')
+    d = round(pac - sm, 3)
+    pct = round(100.0 * d / sm, 1) if sm else None
+    if low_cov:
+        return d, pct, 'low'
+    if pct is not None and abs(pct) > thr:
+        return d, pct, 'outlier'
+    return d, pct, 'ok'
+
+
+@bp.route('/netzqualitaet/energievergleich')
+def nq_energy_compare_page():
+    """Vergleich der Energiezähler PAC4200 ↔ Fronius Primär-SM (Abweichungen markiert)."""
+    return render_template('nq_energie_vergleich_view.html')
+
+
+@bp.route('/api/nq/energy_compare')
+def api_nq_energy_compare():
+    """Read-only Tages-Vergleich PAC4200 (korrigierte Fixpunkte) ↔ Master-SM.
+
+    ``?days=N`` (Default 90, max 400) oder ``?all=1``; ``?outlier_pct=`` (Default 10).
+    Nur echte PAC-Zählertage (``src`` ≠ ``pv_backfill``). Liefert je Tag Import/
+    Export beider Quellen, absolute + prozentuale Abweichung und eine Bewertung
+    (``ok`` | ``outlier`` | ``low`` = geringe Deckung/offener Rand | ``na``).
+    """
+    all_days = request.args.get('all', type=int, default=0)
+    days = min(request.args.get('days', type=int, default=90), 400)
+    thr = float(request.args.get('outlier_pct', default=10.0))
+    cfg = _load_nq_config()
+    min_ok = int(cfg.get('energy', {}).get('min_samples_ok', 200))
+
+    start = 0 if all_days else int(_time.time()) - days * 86400
+    rows_by_day: dict[str, dict] = {}
+    for db_path in sorted(glob(os.path.join(_NQ_PRIMARY_DIR, 'nq_*.db'))):
+        conn = _open_legacy(db_path)
+        if not conn:
+            continue
+        try:
+            rows = conn.execute(
+                "SELECT day, wh_imp_delta, wh_exp_delta, src, n_samples "
+                "FROM nq_energy_daily WHERE src != 'pv_backfill'").fetchall()
+        except Exception:
+            rows = []
+        finally:
+            conn.close()
+        for day, imp, exp, src, n in rows:
+            rows_by_day[day] = {'imp': imp, 'exp': exp, 'src': src, 'n': n}
+
+    items = []
+    s_pac_imp = s_sm_imp = s_pac_exp = s_sm_exp = 0.0
+    n_ok = n_low = n_outlier = 0
+    abs_imp_pct = []
+    for day in sorted(rows_by_day):
+        t0, t1 = _local_day_bounds(day)
+        if not all_days and t0 < start:
+            continue
+        r = rows_by_day[day]
+        pac_imp = round((r['imp'] or 0.0) / 1000.0, 3)
+        pac_exp = round((r['exp'] or 0.0) / 1000.0, 3)
+        sm = _sm_day_kwh(t0, t1)
+        sm_imp = sm['imp_kwh'] if sm else None
+        sm_exp = sm['exp_kwh'] if sm else None
+        low_cov = (r['src'] != 'counter') or ((r['n'] or 0) < min_ok)
+        d_imp, d_imp_pct, imp_cls = _metric_class(pac_imp, sm_imp, low_cov, thr)
+        d_exp, d_exp_pct, exp_cls = _metric_class(pac_exp, sm_exp, low_cov, thr)
+        conf = 'low' if low_cov else ('outlier' if 'outlier' in (imp_cls, exp_cls) else 'ok')
+        if conf == 'ok':
+            n_ok += 1
+            if sm_imp is not None:
+                s_pac_imp += pac_imp; s_sm_imp += sm_imp
+                s_pac_exp += pac_exp; s_sm_exp += sm_exp
+                if d_imp_pct is not None:
+                    abs_imp_pct.append(abs(d_imp_pct))
+        elif conf == 'low':
+            n_low += 1
+        else:
+            n_outlier += 1
+        items.append({
+            'day': day, 'n_samples': r['n'], 'src': r['src'], 'confidence': conf,
+            'pac_imp_kwh': pac_imp, 'sm_imp_kwh': sm_imp,
+            'd_imp_kwh': d_imp, 'd_imp_pct': d_imp_pct, 'imp_class': imp_cls,
+            'pac_exp_kwh': pac_exp, 'sm_exp_kwh': sm_exp,
+            'd_exp_kwh': d_exp, 'd_exp_pct': d_exp_pct, 'exp_class': exp_cls,
+        })
+
+    summary = {
+        'n_days': len(items), 'n_ok': n_ok, 'n_low': n_low, 'n_outlier': n_outlier,
+        'ok_pac_imp_kwh': round(s_pac_imp, 3), 'ok_sm_imp_kwh': round(s_sm_imp, 3),
+        'ok_pac_exp_kwh': round(s_pac_exp, 3), 'ok_sm_exp_kwh': round(s_sm_exp, 3),
+        'ok_imp_dev_pct': (round(100.0 * (s_pac_imp - s_sm_imp) / s_sm_imp, 2) if s_sm_imp else None),
+        'ok_exp_dev_pct': (round(100.0 * (s_pac_exp - s_sm_exp) / s_sm_exp, 2) if s_sm_exp else None),
+        'ok_mean_abs_imp_pct': (round(sum(abs_imp_pct) / len(abs_imp_pct), 2) if abs_imp_pct else None),
+        'outlier_pct': thr, 'min_samples_ok': min_ok,
+    }
+    return jsonify({'items': items, 'summary': summary, 'from': 'PAC4200 vs Master-SM'})
+
+
+# ---------------------------------------------------------------------------
 # Musteranalyse-Datensatz (residual-bereinigt, nq_pattern_5min) — read-only
 # ---------------------------------------------------------------------------
 
@@ -676,6 +810,247 @@ def api_nq_pattern():
             data.append(dict(zip(cols, r)))
     return jsonify({'data': data, 'points': len(data), 'start': start, 'end': end,
                     'source': 'nq_pattern_5min', 'columns': cols})
+
+
+# ---------------------------------------------------------------------------
+# Spektralanalyse (ersetzt die Netzmusteranalyse) — read-only (Saeule B)
+# Rechenkern: nq.analysis.nq_spectral (pure numpy). Siehe Card
+# netzqualitaet-nq-analysis-events.card.md.
+# ---------------------------------------------------------------------------
+
+def _spec_window(default_days: int) -> tuple[int, int]:
+    """Parst ?day / ?start&end -> (start, end) Unix-s."""
+    day = request.args.get('day')
+    if day:
+        try:
+            t = _time.strptime(day, '%Y-%m-%d')
+            start = int(_time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1)))
+            return start, start + 86400
+        except Exception:
+            pass
+    end = request.args.get('end', type=int) or int(_time.time())
+    start = request.args.get('start', type=int) or (end - default_days * 86400)
+    return start, end
+
+
+def _series_pearson(a: dict, b: dict) -> float | None:
+    """Pearson-Korrelation zweier {ts,values}-Serien ueber gemeinsame ts."""
+    import numpy as _np
+    ai = {int(t): float(v) for t, v in zip(a.get('ts', []), a.get('values', []))}
+    bi = {int(t): float(v) for t, v in zip(b.get('ts', []), b.get('values', []))}
+    common = sorted(set(ai) & set(bi))
+    if len(common) < 5:
+        return None
+    x = _np.array([ai[t] for t in common]); y = _np.array([bi[t] for t in common])
+    if x.std() < 1e-12 or y.std() < 1e-12:
+        return None
+    return round(float(_np.corrcoef(x, y)[0, 1]), 4)
+
+
+def _downsample_matrix(mat, max_rows: int, max_cols: int):
+    """Reduziert eine 2D-Matrix (fuer Transport) per Strided-Slicing + Rundung."""
+    import numpy as _np
+    m = _np.asarray(mat, dtype=float)
+    if m.size == 0:
+        return m, _np.array([]), _np.array([])
+    r, c = m.shape
+    rstep = max(1, r // max_rows)
+    cstep = max(1, c // max_cols)
+    ridx = _np.arange(0, r, rstep)
+    cidx = _np.arange(0, c, cstep)
+    return m[_np.ix_(ridx, cidx)], ridx, cidx
+
+
+@bp.route('/api/nq/spectral/harmonics')
+def api_nq_spectral_harmonics():
+    """Oberschwingungs-Linienspektrum (PAC4200-Register) + THD-Korrelation.
+
+    >50-Hz-Teil: geraeteinterne FFT (ungerade Ordnungen H1..H31 -> n*50 Hz).
+    Vergleich berechnete THD (aus Harmonischen) gegen PAC4200-THD-Register.
+    ``?start=&end=`` (Default 7 d) oder ``?day=``, ``?meas=U_LN|U_LL|I``.
+    """
+    from nq.analysis import nq_spectral as spec
+    start, end = _spec_window(7)
+    meas = request.args.get('meas', 'U_LN')
+    if meas not in ('U_LN', 'U_LL', 'I'):
+        meas = 'U_LN'
+    try:
+        harm = spec.load_harmonics(start, end, meas)
+        thd_calc = spec.thd_from_harmonics(harm['orders'], harm['values'])
+        thd_calc_series = spec.load_harmonic_thd_series(start, end, meas)
+        pac_kind = 'i' if meas == 'I' else 'u'
+        thd_pac_series = spec.load_thd_series(start, end, pac_kind)
+        corr = _series_pearson(thd_calc_series, thd_pac_series)
+    except Exception as exc:
+        logging.exception("spectral/harmonics failed")
+        return jsonify({'error': str(exc)}), 503
+    return jsonify({
+        'start': start, 'end': end, 'meas': meas,
+        'spectrum': harm,
+        'thd_calc_pct': thd_calc,
+        'thd_calc_series': thd_calc_series,
+        'thd_pac_series': thd_pac_series,
+        'thd_correlation': corr,
+        'note': ('THD aus ungeraden Einzelharmonischen (H1..H31) -> untere Schranke; '
+                 'gerade Ordnungen (z.B. 100 Hz) fuehrt das PAC4200 nicht als Register.'),
+    })
+
+
+@bp.route('/api/nq/spectral/periodogram')
+def api_nq_spectral_periodogram():
+    """Lomb-Scargle-Periodogramm (VLF/eVLF) der 5-min-Reihe (Luecken-robust).
+
+    ``?signal=freq|voltage``, ``?start=&end=`` (Default 30 d), ``?decimate=N``,
+    ``?binning=1``. Liefert log-Frequenzachse + Zyklus-Marker (Attribution).
+    """
+    from nq.analysis import nq_spectral as spec
+    import numpy as _np
+    start, end = _spec_window(30)
+    signal = request.args.get('signal', 'freq')
+    dec = request.args.get('decimate', type=int, default=1) or 1
+    do_bin = request.args.get('binning', type=int, default=0)
+    try:
+        if signal == 'voltage':
+            ts, v = spec.load_clean_voltage(start, end, 1)
+            x = v - (float(_np.nanmean(v)) if v.size else 0.0)
+            unit = 'V'
+        else:
+            ts, v = spec.load_clean_freq(start, end)
+            x = v - 50.0
+            unit = 'Hz'
+        if ts.size < 16:
+            return jsonify({'error': 'insufficient data', 'n': int(ts.size),
+                            'start': start, 'end': end}), 200
+        t_used = ts.astype(float)
+        dt = float(_np.median(_np.diff(_np.sort(ts))))
+        if dec > 1:
+            tu, xu, _fs = spec.resample_uniform(ts, x)
+            xu = spec.decimate(xu, dec)
+            t_used = tu[::dec][:xu.size]
+            x = xu
+            dt = dt * dec
+        span = float(t_used[-1] - t_used[0])
+        f_min = max(1.0 / span, 1e-9)
+        f_max = 0.5 / dt
+        fg = spec.log_freq_grid(f_min, f_max, 500)
+        power = spec.lombscargle(t_used, x, fg)
+        markers = []
+        for m in spec.CYCLE_MARKERS:
+            f = 1.0 / m['period_s']
+            markers.append({**m, 'freq_hz': f,
+                            'resolvable': bool(f_min <= f <= f_max)})
+        resp = {
+            'start': start, 'end': end, 'signal': signal, 'unit': unit,
+            'n_samples': int(t_used.size), 'span_s': span,
+            'decimate': dec, 'f_min_hz': f_min, 'f_max_hz': f_max,
+            'freqs_hz': [round(float(f), 12) for f in fg],
+            'power': [round(float(p), 6) for p in power],
+            'markers': markers,
+        }
+        if do_bin:
+            cf, cp, cc = spec.log_bin(fg, power, 12)
+            resp['binned'] = {
+                'freqs_hz': [round(float(f), 12) for f in cf],
+                'power': [round(float(p), 6) for p in cp],
+                'count': [int(c) for c in cc],
+            }
+        return jsonify(resp)
+    except Exception as exc:
+        logging.exception("spectral/periodogram failed")
+        return jsonify({'error': str(exc)}), 503
+
+
+@bp.route('/api/nq/spectral/psd')
+def api_nq_spectral_psd():
+    """Welch-PSD (log-log) der 5-min-Reihe. ``?signal=freq|voltage``,
+    ``?window=hann|blackman``, ``?nperseg=``. 50-Hz-Split entfaellt (Nyquist
+    << 50 Hz bei 5-min-Daten) -> hier LF/VLF-Leistungsdichte."""
+    from nq.analysis import nq_spectral as spec
+    import numpy as _np
+    start, end = _spec_window(30)
+    signal = request.args.get('signal', 'freq')
+    window = request.args.get('window', 'hann')
+    try:
+        if signal == 'voltage':
+            ts, v = spec.load_clean_voltage(start, end, 1)
+            x = v - (float(_np.nanmean(v)) if v.size else 0.0)
+            unit = 'V'
+        else:
+            ts, v = spec.load_clean_freq(start, end)
+            x = v - 50.0
+            unit = 'Hz'
+        if ts.size < 32:
+            return jsonify({'error': 'insufficient data', 'n': int(ts.size)}), 200
+        tu, xu, fs = spec.resample_uniform(ts, x)
+        nperseg = request.args.get('nperseg', type=int) or min(1024, xu.size // 4 * 2 or 8)
+        nperseg = max(16, min(nperseg, xu.size))
+        f, p = spec.welch_psd(xu, fs, nperseg=nperseg, window=window)
+        # log-log: DC-Bin (f=0) weglassen
+        keep = f > 0
+        return jsonify({
+            'start': start, 'end': end, 'signal': signal, 'unit': unit,
+            'fs_hz': fs, 'nperseg': nperseg, 'window': window,
+            'freqs_hz': [round(float(x_), 12) for x_ in f[keep]],
+            'psd': [round(float(y_), 9) for y_ in p[keep]],
+            'psd_unit': f'{unit}^2/Hz',
+            'note': ('50-Hz-Notch/Split nicht anwendbar: Abtastung 300 s '
+                     '(Nyquist 1,667 mHz). Dargestellt ist die LF/VLF-Leistungsdichte.'),
+        })
+    except Exception as exc:
+        logging.exception("spectral/psd failed")
+        return jsonify({'error': str(exc)}), 503
+
+
+@bp.route('/api/nq/spectral/spectrogram')
+def api_nq_spectral_spectrogram():
+    """Zeit-Frequenz-Analyse fuer Transienten (Verschiebungen/Aufschwingen).
+
+    ``?method=cwt|stft`` (Default cwt, Morlet w0=6), ``?signal=freq|voltage``,
+    ``?start=&end=`` (Default 7 d). Liefert eine kompakte 2D-Matrix (Heatmap).
+    """
+    from nq.analysis import nq_spectral as spec
+    import numpy as _np
+    start, end = _spec_window(7)
+    method = request.args.get('method', 'cwt')
+    signal = request.args.get('signal', 'freq')
+    try:
+        if signal == 'voltage':
+            ts, v = spec.load_clean_voltage(start, end, 1)
+            x = v - (float(_np.nanmean(v)) if v.size else 0.0)
+            unit = 'V'
+        else:
+            ts, v = spec.load_clean_freq(start, end)
+            x = v - 50.0
+            unit = 'Hz'
+        if ts.size < 32:
+            return jsonify({'error': 'insufficient data', 'n': int(ts.size)}), 200
+        tu, xu, fs = spec.resample_uniform(ts, x)
+        t0 = float(tu[0])
+        if method == 'stft':
+            nperseg = request.args.get('nperseg', type=int) or min(128, xu.size // 4 or 8)
+            nperseg = max(16, min(nperseg, xu.size))
+            freqs, times, Z = spec.stft(xu, fs, nperseg=nperseg)
+            times_abs = t0 + times
+        else:  # cwt (Morlet)
+            f_hi = fs / 2.0
+            f_lo = max(4.0 / (float(tu[-1] - tu[0])), f_hi / 1000.0)
+            freqs = spec.log_freq_grid(f_lo, f_hi, 48)
+            Z = spec.morlet_cwt(xu, fs, freqs)
+            times_abs = tu
+        Zd, ridx, cidx = _downsample_matrix(Z, max_rows=64, max_cols=240)
+        f_out = _np.asarray(freqs)[ridx] if len(ridx) else _np.asarray([])
+        t_out = _np.asarray(times_abs)[cidx] if len(cidx) else _np.asarray([])
+        return jsonify({
+            'start': start, 'end': end, 'method': method, 'signal': signal, 'unit': unit,
+            'fs_hz': fs,
+            'freqs_hz': [round(float(f), 10) for f in f_out],
+            'times': [int(t) for t in t_out],
+            'z': [[round(float(val), 6) for val in row] for row in Zd],
+            'shape': [int(Zd.shape[0]) if Zd.size else 0, int(Zd.shape[1]) if Zd.size else 0],
+        })
+    except Exception as exc:
+        logging.exception("spectral/spectrogram failed")
+        return jsonify({'error': str(exc)}), 503
 
 
 # ---------------------------------------------------------------------------
