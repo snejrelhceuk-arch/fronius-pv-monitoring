@@ -1625,8 +1625,8 @@
         document.getElementById('label-f3').setAttribute('fill', wrOffline.f3 ? WR_LABEL_DOWN : WR_LABEL_OK);
 
         document.getElementById('value-pv').textContent = fmt(d.producers.pv_total);
-        document.getElementById('sub-pv').textContent = `${d.producers.pv_today_kwh} kWh`;
-        document.getElementById('sub-pv-autarkie').textContent = `${d.producers.autarkie_today}%`;
+        document.getElementById('sub-pv').textContent = `${String(d.producers.pv_today_kwh).replace('.', ',')} kWh`;
+        document.getElementById('sub-pv-autarkie').textContent = `${String(d.producers.autarkie_today).replace('.', ',')}%`;
 
         const bp = d.battery.power;
         document.getElementById('value-battery').textContent = fmt(Math.abs(bp));
@@ -1928,9 +1928,9 @@
             const hasClearSky = clearSkyKwh != null && Number.isFinite(Number(clearSkyKwh));
             const hasRatio = ratioPct != null && Number.isFinite(Number(ratioPct));
             if (hasExpected && hasClearSky && hasRatio) {
-                titleEl.textContent = `${label} (${Number(expectedKwh).toFixed(1)} kWh / ${Number(clearSkyKwh).toFixed(1)} kWh = ${Number(ratioPct).toFixed(1)}%)`;
+                titleEl.textContent = `${label} (${Number(expectedKwh).toFixed(1).replace('.', ',')} kWh / ${Number(clearSkyKwh).toFixed(1).replace('.', ',')} kWh = ${Number(ratioPct).toFixed(1).replace('.', ',')}%)`;
             } else if (hasExpected) {
-                titleEl.textContent = `${label} (${Number(expectedKwh).toFixed(1)} kWh)`;
+                titleEl.textContent = `${label} (${Number(expectedKwh).toFixed(1).replace('.', ',')} kWh)`;
             } else {
                 titleEl.textContent = label;
             }
@@ -1938,7 +1938,7 @@
 
         if (kwhEl) {
             if (expectedKwh != null && Number.isFinite(Number(expectedKwh))) {
-                kwhEl.textContent = `${Number(expectedKwh).toFixed(1)} kWh`;
+                kwhEl.textContent = `${Number(expectedKwh).toFixed(1).replace('.', ',')} kWh`;
             } else {
                 kwhEl.textContent = '-- kWh';
             }
