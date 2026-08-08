@@ -28,40 +28,31 @@
     <div class="container">
         <div class="top-nav"></div>
 
-        {% if freq_extremes %}
-        <div class="freq-info-line">
-            Netzfrequenz:
-            {% if freq_extremes.f_max %}<span class="freq-max">Max. {{ "%.3f"|format(freq_extremes.f_max)|replace('.', ',') }} Hz</span> ({{ freq_extremes.f_max_label }} Uhr){% endif %}
-            {% if freq_extremes.f_max and freq_extremes.f_min %} · {% endif %}
-            {% if freq_extremes.f_min %}<span class="freq-min">Min. {{ "%.3f"|format(freq_extremes.f_min)|replace('.', ',') }} Hz</span> ({{ freq_extremes.f_min_label }} Uhr){% endif %}
-        </div>
-        {% endif %}
-
         <!-- Summary Cards -->
         <div class="summary-cards">
             <div class="summary-card">
                 <div class="label">Gesamt-Erzeugung</div>
-                <div class="value accent">{{ "{:,.0f}".format(totals.solar) }} kWh</div>
-                <div class="sub">seit 2022</div>
+                <div class="value accent">{{ "{:,.0f}".format(totals.solar).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</div>
+                <div class="sub">seit 2021</div>
             </div>
             <div class="summary-card">
                 <div class="label">Gesamt Netzbezug</div>
-                <div class="value">{{ "{:,.0f}".format(totals.netz_bezug) }} kWh</div>
-                <div class="sub">inkl. Grundpreis {{ "{:,.0f}".format(totals.kosten_strom) }} €</div>
+                <div class="value">{{ "{:,.0f}".format(totals.netz_bezug).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</div>
+                <div class="sub">inkl. Grundpreis {{ "{:,.0f}".format(totals.kosten_strom).replace(",", "X").replace(".", ",").replace("X", ".") }} €</div>
             </div>
             <div class="summary-card">
                 <div class="label">Brutto-Ersparnis Solar</div>
-                <div class="value positive">{{ "{:,.0f}".format(totals.ersparnis_solar) }} €</div>
+                <div class="value positive">{{ "{:,.0f}".format(totals.ersparnis_solar).replace(",", "X").replace(".", ",").replace("X", ".") }} €</div>
                 <div class="sub">Erzeugung × Strompreis</div>
             </div>
             <div class="summary-card">
                 <div class="label">Ø Autarkie</div>
-                <div class="value accent">{{ "%.1f"|format(totals.autarkie) }}%</div>
+                <div class="value accent">{{ "%.1f"|format(totals.autarkie)|replace(".", ",") }}%</div>
                 <div class="sub">1 − Netzbezug / Verbrauch</div>
             </div>
             <div class="summary-card">
                 <div class="label">Spez. Ertrag</div>
-                <div class="value accent">{{ "%.0f"|format(totals.spez_ertrag) }} kWh/kWp</div>
+                <div class="value accent">{{ "{:,.0f}".format(totals.spez_ertrag).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh/kWp</div>
                 <div class="sub">über den verfügbaren Zeitraum</div>
             </div>
         </div>
@@ -88,32 +79,32 @@
                     {% for year in yearly_data %}
                     <tr>
                         <td><strong>{{ year.year }}</strong></td>
-                        <td><strong>{{ "{:,.0f}".format(year.solar) }} kWh</strong></td>
-                        <td><strong>{{ "%.0f"|format(year.spez_ertrag) }} kWh/kWp</strong></td>
-                        <td><strong>{{ "{:,.0f}".format(year.direkt) }} kWh</strong></td>
-                        <td><strong>{{ "{:,.0f}".format(year.batt_lad) }} kWh</strong></td>
-                        <td><strong>{{ "{:,.0f}".format(year.batt_entl) }} kWh</strong></td>
-                        <td><strong>{{ "%.1f"|format(year.batt_wirkungsgrad) }}%</strong></td>
-                        <td><strong>{{ "{:,.0f}".format(year.netz_einsp) }} kWh</strong></td>
-                        <td><strong>{{ "{:,.0f}".format(year.netz_bezug) }} kWh</strong></td>
-                        <td><strong>{{ "%.1f"|format(year.autarkie) }}%</strong></td>
-                        <td><strong>{% if year.sonnenstunden %}{{ "%.0f"|format(year.sonnenstunden) }} h{% else %}–{% endif %}</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.solar).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.spez_ertrag).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh/kWp</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.direkt).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.batt_lad).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.batt_entl).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
+                        <td><strong>{{ "%.1f"|format(year.batt_wirkungsgrad)|replace(".", ",") }}%</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.netz_einsp).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.netz_bezug).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
+                        <td><strong>{{ "%.1f"|format(year.autarkie)|replace(".", ",") }}%</strong></td>
+                        <td><strong>{% if year.sonnenstunden %}{{ "{:,.0f}".format(year.sonnenstunden).replace(",", "X").replace(".", ",").replace("X", ".") }} h{% else %}–{% endif %}</strong></td>
                     </tr>
                     {% endfor %}
                 </tbody>
                 <tfoot>
                     <tr>
                         <td>Gesamt</td>
-                        <td>{{ "{:,.0f}".format(totals.solar) }} kWh</td>
-                        <td>{{ "%.0f"|format(totals.spez_ertrag) }} kWh/kWp</td>
-                        <td>{{ "{:,.0f}".format(totals.direkt) }} kWh</td>
-                        <td>{{ "{:,.0f}".format(totals.batt_lad) }} kWh</td>
-                        <td>{{ "{:,.0f}".format(totals.batt_entl) }} kWh</td>
-                        <td>{{ "%.1f"|format(totals.batt_wirkungsgrad) }}%</td>
-                        <td>{{ "{:,.0f}".format(totals.netz_einsp) }} kWh</td>
-                        <td>{{ "{:,.0f}".format(totals.netz_bezug) }} kWh</td>
-                        <td>{{ "%.1f"|format(totals.autarkie) }}%</td>
-                        <td>{{ "%.0f"|format(totals.sonnenstunden) }} h</td>
+                        <td>{{ "{:,.0f}".format(totals.solar).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>
+                        <td>{{ "{:,.0f}".format(totals.spez_ertrag).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh/kWp</td>
+                        <td>{{ "{:,.0f}".format(totals.direkt).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>
+                        <td>{{ "{:,.0f}".format(totals.batt_lad).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>
+                        <td>{{ "{:,.0f}".format(totals.batt_entl).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>
+                        <td>{{ "%.1f"|format(totals.batt_wirkungsgrad)|replace(".", ",") }}%</td>
+                        <td>{{ "{:,.0f}".format(totals.netz_einsp).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>
+                        <td>{{ "{:,.0f}".format(totals.netz_bezug).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>
+                        <td>{{ "%.1f"|format(totals.autarkie)|replace(".", ",") }}%</td>
+                        <td>{{ "{:,.0f}".format(totals.sonnenstunden).replace(",", "X").replace(".", ",").replace("X", ".") }} h</td>
                     </tr>
                 </tfoot>
             </table>
@@ -138,11 +129,11 @@
                     <tr>
                         <td><strong>{{ year.year }}</strong></td>
                         <td><strong>{{ year.monate }}</strong></td>
-                        <td><strong>{{ "%.2f"|format(year.strompreis) }} €/kWh</strong></td>
-                        <td><strong>{{ "{:,.0f}".format(year.netz_bezug) }} kWh</strong></td>
-                        <td><strong>{{ "{:,.2f}".format(year.kosten_strom) }} €</strong></td>
-                        <td><strong>{{ "{:,.2f}".format(year.ersparnis_solar) }} €</strong></td>
-                        <td><strong style="color: {{ 'rgba(255,255,255,0.9)' if year.netto_ersparnis_strom >= 0 else 'rgba(255,255,255,0.6)' }};">{{ "{:,.2f}".format(year.netto_ersparnis_strom) }} €</strong></td>
+                        <td><strong>{{ "%.2f"|format(year.strompreis)|replace(".", ",") }} €/kWh</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.netz_bezug).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.kosten_strom).replace(",", "X").replace(".", ",").replace("X", ".") }} €</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.ersparnis_solar).replace(",", "X").replace(".", ",").replace("X", ".") }} €</strong></td>
+                        <td><strong style="color: {{ 'rgba(255,255,255,0.9)' if year.netto_ersparnis_strom >= 0 else 'rgba(255,255,255,0.6)' }};">{{ "{:,.2f}".format(year.netto_ersparnis_strom).replace(",", "X").replace(".", ",").replace("X", ".") }} €</strong></td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -151,50 +142,136 @@
                         <td>Gesamt</td>
                         <td>{{ totals.monate }}</td>
                         <td>–</td>
-                        <td>{{ "{:,.0f}".format(totals.netz_bezug) }} kWh</td>
-                        <td>{{ "{:,.2f}".format(totals.kosten_strom) }} €</td>
-                        <td>{{ "{:,.2f}".format(totals.ersparnis_solar) }} €</td>
-                        <td style="color: {{ 'rgba(255,255,255,0.95)' if totals.netto_ersparnis_strom >= 0 else 'rgba(255,255,255,0.6)' }};">{{ "{:,.2f}".format(totals.netto_ersparnis_strom) }} €</td>
+                        <td>{{ "{:,.0f}".format(totals.netz_bezug).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>
+                        <td>{{ "{:,.2f}".format(totals.kosten_strom).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
+                        <td>{{ "{:,.2f}".format(totals.ersparnis_solar).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
+                        <td style="color: {{ 'rgba(255,255,255,0.95)' if totals.netto_ersparnis_strom >= 0 else 'rgba(255,255,255,0.6)' }};">{{ "{:,.2f}".format(totals.netto_ersparnis_strom).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
                     </tr>
                 </tfoot>
             </table>
         </div>
 
-        {% if pv_grenzwerte %}
+        {% if monthly_yields %}
         <div class="section">
-            <div class="section-title">PV-Anlage-Grenzwerte — jährliche Extremwerte</div>
-            <table>
+            <div class="section-title">Bestenliste</div>
+            <style>
+                .bestenliste-table { width: 100%; border-collapse: collapse; }
+                .bestenliste-table th, .bestenliste-table td { padding: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
+                .bestenliste-table th { background: rgba(255,255,255,0.05); font-weight: bold; }
+                .bestenliste-table td.year-cell { text-align: center; font-weight: bold; }
+                .rank-1 { color: #FFD700; font-weight: bold; }  /* Gold */
+                .rank-2 { color: #FFFFFF; font-weight: bold; }  /* Silber = Weiß fett */
+                .rank-3 { color: #CD7F32; }  /* Bronze */
+                .bestenliste-table td:not(.rank-1):not(.rank-2):not(.rank-3) { color: #666666; }  /* Dunkelgrau für alle anderen */
+            </style>
+            <table class="bestenliste-table">
                 <thead>
                     <tr>
                         <th>Jahr</th>
-                        <th>Ertrag (größter / kleinster Monat)</th>
-                        <th>Peak-Leistung</th>
-                        <th>Netzspannung (L-L)</th>
-                        <th>Netzfrequenz</th>
-                        <th>cos φ</th>
+                        <th>Jan</th><th>Feb</th><th>Mär</th><th>Apr</th><th>Mai</th><th>Jun</th>
+                        <th>Jul</th><th>Aug</th><th>Sep</th><th>Okt</th><th>Nov</th><th>Dez</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for g in pv_grenzwerte %}
+                    {% for year in monthly_yields.data.keys()|sort %}
                     <tr>
-                        <td><strong>{{ g.year }}</strong></td>
-                        <td>
-                            {% if g.yield_max %}<strong>{{ ("%.0f"|format(g.yield_max.kwh))|replace('.', ',') }} kWh</strong> <span style="opacity:0.6">({{ g.yield_max.label }})</span>{% else %}–{% endif %}
-                            {% if g.yield_min %}<br><span style="opacity:0.85">{{ ("%.0f"|format(g.yield_min.kwh))|replace('.', ',') }} kWh ({{ g.yield_min.label }})</span>{% endif %}
+                        {% set year_rank = monthly_yields.year_rankings.get(year, 0) %}
+                        {% set year_total = monthly_yields.year_totals.get(year, 0) %}
+                        <td class="year-cell">
+                            {{ year }}
+                            {% if year_total > 0 %}
+                                <span {% if year_rank > 0 %}class="rank-{{ year_rank }}"{% endif %}>({{ "{:,.1f}".format(year_total / 1000).replace(",", "X").replace(".", ",").replace("X", ".") }} MWh)</span>
+                            {% endif %}
                         </td>
-                        <td>{% if g.power %}<strong>{{ ("%.2f"|format(g.power.kw))|replace('.', ',') }} kW</strong> <span style="opacity:0.6">({{ g.power.label }})</span>{% else %}–{% endif %}</td>
-                        <td>{% if g.voltage %}<strong>{{ ("%.1f"|format(g.voltage.min))|replace('.', ',') }} V</strong>{% if g.voltage.min_label %} <span style="opacity:0.6">({{ g.voltage.min_label }})</span>{% endif %}<br><strong>{{ ("%.1f"|format(g.voltage.max))|replace('.', ',') }} V</strong>{% if g.voltage.max_label %} <span style="opacity:0.6">({{ g.voltage.max_label }})</span>{% endif %}{% else %}–{% endif %}</td>
-                        <td>{% if g.frequency %}<strong>{{ ("%.3f"|format(g.frequency.min))|replace('.', ',') }} Hz</strong>{% if g.frequency.min_label %} <span style="opacity:0.6">({{ g.frequency.min_label }})</span>{% endif %}<br><strong>{{ ("%.3f"|format(g.frequency.max))|replace('.', ',') }} Hz</strong>{% if g.frequency.max_label %} <span style="opacity:0.6">({{ g.frequency.max_label }})</span>{% endif %}{% else %}–{% endif %}</td>
-                        <td>{% if g.powerfactor %}<strong>{{ ("%.2f"|format(g.powerfactor.min))|replace('.', ',') }}</strong>{% if g.powerfactor.min_label %} <span style="opacity:0.6">({{ g.powerfactor.min_label }})</span>{% endif %}<br><strong>{{ ("%.2f"|format(g.powerfactor.max))|replace('.', ',') }}</strong>{% if g.powerfactor.max_label %} <span style="opacity:0.6">({{ g.powerfactor.max_label }})</span>{% endif %}{% else %}–{% endif %}</td>
+                        {% for month in range(1, 13) %}
+                            {% if monthly_yields.data[year].get(month) %}
+                                {% set value = monthly_yields.data[year][month] %}
+                                {% set rank = monthly_yields.month_rankings[month].get(year, 0) %}
+                                <td {% if rank > 0 %}class="rank-{{ rank }}"{% endif %}>{{ "{:,.1f}".format(value).replace(",", "X").replace(".", ",").replace("X", ".") }}</td>
+                            {% else %}
+                                <td>–</td>
+                            {% endif %}
+                        {% endfor %}
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
+        {% endif %}
+
+        {% if monthly_extremes %}
+        <div class="section">
+            <div class="section-title">Extremwerte Spannung und Frequenz</div>
+            <style>
+                .extremwerte-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+                .extremwerte-table th, .extremwerte-table td { padding: 6px 4px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
+                .extremwerte-table th { background: rgba(255,255,255,0.05); font-weight: bold; }
+                .extremwerte-table td.year-cell { text-align: left; font-weight: bold; border-right: 2px solid rgba(255,255,255,0.2); }
+                .extremwerte-table td.metric-label { text-align: right; font-size: 11px; padding-right: 8px; border-right: 1px solid rgba(255,255,255,0.15); }
+                .extremwerte-table tr.metric-row td { border-bottom: none; }
+                .extremwerte-table tr.last-metric td { border-bottom: 2px solid rgba(255,255,255,0.2); }
+                
+                /* Farbcodierung für Top 3 - nur Schrift */
+                .pmax-1 { color: #FF6666; font-weight: bold; }  /* Rot fett */
+                .pmax-2 { color: #FF6666; }  /* Rot normal */
+                .pmax-3 { color: #FF9999; }  /* Rosa */
+                
+                .umax-1 { color: #6666FF; font-weight: bold; }  /* Blau fett */
+                .umax-2 { color: #6666FF; }  /* Blau normal */
+                .umax-3 { color: #9999FF; }  /* Hellblau */
+                
+                .umin-1 { color: #00E5E5; font-weight: bold; }  /* Türkis dunkel fett */
+                .umin-2 { color: #00E5E5; }  /* Türkis dunkel normal */
+                .umin-3 { color: #40F0F0; }  /* Türkis hell */
+                
+                .fmax-1 { color: #AA44FF; font-weight: bold; }  /* Violett kräftig fett */
+                .fmax-2 { color: #AA44FF; }  /* Violett kräftig normal */
+                .fmax-3 { color: #CC77FF; }  /* Violett hell */
+                
+                .fmin-1 { color: #BB55DD; font-weight: bold; }  /* Lila kräftig fett */
+                .fmin-2 { color: #BB55DD; }  /* Lila kräftig normal */
+                .fmin-3 { color: #DD99EE; }  /* Lila hell */
+            </style>
+            <table class="extremwerte-table">
+                <thead>
+                    <tr>
+                        <th rowspan="2">Jahr</th>
+                        <th rowspan="2" style="border-right: 2px solid rgba(255,255,255,0.2);"></th>
+                        <th>Jan</th><th>Feb</th><th>Mär</th><th>Apr</th><th>Mai</th><th>Jun</th>
+                        <th>Jul</th><th>Aug</th><th>Sep</th><th>Okt</th><th>Nov</th><th>Dez</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% set metrics = ['pmax', 'umin', 'umax', 'fmin', 'fmax'] %}
+                    {% set metric_labels = {'pmax': 'P_max', 'umin': 'U_min', 'umax': 'U_max', 'fmin': 'f_min', 'fmax': 'f_max'} %}
+                    
+                    {% for year in monthly_extremes.data.keys()|sort %}
+                    {% for metric in metrics %}
+                    {% set i = loop.index0 %}
+                    <tr class="{% if i == 4 %}last-metric{% else %}metric-row{% endif %}">
+                        {% if i == 0 %}
+                        <td rowspan="5" class="year-cell">{{ year }}</td>
+                        {% endif %}
+                        <td class="metric-label">{{ metric_labels[metric] }}</td>
+                        {% for month in range(1, 13) %}
+                            {% if monthly_extremes.data[year].get(month) and monthly_extremes.data[year][month].get(metric) %}
+                                {% set value = monthly_extremes.data[year][month][metric] %}
+                                {% set rank = monthly_extremes.rankings[metric].get((year, month), 0) %}
+                                <td {% if rank > 0 %}class="{{ metric }}-{{ rank }}"{% endif %}>
+                                    {% if metric == 'pmax' %}{{ "{:,.2f}".format(value).replace(",", "X").replace(".", ",").replace("X", ".") }}{% elif metric in ['umin', 'umax'] %}{{ "{:,.1f}".format(value).replace(",", "X").replace(".", ",").replace("X", ".") }}{% else %}{{ "{:,.3f}".format(value).replace(",", "X").replace(".", ",").replace("X", ".") }}{% endif %}
+                                </td>
+                            {% else %}
+                                <td>–</td>
+                            {% endif %}
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                    {% endfor %}
+                </tbody>
+            </table>
             <p style="font-size:12px;color:rgba(255,255,255,0.55);margin-top:8px;">
-                Konsistent mit den Gesamt-Tooltips. Spannung als Leiter-Leiter-Wert (L-N ×&nbsp;√3).
-                Datum/Uhrzeit der Spannung/Frequenz/cos φ nur soweit feinaufgelöste Daten vorliegen
-                (≤ 90 Tage; ältere Jahre als Monatsaggregat ohne genauen Zeitpunkt). cos φ erst ab
-                Aktivierung der PF-Aggregation.
+                Monatliche Extremwerte: P<sub>max</sub> in kW, U<sub>min</sub>/U<sub>max</sub> in V (L-L), f<sub>min</sub>/f<sub>max</sub> in Hz.
+                Top 3 jeder Metrik farbcodiert.
             </p>
         </div>
         {% endif %}

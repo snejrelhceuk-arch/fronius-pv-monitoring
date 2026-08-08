@@ -42,6 +42,165 @@ def _get_pv_grenzwerte_yearly(cursor):
     return result
 
 
+def _get_monthly_yield_bestenliste(cursor):
+    """Erstelle Bestenliste der monatlichen Erträge über alle Jahre.
+    
+    Returns: dict mit 'yields' (Jahr/Monat-Erträge) und 'rankings' (Ranking pro Monat und Jahr).
+    """
+    cursor.execute("""
+        SELECT year, month, COALESCE(solar_erzeugung_kwh, 0) as solar_kwh
+        FROM monthly_statistics
+        WHERE year >= 2021
+        ORDER BY year, month
+    """)
+    
+    data = {}
+    month_values = {m: [] for m in range(1, 13)}
+    
+    for row in cursor.fetchall():
+        year, month, solar_kwh = row
+        if year not in data:
+            data[year] = {}
+        data[year][month] = solar_kwh
+        month_values[month].append((year, solar_kwh))
+    
+    # Berechne Rankings für jeden Monat
+    month_rankings = {}
+    for month in range(1, 13):
+        sorted_values = sorted(month_values[month], key=lambda x: x[1], reverse=True)
+        month_rankings[month] = {}
+        for rank, (year, value) in enumerate(sorted_values, 1):
+            if rank <= 10:  # Nur Top 10
+                month_rankings[month][year] = rank
+    
+    # Berechne Jahres-Rankings (Gesamtertrag)
+    year_totals = []
+    year_totals_dict = {}
+    for year in data:
+        total = sum(data[year].get(m, 0) for m in range(1, 13))
+        year_totals.append((year, total))
+        year_totals_dict[year] = total
+    
+    sorted_years = sorted(year_totals, key=lambda x: x[1], reverse=True)
+    year_rankings = {}
+    for rank, (year, total) in enumerate(sorted_years, 1):
+        if rank <= 10:  # Nur Top 10
+            year_rankings[year] = rank
+    
+    return {
+        'data': data,
+        'month_rankings': month_rankings,
+        'year_rankings': year_rankings,
+        'year_totals': year_totals_dict
+    }
+
+
+def _get_monthly_extremwerte(cursor):
+    """Erstelle monatliche Extremwerte (Pmax, Umin, Umax, fmin, fmax) pro Jahr.
+    
+    Returns: dict mit 'values' (Jahr/Monat-Werte) und 'rankings' (Top-3 pro Metrik).
+    """
+    from datetime import datetime
+    
+    # Hole Peak-Leistung und Erträge aus daily_data
+    cursor.execute("""
+        SELECT CAST(strftime('%Y', datetime(ts, 'unixepoch', 'localtime')) AS INTEGER) AS y,
+               CAST(strftime('%m', datetime(ts, 'unixepoch', 'localtime')) AS INTEGER) AS m,
+               MAX(COALESCE(P_PV_total_max, P_AC_Inv_max)) as pmax
+        FROM daily_data
+        WHERE y >= 2021
+        GROUP BY y, m
+    """)
+    
+    data = {}
+    metric_values = {
+        'pmax': [],
+        'umin': [],
+        'umax': [],
+        'fmin': [],
+        'fmax': []
+    }
+    
+    for row in cursor.fetchall():
+        year, month, pmax = row
+        if year not in data:
+            data[year] = {}
+        if month not in data[year]:
+            data[year][month] = {}
+        pmax_kw = round(pmax / 1000.0, 2) if pmax else None
+        data[year][month]['pmax'] = pmax_kw
+        if pmax_kw:
+            metric_values['pmax'].append((year, month, pmax_kw))
+    
+    # Hole Spannungs- und Frequenz-Extremwerte aus data_monthly
+    cursor.execute("""
+        SELECT CAST(strftime('%Y', datetime(ts, 'unixepoch', 'localtime')) AS INTEGER) AS y,
+               CAST(strftime('%m', datetime(ts, 'unixepoch', 'localtime')) AS INTEGER) AS m,
+               U_L1_N_Netz_min, U_L2_N_Netz_min, U_L3_N_Netz_min,
+               U_L1_N_Netz_max, U_L2_N_Netz_max, U_L3_N_Netz_max,
+               f_Netz_min, f_Netz_max
+        FROM data_monthly
+        WHERE y >= 2021
+    """)
+    
+    _SQRT3 = 3 ** 0.5
+    for row in cursor.fetchall():
+        year, month = row[0], row[1]
+        u_mins = [row[2], row[3], row[4]]
+        u_maxs = [row[5], row[6], row[7]]
+        f_min, f_max = row[8], row[9]
+        
+        if year not in data:
+            data[year] = {}
+        if month not in data[year]:
+            data[year][month] = {}
+        
+        # Konvertiere L-N zu L-L Spannung
+        u_min_valid = [u * _SQRT3 for u in u_mins if u and 173 <= u <= 347]
+        u_max_valid = [u * _SQRT3 for u in u_maxs if u and 173 <= u <= 347]
+        
+        umin = round(min(u_min_valid), 1) if u_min_valid else None
+        umax = round(max(u_max_valid), 1) if u_max_valid else None
+        fmin_val = round(f_min, 3) if f_min and 40 <= f_min <= 60 else None
+        fmax_val = round(f_max, 3) if f_max and 40 <= f_max <= 60 else None
+        
+        data[year][month]['umin'] = umin
+        data[year][month]['umax'] = umax
+        data[year][month]['fmin'] = fmin_val
+        data[year][month]['fmax'] = fmax_val
+        
+        if umin:
+            metric_values['umin'].append((year, month, umin))
+        if umax:
+            metric_values['umax'].append((year, month, umax))
+        if fmin_val:
+            metric_values['fmin'].append((year, month, fmin_val))
+        if fmax_val:
+            metric_values['fmax'].append((year, month, fmax_val))
+    
+    # Berechne Rankings (Top 3) für jede Metrik
+    rankings = {}
+    for metric in ['pmax', 'umax', 'fmax']:
+        sorted_values = sorted(metric_values[metric], key=lambda x: x[2], reverse=True)
+        rankings[metric] = {}
+        for rank, (year, month, value) in enumerate(sorted_values[:3], 1):
+            if (year, month) not in rankings[metric]:
+                rankings[metric][(year, month)] = rank
+    
+    # Für Min-Werte: kleinster ist bester
+    for metric in ['umin', 'fmin']:
+        sorted_values = sorted(metric_values[metric], key=lambda x: x[2])
+        rankings[metric] = {}
+        for rank, (year, month, value) in enumerate(sorted_values[:3], 1):
+            if (year, month) not in rankings[metric]:
+                rankings[metric][(year, month)] = rank
+    
+    return {
+        'data': data,
+        'rankings': rankings
+    }
+
+
 def _get_nav_context(args):
     """Normalisiere den UI-Zeitkontext für Links zwischen verwandten Ansichten."""
     now = datetime.now()
@@ -737,6 +896,12 @@ def analyse():
     # PV-Anlage-Grenzwerte: jährliche Min/Max-Netzextremwerte (Spannung L-L, Frequenz)
     # Quelle: data_monthly (Spannung L-N → L-L via √3, Frequenz). Permanent (~10 Jahre).
     pv_grenzwerte = _get_pv_grenzwerte_yearly(cursor)
+    
+    # Bestenliste: monatliche Erträge über alle Jahre
+    monthly_yields = _get_monthly_yield_bestenliste(cursor)
+    
+    # Extremwerte-Tabelle: monatliche Extremwerte pro Jahr
+    monthly_extremes = _get_monthly_extremwerte(cursor)
 
     try:
         return render_template(template,
@@ -755,6 +920,8 @@ def analyse():
                              current_year=current_year,
                              freq_extremes=freq_extremes,
                              pv_grenzwerte=pv_grenzwerte,
+                             monthly_yields=monthly_yields,
+                             monthly_extremes=monthly_extremes,
                              nav_query=('?' + nav_query) if nav_query else '')
     finally:
         conn.close()
