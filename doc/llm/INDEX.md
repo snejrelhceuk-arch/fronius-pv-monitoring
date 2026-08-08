@@ -29,13 +29,12 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 | **diagnos: Energiebilanz, Rollups, Gap-Scan, Config-Parse** | [`diagnos-integrity.card.md`](./cards/diagnos-integrity.card.md) | stable |
 | **diagnos: Tägliche Mail / Sunset-Tagesbericht, Alarm-Mails, SMTP-Credential** | [`diagnos-daily-mail.card.md`](./cards/diagnos-daily-mail.card.md) | stable |
 | **steuerbox: Operator-Intents, Guards, respekt_s, Override-Status** | [`steuerbox-intents.card.md`](./cards/steuerbox-intents.card.md) | stable |
-| **netzqualitaet: Export, DFD-Analyse, Tages-/Boundary-API** | [`netzqualitaet-analysis.card.md`](./cards/netzqualitaet-analysis.card.md) | stable |
-| **NQ (Rolle N): PAC4200-Collector, tmpfs, Block-Poller, Kappung (Tech)** | [`netzqualitaet-nq-collector.card.md`](./cards/netzqualitaet-nq-collector.card.md) | experimental |
-| **NQ2 (Rolle N): Grenzwert-Alarm/LimitMonitor, PAC-Clone Single-Reader, fast/medium/slow-Tier** | [`netzqualitaet-nq-collector.card.md`](./cards/netzqualitaet-nq-collector.card.md) | experimental |
-| **NQ (Rolle N): Transfer Tech→Primary, Aggregationskaskade** | [`netzqualitaet-nq-aggregation.card.md`](./cards/netzqualitaet-nq-aggregation.card.md) | experimental |
-| **NQ2 (Rolle N): Zähler-Fixpunkte (Monat/Jahr), Transienten, Event-Schnipsel-Transfer** | [`netzqualitaet-nq-aggregation.card.md`](./cards/netzqualitaet-nq-aggregation.card.md) | experimental |
-| **NQ (Rolle N): Netzereignis-Analyse (HF/NF/VLF), Harmonische, DFD** | [`netzqualitaet-nq-analysis-events.card.md`](./cards/netzqualitaet-nq-analysis-events.card.md) | experimental |
-| **NQ2-Web: NQ-Chart (Tag/5min), Event-Drill-down, /api/nq/energy|event|aggregates, Zeit-Navi** | [`web-display-api.card.md`](./cards/web-display-api.card.md) | stable |
+| **netzqualitaet: Legacy Export/DFD aus Smart-Meter-Daten** | [`netzqualitaet-analysis.card.md`](./cards/netzqualitaet-analysis.card.md) | stable |
+| **netzqualitaet: Tech-Collector (PAC4200, tmpfs, Fast/Medium/Slow, Kappung)** | [`netzqualitaet-nq-collector.card.md`](./cards/netzqualitaet-nq-collector.card.md) | stable |
+| **netzqualitaet: Grenzwert-Alarm, LimitMonitor, PAC-Clone Single-Reader** | [`netzqualitaet-nq-collector.card.md`](./cards/netzqualitaet-nq-collector.card.md) | stable |
+| **netzqualitaet: Transfer, Aggregation, Energie-Fixpunkte, Event-Schnipsel** | [`netzqualitaet-nq-aggregation.card.md`](./cards/netzqualitaet-nq-aggregation.card.md) | stable |
+| **netzqualitaet: Spektralanalyse, Netzereignisse, Harmonische, HF/NF/VLF** | [`netzqualitaet-nq-analysis-events.card.md`](./cards/netzqualitaet-nq-analysis-events.card.md) | stable |
+| **netzqualitaet: Web/API Chart, Drill-down, /api/nq/energy|event|aggregates** | [`web-display-api.card.md`](./cards/web-display-api.card.md) | stable |
 | **system: .role-Guards, Failover, Publish-Audit, Backup-GFS** | [`system-ops-guards.card.md`](./cards/system-ops-guards.card.md) | stable |
 | **system: Hosts/Pi-Topologie, Deployment, rsync-Sync, Dienst→Host-Map** | [`system-hosts.card.md`](./cards/system-hosts.card.md) | stable |
 | **web: Blueprints, FroniusReadOnly, Display-Formatierung** | [`web-display-api.card.md`](./cards/web-display-api.card.md) | stable |
@@ -72,7 +71,7 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 ### netzqualitaet
 - [`netzqualitaet-analysis.card.md`](./cards/netzqualitaet-analysis.card.md) — Export, Analyse, API
 
-### netzqualitaet — NQ-Modul (Rolle N, PAC4200)
+### netzqualitaet — PAC4200-Modul (Rolle N)
 - [`netzqualitaet-nq-collector.card.md`](./cards/netzqualitaet-nq-collector.card.md) — Tech-Collector, tmpfs, Block-Poller, Kappung
 - [`netzqualitaet-nq-aggregation.card.md`](./cards/netzqualitaet-nq-aggregation.card.md) — Transfer Tech→Primary + Aggregationskaskade
 - [`netzqualitaet-nq-analysis-events.card.md`](./cards/netzqualitaet-nq-analysis-events.card.md) — Netzereignis-Analyse (HF/NF/VLF)

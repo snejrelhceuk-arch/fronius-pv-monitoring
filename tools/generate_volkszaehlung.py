@@ -95,9 +95,9 @@ def render() -> str:
     lines.append('')
     lines.append('## Übersicht')
     lines.append('')
-    lines.append(f'**Gesamtgröße (Textdateien gezählt):** {total_bytes // (1024 * 1024)} MB  ')
-    lines.append(f'**Gesamtzeilen (Code/Doku/Daten):** {_de(total_lines)} Zeilen  ')
-    lines.append(f'**Gezählte Dateien:** {_de(total_files)}  ')
+    lines.append(f'**Gesamtgröße (Textdateien gezählt):** {total_bytes // (1024 * 1024)} MB')
+    lines.append(f'**Gesamtzeilen (Code/Doku/Daten):** {_de(total_lines)} Zeilen')
+    lines.append(f'**Gezählte Dateien:** {_de(total_files)}')
     lines.append(f'**Ausgeschlossene Verzeichnisse:** {_de(excluded_dirs)} '
                  '(.venv, __pycache__, node_modules, .git …)')
     lines.append('')

@@ -2,6 +2,13 @@
 
 **Stand:** 2026-04-03
 
+> **Legacy-Hinweis (2026-08-08):** Dieses Dokument beschreibt die
+> Smart-Meter-/3s-RMS-Phase vor der PAC4200-Entscheidung. Es bleibt als
+> methodische Grundlage fuer DFD, Boundary-Events und robuste Zeitreihenmerkmale
+> nuetzlich, ist aber **nicht** mehr der aktuelle Architektur- oder
+> Spektralanalyse-Leitfaden. Aktuell: [`README.md`](README.md),
+> [`NQ_MODUL.md`](NQ_MODUL.md) und die NQ-Cards unter [`../llm/cards/`](../llm/cards/).
+
 ## Zweck
 
 Dieses Dokument beschreibt, **welche Analyseverfahren für die vorhandenen

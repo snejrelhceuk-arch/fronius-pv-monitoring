@@ -1,134 +1,75 @@
-# Netzqualitäts-Monitoring
+# Netzqualitaet — Dokumentationsstart
 
-Eigenständiges Teilprojekt innerhalb des PV-Systems. Überwacht Leiterspannungen,
-Netzfrequenz und (perspektivisch) Muster in der Netzqualität.
+**Stand:** 2026-08-08
+**Aktueller Schwerpunkt:** Rolle-N-PAC4200-Modul, nicht mehr die alte reine
+Smart-Meter-Auswertung.
 
-## Status
+Netzqualitaet ist ein eigenstaendiges Teilprojekt im PV-System. Es misst und
+analysiert die Netzqualitaet am PCC mit dem PAC4200, bleibt aber strikt von
+Produktionsdaten und Aktorik getrennt: Rolle N schreibt nur in `nq/db/` bzw.
+Tech-tmpfs und niemals in `data.db` oder Aktoren.
 
-| Phase | Status | Beschreibung |
-|-------|--------|-------------|
-| Sofortmaßnahme | ✅ erledigt | Frequenzlinie aus Tagesmonitoring entfernt, Echtzeit → Maschinenraum |
-| Phase 1a | ✅ erledigt | Tagesprofil L-L-Spannungen + Frequenz |
-| Phase 1b | ✅ erledigt | Eigene NQ-Datenbank (Monats-DBs) + 15min-DFD-Analyse |
-| Phase 2 | geplant | Visualisierung, Kalenderprofile, Voraggregation, Messtechnik-Entscheidung |
+## Inhalt
 
-## Architektur
+1. [Schnellwahl](#schnellwahl)
+2. [Aktuelle Architektur](#aktuelle-architektur)
+3. [Leseordnung fuer Menschen](#leseordnung-fuer-menschen)
+4. [Leseordnung fuer LLMs](#leseordnung-fuer-llms)
+5. [Legacy und Archiv](#legacy-und-archiv)
 
-- **Route:** `/netzqualitaet` → `templates/netzqualitaet_view.html`
-- **API:** `/api/netzqualitaet/tag` → `routes/netzqualitaet.py`
-- **NQ-Datenbank:** `nq/legacy/db/nq_YYYY-MM.db` (monatliche SQLite-Dateien, ~20 MB/Monat)
-- **Export:** `nq/legacy/nq_export.py` (Cron, täglich 01:10)
-- **Analyse:** `nq/legacy/nq_analysis.py` (Cron, täglich 01:20)
-- **Daten:** raw_data (3s) resampelt auf 5min-Raster; Fallback data_1min (L-N × √3)
-- **Einstieg UI:** Flow → Maschinenraum → Button „Netzqualität"
+## Schnellwahl
 
-## Projektgrenze
+| Frage | Lesen |
+|---|---|
+| Wie ist Rolle N aufgebaut? | [`NQ_MODUL.md`](NQ_MODUL.md) |
+| Welche PAC4200-Register sind verifiziert? | [`MESSTECHNIK.md`](MESSTECHNIK.md), [`PAC4200-Modbus.md`](PAC4200-Modbus.md) |
+| Wie laufen Tech-Collector, Transfer und Aggregation? | [`../llm/cards/netzqualitaet-nq-collector.card.md`](../llm/cards/netzqualitaet-nq-collector.card.md), [`../llm/cards/netzqualitaet-nq-aggregation.card.md`](../llm/cards/netzqualitaet-nq-aggregation.card.md) |
+| Wie funktioniert Spektralanalyse/THD/HF-NF-VLF? | [`../llm/cards/netzqualitaet-nq-analysis-events.card.md`](../llm/cards/netzqualitaet-nq-analysis-events.card.md) |
+| Warum sind PAC-Energiewerte randscharf? | [`ENERGIE_FEHLERANALYSE_2026-08-08.md`](ENERGIE_FEHLERANALYSE_2026-08-08.md), [`ENERGIE_ABLESEMETHODE.md`](ENERGIE_ABLESEMETHODE.md) |
+| Welche alten NQ-Phasen sind nur noch Historie? | [`migration/`](migration/), [`NQ2_ROADMAP.md`](NQ2_ROADMAP.md) |
 
-Netzqualitaet ist **fachlich ein separates Messtechnik-Projekt**, aber bewusst
-im PV-System belassen.
+## Aktuelle Architektur
 
-- **Warum separat:** eigene Fragestellung, eigene NQ-DB, eigene Analyselogik,
-  perspektivisch eigene Messtechnik
-- **Warum im System:** bestehende API/UI, gemeinsamer Maschinenraum,
-  Wiederverwendung vorhandener Infrastruktur und Feldsemantik
+| Ebene | Host | Aufgabe | Ablage |
+|---|---|---|---|
+| Tech | Pi4-Tech | PAC4200 lesen, Fast/Medium/Slow-RAW, LimitMonitor, Event-Schnipsel | tmpfs `/dev/shm/nq_cache.db` |
+| Primary | Pi5-Primary | Transfer, 5min/hourly/daily, Energie-Fixpunkte, Spektralanalyse | `nq/db/nq_YYYY-MM.db` |
+| Web | Pi5-Primary | Read-only Anzeige/API, PAC-Clone, Charts, Spektralanalyse | `routes/pac4200.py`, Templates |
 
-Aktueller Zuschnitt:
+Wichtig: Web/API (Rolle B) liest nur. Hardwarezugriff auf den PAC4200 passiert
+im NQ-Collector; Produktionsdaten bleiben read-only.
 
-- `nq_export.py` liest die Haupt-DB **read-only** und kopiert nur NQ-relevante
-  Spalten in eigene Monats-DBs
-- `nq_analysis.py` arbeitet nur auf den NQ-DBs
-- `routes/netzqualitaet.py` bleibt **read-only**
-- es gibt **keinen** Write-Pfad vom NQ-Projekt in Collector, Automation oder
-  Aktorik
+## Leseordnung fuer Menschen
 
-Damit ist die Trennungspolicy fuer das NQ-Projekt aktuell eingehalten:
+1. **Ueberblick:** [`NQ_MODUL.md`](NQ_MODUL.md) fuer Ziele, Host-Schnitt,
+   RAM-first-Entscheidung, Retention und Betriebsregeln.
+2. **Messtechnik:** [`MESSTECHNIK.md`](MESSTECHNIK.md) fuer verifizierte
+   Messgroessen; [`PAC4200-Modbus.md`](PAC4200-Modbus.md) nur bei Registerarbeit.
+3. **Energie:** [`ENERGIE_FEHLERANALYSE_2026-08-08.md`](ENERGIE_FEHLERANALYSE_2026-08-08.md)
+   zuerst, danach [`ENERGIE_ABLESEMETHODE.md`](ENERGIE_ABLESEMETHODE.md).
+4. **Betrieb/Tools:** [`TOOLS.md`](TOOLS.md) nur fuer Offline-/Analysewerkzeuge,
+   nicht fuer den heissen Collector-Pfad.
+5. **Historie:** [`NQ2_ROADMAP.md`](NQ2_ROADMAP.md) und Tiefenpruefungen nur
+   zur Nachverfolgung erledigter Work-Packages lesen.
 
-- **lesen** aus dem Gesamtsystem: ja
-- **eigene Analyse-/Ablageebene:** ja
-- **Rueckschreiben in die Produktionskette:** nein
+## Leseordnung fuer LLMs
 
-## Phase-1-Signale
+LLMs starten nicht hier, sondern ueber [`../llm/INDEX.md`](../llm/INDEX.md).
+Die relevanten Cards sind bewusst kurz und fuehren direkt zu Code-Ankern:
 
-| Signal | DB-Feld | Quelle | Ebene |
-|--------|---------|--------|-------|
-| Leiterspannung L1-L2 | `U_L1_L2_Netz` | SmartMeter Netz | raw_data |
-| Leiterspannung L2-L3 | `U_L2_L3_Netz` | SmartMeter Netz | raw_data |
-| Leiterspannung L3-L1 | `U_L3_L1_Netz` | SmartMeter Netz | raw_data |
-| Netzfrequenz | `f_Netz` | SmartMeter Netz | raw_data, data_1min |
-| Phasenstrom L1 | `I_L1_Netz` | SmartMeter Netz | raw_data (Kontext) |
-| Phasenstrom L2 | `I_L2_Netz` | SmartMeter Netz | raw_data (Kontext) |
-| Phasenstrom L3 | `I_L3_Netz` | SmartMeter Netz | raw_data (Kontext) |
+- Collector/Tech: [`../llm/cards/netzqualitaet-nq-collector.card.md`](../llm/cards/netzqualitaet-nq-collector.card.md)
+- Transfer/Aggregation/Energie: [`../llm/cards/netzqualitaet-nq-aggregation.card.md`](../llm/cards/netzqualitaet-nq-aggregation.card.md)
+- Analyse/Spektrik: [`../llm/cards/netzqualitaet-nq-analysis-events.card.md`](../llm/cards/netzqualitaet-nq-analysis-events.card.md)
+- Web/API: [`../llm/cards/web-display-api.card.md`](../llm/cards/web-display-api.card.md)
 
-## Phase-1-Bausteine
+Wenn eine Card die Invarianten klaert, keine langen Human-Dokus nachladen.
+Human-Dokus sind fuer Methodik, Betrieb und historische Begruendung da.
 
-1. **Tagesprofil** — Leiterspannungen + Frequenz im 5min-Raster (✅ vorhanden)
-2. **NQ-Datenbank** — Eigene schlanke Monats-DBs mit 3s-Auflösung (✅ nq_export.py)
-3. **15min-Handelstakt-Analyse** — DFD-Erkennung an Blockgrenzen (✅ nq_analysis.py)
-4. **Lokale Kompensation** — Strom↔Spannung-Korrelation, Local Impact Score (✅ in Analyse integriert)
+## Legacy und Archiv
 
-### NQ-Datenbank-Schema
+`nq/legacy/` und [`METHODEN.md`](METHODEN.md) beschreiben die fruehere
+Smart-Meter-basierte NQ-Auswertung. Diese Inhalte sind fachlich nuetzlich fuer
+DFD und Boundary-Analyse, aber nicht mehr der aktuelle Architekturpfad.
 
-**nq_samples** — Rohdaten (3s-Auflösung, ~20 MB/Monat):
-`ts`, `f_netz`, `u_l1_l2`, `u_l2_l3`, `u_l3_l1`, `i_l1`, `i_l2`, `i_l3`
-
-**nq_15min_blocks** — Blockstatistiken (96/Tag):
-Frequenz (avg/min/max/std), Spannungen, Ströme, Unsymmetrie
-
-**nq_boundary_events** — Grenzübergangs-Analyse (95/Tag):
-DFD-Amplitude, Frequenzgradienten, Nadir, lokale Rückwirkung (Local Impact Score)
-
-**nq_daily_summary** — Tageszusammenfassung:
-DFD-Mittel (gesamt/Vollstunde/Viertelstunde), Frequenzbereich, Lokale vs. Netz-Events
-
-### 15-Minuten-Handelstakt (DFD)
-
-Hintergrund: EPEX SPOT handelt in 15-min-Blöcken. An Blockgrenzen
-(xx:00, :15, :30, :45) wechseln die Fahrpläne der Erzeuger. Das erzeugt
-die „Deterministic Frequency Deviation" (DFD) — dokumentiert von ENTSO-E.
-
-Die Analyse untersucht:
-- **Pre-Boundary** (letzte 60s vor Grenze): Frequenzabfall-Gradient
-- **Post-Boundary** (erste 60s nach Grenze): Recovery-Gradient
-- **Nadir**: Frequenzminimum im ±30s-Fenster um die Grenze
-- **Referenz**: Blockmitte (5:00–10:00 im Block) als Baseline
-- **Grenztyp**: Vollstunde > Halbstunde > Viertelstunde (nach Stärke)
-- **Lokale Rückwirkung**: Stromänderung bei gleichzeitiger Spannungsänderung
-
-## Phase-2-Ausblick
-
-- Voraggregation L-L-Spannungen in data_1min / data_15min
-- Kalenderprofile (Wochentag, Feiertag, Ferien, Jahreszeit)
-- 15min-Handelsmuster-Indikatoren
-- Unsymmetrie- und Korrelationskennzahlen
-- Messtechnik-Entscheidung für Oberschwingungen (kHz–100kHz)
-
-## Dateien
-
-```
-netzqualitaet/                   — Analyse-Modul
-  __init__.py
-  nq_export.py                   — Täglicher Export raw_data → Monats-DBs
-  nq_analysis.py                 — 15min-DFD-Analyse + lokale Rückwirkung
-  db/                            — Monatliche NQ-Datenbanken (gitignored)
-    nq_2026-03.db
-    nq_2026-04.db
-routes/netzqualitaet.py          — API Blueprint (Tagesprofil)
-templates/netzqualitaet_view.html — Chart-Seite (ECharts)
-doc/netzqualitaet/               — Projektdokumentation
-  README.md                      — dieses Dokument
-  METHODEN.md                    — Methodenwahl fuer RMS-/Zeitreihenanalyse
-  TOOLS.md                       — Python-Werkzeuge, Sinn vs. Aufwand
-  MESSTECHNIK.md                 — Hardware-Matrix, Geraeteklassen, Trennlinie
-  TRADE_SWITCH_DETECTION.md      — Erkennung Handels-/Schaltvorgaenge
-  PAC4200_PI5_ENTSCHEIDUNGSVORLAGE.md — Hardware-Entscheidung
-```
-
-## Cron-Einrichtung
-
-```bash
-# NQ-Export: täglich 01:10, volle 2 Tage Puffer
-10 1 * * *  cd ~/Dokumente/PVAnlage/pv-system && .venv/bin/python nq/legacy/nq_export.py >> /tmp/nq_export.log 2>&1
-
-# NQ-Analyse: täglich 01:20 (nach Export)
-20 1 * * *  cd ~/Dokumente/PVAnlage/pv-system && .venv/bin/python nq/legacy/nq_analysis.py >> /tmp/nq_analysis.log 2>&1
-```
+Historische Zwischenstaende liegen unter [`migration/`](migration/). Neue offene
+Aufgaben gehoeren nach [`../TODO.md`](../TODO.md), nicht in Unterordner-TODOs.

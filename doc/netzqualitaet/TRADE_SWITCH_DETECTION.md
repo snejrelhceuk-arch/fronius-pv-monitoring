@@ -2,6 +2,11 @@
 
 Stand: 2026-04-05
 
+> **Legacy-/Methodik-Hinweis (2026-08-08):** Dieses Dokument beschreibt die
+> datengetriebene Periodensuche auf der alten 3s-Smart-Meter-Basis. Die Methode
+> bleibt als wissenschaftliche Referenz gueltig; aktuelle Implementierung und
+> PAC4200-Datenpfade stehen in den NQ-Cards und in `nq/analysis/nq_spectral.py`.
+
 ## Ziel
 
 Schaltzeiten und Periodizitaeten aus den Messdaten selbst bestimmen,

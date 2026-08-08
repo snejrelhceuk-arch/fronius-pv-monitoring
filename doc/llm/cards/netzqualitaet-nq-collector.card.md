@@ -4,7 +4,7 @@ domain: netzqualitaet
 role: N
 applyTo: "nq/collector/**"
 tags: [netzqualitaet, nq, pac4200, collector, tmpfs, tech, rolle-n]
-status: experimental
+status: stable
 last_review: 2026-08-08
 changes:
 	- 2026-08-08 (Energie randscharf auf Mitternacht): Neu `nq/collector/nq_energy.py:compute_daily_boundary` (+ `_interp_at`). Behebt den **Lücken-Verlust** der bisherigen `compute_daily` (delta = letzter−erster Snapshot **innerhalb** des Tages) — bei 5-min-Takt/Collector-Ausfall systematisch (Bsp. 2026-07-13: within-day 883 Wh statt echter 2357 Wh, 1474 Wh in die Mitternachtslücke verloren). Neu: Zählerstand an t0/t1 **linear aus den umschließenden Snapshots interpoliert** → geteilter Grenzwert `Ende(D)==Anfang(D+1)` → **energieerhaltend** (Teleskopierung). Rand nicht bracketierbar → `edge`/`partial` **markiert** (`quality`), nicht still verfälscht. Config `config/nq_config.json:energy` (`boundary_margin_s`, `boundary_max_gap_s`, `min_samples_ok`). `compute_daily` bleibt für Rückwärtskompatibilität. Fehleranalyse: `doc/netzqualitaet/ENERGIE_FEHLERANALYSE_2026-08-08.md`. Die Randwert-Rechnung läuft im **Primary-Rollup** (dort bereits aktiv); der Tech-Snapshotter braucht das Modul nur zur **Code-Redundanz** (rsync + `systemctl restart pv-nq-energy`).

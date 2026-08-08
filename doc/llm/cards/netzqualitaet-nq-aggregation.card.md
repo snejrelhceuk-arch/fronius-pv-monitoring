@@ -4,7 +4,7 @@ domain: netzqualitaet
 role: N
 applyTo: "nq/transfer/**,nq/aggregate/**"
 tags: [netzqualitaet, nq, transfer, aggregation, primary, rolle-n]
-status: experimental
+status: stable
 last_review: 2026-08-08
 changes:
 	- 2026-08-08 (SM-Korrektur Altlasten): Alle 8 PAC-Tage mit Abweichungen durch **SM-Werte überschrieben** (`nq/transfer/nq_energy_sm_correct.py`, einmaliges Dev-Tool): 2026-07-12/13 (Anlaufphase Export=0), 07-14 (96% Abweichung), 07-15 (2,2%), 08-04 (98%, Collector-Ausfall?), 08-05 (1,1%), 08-06 (0,2%), 08-07 (7,5% Export). Alle Tage jetzt `src='sm_corrected'`, Vergleich zeigt 0,0% Abweichung. **Ziel:** Baseline für zukünftige Beobachtung — neue Abweichungen >0,5% sind kritisch und weisen auf systematische Messfehler hin.

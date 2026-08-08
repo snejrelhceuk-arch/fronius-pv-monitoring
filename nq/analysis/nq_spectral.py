@@ -548,6 +548,7 @@ def decimate(x: np.ndarray, factor: int, numtaps: int | None = None) -> np.ndarr
     factor = int(factor)
     if factor <= 1 or x.size < factor * 4:
         return x
+    factor = min(factor, 10)
     if numtaps is None:
         numtaps = 8 * factor + 1
     h = fir_lowpass(numtaps, 0.5 / factor)
@@ -665,7 +666,7 @@ def _demo() -> int:
     fs = 1.0 / 300.0  # 5-min
     n = 4096
     t = np.arange(n) / fs
-    # 15-min-Takt (1,11 mHz) + Tagesgang (11,57 uHz) + Rauschen
+    # Staerkerer Tagesgang (11,57 uHz) + 15-min-Takt (1,11 mHz) + Rauschen
     sig = (0.02 * np.sin(2 * math.pi * (1 / 900) * t)
            + 0.05 * np.sin(2 * math.pi * (1 / 86400) * t)
            + 0.01 * np.random.randn(n))
@@ -674,7 +675,7 @@ def _demo() -> int:
     ls = lombscargle(t, sig, fg)
     cf, cp, _ = log_bin(f, p, 12)
     print(f"welch: {f.size} bins, peak@{f[np.argmax(p)]:.3e} Hz")
-    print(f"lomb : peak@{fg[np.argmax(ls)]:.3e} Hz (erwartet ~1.11e-3)")
+    print(f"lomb : peak@{fg[np.argmax(ls)]:.3e} Hz (dominant: Tagesgang ~1.16e-5)")
     print(f"logbin: {cf.size} baender")
     dec = decimate(sig, 4)
     print(f"decimate x4: {sig.size} -> {dec.size}")

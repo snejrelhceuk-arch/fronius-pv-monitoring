@@ -1,6 +1,14 @@
 # NQ — Weitere Tests & Datenbank-Aufbau (Rolle N)
 
 **Stand:** 2026-07-11
+> **Historischer Umsetzungsstand (2026-08-08):** Dieses Dokument dokumentiert
+> Phase 1/2 waehrend des PAC4200-Aufbaus. Mehrere Aussagen sind inzwischen
+> ueberholt: Einzelharmonische H1/H3..H31 sind verifiziert, die Skalarbasis ist
+> `nq_5min` statt `nq_agg_10s`, und Energie-Deltas laufen randscharf ueber
+> Mitternachts-Boundaries. Fuer aktuelle Codearbeit zuerst die Cards in
+> [`../llm/INDEX.md`](../llm/INDEX.md) lesen; fuer Energie siehe
+> [`ENERGIE_FEHLERANALYSE_2026-08-08.md`](ENERGIE_FEHLERANALYSE_2026-08-08.md).
+
 **Bezug:** [`NQ_MODUL.md`](NQ_MODUL.md) (Architektur), [`MESSTECHNIK.md`](MESSTECHNIK.md)
 (verifizierte Register), [`PAC4200-Modbus.md`](PAC4200-Modbus.md) (vollständige
 Registerreferenz).

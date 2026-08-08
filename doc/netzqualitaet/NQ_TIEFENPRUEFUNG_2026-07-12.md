@@ -1,6 +1,11 @@
 # NQ-Modul — Tiefenprüfung (Rolle N, PAC4200)
 
 **Datum:** 2026-07-12
+> **Archiv-Snapshot (2026-08-08):** Diese Tiefenpruefung beschreibt den Stand
+> unmittelbar nach dem NQ-Modulaufbau. Kritische Punkte wurden spaeter behoben
+> oder in Cards ueberfuehrt. Fuer aktuelle Arbeiten zuerst
+> [`README.md`](README.md) und [`../llm/INDEX.md`](../llm/INDEX.md) nutzen.
+
 **Prüfer:** Agent (autonome Tiefenprüfung)
 **Umfang:** PAC4200 · Pi4-Tech (Collector) · Pi5-Primary (Aggregation/Analyse) ·
 Pi5-FB (Offsite-Backup) · Pi4-Küche (Longterm-Backup)

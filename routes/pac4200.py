@@ -806,6 +806,13 @@ def _spec_window(default_days: int) -> tuple[int, int]:
     return start, end
 
 
+def _bounded_int_arg(name: str, default: int, lo: int, hi: int) -> int:
+    value = request.args.get(name, type=int)
+    if value is None:
+        value = default
+    return max(lo, min(int(value), hi))
+
+
 def _series_pearson(a: dict, b: dict) -> float | None:
     """Pearson-Korrelation zweier {ts,values}-Serien ueber gemeinsame ts.
 
@@ -842,17 +849,34 @@ def _series_pearson(a: dict, b: dict) -> float | None:
 
 
 def _downsample_matrix(mat, max_rows: int, max_cols: int):
-    """Reduziert eine 2D-Matrix (fuer Transport) per Strided-Slicing + Rundung."""
+    """Reduziert eine 2D-Matrix (fuer Transport) per Bin-Mittelung."""
     import numpy as _np
     m = _np.asarray(mat, dtype=float)
     if m.size == 0:
         return m, _np.array([]), _np.array([])
     r, c = m.shape
-    rstep = max(1, r // max_rows)
-    cstep = max(1, c // max_cols)
-    ridx = _np.arange(0, r, rstep)
-    cidx = _np.arange(0, c, cstep)
-    return m[_np.ix_(ridx, cidx)], ridx, cidx
+    out_rows = min(max_rows, r)
+    out_cols = min(max_cols, c)
+    if out_rows == r and out_cols == c:
+        return m, _np.arange(r), _np.arange(c)
+
+    row_edges = _np.linspace(0, r, out_rows + 1, dtype=int)
+    col_edges = _np.linspace(0, c, out_cols + 1, dtype=int)
+    out = _np.empty((out_rows, out_cols), dtype=float)
+    ridx = _np.empty(out_rows, dtype=int)
+    cidx = _np.empty(out_cols, dtype=int)
+
+    for i in range(out_rows):
+        rs, re = int(row_edges[i]), max(int(row_edges[i + 1]), int(row_edges[i]) + 1)
+        ridx[i] = min(r - 1, (rs + re - 1) // 2)
+        for j in range(out_cols):
+            cs, ce = int(col_edges[j]), max(int(col_edges[j + 1]), int(col_edges[j]) + 1)
+            if i == 0:
+                cidx[j] = min(c - 1, (cs + ce - 1) // 2)
+            block = m[rs:re, cs:ce]
+            finite = block[_np.isfinite(block)]
+            out[i, j] = float(finite.mean()) if finite.size else float('nan')
+    return out, ridx, cidx
 
 
 @bp.route('/api/nq/spectral/harmonics')
@@ -886,7 +910,8 @@ def api_nq_spectral_harmonics():
         'thd_pac_series': thd_pac_series,
         'thd_correlation': corr,
         'note': ('THD aus ungeraden Einzelharmonischen (H1..H31) -> untere Schranke; '
-                 'gerade Ordnungen (z.B. 100 Hz) fuehrt das PAC4200 nicht als Register.'),
+                 'gerade Ordnungen (z.B. 100 Hz) fuehrt das PAC4200 nicht als Register. '
+                 'Korrelation zum PAC-THD-Register ist deshalb erwartbar < 1,0.'),
     })
 
 
@@ -901,7 +926,7 @@ def api_nq_spectral_periodogram():
     import numpy as _np
     start, end = _spec_window(30)
     signal = request.args.get('signal', 'freq')
-    dec = request.args.get('decimate', type=int, default=1) or 1
+    dec = _bounded_int_arg('decimate', 1, 1, 10)
     do_bin = request.args.get('binning', type=int, default=0)
     try:
         if signal == 'voltage':
@@ -976,8 +1001,8 @@ def api_nq_spectral_psd():
         if ts.size < 32:
             return jsonify({'error': 'insufficient data', 'n': int(ts.size)}), 200
         tu, xu, fs = spec.resample_uniform(ts, x)
-        nperseg = request.args.get('nperseg', type=int) or min(1024, xu.size // 4 * 2 or 8)
-        nperseg = max(16, min(nperseg, xu.size))
+        default_nperseg = min(1024, xu.size // 4 * 2 or 8)
+        nperseg = _bounded_int_arg('nperseg', default_nperseg, 16, min(8192, xu.size))
         f, p = spec.welch_psd(xu, fs, nperseg=nperseg, window=window)
         # log-log: DC-Bin (f=0) weglassen
         keep = f > 0
@@ -1021,14 +1046,18 @@ def api_nq_spectral_spectrogram():
         tu, xu, fs = spec.resample_uniform(ts, x)
         t0 = float(tu[0])
         if method == 'stft':
-            nperseg = request.args.get('nperseg', type=int) or min(128, xu.size // 4 or 8)
-            nperseg = max(16, min(nperseg, xu.size))
+            default_nperseg = min(128, xu.size // 4 or 8)
+            nperseg = _bounded_int_arg('nperseg', default_nperseg, 16, min(4096, xu.size))
             freqs, times, Z = spec.stft(xu, fs, nperseg=nperseg)
             times_abs = t0 + times
         else:  # cwt (Morlet)
             f_hi = fs / 2.0
             f_lo = max(4.0 / (float(tu[-1] - tu[0])), f_hi / 1000.0)
             freqs = spec.log_freq_grid(f_lo, f_hi, 48)
+            expected_bytes = len(freqs) * len(xu) * 8
+            if expected_bytes > 50 * 1024 * 1024:
+                return jsonify({'error': 'too much data for CWT; reduce timespan',
+                                'estimated_mb': round(expected_bytes / (1024 * 1024), 1)}), 400
             Z = spec.morlet_cwt(xu, fs, freqs)
             times_abs = tu
         Zd, ridx, cidx = _downsample_matrix(Z, max_rows=64, max_cols=240)
