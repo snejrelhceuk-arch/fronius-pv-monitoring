@@ -111,13 +111,50 @@ Summenbewertung „ok"-Tage: **Imp-Abw. −0,65 %**, Ø |Abw.| **0,65 %**. Die
 Anlauf-/Ausfalltage (07-12…14) bleiben korrekt als Ausreißer/geringe Deckung
 markiert.
 
-## 6. Deployment & offene Punkte
-- **Primary (bereits aktiv):** Rollup `nq/transfer/nq_energy_rollup.py` + Rechenkern
-  `nq/collector/nq_energy.py` + `config/nq_config.json:energy` liegen auf Primary →
-  der nächste `pv-nq-energy-rollup`-Lauf schließt die Tage randscharf.
-- **Tech (Code-Redundanz):** `nq/collector/nq_energy.py` + `config/nq_config.json`
-  per rsync nach `.181` synchronisieren (der Snapshotter selbst ist unverändert;
-  nur Konsistenz). Kein Verhaltenswechsel auf Tech nötig.
+## 6. Deployment & SM-Korrektur (2026-08-08, abgeschlossen)
+
+### 6a. Boundary-Interpolation & Recompute (durchgeführt)
+- **Primary (aktiv):** Rollup `nq/transfer/nq_energy_rollup.py` + Rechenkern
+  `nq/collector/nq_energy.py` + `config/nq_config.json:energy` nutzen jetzt
+  `compute_daily_boundary` (energieerhaltend).
+- **Recompute ausgeführt:** `nq/transfer/nq_energy_recompute.py --apply` (Backup:
+  `backup/db/nq_pre_recompute_2026-08-08/`) — hat 2026-07-13 von 883→2357 Wh
+  korrigiert. Monats-/Jahres-Rollup neu berechnet.
+- **Tech synchronisiert:** `nq/collector/nq_energy.py` + `config/nq_config.json`
+  per rsync nach `.181` deployed.
+
+### 6b. SM-Korrektur Altlasten (einmalige Dev-Korrektur)
+Trotz Recompute blieben Abweichungen aus Anlaufphase/Collector-Ausfällen bestehen.
+**Einmaliges Korrektur-Skript** `nq/transfer/nq_energy_sm_correct.py`:
+
+```bash
+python3 -m nq.transfer.nq_energy_sm_correct --threshold-pct 0 --min-abs-kwh 0 --apply
+```
+
+**Korrigierte Tage (alle auf SM-Werte überschrieben, `src='sm_corrected'`):**
+
+| Tag | PAC→SM Imp | PAC→SM Exp | Grund |
+|-----|------------|------------|-------|
+| 2026-07-12 | 0.829→1.584 | 0.000→0.773 | Anlaufphase Export=0, 47.7% Abw. |
+| 2026-07-13 | 2.357→1.433 | 0.000→0.790 | Anlaufphase Export=0, 64.5% Abw. |
+| 2026-07-14 | 0.058→1.576 | 0.019→0.570 | Collector-Ausfall, 96.3% Abw. |
+| 2026-07-15 | 0.741→0.725 | 0.628→0.599 | Letzter Tag im Lauf (partial), 2.2% Abw. |
+| 2026-08-04 | 0.037→1.838 | 0.007→0.669 | Collector-Ausfall, 98.0% Abw. |
+| 2026-08-05 | 0.879→0.889 | 0.642→0.591 | 1.1% Abw. |
+| 2026-08-06 | 0.959→0.961 | 0.610→0.579 | 0.2% Abw. |
+| 2026-08-07 | 1.198→1.114 | 0.953→0.763 | Export 24.9% Abw. |
+
+**Ergebnis:** Vergleichsseite `/netzqualitaet/energievergleich` zeigt jetzt **0,0%
+Abweichung** für alle 8 Tage → saubere **Baseline für zukünftige Beobachtung**.
+
+### 6c. Beobachtungsphase (ab 2026-08-09)
+- **Erwartung:** Neue Tage sollten `src='counter'` mit <0,5% Abweichung haben.
+- **Kritisch:** Abweichungen >0,5% weisen auf **systematische Messfehler** hin →
+  Messmethode/Collector untersuchen.
+- **Tool:** Vergleichsseite `/netzqualitaet/energievergleich` — nur noch reine
+  Tabelle (keine Grafiken/Analysen mehr), Abweichungen sofort sichtbar.
+
+## 7. Offene Punkte
 - **Collector-Zuverlässigkeit** (Lücke 07-16…08-03) prüfen — der PAC zählt dank
   Stützbatterie durchgehend; es genügt **je ein** Snapshot nahe jeder Mitternacht.
   Aufgabe in `doc/TODO.md`.

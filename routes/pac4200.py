@@ -681,16 +681,12 @@ def nq_energy_compare_page():
 def api_nq_energy_compare():
     """Read-only Tages-Vergleich PAC4200 (korrigierte Fixpunkte) ↔ Master-SM.
 
-    ``?days=N`` (Default 90, max 400) oder ``?all=1``; ``?outlier_pct=`` (Default 10).
-    Nur echte PAC-Zählertage (``src`` ≠ ``pv_backfill``). Liefert je Tag Import/
-    Export beider Quellen, absolute + prozentuale Abweichung und eine Bewertung
-    (``ok`` | ``outlier`` | ``low`` = geringe Deckung/offener Rand | ``na``).
+    ``?days=N`` (Default 90, max 400) oder ``?all=1``. Nur echte PAC-Zählertage
+    (``src`` ≠ ``pv_backfill``). Liefert je Tag Import/Export beider Quellen,
+    absolute + prozentuale Abweichung. Keine Bewertung/Analyse.
     """
     all_days = request.args.get('all', type=int, default=0)
     days = min(request.args.get('days', type=int, default=90), 400)
-    thr = float(request.args.get('outlier_pct', default=10.0))
-    cfg = _load_nq_config()
-    min_ok = int(cfg.get('energy', {}).get('min_samples_ok', 200))
 
     start = 0 if all_days else int(_time.time()) - days * 86400
     rows_by_day: dict[str, dict] = {}
@@ -700,19 +696,16 @@ def api_nq_energy_compare():
             continue
         try:
             rows = conn.execute(
-                "SELECT day, wh_imp_delta, wh_exp_delta, src, n_samples "
+                "SELECT day, wh_imp_delta, wh_exp_delta "
                 "FROM nq_energy_daily WHERE src != 'pv_backfill'").fetchall()
         except Exception:
             rows = []
         finally:
             conn.close()
-        for day, imp, exp, src, n in rows:
-            rows_by_day[day] = {'imp': imp, 'exp': exp, 'src': src, 'n': n}
+        for day, imp, exp in rows:
+            rows_by_day[day] = {'imp': imp, 'exp': exp}
 
     items = []
-    s_pac_imp = s_sm_imp = s_pac_exp = s_sm_exp = 0.0
-    n_ok = n_low = n_outlier = 0
-    abs_imp_pct = []
     for day in sorted(rows_by_day):
         t0, t1 = _local_day_bounds(day)
         if not all_days and t0 < start:
@@ -723,39 +716,19 @@ def api_nq_energy_compare():
         sm = _sm_day_kwh(t0, t1)
         sm_imp = sm['imp_kwh'] if sm else None
         sm_exp = sm['exp_kwh'] if sm else None
-        low_cov = (r['src'] != 'counter') or ((r['n'] or 0) < min_ok)
-        d_imp, d_imp_pct, imp_cls = _metric_class(pac_imp, sm_imp, low_cov, thr)
-        d_exp, d_exp_pct, exp_cls = _metric_class(pac_exp, sm_exp, low_cov, thr)
-        conf = 'low' if low_cov else ('outlier' if 'outlier' in (imp_cls, exp_cls) else 'ok')
-        if conf == 'ok':
-            n_ok += 1
-            if sm_imp is not None:
-                s_pac_imp += pac_imp; s_sm_imp += sm_imp
-                s_pac_exp += pac_exp; s_sm_exp += sm_exp
-                if d_imp_pct is not None:
-                    abs_imp_pct.append(abs(d_imp_pct))
-        elif conf == 'low':
-            n_low += 1
-        else:
-            n_outlier += 1
+        d_imp = round(pac_imp - sm_imp, 3) if sm_imp is not None else None
+        d_exp = round(pac_exp - sm_exp, 3) if sm_exp is not None else None
+        d_imp_pct = round(100.0 * d_imp / sm_imp, 1) if (sm_imp and d_imp is not None) else None
+        d_exp_pct = round(100.0 * d_exp / sm_exp, 1) if (sm_exp and d_exp is not None) else None
         items.append({
-            'day': day, 'n_samples': r['n'], 'src': r['src'], 'confidence': conf,
+            'day': day,
             'pac_imp_kwh': pac_imp, 'sm_imp_kwh': sm_imp,
-            'd_imp_kwh': d_imp, 'd_imp_pct': d_imp_pct, 'imp_class': imp_cls,
+            'd_imp_kwh': d_imp, 'd_imp_pct': d_imp_pct,
             'pac_exp_kwh': pac_exp, 'sm_exp_kwh': sm_exp,
-            'd_exp_kwh': d_exp, 'd_exp_pct': d_exp_pct, 'exp_class': exp_cls,
+            'd_exp_kwh': d_exp, 'd_exp_pct': d_exp_pct,
         })
 
-    summary = {
-        'n_days': len(items), 'n_ok': n_ok, 'n_low': n_low, 'n_outlier': n_outlier,
-        'ok_pac_imp_kwh': round(s_pac_imp, 3), 'ok_sm_imp_kwh': round(s_sm_imp, 3),
-        'ok_pac_exp_kwh': round(s_pac_exp, 3), 'ok_sm_exp_kwh': round(s_sm_exp, 3),
-        'ok_imp_dev_pct': (round(100.0 * (s_pac_imp - s_sm_imp) / s_sm_imp, 2) if s_sm_imp else None),
-        'ok_exp_dev_pct': (round(100.0 * (s_pac_exp - s_sm_exp) / s_sm_exp, 2) if s_sm_exp else None),
-        'ok_mean_abs_imp_pct': (round(sum(abs_imp_pct) / len(abs_imp_pct), 2) if abs_imp_pct else None),
-        'outlier_pct': thr, 'min_samples_ok': min_ok,
-    }
-    return jsonify({'items': items, 'summary': summary, 'from': 'PAC4200 vs Master-SM'})
+    return jsonify({'items': items, 'from': 'PAC4200 vs Master-SM'})
 
 
 # ---------------------------------------------------------------------------
@@ -834,7 +807,13 @@ def _spec_window(default_days: int) -> tuple[int, int]:
 
 
 def _series_pearson(a: dict, b: dict) -> float | None:
-    """Pearson-Korrelation zweier {ts,values}-Serien ueber gemeinsame ts."""
+    """Pearson-Korrelation zweier {ts,values}-Serien ueber gemeinsame ts.
+
+    Plausibilitaetspruefungen:
+      - NaN/Inf werden ausgefiltert
+      - Extreme Werte (>1e15 abs) werden verworfen
+      - Ergebnis muss im gültigen Bereich [-1, 1] liegen
+    """
     import numpy as _np
     ai = {int(t): float(v) for t, v in zip(a.get('ts', []), a.get('values', []))}
     bi = {int(t): float(v) for t, v in zip(b.get('ts', []), b.get('values', []))}
@@ -842,9 +821,24 @@ def _series_pearson(a: dict, b: dict) -> float | None:
     if len(common) < 5:
         return None
     x = _np.array([ai[t] for t in common]); y = _np.array([bi[t] for t in common])
+
+    # Plausibilitätsprüfung: NaN/Inf/extreme Werte filtern
+    mask = _np.isfinite(x) & _np.isfinite(y) & (_np.abs(x) < 1e15) & (_np.abs(y) < 1e15)
+    if mask.sum() < 5:
+        return None
+    x = x[mask]; y = y[mask]
+
     if x.std() < 1e-12 or y.std() < 1e-12:
         return None
-    return round(float(_np.corrcoef(x, y)[0, 1]), 4)
+
+    try:
+        r = float(_np.corrcoef(x, y)[0, 1])
+        # Plausibilitätsprüfung des Ergebnisses
+        if not _np.isfinite(r) or abs(r) > 1.0:
+            return None
+        return round(r, 4)
+    except Exception:
+        return None
 
 
 def _downsample_matrix(mat, max_rows: int, max_cols: int):

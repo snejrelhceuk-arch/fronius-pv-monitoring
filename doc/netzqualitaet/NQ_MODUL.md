@@ -1,8 +1,8 @@
 # NQ-Modul (Rolle N) — PAC4200-Netzqualität Tech + Primary
 
-**Stand:** 2026-07-11
+**Stand:** 2026-08-08
 **Rolle:** N (Netzqualität) — siehe [`../system/ABCDEN_ROLLENMODELL.md`](../system/ABCDEN_ROLLENMODELL.md)
-**Status:** Architektur festgelegt, Implementierung in Phasen (siehe unten)
+**Status:** Architektur implementiert, in Betrieb (Phasen 0-2 produktiv, siehe unten)
 
 ---
 
@@ -262,4 +262,6 @@ und aktualisiert dieses Dokument bei Abweichungen.
 - [`MESSTECHNIK.md`](MESSTECHNIK.md) — PAC4200-Fakten, Registerblöcke
 - [`PAC4200_PI5_ENTSCHEIDUNGSVORLAGE.md`](PAC4200_PI5_ENTSCHEIDUNGSVORLAGE.md) — Datenmengen-Rechnung
 - [`METHODEN.md`](METHODEN.md) — Analyseverfahren
+- **[`ENERGIE_ABLESEMETHODE.md`](ENERGIE_ABLESEMETHODE.md)** — PAC4200-Energiezähler: Routine-Ablesemethode, Fixpunkte, Timer-Kette, Validierung
+- **[`ENERGIE_FEHLERANALYSE_2026-08-08.md`](ENERGIE_FEHLERANALYSE_2026-08-08.md)** — Fehlerdiagnose + Korrektur der Tages-Fixpunkte (Lücken-Verlust, Boundary-Interpolation, SM-Korrektur)
 - [`../../nq/README.md`](../../nq/README.md) — Code-Paket

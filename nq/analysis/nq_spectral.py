@@ -283,6 +283,8 @@ def load_harmonic_thd_series(start: int, end: int, meas: str = "U_LN") -> dict:
     Pro Bucket/Phase: THD = sqrt(sum_{n>=2} H_n^2)/H_1. Ueber die Phasen
     gemittelt. Dient dem Korrelationsvergleich gegen das PAC4200-THD-Register.
     Rueckgabe: {'ts':[...], 'values':[...]}  (THD in %).
+
+    Plausibilitätsprüfung: Harmonischenwerte > 1e6 werden verworfen (in thd_from_harmonics).
     """
     # {ts: {phase: {ord: value}}}
     buckets: dict[int, dict[int, dict[int, float]]] = {}
@@ -296,6 +298,7 @@ def load_harmonic_thd_series(start: int, end: int, meas: str = "U_LN") -> dict:
                 "WHERE quantity='' AND meas=? AND ts>=? AND ts<? AND vavg IS NOT NULL",
                 (meas, start, end)).fetchall()
             for tsec, phase, ordn, v in rows:
+                # Plausibilitätsprüfung bereits in thd_from_harmonics
                 buckets.setdefault(int(tsec), {}).setdefault(int(phase), {})[int(ordn)] = float(v)
         except Exception:
             pass
@@ -311,7 +314,12 @@ def load_harmonic_thd_series(start: int, end: int, meas: str = "U_LN") -> dict:
                 phase_thd.append(thd)
         if phase_thd:
             ts_out.append(tsec)
-            v_out.append(round(float(np.mean(phase_thd)), 3))
+            mean_thd = float(np.mean(phase_thd))
+            # Zusätzliche Plausibilitätsprüfung des gemittelten Werts
+            if math.isfinite(mean_thd) and 0 <= mean_thd <= 200.0:
+                v_out.append(round(mean_thd, 3))
+            else:
+                continue
     return {"ts": ts_out, "values": v_out}
 
 
@@ -319,6 +327,8 @@ def load_thd_series(start: int, end: int, kind: str = "u") -> dict:
     """THD-Zeitreihe (Phasen-Mittel) aus den PAC4200-THD-Registern (nq_5min).
 
     kind: 'u' -> THDu_L1..L3, 'i' -> THDi_L1..L3. Rueckgabe (ts, v) gemittelt.
+
+    Plausibilitätsprüfung: NaN/Inf und Werte außerhalb [0, 200%] werden gefiltert.
     """
     prefix = "THDu_L" if kind == "u" else "THDi_L"
     series = [load_scalar_series(f"{prefix}{p}", start, end) for p in (1, 2, 3)]
@@ -331,14 +341,18 @@ def load_thd_series(start: int, end: int, kind: str = "u") -> dict:
         common &= set(ts.tolist())
     if not common:
         ts0, v0 = series[0]
-        return {"ts": ts0.tolist(), "values": np.round(v0, 3).tolist()}
+        # Plausibilitätsprüfung
+        mask = np.isfinite(v0) & (v0 >= 0) & (v0 <= 200.0)
+        return {"ts": ts0[mask].tolist(), "values": np.round(v0[mask], 3).tolist()}
     common_ts = np.array(sorted(common), dtype=np.int64)
     stacked = []
     for ts, v in series:
         idx = {int(t): float(val) for t, val in zip(ts, v)}
         stacked.append(np.array([idx[int(t)] for t in common_ts]))
     mean_v = np.mean(np.vstack(stacked), axis=0)
-    return {"ts": common_ts.tolist(), "values": np.round(mean_v, 3).tolist()}
+    # Plausibilitätsprüfung des Mittelwerts
+    mask = np.isfinite(mean_v) & (mean_v >= 0) & (mean_v <= 200.0)
+    return {"ts": common_ts[mask].tolist(), "values": np.round(mean_v[mask], 3).tolist()}
 
 
 # ===========================================================================
@@ -617,13 +631,29 @@ def thd_from_harmonics(orders: Iterable[int], values: Iterable[float]) -> float 
 
     Nutzt die vorhandenen (ungeraden) Ordnungen. Gerade Ordnungen fehlen im
     PAC4200-Registersatz -> Ergebnis ist eine untere Schranke (dokumentiert).
+
+    Plausibilitätsprüfungen:
+      - h1 > 0 und < 1e6 (Volt/Ampere)
+      - Harmonische < 1e6 und endlich
+      - Ergebnis < 200% (theoretisches Maximum)
     """
-    d = {int(o): float(v) for o, v in zip(orders, values)}
+    d = {}
+    for o, v in zip(orders, values):
+        # Plausibilitätsprüfung der Eingabewerte
+        if not math.isfinite(v) or abs(v) > 1e6:
+            continue
+        d[int(o)] = float(v)
+
     h1 = d.get(1)
-    if not h1 or h1 <= 0:
+    if not h1 or h1 <= 0 or h1 > 1e6:
         return None
     rest = math.sqrt(sum(v * v for o, v in d.items() if o >= 2))
-    return round(100.0 * rest / h1, 3)
+    thd = 100.0 * rest / h1
+
+    # Plausibilitätsprüfung des Ergebnisses (THD sollte < 200% sein)
+    if not math.isfinite(thd) or thd < 0 or thd > 200.0:
+        return None
+    return round(thd, 3)
 
 
 # ===========================================================================

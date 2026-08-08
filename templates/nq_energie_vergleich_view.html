@@ -8,7 +8,6 @@
     <script src="/static/js/nav-context.js"></script>
     <script src="/static/js/nav-ui.js"></script>
     <link rel="stylesheet" href="/static/css/nav-ui.css">
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -27,7 +26,6 @@
             display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
             background: rgba(30,41,59,0.6); border: 1px solid rgba(255,255,255,0.08);
             border-radius: 10px; padding: 10px 14px; margin-bottom: 20px;
-            position: sticky; top: 0; z-index: 5; backdrop-filter: blur(6px);
         }
         .gb-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: .4px; }
         .ctrl-btn {
@@ -42,48 +40,15 @@
             margin-bottom: 26px; background: rgba(30,41,59,0.5);
             border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; overflow: hidden;
         }
-        .section-header { padding: 16px 20px 12px; border-bottom: 1px solid rgba(255,255,255,0.07); }
-        .section-title { font-size: 16px; font-weight: 700; color: #f1f5f9; margin-bottom: 4px; }
-        .section-sub { font-size: 12px; color: #94a3b8; line-height: 1.55; max-width: 940px; }
-        .section-sub strong { color: #cbd5e1; }
         .section-body { padding: 16px 20px 20px; }
-
-        .stat-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
-        .stat-card {
-            flex: 1; min-width: 150px; background: rgba(15,23,42,0.7);
-            border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px 14px;
-        }
-        .stat-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 4px; }
-        .stat-value { font-size: 20px; font-weight: 700; color: #f1f5f9; font-variant-numeric: tabular-nums; }
-        .stat-unit { font-size: 11px; color: #94a3b8; margin-left: 3px; }
-
-        .chart-el { width: 100%; height: 300px; }
-        .chart-wrap { background: rgba(15,23,42,0.5); border-radius: 8px; padding: 12px; margin-top: 12px; }
-        .chart-label { font-size: 11px; color: #64748b; margin-bottom: 6px; font-weight: 600; letter-spacing: .3px; text-transform: uppercase; }
 
         table.cmp { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
         table.cmp th, table.cmp td { padding: 7px 9px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.06); }
         table.cmp th { color: #94a3b8; font-weight: 600; text-align: right; position: sticky; top: 0; background: #1a2437; }
         table.cmp td:first-child, table.cmp th:first-child { text-align: left; }
         table.cmp tbody tr:hover { background: rgba(255,255,255,0.03); }
-        .cell-ok { color: #86efac; }
-        .cell-outlier { color: #fca5a5; font-weight: 700; }
-        .cell-low { color: #64748b; }
-        .badge {
-            display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: .3px;
-            padding: 1px 7px; border-radius: 3px;
-        }
-        .b-ok { background: rgba(34,197,94,0.18); color: #86efac; border: 1px solid rgba(34,197,94,0.35); }
-        .b-outlier { background: rgba(239,68,68,0.2); color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); }
-        .b-low { background: rgba(148,163,184,0.15); color: #94a3b8; border: 1px solid rgba(148,163,184,0.3); }
-        .hint-box {
-            font-size: 11px; color: #7c8aa0; background: rgba(255,255,255,0.03);
-            border: 1px solid rgba(255,255,255,0.06); border-radius: 6px;
-            padding: 8px 12px; margin-top: 12px; line-height: 1.7;
-        }
-        .hint-box strong { color: #94a3b8; }
         .loading-msg { text-align: center; padding: 26px; color: #64748b; font-size: 13px; }
-        .table-scroll { max-height: 560px; overflow-y: auto; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); }
+        .table-scroll { max-height: 660px; overflow-y: auto; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); }
     </style>
 </head>
 <body>
@@ -98,70 +63,19 @@
         <button class="ctrl-btn" data-days="30" onclick="setDays(30,this)">30 T</button>
         <button class="ctrl-btn active" data-days="90" onclick="setDays(90,this)">90 T</button>
         <button class="ctrl-btn" data-days="0" onclick="setDays(0,this)">Alle</button>
-        <span class="gb-label" style="margin-left:12px">Ausreißer ab</span>
-        <button class="ctrl-btn" data-thr="5" onclick="setThr(5,this)">5 %</button>
-        <button class="ctrl-btn active" data-thr="10" onclick="setThr(10,this)">10 %</button>
-        <button class="ctrl-btn" data-thr="25" onclick="setThr(25,this)">25 %</button>
         <button class="ctrl-btn" style="margin-left:auto" onclick="load()">↻ Aktualisieren</button>
     </div>
 
     <div class="section">
-        <div class="section-header">
-            <div class="section-title">Bewertung & Übereinstimmung</div>
-            <div class="section-sub">
-                Der <strong>PAC4200</strong> zählt am Netzanschlusspunkt (PCC) mit batteriegepufferten,
-                kumulativen Zählerregistern und ist damit prinzipiell <strong>genauer als iMS/SM</strong>.
-                Verglichen wird gegen den <strong>Fronius Primär-SM</strong> (autoritative Tages-Fixpunkte
-                <em>W_Imp/Exp_Netz</em> aus <em>daily_data</em>). Aufgrund unterschiedlicher Messtechnik/
-                -orte sind kleine Abweichungen normal; große Abweichungen markieren Tage mit
-                <strong>Datenlücken/Anlaufphase</strong> (geringe Deckung = grau, nicht bewertbar).
-            </div>
-        </div>
-        <div class="section-body">
-            <div class="stat-row" id="statRow"><div class="loading-msg">Lade Vergleich…</div></div>
-            <div class="hint-box" id="summaryNote"></div>
-        </div>
-    </div>
-
-    <div class="section">
-        <div class="section-header">
-            <div class="section-title">Netzbezug (Import) — PAC4200 vs. Fronius-SM</div>
-            <div class="section-sub">Gruppierte Tagesbalken beider Zähler; die Linie zeigt die prozentuale Abweichung (nur bewertbare Tage).</div>
-        </div>
-        <div class="section-body">
-            <div class="chart-wrap"><div class="chart-label">Import je Tag [kWh] + Abweichung [%]</div><div class="chart-el" id="chartImp"></div></div>
-        </div>
-    </div>
-
-    <div class="section">
-        <div class="section-header">
-            <div class="section-title">Netzeinspeisung (Export) — PAC4200 vs. Fronius-SM</div>
-            <div class="section-sub">Analog zum Import. In der Anlaufphase (2026-07-12/13) war das Export-Register noch nicht valide (0) — diese Tage sind als geringe Deckung markiert.</div>
-        </div>
-        <div class="section-body">
-            <div class="chart-wrap"><div class="chart-label">Export je Tag [kWh] + Abweichung [%]</div><div class="chart-el" id="chartExp"></div></div>
-        </div>
-    </div>
-
-    <div class="section">
-        <div class="section-header">
-            <div class="section-title">Tagesvergleich (Details)</div>
-            <div class="section-sub">
-                Bewertung je Tag: <span class="badge b-ok">ok</span> marginale Abweichung ·
-                <span class="badge b-outlier">Ausreißer</span> auffällig trotz guter Deckung ·
-                <span class="badge b-low">geringe Deckung</span> Datenlücke/offener Rand → nicht bewertbar.
-            </div>
-        </div>
         <div class="section-body">
             <div class="table-scroll">
                 <table class="cmp">
                     <thead><tr>
-                        <th>Tag</th><th>n</th>
+                        <th>Tag</th>
                         <th>PAC Imp</th><th>SM Imp</th><th>Δ Imp</th><th>Δ %</th>
                         <th>PAC Exp</th><th>SM Exp</th><th>Δ Exp</th><th>Δ %</th>
-                        <th>Bewertung</th>
                     </tr></thead>
-                    <tbody id="cmpBody"><tr><td colspan="11" class="loading-msg">Lade…</td></tr></tbody>
+                    <tbody id="cmpBody"><tr><td colspan="9" class="loading-msg">Lade…</td></tr></tbody>
                 </table>
             </div>
         </div>
@@ -169,79 +83,30 @@
 </div>
 
 <script>
-const S = { days: 90, thr: 10 };
-const charts = {};
-function ec(id){ if(!charts[id]) charts[id]=echarts.init(document.getElementById(id),'dark'); return charts[id]; }
-window.addEventListener('resize', ()=>Object.values(charts).forEach(c=>c.resize()));
+const S = { days: 90 };
 
-function activate(btn, sel){ if(!btn) return; btn.parentElement.querySelectorAll(sel).forEach(b=>{ if(b.dataset.days!==undefined===(btn.dataset.days!==undefined)) b.classList.remove('active'); }); btn.classList.add('active'); }
 function setDays(d,b){ S.days=d; b.parentElement.querySelectorAll('[data-days]').forEach(x=>x.classList.remove('active')); b.classList.add('active'); load(); }
-function setThr(t,b){ S.thr=t; b.parentElement.querySelectorAll('[data-thr]').forEach(x=>x.classList.remove('active')); b.classList.add('active'); load(); }
 
 function fmt(v,dec){ return (v===null||v===undefined)?'—':Number(v).toFixed(dec===undefined?3:dec); }
-function statCard(label,val,unit){ return `<div class="stat-card"><div class="stat-label">${label}</div><div class="stat-value">${val}<span class="stat-unit">${unit||''}</span></div></div>`; }
 
-function devChart(id, items, key){
-    const days = items.map(i=>i.day.slice(5));
-    const pac = items.map(i=>i['pac_'+key+'_kwh']);
-    const sm  = items.map(i=>i['sm_'+key+'_kwh']);
-    const dev = items.map(i=> i.confidence==='low' ? null : i['d_'+key+'_pct']);
-    ec(id).setOption({
-        grid:{left:56,right:56,top:28,bottom:64},
-        legend:{top:0,textStyle:{color:'#94a3b8'},data:['PAC4200','Fronius-SM','Abweichung %']},
-        tooltip:{trigger:'axis',confine:true,axisPointer:{type:'shadow'}},
-        xAxis:{type:'category',data:days,axisLabel:{color:'#94a3b8',hideOverlap:true,rotate:days.length>20?45:0}},
-        yAxis:[
-            {type:'value',name:'kWh',nameTextStyle:{color:'#cbd5e1'},axisLabel:{color:'#94a3b8'},splitLine:{lineStyle:{color:'rgba(255,255,255,0.05)'}}},
-            {type:'value',name:'%',position:'right',axisLabel:{color:'#94a3b8',formatter:'{value}%'},splitLine:{show:false}}
-        ],
-        series:[
-            {name:'PAC4200',type:'bar',data:pac,itemStyle:{color:'#60a5fa'},barMaxWidth:16},
-            {name:'Fronius-SM',type:'bar',data:sm,itemStyle:{color:'#a3a3a3'},barMaxWidth:16},
-            {name:'Abweichung %',type:'line',yAxisIndex:1,data:dev,connectNulls:false,
-             symbol:'circle',symbolSize:5,lineStyle:{color:'#fbbf24',width:1.4},itemStyle:{color:'#fbbf24'}}
-        ]
-    }, true);
-}
-
-function cell(v,cls,dec,suffix){
+function cell(v,dec,suffix){
     const t = (v===null||v===undefined)?'—':Number(v).toFixed(dec===undefined?3:dec)+(suffix||'');
-    const c = cls==='outlier'?'cell-outlier':(cls==='low'||cls==='na'?'cell-low':(cls==='ok'?'cell-ok':''));
-    return `<td class="${c}">${t}</td>`;
-}
-function badge(conf){
-    if(conf==='ok') return '<span class="badge b-ok">ok</span>';
-    if(conf==='outlier') return '<span class="badge b-outlier">Ausreißer</span>';
-    return '<span class="badge b-low">geringe Deckung</span>';
+    return `<td>${t}</td>`;
 }
 
 async function load(){
-    document.getElementById('statRow').innerHTML='<div class="loading-msg">Lade Vergleich…</div>';
+    document.getElementById('cmpBody').innerHTML='<tr><td colspan="9" class="loading-msg">Lade…</td></tr>';
     let d;
-    try{ d = await (await fetch(`/api/nq/energy_compare?days=${S.days}&all=${S.days===0?1:0}&outlier_pct=${S.thr}`)).json(); }
-    catch(e){ document.getElementById('statRow').innerHTML='<div class="loading-msg">Fehler beim Laden.</div>'; return; }
-    const it = d.items||[], sm = d.summary||{};
-    document.getElementById('statRow').innerHTML =
-        statCard('Tage gesamt', sm.n_days||0, '') +
-        statCard('bewertbar (ok)', sm.n_ok||0, '') +
-        statCard('Ausreißer', sm.n_outlier||0, '') +
-        statCard('geringe Deckung', sm.n_low||0, '') +
-        statCard('Import-Abw. (ok-Tage)', sm.ok_imp_dev_pct===null?'—':sm.ok_imp_dev_pct, '%') +
-        statCard('Ø |Abw.| Import', sm.ok_mean_abs_imp_pct===null?'—':sm.ok_mean_abs_imp_pct, '%');
-    document.getElementById('summaryNote').innerHTML =
-        `Summe bewertbarer Tage — <strong>Import:</strong> PAC ${fmt(sm.ok_pac_imp_kwh)} kWh vs. SM ${fmt(sm.ok_sm_imp_kwh)} kWh `
-        + `(${sm.ok_imp_dev_pct===null?'—':sm.ok_imp_dev_pct} %) · <strong>Export:</strong> PAC ${fmt(sm.ok_pac_exp_kwh)} kWh vs. SM ${fmt(sm.ok_sm_exp_kwh)} kWh `
-        + `(${sm.ok_exp_dev_pct===null?'—':sm.ok_exp_dev_pct} %). Ausreißer-Schwelle ${sm.outlier_pct} %, Mindestdeckung ${sm.min_samples_ok} Samples/Tag.`;
-
-    devChart('chartImp', it, 'imp');
-    devChart('chartExp', it, 'exp');
+    try{ d = await (await fetch(`/api/nq/energy_compare?days=${S.days}&all=${S.days===0?1:0}`)).json(); }
+    catch(e){ document.getElementById('cmpBody').innerHTML='<tr><td colspan="9" class="loading-msg">Fehler beim Laden.</td></tr>'; return; }
+    const it = d.items||[];
 
     const rows = it.slice().reverse().map(i=>`<tr>
-        <td>${i.day}</td><td class="cell-low">${i.n_samples==null?'—':i.n_samples}</td>
-        ${cell(i.pac_imp_kwh,'')}${cell(i.sm_imp_kwh,'')}${cell(i.d_imp_kwh,i.imp_class)}${cell(i.d_imp_pct,i.imp_class,1,' %')}
-        ${cell(i.pac_exp_kwh,'')}${cell(i.sm_exp_kwh,'')}${cell(i.d_exp_kwh,i.exp_class)}${cell(i.d_exp_pct,i.exp_class,1,' %')}
-        <td>${badge(i.confidence)}</td></tr>`).join('');
-    document.getElementById('cmpBody').innerHTML = rows || '<tr><td colspan="11" class="loading-msg">Keine PAC-Zählertage im Zeitraum.</td></tr>';
+        <td>${i.day}</td>
+        ${cell(i.pac_imp_kwh)}${cell(i.sm_imp_kwh)}${cell(i.d_imp_kwh)}${cell(i.d_imp_pct,1,' %')}
+        ${cell(i.pac_exp_kwh)}${cell(i.sm_exp_kwh)}${cell(i.d_exp_kwh)}${cell(i.d_exp_pct,1,' %')}
+        </tr>`).join('');
+    document.getElementById('cmpBody').innerHTML = rows || '<tr><td colspan="9" class="loading-msg">Keine PAC-Zählertage im Zeitraum.</td></tr>';
 }
 
 if (window.PVNavUI) PVNavUI.initDrawer();

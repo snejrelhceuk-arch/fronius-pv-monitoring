@@ -26,14 +26,25 @@ _THD_QUANTITIES: dict[str, tuple[str, int]] = {
 
 
 def _pearson_r(x: np.ndarray, y: np.ndarray) -> float | None:
-    mask = np.isfinite(x) & np.isfinite(y)
+    """Pearson-Korrelation mit Plausibilitätsprüfungen.
+
+    Filtert NaN/Inf/extreme Werte (>1e15 abs).
+    Ergebnis muss im gültigen Bereich [-1, 1] liegen.
+    """
+    mask = np.isfinite(x) & np.isfinite(y) & (np.abs(x) < 1e15) & (np.abs(y) < 1e15)
     if mask.sum() < 5:
         return None
     xm = x[mask]; ym = y[mask]
     mx, my = xm.mean(), ym.mean()
     num = float(((xm - mx) * (ym - my)).sum())
     den = math.sqrt(float(((xm - mx) ** 2).sum()) * float(((ym - my) ** 2).sum()))
-    return (num / den) if den > 1e-12 else None
+    if den <= 1e-12:
+        return None
+    r = num / den
+    # Plausibilitätsprüfung des Ergebnisses
+    if not np.isfinite(r) or abs(r) > 1.0:
+        return None
+    return r
 
 
 def detect_thd_spikes(ts_series: dict[str, Any], cfg: dict) -> list[dict]:
