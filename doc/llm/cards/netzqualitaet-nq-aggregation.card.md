@@ -5,8 +5,9 @@ role: N
 applyTo: "nq/transfer/**,nq/aggregate/**"
 tags: [netzqualitaet, nq, transfer, aggregation, primary, rolle-n]
 status: experimental
-last_review: 2026-08-06
+last_review: 2026-08-08
 changes:
+	- 2026-08-08 (Energie-Rollup randscharf + Rückwirkende Korrektur): `nq/transfer/nq_energy_rollup.py:rollup` nutzt jetzt `compute_daily_boundary` (Randwert-Interpolation auf Mitternacht, energieerhaltend); `fetch_tech_rows` holt mit `boundary_margin_s`-Rand (Bracketing); `master_sm_day` liest den **autoritativen** `daily_data`-Tagesfixpunkt (statt `data_1min`-Summe). Neu **`nq/transfer/nq_energy_recompute.py`**: korrigiert bestehende Fixpunkte rückwirkend per **aufeinanderfolgender day_start-Differenz** (`delta(D)=start(D+1)−start(D)`, produktionskonform wie `energy_checkpoints`), nur PAC-Zählertage (`src≠pv_backfill`), Reset-/Gültigkeits-Guard (0-Register-Anlaufphase), idempotent, Dry-Run-Default. Ausgeführt 2026-08-08 (Backup `backup/db/nq_pre_recompute_2026-08-08/`): 2026-07-13 Imp 883→2357 Wh (+1474 zurückgewonnen), Monats-/Jahres-Rollup neu. Validierung: saubere Tage PAC↔SM <1 %. Doku `doc/netzqualitaet/ENERGIE_FEHLERANALYSE_2026-08-08.md`.
 	- 2026-08-06 (Musteranalyse-Datensatz-Tabelle): Neue Primary-Tabelle `nq_pattern_5min` (`nq/schema/nq_primary_schema.sql`) — residual-bereinigter Netz-Signaldatensatz (u_clean/u_meas je Phase, freq, pf, phi, i, du_int_max, origin). Erzeuger `nq/analysis/nq_pattern.py`.
 	- 2026-08-06 (Fixpunkt-Backfill): Neues Einmal-Werkzeug `nq/transfer/nq_energy_backfill.py:backfill` — füllt die NQ-Energie-Fixpunkte (`nq_energy_daily`/`nq_energy_checkpoint` + Monats-/Jahres-Rollup) für den Zeitraum VOR PAC-Start read-only aus der Produktions-`daily_data` (`W_Imp/Exp_Netz_*` → `wh_imp/wh_exp`, `src='pv_backfill'`). Idempotent, Dry-Run-Default, echte PAC-Zeilen (`counter`) werden nie überschrieben. Ausgeführt 2026-08-06: 189 Tage (2026-01-01…07-11), Monate 01–07 + Jahr 2026.
 	- 2026-08-06: Legacy-Verweis auf `nq/legacy/nq_export.py` umgestellt (Modul `netzqualitaet/` → `nq/legacy/` konsolidiert).
@@ -34,7 +35,8 @@ fächert zu `hourly → daily` auf und hält Event-RAW dauerhaft.
 - **Transienten (Tech):** `nq/aggregate/nq_transients.py:run_tech` / `detect_transients_in_window` / `analyze_jumps`
 - **Event-Schnipsel-Pipeline (Primary):** `nq/transfer/nq_event_transfer.py:transfer_events` / `derive_event` / `ingest_snippets` / `_cap_event_log`
 - **GFS-Backup NQ-DB:** `scripts/backup_nq_gfs.sh` (daily/weekly/monthly, Integrität, Offsite rsync)
-- **Energie-Rollup (Primary):** `nq/transfer/nq_energy_rollup.py:rollup` (tägl. 00:05) / `rollup_month` / `rollup_year`
+- **Energie-Rollup (Primary):** `nq/transfer/nq_energy_rollup.py:rollup` (tägl. 00:05, randscharf via `compute_daily_boundary`) / `rollup_month` / `rollup_year` / `master_sm_day` (autoritativer `daily_data`-Fixpunkt)
+- **Energie-Fixpunkt-Recompute (rückwirkend, Primary):** `nq/transfer/nq_energy_recompute.py:recompute` (aufeinanderfolgende day_start-Differenz, `--apply`/Dry-Run)
 - **Fixpunkt-Backfill (einmalig, Primary):** `nq/transfer/nq_energy_backfill.py:backfill` (PV-DB `daily_data` → NQ-Fixpunkte, `src='pv_backfill'`, Dry-Run-Default)
 - **Schema (Primary):** `nq/schema/nq_primary_schema.sql`
 - **Konfig (Retention/Transfer):** `config/nq_config.json`

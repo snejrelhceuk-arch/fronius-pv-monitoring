@@ -5,8 +5,9 @@ role: N
 applyTo: "nq/analysis/**"
 tags: [netzqualitaet, nq, analyse, events, harmonische, frequenz, rolle-n]
 status: stable
-last_review: 2026-08-06
+last_review: 2026-08-08
 changes:
+	- 2026-08-07 (Spektralanalyse-Pipeline): Neues Modul **`nq/analysis/nq_spectral.py`** (pure numpy, read-only) ersetzt die „Netzmusteranalyse“. Enthaelt Welch-PSD, Lomb-Scargle-Periodogramm (Luecken-robust, VLF/eVLF), Anti-Aliasing-Dezimation (windowed-sinc FIR), log-Frequenz-Binning, STFT + komplexe Morlet-CWT (w0=6) und THD-aus-Harmonischen. Loader lesen `nq_pattern_5min` (bereinigte f/U), nq_5min-Skalare (FREQ/THDu/THDi) und Einzelharmonische (meas U_LN/U_LL/I, ord 1..31 → n·50 Hz). Serve: `routes/pac4200.py:/api/nq/spectral/{harmonics,periodogram,psd,spectrogram}`. Reality-Check: >50-Hz-PSD aus Abtastwerten unmoeglich (Nyquist 1,667 mHz @ 300 s) → HF ausschliesslich aus PAC4200-FFT-Registern. CLI-Selbsttest `python3 -m nq.analysis.nq_spectral --demo`.
 	- 2026-08-06 (Musteranalyse-Datensatz): Neuer **sauberer Netz-Signaldatensatz** `nq/analysis/nq_pattern.py:build_range`/`build_day`/`backfill` → `nq_pattern_5min` (Primary). Residual-Deconvolution (ΔU_int = I·(R·cosφ + X·sinφ), Z aus `nq_impedance.json`) entfernt **interne** (hinter-PCC) Lasteffekte → netzseitige U + f + PF + φ + `origin` (intern/extern). `analyze_day` triggert `build_day` (best-effort). Rückwirkend erzeugt (6526 Buckets, 2026-07-12…08-06). API `routes/pac4200.py:/api/nq/pattern`.
 	- 2026-08-06: Methodik-Verweis auf `nq/legacy/nq_analysis.py` umgestellt (Modul `netzqualitaet/` → `nq/legacy/` konsolidiert); Kommentar in `nq/analysis/nq_nf.py` nachgezogen.
 	- 2026-07-16 (l): **Dual-Modus: 4h HF/NF + täglich VLF.** `nq/analysis/nq_events.py` Refactor: neue `analyze_window(ts_start, ts_end, bands=[...])` für Fenster-basierte Analysen (HF/NF alle 4h), alte `analyze_day(day)` → Backward-Compat-Wrapper; CLI: `--hours N --bands HF_local,NF_global` für 4h-Läufe. Systemd: `pv-nq-analysis` = VLF täglich 00:30 (Vortag), `pv-nq-analysis-hf-nf` = HF/NF alle 4h (00:30,04:30,...,20:30, aktuelle Daten). Idempotent per INSERT OR REPLACE; Duplikat-Key bleibt Trigger+Stunden-Bucket.
@@ -35,6 +36,7 @@ global-niederfrequent (`NF_global`), sehr niederfrequent (`VLF`).
 - **Konfiguration:** `config/nq_config.json` → `analysis`-Block
 - **Impedanz:** `config/nq_impedance.json` (R=163 mΩ, X=251 mΩ, Z=299 mΩ)
 - **Musteranalyse-Datensatz (residual-bereinigt):** `nq/analysis/nq_pattern.py:build_range` → `nq_pattern_5min` (netzseitige U/f/PF/φ, `origin`); Serve: `routes/pac4200.py:api_nq_pattern` (`/api/nq/pattern`)
+- **Spektralanalyse-Pipeline (pure numpy):** `nq/analysis/nq_spectral.py` — `welch_psd`, `lombscargle`, `decimate`/`fir_lowpass`, `log_bin`, `stft`, `morlet_cwt`, `thd_from_harmonics`; Loader `load_clean_freq`/`load_harmonics`/`load_thd_series`. Serve: `routes/pac4200.py:/api/nq/spectral/{harmonics,periodogram,psd,spectrogram}`
 - **Gemeinsame Helfer:** `nq/nq_common.py`
 - **Methodik-Vorbild:** Legacy `nq/legacy/nq_analysis.py` (DFD, Boundary-Events)
 
