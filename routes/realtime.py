@@ -906,10 +906,23 @@ def api_flow_devices():
     f3_power = _read_fronius_ac_power(
         config.load_local_setting('PV_TERTIARY_INVERTER_API', ''))
 
+    # Wattpilot Session-Energie aus DB
+    wattpilot_session_kwh = None
+    try:
+        from routes.system._shared import _read_wattpilot_db_summary
+        wp_summary = _read_wattpilot_db_summary(now)
+        wattpilot_session_kwh = wp_summary.get('energy_session_kwh')
+    except Exception as exc:
+        logging.debug(f"Wattpilot session energy read failed: {exc}")
+
     result = {
         "pac": pac,
         "f2": {"power": f2_power, "available": f2_power is not None},
         "f3": {"power": f3_power, "available": f3_power is not None},
+        "wattpilot": {
+            "energy_session_kwh": wattpilot_session_kwh,
+            "available": wattpilot_session_kwh is not None
+        },
     }
     _FLOW_DEVICES_CACHE["ts"] = now
     _FLOW_DEVICES_CACHE["data"] = result

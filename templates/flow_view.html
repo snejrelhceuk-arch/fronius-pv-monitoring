@@ -969,6 +969,9 @@
                                         <text x="660" y="318" text-anchor="middle"
                       fill="white" font-size="18"
                       font-weight="700" id="value-wattpilot">0W</text>
+                                        <text x="660" y="335" text-anchor="middle"
+                      fill="rgba(255,255,255,0.7)" font-size="14"
+                      id="sub-wattpilot"></text>
 
                                         <circle cx="500" cy="340" r="39" fill="none"
                         stroke="#60a5fa" stroke-width="2" id="circle-heatpump"/>
@@ -1524,7 +1527,7 @@
         }
     }
 
-    // Unabhängige Geräte-Direktwerte (PAC/F2/F3) für die Zusatz-Bubbles.
+    // Unabhängige Geräte-Direktwerte (PAC/F2/F3/Wattpilot) für die Zusatz-Bubbles.
     // Getrennt von fetchFlow, damit PV-Gesamt/Flow-Logik unberührt bleibt.
     async function fetchFlowDevices() {
         try {
@@ -1535,7 +1538,7 @@
             flowDevicesData = d;
         } catch (e) {
             console.warn('flow_devices:', e);
-            flowDevicesData = { pac: null, f2: null, f3: null };
+            flowDevicesData = { pac: null, f2: null, f3: null, wattpilot: { energy_session_kwh: null, available: false } };
         }
     }
 
@@ -1637,6 +1640,7 @@
         document.getElementById('sub-consumption').textContent = `${d.consumption.total_today_kwh} kWh`;
         document.getElementById('value-household').textContent   = fmt(Math.max(0, d.consumption.household));
         document.getElementById('value-wattpilot').textContent   = fmt(Math.max(0, d.consumption.wattpilot));
+        document.getElementById('sub-wattpilot').textContent     = flowDevicesData.wattpilot?.energy_session_kwh !== null && flowDevicesData.wattpilot?.energy_session_kwh !== undefined ? `${flowDevicesData.wattpilot.energy_session_kwh} kWh` : '';
         document.getElementById('value-heatpump').textContent    = fmt(Math.max(0, d.consumption.heatpump));
         document.getElementById('value-heizpatrone').textContent = fmt(Math.max(0, d.consumption.heizpatrone));
         document.getElementById('value-klima').textContent       = fmt(Math.max(0, d.consumption.klima));
