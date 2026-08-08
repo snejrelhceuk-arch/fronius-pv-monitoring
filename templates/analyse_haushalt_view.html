@@ -32,17 +32,17 @@
         <div class="summary-cards">
             <div class="summary-card">
                 <div class="label">Gesamt-Verbrauch</div>
-                <div class="value accent">{{ "{:,.0f}".format(totals.gesamt_verbr) }} kWh</div>
+                <div class="value accent">{{ "{:,.0f}".format(totals.gesamt_verbr).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</div>
                 <div class="sub">seit 2022</div>
             </div>
             <div class="summary-card">
                 <div class="label">Gesamt Netto-Ersparnis</div>
-                <div class="value positive">{{ "{:,.0f}".format(totals.netto_ersparnis) }} €</div>
+                <div class="value positive">{{ "{:,.0f}".format(totals.netto_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</div>
                 <div class="sub">Strom + Heizung + Benzin</div>
             </div>
             <div class="summary-card">
                 <div class="label">E-Auto gefahren</div>
-                <div class="value accent">{{ "{:,.0f}".format(totals.km_gefahren) }} km</div>
+                <div class="value accent">{{ "{:,.0f}".format(totals.km_gefahren).replace(",", "X").replace(".", ",").replace("X", ".") }} km</div>
                 <div class="sub">mit Solarstrom</div>
             </div>
             <div class="summary-card">
@@ -73,30 +73,30 @@
                     {% for year in yearly_data %}
                     <tr>
                         <td><strong>{{ year.year }}</strong></td>
-                        <td><strong>{{ "{:,.0f}".format(year.gesamt_verbr) }} kWh</strong></td>
-                        <td><strong>{{ "{:,.0f}".format(year.solar) }} kWh</strong></td>
-                        <td><strong>{{ "{:,.0f}".format(year.netz_bezug) }} kWh</strong></td>
-                        <td><strong>{{ "%.1f"|format(year.autarkie) }}%</strong></td>
-                        <td><strong>{{ "{:,.0f}".format(year.km_gefahren) }} km</strong></td>
-                        <td><strong>{{ "{:,.2f}".format(year.netto_ersparnis_strom) }} €</strong></td>
-                        <td><strong>{{ "{:,.2f}".format(year.heiz_ersparnis) }} €</strong></td>
-                        <td><strong>{{ "{:,.2f}".format(year.benzin_ersparnis) }} €</strong></td>
-                        <td><strong>{{ "{:,.2f}".format(year.netto_ersparnis) }} €</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.gesamt_verbr).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.solar).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.netz_bezug).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
+                        <td><strong>{{ "%.1f"|format(year.autarkie)|replace(".", ",") }}%</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.km_gefahren).replace(",", "X").replace(".", ",").replace("X", ".") }} km</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.netto_ersparnis_strom).replace(",", "X").replace(".", ",").replace("X", ".") }} €</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.heiz_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.benzin_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.netto_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</strong></td>
                     </tr>
                     {% endfor %}
                 </tbody>
                 <tfoot>
                     <tr>
                         <td>Gesamt</td>
-                        <td>{{ "{:,.0f}".format(totals.gesamt_verbr) }} kWh</td>
-                        <td>{{ "{:,.0f}".format(totals.solar) }} kWh</td>
-                        <td>{{ "{:,.0f}".format(totals.netz_bezug) }} kWh</td>
-                        <td>{{ "%.1f"|format(totals.autarkie) }}%</td>
-                        <td>{{ "{:,.0f}".format(totals.km_gefahren) }} km</td>
-                        <td>{{ "{:,.2f}".format(totals.netto_ersparnis_strom) }} €</td>
-                        <td>{{ "{:,.2f}".format(totals.heiz_ersparnis) }} €</td>
-                        <td>{{ "{:,.2f}".format(totals.benzin_ersparnis) }} €</td>
-                        <td>{{ "{:,.2f}".format(totals.netto_ersparnis) }} €</td>
+                        <td>{{ "{:,.0f}".format(totals.gesamt_verbr).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>
+                        <td>{{ "{:,.0f}".format(totals.solar).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>
+                        <td>{{ "{:,.0f}".format(totals.netz_bezug).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>
+                        <td>{{ "%.1f"|format(totals.autarkie)|replace(".", ",") }}%</td>
+                        <td>{{ "{:,.0f}".format(totals.km_gefahren).replace(",", "X").replace(".", ",").replace("X", ".") }} km</td>
+                        <td>{{ "{:,.2f}".format(totals.netto_ersparnis_strom).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
+                        <td>{{ "{:,.2f}".format(totals.heiz_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
+                        <td>{{ "{:,.2f}".format(totals.benzin_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
+                        <td>{{ "{:,.2f}".format(totals.netto_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
                     </tr>
                 </tfoot>
             </table>
@@ -107,8 +107,8 @@
             <h3>Investitionsübersicht</h3>
             <p><strong>Jan 2022:</strong> 24.000 € (PV-Anlage + Batterie) + 12.000 € (Wärmepumpe)</p>
             <p><strong>Jan 2024:</strong> 8.000 € (PV-Erweiterung/Wattpilot)</p>
-            <p><strong>PV-Gesamt:</strong> {{ "{:,.0f}".format(gesamt_invest_pv) }} €</p>
-            <p><strong>Haushalt-Gesamt:</strong> {{ "{:,.0f}".format(gesamt_invest_haushalt) }} €</p>
+            <p><strong>PV-Gesamt:</strong> {{ "{:,.0f}".format(gesamt_invest_pv).replace(",", "X").replace(".", ",").replace("X", ".") }} €</p>
+            <p><strong>Haushalt-Gesamt:</strong> {{ "{:,.0f}".format(gesamt_invest_haushalt).replace(",", "X").replace(".", ",").replace("X", ".") }} €</p>
             <br>
             <p><strong>Strompreise:</strong> 2022/23: 0,30 €/kWh, 2024/25: 0,33 €/kWh, ab 22.2.26: 0,30 €/kWh</p>
             <p><strong>Einspeisevergütung:</strong> Nulleinspeiser</p>

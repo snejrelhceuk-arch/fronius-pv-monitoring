@@ -33,29 +33,29 @@
         <div class="summary-cards">
             <div class="summary-card">
                 <div class="label">Investition PV</div>
-                <div class="value">{{ "{:,.0f}".format(gesamt_invest_pv) }} €</div>
-                <div class="sub">{% if amort_pv_data %}Fortschritt {{ "%.0f"|format(amort_pv_data[-1].fortschritt) }}%{% endif %}</div>
+                <div class="value">{{ "{:,.0f}".format(gesamt_invest_pv).replace(",", "X").replace(".", ",").replace("X", ".") }} €</div>
+                <div class="sub">{% if amort_pv_data %}Fortschritt {{ "{:,.0f}".format(amort_pv_data[-1].fortschritt).replace(",", "X").replace(".", ",").replace("X", ".") }}%{% endif %}</div>
             </div>
             <div class="summary-card">
                 <div class="label">PV amortisiert</div>
                 <div class="value accent">{% if amort_pv_jahr %}~{{ amort_pv_jahr }}{% else %}–{% endif %}</div>
-                <div class="sub">{% if amort_pv_data %}Kum. {{ "{:,.0f}".format(amort_pv_data[-1].kum_ersparnis) }} € bisher{% endif %}</div>
+                <div class="sub">{% if amort_pv_data %}Kum. {{ "{:,.0f}".format(amort_pv_data[-1].kum_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} € bisher{% endif %}</div>
             </div>
             <div class="summary-card">
                 <div class="label">Investition Haushalt</div>
-                <div class="value">{{ "{:,.0f}".format(gesamt_invest_haushalt) }} €</div>
-                <div class="sub">{% if amort_haushalt_data %}Fortschritt {{ "%.0f"|format(amort_haushalt_data[-1].fortschritt) }}%{% endif %}</div>
+                <div class="value">{{ "{:,.0f}".format(gesamt_invest_haushalt).replace(",", "X").replace(".", ",").replace("X", ".") }} €</div>
+                <div class="sub">{% if amort_haushalt_data %}Fortschritt {{ "{:,.0f}".format(amort_haushalt_data[-1].fortschritt).replace(",", "X").replace(".", ",").replace("X", ".") }}%{% endif %}</div>
             </div>
             <div class="summary-card">
                 <div class="label">Haushalt amortisiert</div>
                 <div class="value accent">{% if amort_haushalt_jahr %}~{{ amort_haushalt_jahr }}{% else %}–{% endif %}</div>
-                <div class="sub">{% if amort_haushalt_data %}Kum. {{ "{:,.0f}".format(amort_haushalt_data[-1].kum_ersparnis) }} € bisher{% endif %}</div>
+                <div class="sub">{% if amort_haushalt_data %}Kum. {{ "{:,.0f}".format(amort_haushalt_data[-1].kum_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} € bisher{% endif %}</div>
             </div>
         </div>
 
         <!-- PV-Amortisation -->
         <div class="section">
-            <div class="section-title">PV-Amortisation (Invest: {{ "{:,.0f}".format(gesamt_invest_pv) }} €)</div>
+            <div class="section-title">PV-Amortisation (Invest: {{ "{:,.0f}".format(gesamt_invest_pv).replace(",", "X").replace(".", ",").replace("X", ".") }} €)</div>
             <table>
                 <thead>
                     <tr>
@@ -72,24 +72,24 @@
                     {% for year in amort_pv_data %}
                     <tr>
                         <td><strong>{{ year.year }}</strong></td>
-                        <td><strong>{{ "{:,.0f}".format(year.solar) }} kWh</strong></td>
-                        <td><strong>{{ "{:,.2f}".format(year.brutto_ersparnis) }} €</strong></td>
-                        <td><strong>{{ "{:,.2f}".format(year.netz_kosten) }} €</strong></td>
-                        <td><strong>{{ "{:,.0f}".format(year.kum_ersparnis) }} €</strong></td>
-                        <td><strong>{{ "%.1f"|format(year.fortschritt) }}%</strong></td>
-                        <td><strong>{{ "%.3f"|format(year.eur_kwh_25j) }} €</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.solar).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.brutto_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.netz_kosten).replace(",", "X").replace(".", ",").replace("X", ".") }} €</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.kum_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</strong></td>
+                        <td><strong>{{ "%.1f"|format(year.fortschritt)|replace(".", ",") }}%</strong></td>
+                        <td><strong>{{ "%.3f"|format(year.eur_kwh_25j)|replace(".", ",") }} €</strong></td>
                     </tr>
                     {% endfor %}
                 </tbody>
                 <tfoot>
                     <tr>
                         <td>Gesamt</td>
-                        <td>{{ "{:,.0f}".format(totals.solar) }} kWh</td>
-                        <td>{{ "{:,.2f}".format(totals.ersparnis_solar) }} €</td>
-                        <td>{{ "{:,.2f}".format(totals.kosten_strom) }} €</td>
-                        <td>{{ "{:,.0f}".format(amort_pv_data[-1].kum_ersparnis) }} €</td>
-                        <td>{{ "%.1f"|format(amort_pv_data[-1].fortschritt) }}%</td>
-                        <td>{{ "%.3f"|format(amort_pv_data[-1].eur_kwh_25j) }} €</td>
+                        <td>{{ "{:,.0f}".format(totals.solar).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>
+                        <td>{{ "{:,.2f}".format(totals.ersparnis_solar).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
+                        <td>{{ "{:,.2f}".format(totals.kosten_strom).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
+                        <td>{{ "{:,.0f}".format(amort_pv_data[-1].kum_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
+                        <td>{{ "%.1f"|format(amort_pv_data[-1].fortschritt)|replace(".", ",") }}%</td>
+                        <td>{{ "%.3f"|format(amort_pv_data[-1].eur_kwh_25j)|replace(".", ",") }} €</td>
                     </tr>
                 </tfoot>
             </table>
@@ -108,8 +108,8 @@
             <h3>Investitionsübersicht</h3>
             <p><strong>Jan 2022:</strong> 24.000 € (PV-Anlage + Batterie) + 12.000 € (Wärmepumpe)</p>
             <p><strong>Jan 2024:</strong> 8.000 € (PV-Erweiterung/Wattpilot) + 2.000 € (Wallbox)</p>
-            <p><strong>PV-Gesamt:</strong> {{ "{:,.0f}".format(gesamt_invest_pv) }} €</p>
-            <p><strong>Haushalt-Gesamt:</strong> {{ "{:,.0f}".format(gesamt_invest_haushalt) }} €</p>
+            <p><strong>PV-Gesamt:</strong> {{ "{:,.0f}".format(gesamt_invest_pv).replace(",", "X").replace(".", ",").replace("X", ".") }} €</p>
+            <p><strong>Haushalt-Gesamt:</strong> {{ "{:,.0f}".format(gesamt_invest_haushalt).replace(",", "X").replace(".", ",").replace("X", ".") }} €</p>
             <p><strong>Zusatzinvestitionen:</strong> Heizung 12.000 € ab 2021, Wallbox 2.000 € ab 2024</p>
             <br>
             <p><strong>Strompreise:</strong> 2022/23: 0,30 €/kWh, 2024/25: 0,33 €/kWh, ab 22.2.26: 0,30 €/kWh</p>
@@ -118,7 +118,7 @@
 
         <!-- Haushalts-Amortisation -->
         <div class="section">
-            <div class="section-title">Haushalts-Amortisation (Invest: {{ "{:,.0f}".format(gesamt_invest_haushalt) }} €, inkl. Wärmepumpe)</div>
+            <div class="section-title">Haushalts-Amortisation (Invest: {{ "{:,.0f}".format(gesamt_invest_haushalt).replace(",", "X").replace(".", ",").replace("X", ".") }} €, inkl. Wärmepumpe)</div>
             <table>
                 <thead>
                     <tr>
@@ -135,24 +135,24 @@
                     {% for year in amort_haushalt_data %}
                     <tr>
                         <td><strong>{{ year.year }}</strong></td>
-                        <td><strong>{{ "{:,.2f}".format(year.strom_ersparnis) }} €</strong></td>
-                        <td><strong>{{ "{:,.0f}".format(year.heiz_ersparnis) }} €</strong></td>
-                        <td><strong>{{ "{:,.2f}".format(year.benzin_ersparnis) }} €</strong></td>
-                        <td><strong>{{ "{:,.2f}".format(year.gesamt_ersparnis) }} €</strong></td>
-                        <td><strong>{{ "{:,.0f}".format(year.kum_ersparnis) }} €</strong></td>
-                        <td><strong>{{ "%.1f"|format(year.fortschritt) }}%</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.strom_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.heiz_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.benzin_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</strong></td>
+                        <td><strong>{{ "{:,.2f}".format(year.gesamt_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.kum_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</strong></td>
+                        <td><strong>{{ "%.1f"|format(year.fortschritt)|replace(".", ",") }}%</strong></td>
                     </tr>
                     {% endfor %}
                 </tbody>
                 <tfoot>
                     <tr>
                         <td>Gesamt</td>
-                        <td>{{ "{:,.2f}".format(totals.netto_ersparnis_strom) }} €</td>
-                        <td>{{ "{:,.0f}".format(totals.heiz_ersparnis) }} €</td>
-                        <td>{{ "{:,.2f}".format(totals.benzin_ersparnis) }} €</td>
-                        <td>{{ "{:,.2f}".format(totals.netto_ersparnis) }} €</td>
-                        <td>{{ "{:,.0f}".format(amort_haushalt_data[-1].kum_ersparnis) }} €</td>
-                        <td>{{ "%.1f"|format(amort_haushalt_data[-1].fortschritt) }}%</td>
+                        <td>{{ "{:,.2f}".format(totals.netto_ersparnis_strom).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
+                        <td>{{ "{:,.0f}".format(totals.heiz_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
+                        <td>{{ "{:,.2f}".format(totals.benzin_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
+                        <td>{{ "{:,.2f}".format(totals.netto_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
+                        <td>{{ "{:,.0f}".format(amort_haushalt_data[-1].kum_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
+                        <td>{{ "%.1f"|format(amort_haushalt_data[-1].fortschritt)|replace(".", ",") }}%</td>
                     </tr>
                 </tfoot>
             </table>
