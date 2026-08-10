@@ -1,6 +1,6 @@
 # PAC4200-Energiezähler: Ablesemethode & Tages-Fixpunkte
 
-**Rolle N · Gültig ab 2026-08-08** (nach Fehlerkorrektur, siehe `ENERGIE_FEHLERANALYSE_2026-08-08.md`)
+**Rolle N**
 
 Dieses Dokument beschreibt die **produktive Routine-Methode** zur Erfassung der PAC4200-Energiezähler (Bezug/Einspeisung) und deren Validierung gegen den Fronius Master-SM.
 
@@ -229,16 +229,7 @@ cp backup/db/nq_2026-08_2026-08-08.db nq/db/nq_2026-08.db
 sudo -u admin python3 -m nq.transfer.nq_energy_rollup --day 2026-08-08
 ```
 
-## 10. Änderungshistorie
-
-| Datum | Änderung | Grund |
-|-------|----------|-------|
-| 2026-08-08 | Boundary-Interpolation eingeführt | Lücken-Verlust behoben |
-| 2026-08-08 | Alle Altlasten mit SM korrigiert | Baseline 0% Abweichung |
-| 2026-08-08 | Dokumentation erstellt | Routine-Methode festhalten |
-
 ## Siehe auch
-- `ENERGIE_FEHLERANALYSE_2026-08-08.md` — Detaillierte Fehleranalyse & Korrektur
 - `NQ_TESTS_UND_DB.md` — Schema & Tests
 - `nq/collector/nq_energy.py` — Implementierung
 - `nq/transfer/nq_energy_rollup.py` — Tages-Rollup

@@ -22,7 +22,7 @@ Die Rohwerte (`nq_5min`) bleiben unverändert; `nq_pattern_5min` ist die
 saubere, permanent verfügbare Ableitung.
 
 Start:  python3 -m nq.analysis.nq_pattern [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--day YYYY-MM-DD]
-Doku:   doc/netzqualitaet/NQ_MODUL.md §8, doc/dev_prompt/NQ2-WP6-Analyse/prompt.md.
+Doku:   doc/netzqualitaet/NQ_MODUL.md §8.
 """
 from __future__ import annotations
 

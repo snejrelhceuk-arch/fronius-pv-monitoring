@@ -5,15 +5,10 @@ role: D
 applyTo: "diagnos/integrity.py,diagnos/gap_checks.py"
 tags: [integritaet, gap-scan, rollup, balance, config-parse]
 status: stable
-last_review: 2026-08-08
+last_review: 2026-08-10
 ---
 
 # Diagnos Integritaet
-
-## Changes
-- 2026-08-08: Gap-Scan aus `diagnos/integrity.py` nach `diagnos/gap_checks.py` ausgelagert. `run_all()` und die oeffentlichen Check-Namen bleiben unveraendert; Rolle D bleibt strikt read-only.
-- 2026-06-27: Weniger Fehlalarme + Statusdateien. (1) `check_fronius_attachment_state`: aktuelle Collector-Liveness ist primär — pollt der Collector frisch (≤300 s) ohne Fehlerserie, ist eine ältere/unvollständige gespeicherte Vollprüfung höchstens `warn` (nie `crit`); Assessment führt mit dem Lieferzustand („WR liefern aktuell …"). Reconnect-Versuche zählen nur als Problem, wenn sie fehlschlugen UND der Collector nicht wieder liefert (erfolgreiche/behobene, z. B. nach WR-Firmware-Update, sind Info). (2) Gap-Scan: Lücken, deren Ende > `GAP_SETTLE_S` (25 h) zurückliegt, sind „gesetzt" (Tag abgeschlossen, Aggregationen übernommen) → treiben KEINE Alarmschwere mehr, bleiben aber in `samples`/`settled_gap_count` dokumentiert; neue Felder `fresh_gap_count`/`settled_gap_count`. (3) Neues Modul `diagnos/status_report.py` schreibt aus den read-only Snapshots menschenlesbare RAW-Status.md (Lücken mit Zeitstempel/Größe/Ursachenheuristik) + System-Status.md (Host-Kennwerte) nach `logs/diagnos/`; die Sunset-Mail (`automation/engine/event_notifier.py`) verweist nur noch knapp darauf.
-- 2026-06-20: Gap-Scan ist für `raw_data` und `data_1min` jetzt **daylight-aware** (`_run_gap_scan(..., daylight_aware=True)`, `_gap_in_darkness` via `solar_geometry.sun_position`). Lücken vollständig bei Dunkelheit/Dämmerung (Sonnenhöhe < 1°, = WR-Standby am Tagesende/Nacht) zählen NICHT zur Alarmschwere, bleiben aber in `samples` (Flag `expected_night`) und `gap_count` sichtbar; zusätzliche Felder `night_gap_count`, `daylight_gap_classes`. Severity wird aus den Tag-Lücken gebildet. Ziel: keine Warnung für betrieblich normales WR-Offline bei Dunkelheit, Lücken bleiben dokumentiert.
 
 ## Zweck
 Tiefe read-only Pruefung der Datenkonsistenz: Energiebilanz, Monats-/Jahresrollups, Zeitlueckenklassifikation und JSON-Konfigurationsparse.

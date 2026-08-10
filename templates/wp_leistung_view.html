@@ -406,7 +406,6 @@
             toolbox: {
                 right: 20,
                 feature: {
-                    dataZoom: { yAxisIndex: false },
                     restore: {},
                     saveAsImage: { title: 'PNG speichern' }
                 }
@@ -432,10 +431,6 @@
                     return Math.max(4600, Math.ceil(v.max / 200) * 200);
                 }
             },
-            dataZoom: [
-                { type: 'inside', xAxisIndex: 0, filterMode: 'none' },
-                { type: 'slider', xAxisIndex: 0, height: 24, bottom: 50, filterMode: 'none' }
-            ],
             series: [
                 {
                     name: 'WP-Leistung',
@@ -464,36 +459,16 @@
 
         chart.setOption(option);
 
-        let zoomTimer = null;
-        chart.on('datazoom', function() {
-            if (zoomTimer) clearTimeout(zoomTimer);
-            zoomTimer = setTimeout(updateInfoByCurrentZoom, 120);
-        });
+        // Immer alle Daten anzeigen
+        const stats = computeStatsForRange(points, activeStartTs, activeEndTs);
+        renderInfo(stats, activeStartTs, activeEndTs);
 
         window.addEventListener('resize', () => {
             if (chart) chart.resize();
         });
     }
 
-    function updateInfoByCurrentZoom() {
-        if (!chart || points.length === 0) return;
-        const opt = chart.getOption();
-        const dz = (opt.dataZoom && opt.dataZoom[0]) ? opt.dataZoom[0] : null;
-        if (!dz || dz.start == null || dz.end == null) {
-            const stats = computeStatsForRange(points, activeStartTs, activeEndTs);
-            renderInfo(stats, activeStartTs, activeEndTs);
-            return;
-        }
-
-        const startIdx = Math.floor((dz.start / 100) * (points.length - 1));
-        const endIdx = Math.ceil((dz.end / 100) * (points.length - 1));
-        const safeStart = Math.max(0, Math.min(points.length - 1, startIdx));
-        const safeEnd = Math.max(0, Math.min(points.length - 1, endIdx));
-        const tsFrom = points[Math.min(safeStart, safeEnd)].ts;
-        const tsTo = points[Math.max(safeStart, safeEnd)].ts;
-        const stats = computeStatsForRange(points, tsFrom, tsTo);
-        renderInfo(stats, tsFrom, tsTo);
-    }
+    // updateInfoByCurrentZoom entfernt - alle Daten werden immer vollständig angezeigt
 
     async function loadData() {
         document.getElementById('chartLoading').style.display = 'block';

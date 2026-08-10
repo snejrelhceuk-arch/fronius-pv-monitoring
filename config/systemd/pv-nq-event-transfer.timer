@@ -1,6 +1,6 @@
 [Unit]
 Description=NQ Event-Schnipsel-Transfer alle 5 min (Primary, Rolle N, NQ2 WP4)
-Documentation=https://github.com/mvk/pv-system/blob/main/doc/netzqualitaet/NQ2_ROADMAP.md
+Documentation=https://github.com/mvk/pv-system/blob/main/doc/netzqualitaet/NQ_MODUL.md
 
 [Timer]
 # Alle 5 min — nahe "sofort", deutlich vor der Stale-Event-Kappung (1 h auf Tech).

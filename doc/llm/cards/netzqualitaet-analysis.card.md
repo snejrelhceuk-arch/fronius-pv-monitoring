@@ -5,10 +5,7 @@ role: B
 applyTo: "nq/legacy/**"
 tags: [netzqualitaet, nq, legacy, dfd, export, analyse, api]
 status: stable
-last_review: 2026-08-06
-changes:
-	- 2026-08-06: Legacy-Modul `netzqualitaet/` nach `nq/legacy/` konsolidiert (Code + Monats-DBs). Alle Pfade/Anchors/Cron auf `nq/legacy/` umgestellt; URLs (`/netzqualitaet`, `/api/netzqualitaet/*`) und Blueprint-Name unverändert.
-	- 2026-05-17: UI: removed Min/Max info line from Netzqualitaet view; Backend: ignore implausible extrema in maxima collector (U 200-600 V, f 40-60 Hz); Chart: fixed mobile legend overlap; webserver restarted to apply changes.
+last_review: 2026-08-10
 ---
 
 # Netzqualitaet Analyse

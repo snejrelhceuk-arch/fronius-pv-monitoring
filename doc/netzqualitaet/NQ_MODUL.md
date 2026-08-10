@@ -64,7 +64,7 @@ konservativer wegen der schwächeren Pi4-Plattform).
 > (Kappung bei 1,2 GB) ist damit bestätigt und lässt selbst mit laufender
 > WP-Bridge klare Reserve.
 
-### 3.2 Datenvolumen je Poll-Profil (aus [`PAC4200_PI5_ENTSCHEIDUNGSVORLAGE.md`](PAC4200_PI5_ENTSCHEIDUNGSVORLAGE.md))
+### 3.2 Datenvolumen je Poll-Profil
 
 | Profil | Fast / Medium / Slow | Brutto pro Tag (inkl. SQLite-Overhead) |
 |---|---|---|
@@ -174,8 +174,7 @@ nq_daily     (Retention ~10 a)  + nq_events (Event-RAW-Verweise)
 
 ## 7. Feldtest-Vorbedingung (Phase 0)
 
-Vor finalem Produktions-Code steht der **48 h-Read-Only-Feldtest** (aus der
-Entscheidungsvorlage): Ein kleines Skript pollt Profil 1 und **druckt nur
+Vor finalem Produktions-Code steht der **48 h-Read-Only-Feldtest**: Ein kleines Skript pollt Profil 1 und **druckt nur
 Deltas**, speichert nichts. Erkenntnisziel: Wie oft aktualisiert der PAC4200
 intern RMS-/THD-/Harmonik-Register real? Die gemessenen Refresh-Zeiten legen die
 endgültigen Poll-Raten fest (dichter zu pollen erzeugt nur redundante Reads).
@@ -260,8 +259,6 @@ und aktualisiert dieses Dokument bei Abweichungen.
 - [`../system/ABCDEN_ROLLENMODELL.md`](../system/ABCDEN_ROLLENMODELL.md) — Rolle N
 - [`README.md`](README.md) — NQ-Gesamtübersicht (Legacy + neu)
 - [`MESSTECHNIK.md`](MESSTECHNIK.md) — PAC4200-Fakten, Registerblöcke
-- [`PAC4200_PI5_ENTSCHEIDUNGSVORLAGE.md`](PAC4200_PI5_ENTSCHEIDUNGSVORLAGE.md) — Datenmengen-Rechnung
 - [`METHODEN.md`](METHODEN.md) — Analyseverfahren
 - **[`ENERGIE_ABLESEMETHODE.md`](ENERGIE_ABLESEMETHODE.md)** — PAC4200-Energiezähler: Routine-Ablesemethode, Fixpunkte, Timer-Kette, Validierung
-- **[`ENERGIE_FEHLERANALYSE_2026-08-08.md`](ENERGIE_FEHLERANALYSE_2026-08-08.md)** — Fehlerdiagnose + Korrektur der Tages-Fixpunkte (Lücken-Verlust, Boundary-Interpolation, SM-Korrektur)
 - [`../../nq/README.md`](../../nq/README.md) — Code-Paket

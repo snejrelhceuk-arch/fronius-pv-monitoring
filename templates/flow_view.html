@@ -547,22 +547,49 @@
             .status-badge { padding: 3px 8px; font-size: 9px; }
         }
 
-        /* Handy Portrait: kompakte Darstellung, scrollbar für Status-Daten */
+        /* Handy Portrait: kompakte Darstellung; SVG scrollbar für alle Bubbles */
         @media (max-width: 600px) and (orientation: portrait) {
             body { overflow: auto; }
             .top-nav { padding: 4px 4px 0 4px; }
             .top-nav-inner { border-radius: 8px 8px 0 0; }
             .container { padding: 0 4px 4px 4px; }
             .flow-chart { padding: 4px; border-radius: 8px; }
-            #flow-svg { height: auto; min-height: 250px; max-height: calc(100vh - 180px); aspect-ratio: auto; }
+
+            /* Scroll-Wrapper: inhaltshoch, horizontal wischbar */
+            #flow-svg-scroll {
+                width: 100%;
+                overflow-x: auto;
+                overflow-y: hidden;
+                -webkit-overflow-scrolling: touch;
+                touch-action: pan-x pinch-zoom;
+                overscroll-behavior-x: contain;
+            }
+            /* SVG: feste Pixelgröße per JS (Seitenverhältnis = viewBox → kein Leerraum) */
+            #flow-svg {
+                flex: none;
+                height: auto;
+                width: auto;
+                max-height: none;
+                max-width: none;
+                aspect-ratio: auto;
+                display: block;
+            }
+            /* CSS-Overrides mit width-Zwang neutralisieren */
+            .flow-chart.has-monitor-overlay #flow-svg,
+            .flow-chart.has-monitor-overlay.overlay-hidden #flow-svg {
+                width: auto;
+                max-width: none;
+                margin: 0;
+                transform: none;
+            }
+
             .monitor-overlay { display: none !important; }
             .flow-chart.has-monitor-overlay {
                 --monitor-overlay-w: 0px;
                 --monitor-overlay-gap: 0px;
             }
-            .flow-chart.has-monitor-overlay #flow-svg { max-width: 100%; transform: none; margin: 0 auto; }
-            /* Sub-Kreise (Detail-Erzeuger + Detail-Verbraucher) ausblenden */
-            .sub-producers, .sub-consumers { display: none; }
+            /* Alle Detail-Bubbles sichtbar — per Wischen erreichbar (nicht mehr ausgeblendet) */
+            .sub-producers, .sub-consumers { display: inline; }
             /* Battery-Detail und Inverter-Temps: kompakter, aber sichtbar */
             .battery-detail {
                 flex-wrap: wrap;
@@ -1125,13 +1152,34 @@
     function adjustSvgViewBox(overlayActive) {
         const svg = document.getElementById('flow-svg');
         const isPortraitMobile = window.innerWidth < 600 && window.innerHeight > window.innerWidth;
-        // Portrait-viewBox je nach Sichtbarkeit der Sub-Buttons dynamisch erweitern
-        const subBtnsVisible = document.getElementById('btn-echtzeit') &&
-                               document.getElementById('btn-echtzeit').style.display !== 'none';
+        svg.setAttribute('viewBox', DEFAULT_VIEWBOX);
+
+        let wrapper = document.getElementById('flow-svg-scroll');
         if (isPortraitMobile) {
-            svg.setAttribute('viewBox', subBtnsVisible ? '80 70 500 360' : '80 70 500 320');
+            // Scroll-Wrapper erstellen falls noch nicht vorhanden
+            if (!wrapper) {
+                wrapper = document.createElement('div');
+                wrapper.id = 'flow-svg-scroll';
+                svg.parentNode.insertBefore(wrapper, svg);
+                wrapper.appendChild(svg);
+            }
+            // Feste, angenehme Größe: Breite = 1.35× sichtbar (min 480px), Höhe aus viewBox-Ratio
+            // → kein Leerraum, großzügiger horizontaler Pan-Weg für die rechte Bubble-Gruppe
+            requestAnimationFrame(() => {
+                const avail = (wrapper && wrapper.clientWidth) || (window.innerWidth - 16);
+                const w = Math.max(480, Math.round(avail * 1.35));
+                const h = Math.round(w * 460 / 590);
+                svg.style.width = w + 'px';
+                svg.style.height = h + 'px';
+            });
         } else {
-            svg.setAttribute('viewBox', DEFAULT_VIEWBOX);
+            // Wrapper entfernen bei Querformat / Desktop
+            if (wrapper && wrapper.parentNode) {
+                wrapper.parentNode.insertBefore(svg, wrapper);
+                wrapper.parentNode.removeChild(wrapper);
+            }
+            svg.style.width = '';
+            svg.style.height = '';
         }
     }
 
@@ -2166,17 +2214,8 @@
     setInterval(fetchBackupStatus, 600000);   // Backup-Check 1×/10 Min (SSH-basiert, Cache: 10 Min)
     animate();
 
-    // Mobile Portrait: SVG viewBox auf Hauptknoten beschränken (ohne Sub-Kreise)
-    function adjustSvgForMobile() {
-        // Wird jetzt von adjustSvgViewBox (via syncOverlayLayout) erledigt
-        const svg = document.getElementById('flow-svg');
-        const isPortraitMobile = window.innerWidth < 600 && window.innerHeight > window.innerWidth;
-        if (isPortraitMobile) {
-            const subBtnsVisible = document.getElementById('btn-echtzeit') &&
-                                   document.getElementById('btn-echtzeit').style.display !== 'none';
-            svg.setAttribute('viewBox', subBtnsVisible ? '80 70 500 360' : '80 70 500 320');
-        }
-    }
+    // adjustSvgForMobile: viewBox + width wird von adjustSvgViewBox (via syncOverlayLayout) gesetzt
+    function adjustSvgForMobile() {}
     adjustSvgForMobile();
     syncOverlayLayout();
     window.addEventListener('resize', function() {

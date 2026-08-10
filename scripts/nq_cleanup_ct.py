@@ -13,7 +13,7 @@ Dieses Skript löscht die betroffenen Zeilen:
 
 Aufruf (Dry-Run):   python3 scripts/nq_cleanup_ct.py
 Aufruf (echt):      python3 scripts/nq_cleanup_ct.py --commit
-Doku:  doc/netzqualitaet/NQ2_ROADMAP.md §6 (WP0), doc/dev_prompt/NQ2-WP0-Datenhygiene/prompt.md
+Doku:  doc/netzqualitaet/NQ_MODUL.md (Rolle N, Datenhygiene)
 """
 from __future__ import annotations
 

@@ -125,9 +125,7 @@
     let events = [];
     let currentRows = [];
     let focusEvent = null;      // aktuell fokussiertes Event (Marker-Klick)
-    let lastSnippetEid = null;  // zuletzt bei Zoom eingeblendeter Schnipsel
     let pendingFocus = null;    // Fokus nach Auflösungswechsel nachziehen
-    let dzTimer = null;
 
     function setStatus(ok, msg) {
         $('dot').className = 'dot ' + (ok ? 'ok' : 'err');
@@ -212,17 +210,10 @@
         const isDay = ctx.period === 'tag';
         return {
             backgroundColor: 'transparent',
-            grid: { left: 56, right: 20, top: 20, bottom: isDay ? 64 : 46 },
+            grid: { left: 56, right: 20, top: 20, bottom: 46 },
             tooltip: PVChart.tooltipResponsive({ trigger: 'axis' }),
             xAxis: { type: 'time', axisLine: { lineStyle: { color: '#334155' } }, axisLabel: { color: '#94a3b8' } },
             yAxis: { type: 'value', scale: true, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } }, axisLabel: { color: '#94a3b8' } },
-            dataZoom: isDay ? [
-                { type: 'inside', filterMode: 'none', zoomOnMouseWheel: true, moveOnMouseMove: false },
-                { type: 'slider', height: 16, bottom: 22, filterMode: 'none', brushSelect: false,
-                  borderColor: 'rgba(255,255,255,0.12)', fillerColor: 'rgba(96,165,250,0.15)',
-                  handleStyle: { color: '#60a5fa' }, dataBackground: { lineStyle: { color: '#334155' } },
-                  textStyle: { color: '#94a3b8', fontSize: 10 } }
-            ] : undefined,
             series: [
                 { name: 'min', type: 'line', data: xs.map((x, i) => [x, mn[i]]), lineStyle: { opacity: 0 }, symbol: 'none', stack: 'band', silent: true },
                 { name: 'Spanne', type: 'line', data: xs.map((x, i) => [x, band[i]]), lineStyle: { opacity: 0 }, areaStyle: { color: 'rgba(96,165,250,0.18)' }, symbol: 'none', stack: 'band', silent: true },
@@ -280,7 +271,6 @@
             events = evRes.events || [];
             const rows = aggRes.data || [];
             currentRows = rows;
-            lastSnippetEid = null;
             const qs = (aggRes.quantities || []);
             populateQty(qs);
             if (!rows.length) { chart.clear(); setStatus(false, 'Keine Daten'); return; }
@@ -329,24 +319,14 @@
         if (pq && opts.includes(pq)) { curQty = pq; sel.value = curQty; }
         chart.setOption(bandOption(currentRows, curQty), true);
         const t = e.ts * 1000;
-        chart.dispatchAction({ type: 'dataZoom', startValue: t - 30 * 60000, endValue: t + 30 * 60000 });
         const hhmm = new Date(t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
         $('hint').textContent = `⚡ ${hhmm} · ${e.kind || 'Event'}${e.peak_qty ? ' · ' + e.peak_qty : ''}` +
-            (e.has_snippet ? ' — weiter reinzoomen (Scrollen/Slider) blendet den 200-ms-Schnipsel ein.'
+            (e.has_snippet ? ' — Snippet wird direkt angezeigt.'
                            : ' (kein Schnipsel gespeichert).');
+        // Snippet direkt öffnen wenn vorhanden
+        if (e.has_snippet && e.event_id) openEvent(e.event_id, e.month);
     }
 
-    // Reinzoomen auf ein Snippet-Event blendet den 200-ms-Schnipsel ein.
-    function onZoom() {
-        if (ctx.period !== 'tag') return;
-        let ext;
-        try { ext = chart.getModel().getComponent('xAxis', 0).axis.scale.getExtent(); }
-        catch (_) { return; }
-        const spanMin = (ext[1] - ext[0]) / 60000;
-        if (spanMin > 12) { lastSnippetEid = null; return; }
-        const ev = events.find(x => x.has_snippet && x.ts * 1000 >= ext[0] && x.ts * 1000 <= ext[1]);
-        if (ev && ev.event_id !== lastSnippetEid) { lastSnippetEid = ev.event_id; openEvent(ev.event_id, ev.month); }
-    }
     // ── Event-Drill-down (Overlay) ─────────────────────────────
     let ovSegs = [], ovSeg = 0;
     function openEvent(eid, month) {
@@ -404,7 +384,6 @@
             });
         }
     });
-    chart.on('dataZoom', () => { clearTimeout(dzTimer); dzTimer = setTimeout(onZoom, 300); });
     $('ovClose').addEventListener('click', closeOverlay);
     $('ovBackdrop').addEventListener('click', closeOverlay);
     $('segPrev').addEventListener('click', () => { if (ovSeg > 0) { ovSeg--; renderSeg(); } });

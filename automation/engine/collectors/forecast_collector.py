@@ -13,7 +13,7 @@ Trigger-Zeitpunkte:
 Schreibt Ergebnisse in ObsState UND in forecast_daily (für
 Dashboard + Web-API Kompatibilität).
 
-Siehe: doc/SOLAR_FORECAST_SCAFFOLD.md
+Siehe: doc/collector/SOLAR_FORECAST_SCAFFOLD.md
 """
 
 from __future__ import annotations

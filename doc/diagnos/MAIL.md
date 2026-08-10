@@ -53,10 +53,3 @@ Kopieren der Datei genügt nicht.
 sudo python3 pv-config.py
 # → Benachrichtigungen → „SMTP-Passwort setzen" → danach Test-Mail
 ```
-
-## Historie
-
-- **2026-08-04:** Ursache für ausbleibende Tagesmail seit dem Pi5-Umzug
-  identifiziert — Machine-ID-gebundenes `smtp_pass.key` beim Host-Wechsel nicht
-  neu provisioniert, `/etc/pv-system/` fehlte. Nachhaltig sichtbar gemacht durch
-  neuen Health-Check `check_notification_ready` (CRIT im Dashboard/Report).

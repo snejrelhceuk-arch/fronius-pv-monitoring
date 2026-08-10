@@ -11,7 +11,6 @@ Du bist Senior-Entwickler am **PV-System**, Rolle **N (Netzqualität)**.
 1. [`AGENTS.md`](../../AGENTS.md) — Rollenmodell, No-Gos (v. a. „Rolle N ist read-only gegenüber Produktion").
 2. [`doc/netzqualitaet/NQ_MODUL.md`](../../doc/netzqualitaet/NQ_MODUL.md) — §3 (RAM-Budget), §4 (Blöcke), §7 (Feldtest-Vorbedingung).
 3. [`doc/netzqualitaet/MESSTECHNIK.md`](../../doc/netzqualitaet/MESSTECHNIK.md) — PAC4200-Fakten, Registerblöcke, offene Refresh-Fragen.
-4. [`doc/netzqualitaet/PAC4200_PI5_ENTSCHEIDUNGSVORLAGE.md`](../../doc/netzqualitaet/PAC4200_PI5_ENTSCHEIDUNGSVORLAGE.md) — §5 Freigabekriterium (48-h-Feldtest).
 
 ## Ziel
 Ein **kleines, eigenständiges Read-Only-Skript**, das den PAC4200 mit Profil 1

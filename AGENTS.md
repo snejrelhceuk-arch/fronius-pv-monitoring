@@ -26,6 +26,8 @@
 6. **Keine TODOs in Subdirectories.** Alle offenen Aufgaben gehören in `doc/TODO.md`.
 7. **Veröffentlichung:** Vor jedem Push prüft der Publish-Guard (s. `doc/system/PUBLISH_GUARD.md`). Niemals umgehen.
 8. **Rolle N ist read-only gegenüber Produktions-DATEN.** PAC4200/NQ schreibt nur eigene NQ-DBs, niemals `data.db` oder Aktoren. Tech-Collector arbeitet RAM-first (tmpfs), SD nur selten. (Betrifft **Runtime-Daten**, nicht Code-Deployment — s. Deployment-Policy unten.)
+9. **Doku = IST-Zustand.** Cards und Human-Docs beschreiben ausschließlich den *aktuellen* Stand/Funktion — **kein** „was wann warum geändert" (kein Changelog, keine `## Changes`-Sektion, kein `changes:`-Frontmatter, keine datierten Verlaufslisten). Historie lebt in **git**. Einzige Ausnahme: `doc/meta/KI_BEITRAGSANALYSE.md`.
+10. **UI-Änderungen visuell verifizieren.** Vor „fertig": Ziel-Viewport headless rendern + screenshotten (Browser-Tools) und den Effekt belegen — nicht den Bediener prüfen lassen. Mobile/Portrait immer bei 390×844 gegenprüfen.
 ## Hosts (knapp)
 
 Nach der **REFORMATION** (Umzug der Produktion auf Pi5, 2026-07-11) gilt die Vier-Host-Topologie:
@@ -60,6 +62,14 @@ angepasst) — Primary ist die vollständige Quelle. Deploy-Kommandos + Dienst�
 - Wenn du Code änderst, der durch eine Card abgedeckt ist, **musst** du die Card im selben Commit aktualisieren (mind. `last_review` auf heute).
 - Pre-commit-Hook prüft das (`tools/pre_commit_doc_check.py`).
 - Drift-Engine (Pi5-Cron) erzeugt täglich Tasks in `doc/llm/_drift/tasks/` für übersehene Drift.
+
+## Doku-Prinzip: IST-Zustand-only
+
+- **Human-Docs & Cards = Gegenwart.** Beschreibe, *wie das System heute funktioniert*, nicht seinen Entstehungsweg. Kein Changelog, keine Änderungshistorie, keine Datums-Verlaufslisten, keine „vorher/nachher"-Notizen.
+- **Historie = git.** `git log`/`git blame` ist die vollständige, portable Entwicklungsgeschichte. Kein separater `History/`-Ordner, keine Verlaufs-Doku im Workspace.
+- **Entwicklungsartefakte gehören nicht ins Doku-Set.** Datierte Audits, Tiefenprüfungen, Roadmaps, Entscheidungsvorlagen, Snapshots, Dev-Prompts sind flüchtig — nach Einarbeitung in den IST-Stand entfernen (git bewahrt sie).
+- **Einzige Ausnahme:** `doc/meta/KI_BEITRAGSANALYSE.md` (Mensch/KI-Beitragsanalyse) darf datierte Stände führen.
+- Erzwungen durch den Pre-commit-Hook (`tools/pre_commit_doc_check.py`) für geänderte Cards/Docs.
 
 ## Konvention für deine Antworten
 

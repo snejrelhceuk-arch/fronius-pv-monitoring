@@ -5,15 +5,10 @@ role: A
 applyTo: "db_init.py"
 tags: [db, schema, raw-data, aggregat]
 status: stable
-last_review: 2026-07-02
+last_review: 2026-08-10
 ---
 
 # DB-Schema
-
-## Changes
-- 2026-07-02: **STATS-DB** `data_stats.db` (SD, permanent) mit `data_5min_permanent` (5-min-Downsample, Schema = `data_1min`) eingeführt — hält Tag-Chart-Daten dauerhaft (RAM-DB bleibt bei 90 T). Producer/Backfill `tools/build_stats_db.py`; Tages-Archiv `scripts/stats_archive_daily.sh` (Cron 00:20). Web hängt sie read-only an (`db_utils.get_db_connection` ATTACH `stats`, `config.STATS_DB_PATH`); Tag-Endpunkte via `routes/helpers.py:tag_table()`. **Kein** `db_init.py`-Pflichttabellen-Eintrag (eigene DB, entkoppelt).
-- 2026-06-20 (b): `daily_data` um `P_PV_total_max` (REAL) erweitert — zeitgleicher System-Peak (DC1+DC2+F2+F3), nicht F1-only. Quelle `db_schema_v4_tech.sql`; Migration `db_init.py` (ALTER TABLE idempotent). Producer: `collector/aggregate/daily.py`.
-- 2026-06-20: `data_1min` um Leistungsfaktor-Spalten erweitert: `PF_Netz_avg/min/max`, `PF_Inv_avg/min/max` (REAL). Quelle `db_schema_1min.sql`; Migration via `db_init.py` (ALTER TABLE, idempotent). Producer: `collector/aggregate/min1.py`.
 
 ## Zweck
 Schema-Übersicht der zentralen `data.db` (SQLite). Pflichttabellen, Aggregat-Pipeline-Tabellen, Nebengeräte-Tabellen, Retention-Politik. Ausgangspunkt für jede Datenfrage.
@@ -23,6 +18,7 @@ Schema-Übersicht der zentralen `data.db` (SQLite). Pflichttabellen, Aggregat-Pi
 - **DB-Helper:** `db_utils.py`
 - **Schema-Quelle (SQL):** `doc/collector/schema/db_schema_v4_tech.sql`, `doc/collector/schema/db_schema_wattpilot.sql`
 - **Retention-Konstanten:** `config.py` (`DATA_1MIN_RETENTION_DAYS=90` u. a.)
+- **Stats-DB (permanent, separat):** `config.STATS_DB_PATH` (`data_stats.db`), Producer `tools/build_stats_db.py`, Tages-Archiv `scripts/stats_archive_daily.sh`, ATTACH via `db_utils.py`
 
 ## Inputs / Outputs
 - **Inputs:** Modbus/HTTP-Werte vom Fronius-Collector (`raw_data`), FritzDECT (`fritzdect_readings`), Wattpilot (`wattpilot_readings`).
@@ -49,6 +45,9 @@ Schema-Übersicht der zentralen `data.db` (SQLite). Pflichttabellen, Aggregat-Pi
 
 **Automation:**
 - `automation_log` — Aktor-Resultate (geschrieben durch `automation/engine/actuator.py`).
+
+**Stats-DB (`data_stats.db`, separat, permanent):**
+- `data_5min_permanent` — 5-min-Downsample (Schema = `data_1min`), hält Tag-Chart-Daten **dauerhaft** (RAM-DB bleibt 90 T). Web hängt sie read-only an (ATTACH `stats` in `db_utils.py`, `config.STATS_DB_PATH`); Tag-Endpunkte via `routes/helpers.py:tag_table`. Eigene DB, **kein** `db_init.py`-Pflichteintrag.
 
 ## Invarianten
 - Pflichttabellen müssen existieren — `db_init.py` **prüft** `REQUIRED_TABLES` (kein CREATE der Kern-Tabellen); die Anlage erfolgt aus dem SQL-Schema (`doc/collector/schema/db_schema_v4_tech.sql`, `db_schema_1min.sql`). `db_init.py` legt nur Neben-/Forecast-Tabellen via `CREATE TABLE IF NOT EXISTS` an.

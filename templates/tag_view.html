@@ -2219,10 +2219,6 @@
                 visibleDays = 21; // Tablet Landscape: 21 Tage
             }
             
-            // DataZoom Start/End berechnen
-            const zoomEnd = 100; // Immer bis zum Ende (aktueller Tag)
-            const zoomStart = Math.max(0, 100 - (visibleDays / daysInMonth * 100));
-            
             const option = {
                 animation: false,
                 tooltip: {
@@ -2330,42 +2326,10 @@
                 } : {
                     left: '3%',
                     right: '4%',
-                    bottom: daysInMonth > visibleDays ? '100px' : '80px',
+                    bottom: '80px',
                     top: '35px',
                     containLabel: true
                 },
-                dataZoom: daysInMonth > visibleDays ? [
-                    {
-                        type: 'slider',
-                        show: true,
-                        xAxisIndex: 0,
-                        start: zoomStart,
-                        end: zoomEnd,
-                        bottom: 15,
-                        height: 20,
-                        handleSize: '110%',
-                        handleStyle: {
-                            color: '#667eea'
-                        },
-                        textStyle: {
-                            color: '#666'
-                        },
-                        borderColor: '#ddd',
-                        fillerColor: 'rgba(102, 126, 234, 0.2)',
-                        labelFormatter: function(value) {
-                            return Math.floor(value + 1) + '.';
-                        }
-                    },
-                    {
-                        type: 'inside',
-                        xAxisIndex: 0,
-                        start: zoomStart,
-                        end: zoomEnd,
-                        zoomOnMouseWheel: true,
-                        moveOnMouseMove: true,
-                        moveOnMouseWheel: true
-                    }
-                ] : [],
                 xAxis: {
                     type: 'category',
                     data: days,

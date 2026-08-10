@@ -554,7 +554,6 @@
             await loadColorConfig();
             
             chart = echarts.init(document.getElementById('mainChart'));
-            chart.on('datazoom', checkLiveMode);
             setupEventListeners();
             _ezApplyDay();          // betrachteten Tag (1 h) von anderen Seiten übernehmen
             updateNavButtons();
@@ -925,20 +924,7 @@
                     }
                 },
                 yAxis: yAxisConfigs,
-                series: series,
-                dataZoom: [
-                    {
-                        type: 'inside',
-                        start: 0,
-                        end: 100
-                    },
-                    {
-                        type: 'slider',
-                        start: 0,
-                        end: 100,
-                        bottom: '4%'
-                    }
-                ]
+                series: series
             };
             
             // WICHTIG: notMerge=true → Chart komplett neu aufbauen
@@ -959,25 +945,14 @@
             // 10-s-Reihe wird beim Navigieren/Umschalten geladen; Live-PAC-Werte
             // stehen unter /pac4200 und /netzqualitaet/live bereit.
             if (currentDB === 'nq') { stopLiveUpdate(); return; }
-            // Live-Modus: Heute (kein Offset) + DataZoom am rechten Rand + aktive Topics
+            // Live-Modus: Heute (kein Offset) + aktive Topics
             if (currentOffset !== 0 || activeTopics.length === 0 || !useMaxResolution || !canUseMaxResolution()) {
                 stopLiveUpdate();
                 return;
             }
             
-            // Prüfe DataZoom-Position
-            const option = chart.getOption();
-            if (option && option.dataZoom && option.dataZoom.length > 0) {
-                const end = option.dataZoom[0].end;
-                if (end >= 98) {
-                    startLiveUpdate();
-                } else {
-                    stopLiveUpdate();
-                }
-            } else {
-                // Kein DataZoom = alles sichtbar = am rechten Rand
-                startLiveUpdate();
-            }
+            // Vollansicht ohne Zoom = Live-Modus aktiv
+            startLiveUpdate();
         }
         
         function startLiveUpdate() {

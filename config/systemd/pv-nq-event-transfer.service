@@ -1,6 +1,6 @@
 [Unit]
 Description=PV-System NQ Event-Schnipsel-Transfer (Tech→Primary, Rolle N, NQ2 WP4)
-Documentation=https://github.com/mvk/pv-system/blob/main/doc/netzqualitaet/NQ2_ROADMAP.md
+Documentation=https://github.com/mvk/pv-system/blob/main/doc/netzqualitaet/NQ_MODUL.md
 After=network-online.target
 Wants=network-online.target
 

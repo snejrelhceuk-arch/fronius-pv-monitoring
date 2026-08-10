@@ -195,10 +195,3 @@ Folgende Felder werden aus `raw_data` gelesen und in ObsState abgebildet:
 > gespeichert. Die Werte sind vorzeichenbehaftet (positiv=Bezug, negativ=Einspeisung).
 
 ---
-
-## Änderungshistorie
-
-- **8. Mär 2026**: Netz-Phasenströme (I_L1/L2/L3_Netz) und Automation-ObsState-Felder dokumentiert
-- **8. Feb 2026**: Dokument erstellt nach Systemcheck
-- **6. Feb 2026**: Power-Integration für F2/F3 und Netz implementiert
-- **5. Feb 2026**: Power-Integration für W_DC1/W_DC2 implementiert

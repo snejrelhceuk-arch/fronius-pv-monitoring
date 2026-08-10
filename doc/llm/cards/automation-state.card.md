@@ -5,14 +5,10 @@ role: C
 applyTo: "automation/engine/obs_state.py"
 tags: [state, obs-state, persist, ram-db, configs]
 status: stable
-last_review: 2026-07-25
+last_review: 2026-08-10
 ---
 
 # Automation-State
-
-## Changes
-- 2026-07-25 (Schaltlog-Encoding-Fix): `automation/engine/schaltlog.py` öffnet alle Dateien jetzt explizit mit `encoding='utf-8'` (vorher Locale-Default). Unter der systemd-Locale `LANG=de_DE` (= latin-1) scheiterte **jeder** Schaltlog-Eintrag mit `→` bzw. Nicht-latin-1-Zeichen (`UnicodeEncodeError`) → SOC-/HP-/Klima-Schaltungen fehlten in `logs/schaltlog.txt` und damit in den Flow-Infozeilen (SOC-Gründe enthalten fast immer `→`, z. B. „SOC_MAX 75 → 100 %“). Bestandsdatei einmalig latin-1→utf-8 konvertiert; Leser (`routes/system/battery.py:_fetch_hp_status`) liest utf-8 mit `errors='replace'`. `automation_log`-DB-Persistenz bleibt bekannt gestört — der Actuator schreibt weiterhin verlässlich `schaltlog.txt` (maßgebliche Quelle der Anzeige).
-- 2026-06-20: `automation/engine/diagnos_alert_state.py` — RAW-Datenlücken (`integrity:gaps:raw_data`) sind in der Sunset-Mail jetzt „verfallend": Severity wird auf höchstens `warn` gedeckelt (`_effective_severity`), Fingerprint ist bewusst grob (nur effektive Severity → täglich wandernde Lücken alarmieren nicht erneut), und der 7-Tage-Reminder entfällt für diese Klasse (`_EXPIRING_CHECKS`). Erstauftreten wird einmal gemeldet, danach unterdrückt; die Lücken bleiben in der separaten Ausfall-/Gap-Aufstellung der Mail sichtbar (diagnos-Output unverändert).
 
 ## Zweck
 Wo lebt welcher Zustand? Welche Datei/Tabelle ist Quelle der Wahrheit? Klärung der Trennung zwischen RAM-DB (transient), Persist-DB (`data.db`) und Config-JSONs.

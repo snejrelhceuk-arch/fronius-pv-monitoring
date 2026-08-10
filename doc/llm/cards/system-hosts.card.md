@@ -5,9 +5,7 @@ role: meta
 applyTo: "scripts/**"
 tags: [hosts, deployment, rsync, sync, pi, tech, failover, kueche, rolle-n]
 status: stable
-last_review: 2026-08-06
-changes:
-	- 2026-08-06: Card angelegt. Deployment auf integrierte Pi's (Tech/FB/Küche) ist autorisiert (wie Primary) — s. AGENTS.md Deployment-Policy. Dienst→Host-Map + Sync-Werkzeuge + Tech-Deploy-Rezept dokumentiert.
+last_review: 2026-08-10
 ---
 
 # System Hosts + Deployment

@@ -44,6 +44,16 @@ ALLOWED_DOMAIN = {
 
 CODE_ANCHOR_RE = re.compile(r"`([^`]+\.(?:py|json|md|sh|service|timer|yaml|yml))(?::([\w_][\w\d_]*))?`")
 
+# Doku = IST-Zustand: verbotene Changelog-/Historie-Konstrukte (Historie lebt in git)
+HISTORY_HEADING_RE = re.compile(
+    r"(?mi)^#{1,6}\s+(changes|changelog|change[-\s]?log|\u00e4nderungshistorie|"
+    r"versionshistorie|revision history|historie|history)\b"
+)
+# Human-Docs mit erlaubter datierter Historie (Ausnahmen)
+HISTORY_ALLOWED_DOCS = {
+    "doc/meta/KI_BEITRAGSANALYSE.md",
+}
+
 
 def _staged_files() -> list[Path]:
     """Liste aller fuer Commit gestagten Dateien, relativ zum Repo-Root."""
@@ -101,7 +111,15 @@ def _check_card(card_path: Path, errors: list[str]) -> None:
                     f"{rel}: last_review={d} != heute ({today}) "
                     "- Card geaendert ohne last_review-Update"
                 )
+    if "changes" in fm:
+        errors.append(
+            f"{rel}: 'changes:'-Frontmatter verboten (Doku = IST-Zustand; Historie in git)"
+        )
     body = text[body_offset:]
+    if HISTORY_HEADING_RE.search(body):
+        errors.append(
+            f"{rel}: Changelog-/Historie-Sektion verboten (Doku = IST-Zustand; Historie in git)"
+        )
     seen: set[str] = set()
     for m in CODE_ANCHOR_RE.finditer(body):
         path_part = m.group(1)
@@ -133,6 +151,18 @@ def _check_index_consistency(errors: list[str]) -> None:
         )
 
 
+def _check_human_doc(doc_path: Path, errors: list[str]) -> None:
+    """Human-Doc (doc/**/*.md, keine Card) darf keine Changelog-/Historie-Sektion tragen."""
+    rel = doc_path.relative_to(REPO_ROOT)
+    if rel.as_posix() in HISTORY_ALLOWED_DOCS:
+        return
+    text = doc_path.read_text(encoding="utf-8")
+    if HISTORY_HEADING_RE.search(text):
+        errors.append(
+            f"{rel}: Changelog-/Historie-Sektion verboten (Doku = IST-Zustand; Historie in git)"
+        )
+
+
 def main() -> int:
     staged = _staged_files()
     changed_cards = [
@@ -143,6 +173,14 @@ def main() -> int:
     errors: list[str] = []
     for card in changed_cards:
         _check_card(card, errors)
+    changed_docs = [
+        p for p in staged
+        if p.is_file() and p.suffix == ".md"
+        and p.is_relative_to(REPO_ROOT / "doc")
+        and not p.is_relative_to(CARDS_DIR)
+    ]
+    for doc in changed_docs:
+        _check_human_doc(doc, errors)
     if any(p.is_relative_to(REPO_ROOT / "doc" / "llm") for p in staged):
         _check_index_consistency(errors)
 

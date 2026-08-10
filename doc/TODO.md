@@ -119,7 +119,7 @@ Longterm-Offload-Skript, Einmal-Skripte entfernt (Snapshot auf Pi5-FB).
 - [ ] Datenreduktion fuer Visualisierung: Min/Max/Spread/Std pro 5min-Bucket
 - [ ] Baender-Darstellung (min/max als Flaeche + Mittelwert als Linie)
 
-### NQ-Modul (Rolle N) — aus Tiefenpruefung 2026-07-12 (`doc/netzqualitaet/NQ_TIEFENPRUEFUNG_2026-07-12.md`)
+### NQ-Modul (Rolle N)
 
 > Pipeline am 2026-07-13 aktiviert + end-to-end verifiziert (inkl. Harmonische). Offene Folgepunkte:
 
@@ -127,7 +127,7 @@ Longterm-Offload-Skript, Einmal-Skripte entfernt (Snapshot auf Pi5-FB).
 - [ ] **tmpfs-Schema-Migration robuster:** `open_db` nutzt `CREATE TABLE IF NOT EXISTS` → geaenderte tmpfs-Tabellen (z. B. `nq_raw_medium` `ts`→`ts_ms`) werden bei Poller-Neustart NICHT migriert (Insert-Fehler bis manuellem Drop). Versions-/Migrations-Check beim Poller-Start ergaenzen.
 - [ ] **NQ-Units in Standard-Deployment aufnehmen:** `install_nq_services.sh` in `install_services.sh` bzw. Provisionierung referenzieren, damit NQ nach Reinstall/Reboot nicht manuell vergessen wird.
 
-### NQ-Energiezähler (Fehleranalyse 2026-08-08, `doc/netzqualitaet/ENERGIE_FEHLERANALYSE_2026-08-08.md`)
+### NQ-Energiezähler
 
 > Ablesemethode korrigiert (Randwert-Interpolation auf Mitternacht, energieerhaltend) + Fixpunkte rückwirkend bereinigt. Auf sauberen Tagen stimmt PAC jetzt bis <1 % mit dem SM. Offene Folgepunkte:
 

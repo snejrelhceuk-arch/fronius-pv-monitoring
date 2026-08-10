@@ -7,7 +7,7 @@
 > `nq_5min` statt `nq_agg_10s`, und Energie-Deltas laufen randscharf ueber
 > Mitternachts-Boundaries. Fuer aktuelle Codearbeit zuerst die Cards in
 > [`../llm/INDEX.md`](../llm/INDEX.md) lesen; fuer Energie siehe
-> [`ENERGIE_FEHLERANALYSE_2026-08-08.md`](ENERGIE_FEHLERANALYSE_2026-08-08.md).
+> [`ENERGIE_ABLESEMETHODE.md`](ENERGIE_ABLESEMETHODE.md).
 
 **Bezug:** [`NQ_MODUL.md`](NQ_MODUL.md) (Architektur), [`MESSTECHNIK.md`](MESSTECHNIK.md)
 (verifizierte Register), [`PAC4200-Modbus.md`](PAC4200-Modbus.md) (vollständige

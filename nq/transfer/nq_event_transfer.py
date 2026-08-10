@@ -12,7 +12,7 @@ Rollen-Reinheit: read-only ggü. Produktion; schreibt nur NQ-DBs.
 
 Start:  python3 -m nq.transfer.nq_event_transfer [--hours N]
 Timer:  in pv-nq-agg-transfer integrierbar oder pv-nq-event-transfer.
-Doku:   doc/netzqualitaet/NQ_MODUL.md §7, doc/dev_prompt/EVENT/prompt.md.
+Doku:   doc/netzqualitaet/NQ_MODUL.md §7.
 """
 from __future__ import annotations
 

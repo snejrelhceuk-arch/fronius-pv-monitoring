@@ -25,8 +25,7 @@ Tech-tmpfs und niemals in `data.db` oder Aktoren.
 | Welche PAC4200-Register sind verifiziert? | [`MESSTECHNIK.md`](MESSTECHNIK.md), [`PAC4200-Modbus.md`](PAC4200-Modbus.md) |
 | Wie laufen Tech-Collector, Transfer und Aggregation? | [`../llm/cards/netzqualitaet-nq-collector.card.md`](../llm/cards/netzqualitaet-nq-collector.card.md), [`../llm/cards/netzqualitaet-nq-aggregation.card.md`](../llm/cards/netzqualitaet-nq-aggregation.card.md) |
 | Wie funktioniert Spektralanalyse/THD/HF-NF-VLF? | [`../llm/cards/netzqualitaet-nq-analysis-events.card.md`](../llm/cards/netzqualitaet-nq-analysis-events.card.md) |
-| Warum sind PAC-Energiewerte randscharf? | [`ENERGIE_FEHLERANALYSE_2026-08-08.md`](ENERGIE_FEHLERANALYSE_2026-08-08.md), [`ENERGIE_ABLESEMETHODE.md`](ENERGIE_ABLESEMETHODE.md) |
-| Welche alten NQ-Phasen sind nur noch Historie? | [`migration/`](migration/), [`NQ2_ROADMAP.md`](NQ2_ROADMAP.md) |
+| Warum sind PAC-Energiewerte randscharf? | [`ENERGIE_ABLESEMETHODE.md`](ENERGIE_ABLESEMETHODE.md) |
 
 ## Aktuelle Architektur
 
@@ -45,12 +44,10 @@ im NQ-Collector; Produktionsdaten bleiben read-only.
    RAM-first-Entscheidung, Retention und Betriebsregeln.
 2. **Messtechnik:** [`MESSTECHNIK.md`](MESSTECHNIK.md) fuer verifizierte
    Messgroessen; [`PAC4200-Modbus.md`](PAC4200-Modbus.md) nur bei Registerarbeit.
-3. **Energie:** [`ENERGIE_FEHLERANALYSE_2026-08-08.md`](ENERGIE_FEHLERANALYSE_2026-08-08.md)
-   zuerst, danach [`ENERGIE_ABLESEMETHODE.md`](ENERGIE_ABLESEMETHODE.md).
+3. **Energie:** [`ENERGIE_ABLESEMETHODE.md`](ENERGIE_ABLESEMETHODE.md) —
+   Routine-Ablesemethode, Tages-Fixpunkte, SM-Validierung.
 4. **Betrieb/Tools:** [`TOOLS.md`](TOOLS.md) nur fuer Offline-/Analysewerkzeuge,
    nicht fuer den heissen Collector-Pfad.
-5. **Historie:** [`NQ2_ROADMAP.md`](NQ2_ROADMAP.md) und Tiefenpruefungen nur
-   zur Nachverfolgung erledigter Work-Packages lesen.
 
 ## Leseordnung fuer LLMs
 
@@ -71,5 +68,4 @@ Human-Dokus sind fuer Methodik, Betrieb und historische Begruendung da.
 Smart-Meter-basierte NQ-Auswertung. Diese Inhalte sind fachlich nuetzlich fuer
 DFD und Boundary-Analyse, aber nicht mehr der aktuelle Architekturpfad.
 
-Historische Zwischenstaende liegen unter [`migration/`](migration/). Neue offene
-Aufgaben gehoeren nach [`../TODO.md`](../TODO.md), nicht in Unterordner-TODOs.
+Offene Aufgaben gehoeren nach [`../TODO.md`](../TODO.md), nicht in Unterordner-TODOs.
