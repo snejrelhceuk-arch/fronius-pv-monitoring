@@ -7,18 +7,24 @@ Kurzreferenz für Betrieb und Fehlersuche. LLM-Card:
 
 Es ist **kein** 06:00-Cron, sondern der **Sunset-Tagesbericht**: eine
 24h-Zusammenfassung (Sunset gestern → Sunset heute) aus `hourly_data` plus den
-neuen/eskalierten Diagnos-Auffälligkeiten. Ausgelöst wird der Versand vom
-Automation-Daemon, sobald `is_day` von `True` auf `False` kippt (Sonnenuntergang).
+neuen/eskalierten Diagnos-Auffälligkeiten (Health, Integrität und Netzqualität
+Rolle N). Ausgelöst wird der Versand vom Automation-Daemon, sobald `is_day` von
+`True` auf `False` kippt (Sonnenuntergang).
 
 Ablauf:
 
 1. `automation_daemon` erkennt Sunset (`is_day` True→False).
-2. `EventNotifier.sende_sunset_bericht()` sammelt Energie-/Health-Daten.
-3. `_sende_sunset_mail()` verschickt via `notify/mail.py:smtp_versand`.
-4. Dedup-Marker in `config/event_notifier_dedup.json` verhindert Doppelversand
+2. `EventNotifier.sende_sunset_bericht()` sammelt Energie-/Health-/Integrity-/NQ-Daten.
+3. Die Textzeilen baut [`notify/report_format.py`](../../automation/engine/notify/report_format.py);
+   `_sende_sunset_mail()` verschickt via `notify/mail.py:smtp_versand`.
+4. `write_status_reports()` schreibt `logs/diagnos/{RAW,System,Netz}-Status.md`;
+   die Mail verweist nur darauf.
+5. Dedup-Marker in `config/event_notifier_dedup.json` verhindert Doppelversand
    (1×/Tag, Reset bei Tageswechsel).
 
-Dieselbe Infrastruktur trägt auch Sofort- und Integrity-Alarme.
+Dieselbe Infrastruktur trägt auch Sofort- und Integrity-Alarme. NQ-Befunde
+nutzen den gleichen SMTP-/Dedup-Weg, haben aber einen eigenen Diff-State
+(`config/nq_alert_state.json`).
 
 ## Konfiguration
 

@@ -28,6 +28,7 @@ STATUS_DIR = os.path.join(BASE_DIR, 'logs', 'diagnos')
 
 RAW_STATUS_FILE = 'RAW-Status.md'
 SYSTEM_STATUS_FILE = 'System-Status.md'
+NETZ_STATUS_FILE = 'Netz-Status.md'
 
 _SEV_LABEL = {'ok': 'OK', 'warn': 'WARN', 'crit': 'KRITISCH', 'fail': 'FEHLER'}
 
@@ -197,7 +198,70 @@ def _build_system_status(health_data: Optional[dict]) -> str:
     else:
         lines.append('_Keine — alle Dienste, Frischewerte und Backups im grünen Bereich._')
 
+    log = by.get('log_health')
+    if log and log.get('files'):
+        lines += [
+            '', '## Wartungs-/Diagnose-Logs (logs/)', '',
+            f'_Gesamt: {log.get("file_count", "?")} Dateien, {log.get("total_mb", "?")} MB '
+            f'· Status: {_sev(log.get("severity"))}_',
+            '', '| Datei | Größe | Hinweis |', '| --- | ---: | --- |',
+        ]
+        for f in log['files'][:8]:
+            hinweis = 'endlos (Rechtsnachweis)' if f.get('endless') else ''
+            lines.append(f'| {f.get("name")} | {f.get("size_mb")} MB | {hinweis} |')
+
     lines += ['', '---', 'Vollstatus: `python3 -m diagnos.health --pretty`']
+    return '\n'.join(lines) + '\n'
+
+
+def _build_netz_status(nq_data: Optional[dict]) -> str:
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    host = (nq_data or {}).get('host', os.uname().nodename)
+    by = {c.get('check'): c for c in (nq_data or {}).get('checks', [])}
+    pf = by.get('nq:pipeline_freshness', {})
+    ef = by.get('nq:energy_freshness', {})
+    svc = by.get('nq:services', {})
+    ev = by.get('nq:events_recent', {})
+
+    lines = [
+        '# Netz-Status — PAC4200 / Netzqualitaet (Rolle N)',
+        '',
+        f'_Stand: {now} · Host: {host} · Gesamt: {_sev((nq_data or {}).get("overall"))}_',
+        '',
+        'Read-only-Beobachtung des NQ-Subsystems. Die PAC4200-Hardware liest der',
+        'Tech-Collector; frische Aggregate hier beweisen die Kette',
+        'PAC → Tech → Transfer → Aggregation.',
+        '',
+        '| Kennwert | Wert | Status |',
+        '| --- | --- | --- |',
+        f'| Pipeline (5-min-Aggregat) | letzter Block {pf.get("last_utc", "—")} UTC '
+        f'(Alter {_human_duration(pf.get("age_s", 0))}) | {_sev(pf.get("severity"))} |',
+        f'| Tagesenergie-Rollup | letzter Tag {ef.get("last_day", "—")} '
+        f'({ef.get("days_behind", "—")} d zurück) | {_sev(ef.get("severity"))} |',
+        f'| Netzereignisse ({ev.get("window_h", 24)} h) | {ev.get("count", 0)} '
+        f'(max Severity {ev.get("max_severity", 0)}) | {_sev(ev.get("severity"))} |',
+    ]
+
+    states = svc.get('states') or {}
+    lines += ['', '## Primary-NQ-Timer', '']
+    if svc.get('skipped'):
+        lines.append(f'_{svc.get("detail", "—")}_')
+    elif states:
+        lines += ['| Timer | Zustand |', '| --- | --- |']
+        for unit, st in states.items():
+            lines.append(f'| {unit} | {st} |')
+    else:
+        lines.append('_Keine NQ-Timer installiert._')
+
+    bands = ev.get('bands') or {}
+    if bands:
+        lines += ['', f'## Netzereignisse nach Band (letzte {ev.get("window_h", 24)} h)', '',
+                  '| Band | Anzahl |', '| --- | ---: |']
+        for band, cnt in bands.items():
+            lines.append(f'| {band} | {cnt} |')
+
+    lines += ['', '---',
+              'Vollstatus: `python3 -m diagnos.nq_health --pretty` · Web: /netzqualitaet, /pac4200']
     return '\n'.join(lines) + '\n'
 
 
@@ -214,8 +278,9 @@ def write_status_reports(
     integrity_data: Optional[dict] = None,
     health_data: Optional[dict] = None,
     out_dir: Optional[str] = None,
+    nq_data: Optional[dict] = None,
 ) -> dict:
-    """Schreibt RAW-Status.md + System-Status.md und liefert {name: {path,size}}."""
+    """Schreibt RAW-/System-/Netz-Status.md und liefert {name: {path,size}}."""
     out_dir = out_dir or STATUS_DIR
     result = {}
     try:
@@ -227,6 +292,11 @@ def write_status_reports(
             os.path.join(out_dir, SYSTEM_STATUS_FILE),
             _build_system_status(health_data),
         )
+        if nq_data is not None:
+            result[NETZ_STATUS_FILE] = _write(
+                os.path.join(out_dir, NETZ_STATUS_FILE),
+                _build_netz_status(nq_data),
+            )
     except OSError:
         # Statusdateien sind Beiwerk; Fehler dürfen die Mail nicht verhindern.
         pass
@@ -235,8 +305,9 @@ def write_status_reports(
 
 def main():
     """Standalone: aktuelle Snapshots ziehen und Statusdateien schreiben."""
-    from diagnos import health, integrity
-    written = write_status_reports(integrity.run_all(), health.run_all())
+    from diagnos import health, integrity, nq_health
+    written = write_status_reports(
+        integrity.run_all(), health.run_all(), nq_data=nq_health.run_all())
     for name, info in written.items():
         print(f'{name}: {info["path"]} ({info["size"]} Bytes)')
 

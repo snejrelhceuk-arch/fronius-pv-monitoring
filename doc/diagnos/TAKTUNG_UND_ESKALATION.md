@@ -1,89 +1,61 @@
 # Taktung und Eskalation — Diagnos D
 
-**Stand:** 16. Maerz 2026  
-**Status:** Planungsdokument
+## Leitlinie
 
----
+Keine kalenderbasierten Neustarts. Reaktion ist immer **lesen →
+klassifizieren → melden**. Eingriffe (Restart/Reboot) sind kein Bestandteil von
+Diagnos.
 
-## 1. Leitlinie
+## Taktung (IST)
 
-Keine kalenderbasierten Neustarts des Collectors.
+Die Checks laufen im Automation-Daemon
+([`automation/engine/automation_daemon.py`](../../automation/engine/automation_daemon.py)):
 
-Restarts oder Reboots sind nur dann sinnvoll, wenn die Diagnos-Schicht einen
-konkreten Fehlerzustand erkennt und klassifiziert. Standardreaktion ist daher:
+| Takt | Was |
+|---|---|
+| **alle 10 min** | Sofort-Alarm-Prüfung: `pruefe_integrity_alarme()` + `pruefe_health_alarme()` (nur crit/fail-Whitelist) |
+| **bei Sonnenuntergang** (`is_day` True→False) | Sunset-Tagesbericht: voller Health-/Integrity-/NQ-Snapshot + Statusdateien |
+| **on demand** | `python3 -m diagnos.health\|integrity\|nq_health --pretty` |
 
-1. lesen
-2. klassifizieren
-3. melden
-4. erst dann gezielt eingreifen
+Der Sunset-Bericht schreibt bei jedem Lauf `logs/diagnos/RAW-Status.md`,
+`System-Status.md` und `Netz-Status.md` neu.
 
----
+## Sofort-Alarme (crit/fail, 1×/Tag pro Key)
 
-## 2. Empfohlene Taktung
+Whitelist — nur fachlich zeitkritische Zustände lösen sofort aus, alles andere
+wartet auf den Sunset-Bericht:
 
-### Alle 30 bis 60 Sekunden
+- **Health:** `cpu_temp`, `throttle`, `disk_root`, `service:<unit>`.
+- **Integrität:** Collector inaktiv (>300 s), Fehlerstrang (≥5 Polls),
+  fehlgeschlagener Reconnect (nur wenn der Collector nicht wieder liefert).
 
-- `raw_data`-Freshness
-- Prozess lebt / systemd aktiv
-- CPU-Temperatur
-- Unterspannung / Throttling
-- LAN / API kurz erreichbar
+Der Versand ist persistent dedupliziert (`config/event_notifier_dedup.json`,
+Reset bei Tageswechsel).
 
-### Alle 5 Minuten
+## Sunset-Diff-Filter (WARN-Ebene)
 
-- `data_1min`, `data_15min` aktuell
-- lokale Datentraegerbelegung
-- Journal-Fehler kurz scannen
-- USB-/RS485-/I2C-Geraete sichtbar
+Der Tagesbericht meldet nur **neue/eskalierte** Befunde. Stabil-wiederkehrende
+Zustände werden unterdrückt und erst nach 7 Tagen erinnert; Rückkehr auf `ok`
+heilt den State selbsttätig. Zustand:
+`config/diagnos_alert_state.json` (Diagnos) bzw. `config/nq_alert_state.json`
+(NQ). Mechanik: [`automation/engine/diagnos_alert_state.py`](../../automation/engine/diagnos_alert_state.py).
 
-### Alle 15 Minuten
+## Ausfallklassen (Gap-Scan)
 
-- Mirror-Freshness
-- Pi5-Backup-Freshness
-- Config-Parse-Checks
-- Restart-Zaehler und Drift
-- erste SQL-Invarianten
-
-### Stuendlich
-
-- tiefere Aggregations-Stichproben
-- Parity der relevanten Configs und Units
-- Datenwachstum und Kapazitaet
-
-### Taeglich
-
-- Trendbericht
-- Gap-Klassenbericht
-- Restore-/Backup-Lage
-- Empfehlung: weiter beobachten, gezielt restart, Failover oder Hardware pruefen
-
----
-
-## 3. Ausfallklassen
-
-| Klasse | Beispiel | Standardreaktion |
+| Klasse | Dauer | Wirkung |
 |---|---|---|
-| **Mikro** | < 2 min | nur zaehlen, sichtbar machen |
-| **Kurz** | 2-30 min | Warnung, Folgepruefung |
-| **Mittel** | 30 min-6 h | Warnung + vertiefte Diagnose + Eskalation |
-| **Lang** | > 6 h | Incident, manuelle Bewertung, moeglicher Failover/Hardwarecheck |
+| micro | < 2 min | nur zählen |
+| short | 2–30 min | warn (frisch) |
+| medium | 30 min–6 h | crit (frisch) |
+| long | > 6 h | crit (frisch) |
 
----
+Nacht-Standby (Sonnenhöhe < 1°) und „gesetzte" Lücken (Ende > 25 h zurück,
+Aggregationen haben übernommen) treiben **keine** Alarmschwere mehr, bleiben
+aber in `RAW-Status.md` sichtbar. Nur frische Lücken (< 25 h) sind
+alarmrelevant.
 
-## 4. Schutzreaktionen
+## Datenpolitik bei Ausfällen
 
-| Stufe | Aktion | Automatisierbar? |
-|---|---|---|
-| D1 | Mail / Log / Statusflag | ja |
-| D2 | Health-Report mit Ursache und Empfehlung | ja |
-| D3 | gezielter Restart eines Hilfsdiensts mit Cooldown | spaeter, nur eng begrenzt |
-| D4 | Host-Reboot | nur nach klaren Kriterien, nicht als Standard |
-| D5 | Hardwaretausch / Verkabelungspruefung | manuell |
-
----
-
-## 5. Datenpolitik bei Ausfaellen
-
-- **Technische Reihen:** echte Luecke bleibt sichtbar
-- **Statistik:** counter-basierte Korrektur ist erlaubt
-- **Diagnos:** markiert die Luecke, verschleiert sie aber nicht
+- **Technische Reihen:** echte Lücke bleibt sichtbar.
+- **Statistik:** counter-basierte Korrektur ist erlaubt (Collector/Aggregation).
+- **Diagnos:** markiert die Lücke, verschleiert sie nicht.

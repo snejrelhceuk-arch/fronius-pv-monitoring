@@ -1,85 +1,64 @@
 # Checkkatalog — Diagnos D
 
-**Stand:** 16. Maerz 2026  
-**Status:** Planungsdokument
+Alle produktiven read-only Checks, gruppiert nach Modul. Severity-Stufen:
+`ok` < `warn` < `crit` < `fail` (Check selbst fehlgeschlagen). Die
+Gesamtseverity je Lauf ist stets die schlechteste Einzelseverity.
 
----
+## Health — [`diagnos/health.py`](../../diagnos/health.py)
 
-## 1. Host und Hardware
+| Check | Bedeutung | Schwelle (warn/crit) | Sofort-Alarm |
+|---|---|---|---|
+| `cpu_temp` | CPU-Temperatur | 75 / 80 °C | ja |
+| `throttle` | Pi Unterspannung/Throttling | Flags aktiv → crit; Binary fehlt → fail | ja (crit) |
+| `ram` | RAM-Belegung | 85 / 95 % | — |
+| `disk_root` | Root-Belegung | 80 / 90 % | ja (crit) |
+| `load` | Load-Average | Cores×1 / ×2 | — |
+| `uptime` | Uptime (Info) | — | — |
+| `service:<unit>` | 5 Kern-Dienste aktiv (`SERVICES`) | inaktiv → crit | ja |
+| `freshness:<tabelle>` | Alter des letzten Eintrags (raw_data/data_1min/data_15min/daily_data) | `FRESHNESS_TABLES` | — |
+| `mirror_sync_age` | Alter des Failover-Mirror-Markers | 15 / 30 min (**nur failover**) | — |
+| `backup_local_gfs_daily` | Alter des jüngsten lokalen GFS-Daily | 30 / 48 h | — |
+| `notification_ready` | SMTP-Credential vorhanden (nur primary) | fehlt → crit | — |
+| `fritzdect_freshness` | Messsteckdosen liefern frisch (nur primary) | Stale > 1 h → warn | — |
+| `log_health` | Überlauf persistenter Logs | 50 / 200 MB (endlose CSV ausgenommen) | — |
 
-| Bereich | Beispiele | Methode |
+## Integrität — [`diagnos/integrity.py`](../../diagnos/integrity.py), [`gap_checks.py`](../../diagnos/gap_checks.py), [`rollup_checks.py`](../../diagnos/rollup_checks.py)
+
+| Check | Bedeutung | Logik |
 |---|---|---|
-| CPU / SoC | Temperatur, Frequenz, Load | Systemdateien, `vcgencmd`, `/proc`, `uptime` |
-| Spannungsqualitaet | Unterspannung, Throttling, historische Flags | Raspberry-Pi-Health-Flags |
-| RAM | frei, Pressure, OOM-Hinweise | `/proc/meminfo`, Journal |
-| Kernel | I/O-Fehler, USB-Abbrueche, Link-Flaps | `journalctl`, `dmesg`-Auswertung |
+| `integrity:daily_energy_balance` | Verbrauch = PV + Bezug − Einspeisung | Abweichung 300 / 1000 Wh |
+| `integrity:fronius_attachment_state` | WR-/Schnittstellen- und Collector-Liveness | aktuelle Poll-Liveness schlägt ältere Vollprüfung |
+| `integrity:gaps:<tabelle>` | Zeitlücken je Tabelle | klassifiziert (micro/short/medium/long); Nacht-Standby + „gesetzte" Lücken (>25 h) treiben keinen Alarm |
+| `integrity:config_json_parse` | `config/*.json` syntaktisch lesbar | defektes JSON → crit |
+| `integrity:monthly_rollup` | monthly_statistics vs. Tagessummen | **feld-differenziert** (s. u.) |
+| `integrity:yearly_rollup` | yearly_statistics vs. Monatssummen | **feld-differenziert** (s. u.) |
 
-## 2. Datentraeger und Backups
+**Feld-Differenzierung der Rollups:** Fluss-Felder (Solar/Bezug/Einspeisung/
+Gesamtverbrauch) sind eichgenaue Counter-Summen und müssen eng zusammenpassen
+(relative Toleranz `ROLLUP_FLOW_WARN_PCT`/`_CRIT_PCT`, Absolutboden 2 kWh →
+alarmtreibend). Methoden-Felder (Batterieladung/-entladung, Direktverbrauch)
+divergieren systematisch (~2–13 %), weil der Monatswert aus der eichgenauen
+Counter-Differenz (`data_monthly`) stammt bzw. daraus abgeleitet wird, die
+Tagessumme aber aus BMS-Checkpoints/`W_PV_Direct`. Diese Differenz wird
+berichtet, treibt aber **keine** Alarmschwere.
 
-| Bereich | Beispiele | Methode |
+## Netzqualität (Rolle N) — [`diagnos/nq_health.py`](../../diagnos/nq_health.py)
+
+Rollen-/deploymentbewusst: ohne NQ-Monats-DB oder auf Failover still. Die
+PAC4200-Hardware liest ausschließlich der Tech-Collector; Primary beobachtet
+indirekt über frische Aggregate.
+
+| Check | Bedeutung | Schwelle (warn/crit) |
 |---|---|---|
-| Primary SD | Belegung, DB-Groesse, Wachstum | `df`, `stat`, Dateivergleich |
-| Failover SD | Mirror-Alter, freier Platz | Sync-Marker, `df` |
-| Pi5 SSD | Backup-Freshness, Archivrotation, freier Platz | SSH/Remote-Check, Backup-Metadaten |
+| `nq:pipeline_freshness` | Alter des jüngsten 5-min-Aggregats (Kette PAC→Tech→Transfer→Aggregation) | 5 / 9,5 h |
+| `nq:energy_freshness` | Alter des jüngsten Tages in `nq_energy_daily` | 2 / 4 Tage |
+| `nq:services` | Primary-NQ-Timer scharf (nur installierte Units) | inaktiv/failed → warn |
+| `nq:events_recent` | Netzereignisse der letzten 24 h (Info) | kein Alarm |
 
-## 3. Prozesse und Services
+## Nicht-Ziele (bewusst nicht als aktiver Probe umgesetzt)
 
-| Bereich | Beispiele | Methode |
-|---|---|---|
-| Collector | aktiv, Restart-Zaehler, Frische | systemd + SQL |
-| Web | API erreichbar, systemd-Status | HTTP-Check + systemd |
-| Automation | Heartbeat, Fehlerquote, Action-Logs | systemd + DB |
-| Wattpilot | Prozess lebt, Polling-Zustand | systemd + DB |
-| Cron/Timer | letzter Lauf, Drift, deaktiviert | systemd, Crontab, Log-Check |
-
-## 4. Daten-Freshness
-
-| Bereich | Signal | Ziel |
-|---|---|---|
-| `raw_data` | letzter Zeitstempel | Collector lebt |
-| `data_1min` | letzter Zeitstempel | Minute-Pipeline lebt |
-| `data_15min` | letzter Zeitstempel | Quartals-Pipeline lebt |
-| `daily_data` | laufender Tag / letzter Abschluss | Tagesaggregation lebt |
-| Mirror | Alter der Failover-DB | Failover einsetzbar |
-| Pi5-Backup | Alter des letzten GFS-Backups | Langzeit-Restore abgesichert |
-
-## 5. Datenintegritaet
-
-| Pruefung | Ziel |
-|---|---|
-| Counter monoton bzw. bekannte Reset-Muster | defekte Zaehler oder Schreibartefakte erkennen |
-| Tageswerte vs. Counter-Differenzen | Statistik und technische Basis vergleichen |
-| `monthly_statistics` vs. `daily_data` | Rollup korrekt |
-| `yearly_statistics` vs. `monthly_statistics` | Rollup korrekt |
-| Gap-Scan je Tabelle | Unterbrechungen klassifizieren |
-| Config-Parse | defekte JSON-/Service-Konfiguration erkennen |
-
-## 6. Parity und Systemkonsistenz
-
-| Bereich | Ziel |
-|---|---|
-| Git-Stand Primary vs. Failover | gleicher Code-Stand |
-| relevante Config-Dateien | gleicher fachlicher Stand |
-| systemd-Units | gleiche Betriebsdefinition |
-| Cron/Timer | gleiche periodische Ablaufe |
-| `.role` und Guards | klare Rollenlage |
-
-## 7. I/O und Infrastruktur
-
-| Bereich | Ziel |
-|---|---|
-| LAN / Routing | Basis-Erreichbarkeit |
-| SSH | Betriebszugang verfuegbar |
-| Fronius Modbus / HTTP | Datenquelle erreichbar |
-| Wattpilot | Statuszugriff kontrolliert moeglich |
-| Fritz!Box | HP-Aktor erreichbar |
-| USB-RS485 | kuenftige WP-/MEGA-BAS-Anbindung sichtbar |
-| MEGA-BAS | I2C/Board erreichbar, sobald aktiviert |
-
-## 8. Berichtswesen
-
-| Ausgabe | Inhalt |
-|---|---|
-| Kurz-Warnung | Einzelereignis, Schwelle, Host, Zeit |
-| Taeglicher Bericht | Trends, Gaps, Speicher, Restart-Historie |
-| Eskalationsbericht | Ursache, Trigger, empfohlene Aktion |
+- **Aktive LAN/SSH/API-Pings.** Erreichbarkeit wird über Datenfrische bewiesen
+  (`freshness:*`, `nq:pipeline_freshness`, `fronius_attachment_state`) statt über
+  redundante Netz-Probes — schont die read-only Schicht und die Gegenstellen.
+- **Parity aktiver Hosts** (Git-/Config-Diff) läuft über die Ops-Guards
+  (`system-ops-guards`), nicht über Diagnos.

@@ -145,11 +145,10 @@ Bei jeder neuen Funktion zuerst pruefen:
 | `AGENTS.md` | Kurzuebersicht des Gesamtsystems (ABCDEN, No-Gos, Hosts) |
 | `doc/system/SYSTEM_ARCHITECTURE.md` | Gesamtarchitektur, Datenfluesse, Modulrollen |
 | `doc/automation/AUTOMATION_ARCHITEKTUR.md` | Schicht C im Detail |
-| `doc/diagnos/DIAGNOS_KONZEPT.md` | Zielbild fuer D Diagnos |
+| `doc/diagnos/DIAGNOS.md` | Übersicht D Diagnos (IST) |
 | `doc/steuerbox/ARCHITEKTUR.md` | Architektur der E-Schicht (Operator-Intent-API) |
 | `doc/steuerbox/SICHERHEIT.md` | Sicherheitskonzept Steuerbox |
 | `doc/steuerbox/TODO.md` | Umsetzungsplan Steuerbox |
 | `doc/netzqualitaet/NQ_MODUL.md` | Architektur der N-Schicht (PAC4200, Tech+Primary) |
-| `doc/diagnos/CHECKKATALOG.md` | Check-Domaenen und Methoden |
-| `doc/diagnos/TAKTUNG_UND_ESKALATION.md` | Intervalle und Schutzreaktionen |
-| `doc/diagnos/UMSETZUNGSPLAN.md` | Schrittweise Realisierung |
+| `doc/diagnos/CHECKKATALOG.md` | Katalog aller read-only Checks |
+| `doc/diagnos/TAKTUNG_UND_ESKALATION.md` | Intervalle und Eskalation |

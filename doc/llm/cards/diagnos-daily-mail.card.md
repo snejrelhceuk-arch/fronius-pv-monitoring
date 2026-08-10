@@ -2,10 +2,10 @@
 title: Diagnos Daily-Mail (Sunset-Tagesbericht + Alarm-Mails)
 domain: diagnos
 role: D
-applyTo: "automation/engine/event_notifier.py"
-tags: [mail, sunset, tagesbericht, smtp, credential]
+applyTo: "automation/engine/event_notifier.py,automation/engine/nq_notifier.py,automation/engine/notify/report_format.py,automation/engine/diagnos_alert_state.py"
+tags: [mail, sunset, tagesbericht, smtp, credential, nq]
 status: stable
-last_review: 2026-08-04
+last_review: 2026-08-10
 ---
 
 # Diagnos Daily-Mail
@@ -19,6 +19,9 @@ Sofort-/Integrity-Alarme.
 
 ## Code-Anchor
 - **Bericht + Versand:** `automation/engine/event_notifier.py:sende_sunset_bericht`, `_sende_sunset_mail`
+- **Textformatierung:** `automation/engine/notify/report_format.py` (Energie-/Health-/Integrity-/NQ-Sektionen)
+- **NQ-Anteil:** `automation/engine/nq_notifier.py:diff_nq_befunde` + `diagnos/nq_health.py` (eigener Diff-State `nq_alert_state.json` unter `config/`)
+- **Diff-Filter:** `automation/engine/diagnos_alert_state.py:filter_reportable`
 - **Trigger (Sunset-Erkennung):** `automation/engine/automation_daemon.py` (`is_day` True→False, `_war_tag`)
 - **is_day-Berechnung:** `automation/engine/collectors/forecast_collector.py:_refresh_is_day`
 - **SMTP-Low-Level:** `automation/engine/notify/mail.py:smtp_versand`
@@ -43,12 +46,12 @@ Sofort-/Integrity-Alarme.
 - Keine Änderung von Empfänger/Events/Versandzeitpunkt ohne Freigabe.
 - Kein zweiter, konkurrierender Mail-Trigger (Cron) — der Daemon ist maßgeblich.
 
-## Fehlerbild — Credential fehlt nach Host-Migration (2026-08-04 behoben)
-- **Symptom:** Seit Pi5-Umzug keine Tagesmail; Test-Mail in pv-config zeigt „Passwort ✗ FEHLT".
+## Bekanntes Fehlerbild — SMTP-Credential fehlt (nach Host-Wechsel)
+- **Symptom:** keine Tagesmail; Test-Mail in pv-config zeigt „Passwort ✗ FEHLT".
 - **Log:** jeden Sunset `event_notifier ERROR: Sunset-Bericht FEHLGESCHLAGEN: SMTP-Passwort nicht gesetzt (credential_store)`.
-- **Ursache:** `smtp_pass.key` ist Machine-ID-gebunden → beim Host-Wechsel nicht mitgewandert, `/etc/pv-system/` fehlt komplett.
-- **Nachhaltig sichtbar:** `check_notification_ready` meldet den Zustand jetzt als CRIT im Health-Report/Dashboard (kein stiller Log-Tod mehr).
-- **Fix (Operator, Secret):** `sudo python3 pv-config.py` → Benachrichtigungen → „SMTP-Passwort setzen" → danach Test-Mail. Nach jeder Host-Migration/SD-Neuinstallation erneut setzen.
+- **Ursache:** `smtp_pass.key` ist Machine-ID-gebunden → wandert bei Host-Wechsel/SD-Neuinstallation nicht mit.
+- **Sichtbar:** `check_notification_ready` meldet den Zustand als CRIT im Health-Report/Dashboard.
+- **Fix (Operator, Secret):** `sudo python3 pv-config.py` → Benachrichtigungen → „SMTP-Passwort setzen" → Test-Mail. Nach jeder Host-Migration/SD-Neuinstallation erneut setzen.
 
 ## Häufige Aufgaben
 - Kein Versand? → Health-Check `notification_ready` prüfen; `journalctl -u pv-automation | grep -i sunset`.

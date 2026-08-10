@@ -35,6 +35,7 @@ from diagnos.config import (
     OK, RAM_WARN_PCT, SERVICES, WARN,
     ROLE_FILE,
 )
+from diagnos.log_health import check_log_health
 
 # ═══════════════════════════════════════════════════════════
 # Hilfs-Funktionen
@@ -495,6 +496,9 @@ def run_all() -> dict:
 
     # Fritz!DECT-Steckdosen frisch? (Stale-Hinweis für Tagesbericht)
     checks.append(check_fritzdect_freshness())
+
+    # Log-Ueberlaufwache (persistente Wartungs-/Diagnose-Logs)
+    checks.append(check_log_health())
 
     # Gesamtbewertung
     severity_order = {OK: 0, WARN: 1, CRIT: 2, FAIL: 3}

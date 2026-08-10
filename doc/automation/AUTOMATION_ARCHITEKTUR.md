@@ -821,7 +821,7 @@ CREATE TABLE obs_state_snapshot (
 | Dokument | Relevanz |
 |----------|----------|
 | [ABCDEN_ROLLENMODELL.md](../system/ABCDEN_ROLLENMODELL.md) | Rollen A/B/C/D/E/N, Grenzen und Verantwortungen |
-| [DIAGNOS_KONZEPT.md](../diagnos/DIAGNOS_KONZEPT.md) | Zielbild fuer Health, Integritaet und Parity |
+| [DIAGNOS.md](../diagnos/DIAGNOS.md) | Übersicht Health, Integrität und Netzqualität (Rolle N) |
 | [BEOBACHTUNGSKONZEPT.md](BEOBACHTUNGSKONZEPT.md) | ObsState-Definition, Datenkanäle, Prioritäten |
 | [PARAMETER_MATRIZEN.md](PARAMETER_MATRIZEN.md) | Erzeuger/Speicher/Verbraucher/Netz-Matrizen |
 | [BATTERIE_STRATEGIEN.md](BATTERIE_STRATEGIEN.md) | Strategien A–F, Kontroll-Matrix |

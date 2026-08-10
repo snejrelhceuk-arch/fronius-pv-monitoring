@@ -1,54 +1,36 @@
 """
-nq_notifier.py — Mail-Skelett für Netzqualitäts-Befunde (Schicht D, Mai 2026).
+nq_notifier.py — Diff-Filter + Sofortpfad für Netzqualitäts-Befunde (Schicht D).
 
-Status: SKELETT — Versandlogik produktiv, NQ-Detektoren stehen erst mit
-PAC4200-Inbetriebnahme im Mai 2026 zur Verfügung. Wird vom
-``automation_daemon`` aktuell nicht aufgerufen (siehe ``ENABLED``).
+NQ-Befunde (Rolle N) liefert ``diagnos.nq_health.run_all()`` als Liste von
+Check-Dicts (gleiches Schema wie diagnos.health/integrity):
 
-Architektur
------------
-NQ-Befunde werden vom ``netzqualitaet``-Subsystem als Liste von Check-
-Dicts geliefert (gleiches Schema wie diagnos.health/integrity):
+    {'check': 'nq:pipeline_freshness', 'severity': 'ok'|'warn'|'crit'|'fail', ...}
 
-    {
-        'check': 'nq:flicker_pst10',  # eindeutiger Schlüssel je Bucket/Phasen-Kombo
-        'severity': 'warn'|'crit'|'fail'|'ok',
-        # checkspezifische Felder:
-        'pst_max': 1.42,
-        'phase': 'L1',
-        'bucket': '5m',
-        ...
-    }
+Zwei Pfade, beide über den SMTP-/Dedup-Weg des ``EventNotifier``:
 
-Pfade
------
-- **Sunset-Mail-Anteil** (NQ in Tagesbericht): über ``filter_reportable``
-  + eigenem State-File ``config/nq_alert_state.json``. Stabile Befunde
-  werden unterdrückt, Reminder nach 7 Tagen, Heilung automatisch.
-- **Sofortpfad**: Trade-Switch-Detektion oder THD-Hard-Crit (Brand-/
-  Geräteschutz) → ``pruefe_nq_sofortalarme()`` ruft den generischen
-  ``EventNotifier._sende_diagnos_alarm`` auf.
-
-Aktivierung
------------
-Wenn die NQ-Sammlung produktiv ist, ``ENABLED = True`` setzen und
-``automation_daemon`` einklinken (bevorzugt im 10-min-Slot neben
-Integrity/Health).
+- **Sunset-Mail-Anteil:** ``diff_nq_befunde()`` filtert die Befunde gegen den
+  eigenen State ``config/nq_alert_state.json`` (stabile unterdrücken, Reminder
+  nach 7 Tagen, Heilung automatisch). Die Textzeilen baut
+  ``notify/report_format.nq_summary``; die Detailtabelle steht in
+  ``logs/diagnos/Netz-Status.md``.
+- **Sofortpfad:** ``pruefe_nq_sofortalarme()`` reagiert auf fachlich harte
+  Trigger (Trade-Switch, THD-Hard-Crit) künftiger Analyse-Detektoren.
+  ``diagnos.nq_health`` selbst löst diese nicht aus — der Pfad bleibt für die
+  Ereignis-Analyse reserviert.
 """
 
 from __future__ import annotations
 
 import logging
 import os
-from typing import Optional
 
 from automation.engine import diagnos_alert_state
 
 LOG = logging.getLogger('nq_notifier')
 
-# Solange das NQ-Subsystem nicht produktiv läuft, bleibt der Notifier
-# inaktiv. Schalter zentral, damit der Daemon das defensiv prüfen kann.
-ENABLED = False
+# Sofortpfad-Schalter (zentral). Der Sunset-Diff (diff_nq_befunde) laeuft
+# unabhaengig davon; ENABLED steuert nur die harten Sofort-Trigger unten.
+ENABLED = True
 
 # Eigener State-File-Pfad (separates Namespacing zu Diagnos).
 NQ_STATE_PATH = os.path.join(
@@ -56,9 +38,6 @@ NQ_STATE_PATH = os.path.join(
     'config',
     'nq_alert_state.json',
 )
-
-# Severities, die für die NQ-Sunset-Sektion akzeptiert werden.
-_REPORT_SEVERITIES = {'warn', 'crit', 'fail'}
 
 # Sofortpfad: nur fachlich begründete Trigger. Erweiterbar, sobald die
 # konkreten Schwellen aus der PAC4200-Auswertung feststehen.
@@ -120,53 +99,6 @@ class NQNotifier:
         names = {c.get('check') for c in reportable if c.get('check')}
         sev_counts = diagnos_alert_state.severity_counts(reportable)
         return names, summary, sev_counts
-
-    @staticmethod
-    def format_nq_summary(
-        nq_checks: list,
-        reportable_names: Optional[set] = None,
-        summary: Optional[dict] = None,
-    ) -> list[str]:
-        """Formatiere NQ-Sektion für die Sunset-Mail (Skelett).
-
-        Wird vom ``EventNotifier`` über einen optionalen Hook eingebunden,
-        sobald NQ produktiv ist. Aktuell nur Demonstrationsformat.
-        """
-        if not nq_checks:
-            return [
-                '',
-                'Netzqualitaet (PAC4200)',
-                '  Snapshot:            keine NQ-Daten verfuegbar',
-            ]
-
-        severity_map = {'ok': 'OK', 'warn': 'WARN', 'crit': 'KRIT', 'fail': 'FAIL'}
-        bad = [c for c in nq_checks if (c.get('severity') or '').lower() in _REPORT_SEVERITIES]
-        if reportable_names is not None:
-            shown = [c for c in bad if c.get('check') in reportable_names]
-            stale = len(bad) - len(shown)
-        else:
-            shown = bad
-            stale = 0
-
-        lines = [
-            '',
-            'Netzqualitaet (PAC4200)',
-            f'  Befunde gesamt:      {len(bad)}'
-            f' (neu/eskaliert: {len(shown)}, stabil unterdrueckt: {stale})',
-        ]
-
-        for check in shown[:8]:
-            sev = severity_map.get(check.get('severity'), '—')
-            reason = check.get('_alert_reason') or 'new'
-            tag = f' [{reason}]' if reason and reason != 'new' else ''
-            lines.append(f'  [{sev}] {check.get("check")}{tag}')
-
-        if stale > 0:
-            lines.append(
-                f'  ({stale} stabile NQ-Befund(e) unterdrueckt — siehe nq/legacy/nq_analysis.py)'
-            )
-
-        return lines
 
     # ── Sofortpfad (über generischen EventNotifier-Helper) ──
     def pruefe_nq_sofortalarme(self, nq_checks: list) -> list[str]:

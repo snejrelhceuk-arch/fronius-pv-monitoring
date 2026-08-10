@@ -2,7 +2,7 @@
 title: Diagnos Integritaet (Bilanzen, Rollups, Gap-Scan)
 domain: diagnos
 role: D
-applyTo: "diagnos/integrity.py,diagnos/gap_checks.py"
+applyTo: "diagnos/integrity.py,diagnos/gap_checks.py,diagnos/rollup_checks.py"
 tags: [integritaet, gap-scan, rollup, balance, config-parse]
 status: stable
 last_review: 2026-08-10
@@ -16,7 +16,7 @@ Tiefe read-only Pruefung der Datenkonsistenz: Energiebilanz, Monats-/Jahresrollu
 ## Code-Anchor
 - **Hauptlauf:** `diagnos/integrity.py:run_all`
 - **Tagesbilanz:** `diagnos/integrity.py:check_daily_energy_balance`
-- **Rollups:** `diagnos/integrity.py:check_monthly_rollup`, `check_yearly_rollup`
+- **Rollups:** `diagnos/rollup_checks.py:check_monthly_rollup`, `check_yearly_rollup` (feld-differenziert)
 - **Gap-Scan:** `diagnos/gap_checks.py:_run_gap_scan` + `check_*_gaps` (importiert in `diagnos/integrity.py`)
 - **WR-Zustand:** `diagnos/integrity.py:check_fronius_attachment_state`
 - **Config-Parse:** `diagnos/integrity.py:check_config_json_parse`
@@ -40,10 +40,12 @@ Tiefe read-only Pruefung der Datenkonsistenz: Energiebilanz, Monats-/Jahresrollu
 
 ## Häufige Aufgaben
 - Schwellwerte nachziehen -> Konstanten (`*_WARN_*`, `*_CRIT_*`) in `diagnos/integrity.py` anpassen.
+- Rollup-Toleranz nachziehen -> `ROLLUP_FLOW_WARN_PCT`/`_CRIT_PCT` in `diagnos/rollup_checks.py`.
 - Neue Tabelle in Gap-Scan aufnehmen -> neuer `check_<table>_gaps()` in `diagnos/gap_checks.py` ueber `_run_gap_scan`.
 - Neue Konfigdatei in Parse-Check -> Glob oder expliziten Pfad in `diagnos/integrity.py` erweitern.
 
 ## Bekannte Fallstricke
+- Monats-/Jahresrollup ist **feld-differenziert**: nur Fluss-Felder (Solar/Bezug/Einspeisung/Gesamtverbrauch) treiben Alarm. Batterie & Direktverbrauch divergieren methodisch bedingt (Monat = eichgenaue Counter-Diff `data_monthly`, Tag = BMS-Checkpoints/`W_PV_Direct`) und werden nur berichtet — sonst Dauer-CRIT ohne realen Datenfehler.
 - SQL-Rollups nutzen `localtime`; bei TZ-/DST-Sonderfaellen koennen Monatsgrenzen anders wirken als reine UTC-Auswertung.
 - Ein fehlender/unvollständiger Attachment-State führt bei lebendem Collector nur zu `warn` (nicht `crit`); ohne lebenden Collector weiterhin `crit`.
 - Konsistente Folgedaten koennen historische Gaps relativieren, aber nicht automatisch entkraeften.
@@ -57,5 +59,4 @@ Tiefe read-only Pruefung der Datenkonsistenz: Energiebilanz, Monats-/Jahresrollu
 ## Human-Doku
 - `doc/diagnos/STATUS_BERICHTE.md`
 - `doc/diagnos/CHECKKATALOG.md`
-- `doc/diagnos/DIAGNOS_KONZEPT.md`
-- `doc/diagnos/UMSETZUNGSPLAN.md`
+- `doc/diagnos/DIAGNOS.md`

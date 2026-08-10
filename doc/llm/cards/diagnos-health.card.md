@@ -1,11 +1,11 @@
 ---
-title: Diagnos Health (Host, Services, Freshness)
+title: Diagnos Health (Host, Services, Freshness, Logs)
 domain: diagnos
 role: D
-applyTo: "diagnos/health.py"
-tags: [health, services, freshness, mirror, backup, notification]
+applyTo: "diagnos/health.py,diagnos/log_health.py"
+tags: [health, services, freshness, mirror, backup, notification, logs]
 status: stable
-last_review: 2026-08-04
+last_review: 2026-08-10
 ---
 
 # Diagnos Health
@@ -21,7 +21,8 @@ Read-only Zustandspruefung fuer Host, Services und Datenfrische. Liefert eine sc
 - **Mirror/Backup:** `diagnos/health.py:check_mirror_sync_age`, `check_local_gfs_backup_age`
 - **Mail-Bereitschaft:** `diagnos/health.py:check_notification_ready` (SMTP-Credential vorhanden?)
 - **Fritz!DECT-Frische:** `diagnos/health.py:check_fritzdect_freshness` (Stale-Steckdose → Sunset-Hinweis)
-- **Schwellwerte/Tabellen:** `diagnos/config.py` (`SERVICES`, `FRESHNESS_TABLES`, Warn-/Crit-Grenzen)
+- **Log-Überlauf:** `diagnos/log_health.py:check_log_health` (persistente Wartungs-Logs; endlose Nachweis-CSV ausgenommen)
+- **Schwellwerte/Tabellen:** `diagnos/config.py` (`SERVICES`, `FRESHNESS_TABLES`, `LOG_*`, Warn-/Crit-Grenzen)
 
 ## Inputs / Outputs
 - **Inputs:** `/proc/*`, `/sys/class/thermal/*`, `vcgencmd`, `systemctl`, read-only SQLite auf `/dev/shm/fronius_data.db`, `.role`, Mirror-/Backup-Marker.
@@ -55,6 +56,6 @@ Read-only Zustandspruefung fuer Host, Services und Datenfrische. Liefert eine sc
 - [`collector-db-schema.card.md`](./collector-db-schema.card.md)
 
 ## Human-Doku
-- `doc/diagnos/DIAGNOS_KONZEPT.md`
+- `doc/diagnos/DIAGNOS.md`
 - `doc/diagnos/CHECKKATALOG.md`
 - `doc/diagnos/TAKTUNG_UND_ESKALATION.md`

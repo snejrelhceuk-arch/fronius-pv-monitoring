@@ -54,6 +54,34 @@ MIRROR_CRIT_S = 1800         # 30 min
 BACKUP_WARN_HOURS = 30.0
 BACKUP_CRIT_HOURS = 48.0
 
+# ── NQ (Rolle N, read-only Beobachtung) ────────────────────
+# Primary beobachtet das PAC4200-Netzqualitaets-Subsystem rein lesend ueber die
+# Monats-DBs (nq/db/nq_YYYY-MM.db). Frische Aggregate beweisen die Kette
+# PAC -> Tech-Collector -> Transfer -> Aggregation. Kein PAC-Hardwarezugriff.
+NQ_DB_DIR = os.path.join(BASE_DIR, 'nq', 'db')
+# Transfer/Aggregation laufen alle 4 h (Timer :10/:15). Frische bis ~4 h normal.
+NQ_PIPELINE_WARN_S = 5 * 3600          # 5 h  (ein Zyklus verpasst)
+NQ_PIPELINE_CRIT_S = int(9.5 * 3600)   # 9.5 h (mehrere Zyklen verpasst)
+# Tagesenergie-Rollup laeuft taeglich 00:05 (rollt den Vortag).
+NQ_ENERGY_WARN_DAYS = 2
+NQ_ENERGY_CRIT_DAYS = 4
+# Primary-seitige NQ-Timer (Poller laeuft auf Tech, nicht hier).
+NQ_TIMERS = [
+    'pv-nq-agg-transfer.timer',
+    'pv-nq-aggregate.timer',
+    'pv-nq-analysis.timer',
+    'pv-nq-energy-rollup.timer',
+    'pv-nq-primary-cap.timer',
+]
+
+# ── Logging (Diagnose-/Wartungs-Dateien, Ueberlaufwache) ────
+# Persistente Logs unter logs/. Rotierende /tmp-Logs deckt scripts/logrotate.sh.
+LOG_DIR = os.path.join(BASE_DIR, 'logs')
+LOG_OVERFLOW_WARN_MB = 50.0
+LOG_OVERFLOW_CRIT_MB = 200.0
+# Bewusst endlose Dateien (rechtlicher Langzeitnachweis) -> nur Info, nie Alarm.
+LOG_ENDLESS_FILES = {'wp_netzbetreiber_leistung.csv'}
+
 # ── Ausgabe ────────────────────────────────────────────────
 # Severity-Stufen
 OK   = 'ok'

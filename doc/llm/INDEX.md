@@ -28,6 +28,7 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 | **diagnos: Host-Health, Services, Freshness, Mirror/Backup-Alter** | [`diagnos-health.card.md`](./cards/diagnos-health.card.md) | stable |
 | **diagnos: Energiebilanz, Rollups, Gap-Scan, Config-Parse** | [`diagnos-integrity.card.md`](./cards/diagnos-integrity.card.md) | stable |
 | **diagnos: Tägliche Mail / Sunset-Tagesbericht, Alarm-Mails, SMTP-Credential** | [`diagnos-daily-mail.card.md`](./cards/diagnos-daily-mail.card.md) | stable |
+| **diagnos: Netzqualität-Beobachtung, PAC4200-Pipeline-Frische, NQ-Timer, Netzereignisse** | [`diagnos-nq.card.md`](./cards/diagnos-nq.card.md) | stable |
 | **steuerbox: Operator-Intents, Guards, respekt_s, Override-Status** | [`steuerbox-intents.card.md`](./cards/steuerbox-intents.card.md) | stable |
 | **netzqualitaet: Legacy Export/DFD aus Smart-Meter-Daten** | [`netzqualitaet-analysis.card.md`](./cards/netzqualitaet-analysis.card.md) | stable |
 | **netzqualitaet: Tech-Collector (PAC4200, tmpfs, Fast/Medium/Slow, Kappung)** | [`netzqualitaet-nq-collector.card.md`](./cards/netzqualitaet-nq-collector.card.md) | stable |
@@ -62,9 +63,10 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 - [`collector-fritzdect-collector.card.md`](./cards/collector-fritzdect-collector.card.md) — AHA-API, AIN-Mapping
 
 ### diagnos (Schicht D)
-- [`diagnos-health.card.md`](./cards/diagnos-health.card.md) — Host, Services, Freshness
-- [`diagnos-integrity.card.md`](./cards/diagnos-integrity.card.md) — Bilanz, Rollups, Gap-Scan
+- [`diagnos-health.card.md`](./cards/diagnos-health.card.md) — Host, Services, Freshness, Log-Überlauf
+- [`diagnos-integrity.card.md`](./cards/diagnos-integrity.card.md) — Bilanz, Rollups (feld-differenziert), Gap-Scan
 - [`diagnos-daily-mail.card.md`](./cards/diagnos-daily-mail.card.md) — Sunset-Tagesbericht + Alarm-Mails, SMTP-Credential
+- [`diagnos-nq.card.md`](./cards/diagnos-nq.card.md) — PAC4200-Pipeline, Tagesenergie, NQ-Timer (Rolle N)
 
 ### steuerbox (Schicht E)
 - [`steuerbox-intents.card.md`](./cards/steuerbox-intents.card.md) — Intents, Guards, Override-Lebenszyklus

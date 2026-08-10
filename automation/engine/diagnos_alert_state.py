@@ -144,6 +144,18 @@ def _fingerprint_fields(check: dict) -> tuple:
     if name.startswith('service:'):
         return (sev, check.get('active_state') or check.get('error') or '')
 
+    if name == 'log_health':
+        return (sev, check.get('error') or '')
+
+    # NQ-Befunde (Rolle N, eigener Namespace): Freshness grob nach Stunden/Tagen
+    # bucketen, damit langsam wandernde Alter nicht taeglich neu alarmieren.
+    if name == 'nq:pipeline_freshness':
+        return (sev, _round_or_none(check.get('age_s'), 3600))
+    if name == 'nq:energy_freshness':
+        return (sev, check.get('days_behind'))
+    if name.startswith('nq:'):
+        return (sev, check.get('error') or check.get('detail') or '')
+
     # Generischer Fallback: severity + Fehlertext
     return (sev, check.get('error') or '')
 

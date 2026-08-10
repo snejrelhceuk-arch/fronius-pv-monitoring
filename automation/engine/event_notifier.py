@@ -42,9 +42,11 @@ from automation.engine import credential_store
 from automation.engine import diagnos_alert_state
 from automation.engine.obs_state import ObsState
 from automation.engine.wattpilot_recovery import WattpilotRecoveryManager
-from automation.engine.notify import dedup, thresholds, mail
+from automation.engine.notify import dedup, thresholds, mail, report_format
+from automation.engine.nq_notifier import NQNotifier
 from diagnos.health import run_all as run_diagnos_health
 from diagnos.integrity import run_all as run_diagnos_integrity
+from diagnos.nq_health import run_all as run_diagnos_nq
 
 LOG = logging.getLogger('event_notifier')
 
@@ -75,6 +77,9 @@ class EventNotifier:
         self._events = getattr(app_config, 'NOTIFICATION_EVENTS', [])
         self._thresholds = getattr(app_config, 'EVENT_THRESHOLDS', {})
         self._wattpilot_recovery = WattpilotRecoveryManager()
+        # NQ-Befunde (Rolle N) teilen sich den SMTP-/Dedup-Pfad, haben aber
+        # einen eigenen Diff-State (config/nq_alert_state.json).
+        self._nq = NQNotifier(self)
 
     # ── Persistenter Dedup ──────────────────────────────────
     def _dedup_cleanup(self) -> None:
@@ -227,6 +232,7 @@ class EventNotifier:
 
             health_data = self._hole_diagnos_snapshot()
             integrity_data = self._hole_integrity_snapshot()
+            nq_data = self._hole_nq_snapshot()
 
             # Diff-Filter: nur neue/eskalierte/heartbeat-fällige Befunde
             # erscheinen als "Auffälligkeit". Stabile Wiederholungen werden
@@ -235,11 +241,17 @@ class EventNotifier:
             reportable_names, alert_summary, severity_counts = (
                 self._diff_diagnos_alerts(health_data, integrity_data)
             )
+            # NQ nutzt einen eigenen Diff-State; Severity-Zähler fürs Subject mischen.
+            nq_checks = (nq_data or {}).get('checks') or []
+            nq_reportable, _nq_summary, nq_counts = self._nq.diff_nq_befunde(nq_checks)
+            for k in ('warn', 'crit', 'fail'):
+                severity_counts[k] = severity_counts.get(k, 0) + nq_counts.get(k, 0)
 
             koerper = self._formatiere_sunset_bericht(
-                daten, obs, health_data, integrity_data,
+                daten, obs, health_data, integrity_data, nq_data,
                 reportable_names=reportable_names,
                 alert_summary=alert_summary,
+                nq_reportable=nq_reportable,
             )
             self._sende_sunset_mail(koerper, severity_counts)
             self._dedup_mark(event_key)
@@ -693,321 +705,49 @@ class EventNotifier:
             LOG.error(f"Integrity-Alarm FEHLGESCHLAGEN: {alarm_key}: {e}")
             return False
 
-    def _format_diagnos_summary(
-        self,
-        health_data: Optional[dict],
-        reportable_names: Optional[set] = None,
-    ) -> list[str]:
-        """Formatiere Diagnos-Daten kompakt für den Tagesbericht.
-
-        ``reportable_names`` enthält die Check-Namen, die diesmal gemeldet
-        werden sollen (Diff gegen Alert-State). Stabil-wiederholte Befunde
-        sind nicht enthalten und werden in der Mail unterdrückt.
-        """
-        if not health_data:
-            return [
-                '',
-                'Systemgesundheit (Diagnos D)',
-                '  Snapshot:            nicht verfügbar',
-            ]
-
-        severity_map = {'ok': 'OK', 'warn': 'WARN', 'crit': 'KRIT', 'fail': 'FAIL'}
-        checks = health_data.get('checks', [])
-        by_name = {c.get('check'): c for c in checks}
-        bad_checks = [c for c in checks if c.get('severity') in ('warn', 'crit', 'fail')]
-        if reportable_names is not None:
-            shown_bad = [c for c in bad_checks if c.get('check') in reportable_names]
-            stale_bad_count = len(bad_checks) - len(shown_bad)
-        else:
-            shown_bad = bad_checks
-            stale_bad_count = 0
-
-        def _fmt_sev(value: Optional[str]) -> str:
-            return severity_map.get(value or '', value or '—')
-
-        def _fmt_age_s(check_name: str) -> str:
-            check = by_name.get(check_name, {})
-            age_s = check.get('age_s')
-            if age_s is None:
-                return '—'
-            if age_s < 3600:
-                return f'{int(age_s // 60)} min'
-            return f'{age_s / 3600:.1f} h'
-
-        def _fmt_value(check_name: str, key: str, unit: str = '') -> str:
-            check = by_name.get(check_name, {})
-            value = check.get(key)
-            if value is None:
-                return '—'
-            return f'{value}{unit}'
-
-        lines = [
-            '',
-            'Systemgesundheit (Diagnos D)',
-            f'  Gesamt:              {_fmt_sev(health_data.get("overall"))}',
-            f'  CPU / RAM / Disk:    {_fmt_value("cpu_temp", "value_c", "°C")} / '
-            f'{_fmt_value("ram", "used_pct", "%")} / {_fmt_value("disk_root", "used_pct", "%")}',
-            f'  Freshness raw/1m:    {_fmt_age_s("freshness:raw_data")} / {_fmt_age_s("freshness:data_1min")}',
-            f'  Freshness 15m/day:   {_fmt_age_s("freshness:data_15min")} / {_fmt_age_s("freshness:daily_data")}',
-            f'  Lokales GFS-Backup:  {_fmt_value("backup_local_gfs_daily", "age_h", " h")}',
-        ]
-
-        mirror_check = by_name.get('mirror_sync_age')
-        if mirror_check and not mirror_check.get('skipped'):
-            lines.append(
-                f'  Mirror-Sync:         {_fmt_value("mirror_sync_age", "age_s", " s")} '
-                f'({_fmt_sev(mirror_check.get("severity"))})'
-            )
-
-        if shown_bad:
-            lines.append('')
-            lines.append('Auffaelligkeiten (neu/eskaliert)')
-            for check in shown_bad[:6]:
-                detail = check.get('error')
-                if detail is None and 'age_s' in check:
-                    detail = f'age={check.get("age_s")}s'
-                elif detail is None and 'age_h' in check:
-                    detail = f'age={check.get("age_h")}h'
-                elif detail is None and 'state' in check:
-                    detail = f'state={check.get("state")}'
-                elif detail is None:
-                    detail = 'siehe Diagnos-Report'
-                reason = check.get('_alert_reason')
-                tag = f' [{reason}]' if reason and reason != 'new' else ''
-                lines.append(
-                    f'  [{_fmt_sev(check.get("severity"))}] {check.get("check")}: {detail}{tag}'
-                )
-        if stale_bad_count > 0:
-            lines.append(
-                f'  ({stale_bad_count} stabile Befund(e) unterdrueckt — siehe diagnos.health)'
-            )
-
-        return lines
-
-    def _format_integrity_summary(
-        self,
-        integrity_data: Optional[dict],
-        reportable_names: Optional[set] = None,
-    ) -> list[str]:
-        """Formatiere Diagnos-Integritätsdaten kompakt für den Tagesbericht.
-
-        ``reportable_names`` selektiert, welche Befunde diesmal als neu/
-        geändert/heartbeat gemeldet werden. Stabil-wiederholte werden
-        unterdrückt — Fehler bleiben in den Logs erhalten.
-        """
-        if not integrity_data:
-            return [
-                '',
-                'Datenintegritaet (Diagnos D)',
-                '  Snapshot:            nicht verfügbar',
-            ]
-
-        severity_map = {'ok': 'OK', 'warn': 'WARN', 'crit': 'KRIT', 'fail': 'FAIL'}
-        checks = integrity_data.get('checks', [])
-        by_name = {c.get('check'): c for c in checks}
-        bad_checks = [c for c in checks if c.get('severity') in ('warn', 'crit', 'fail')]
-        if reportable_names is not None:
-            stale_bad_count = sum(
-                1 for c in bad_checks if c.get('check') not in reportable_names
-            )
-        else:
-            stale_bad_count = 0
-
-        def _fmt_sev(value: Optional[str]) -> str:
-            return severity_map.get(value or '', value or '—')
-
-        attachment = by_name.get('integrity:fronius_attachment_state', {})
-
-        # Collector-Liveness
-        poll_age = attachment.get('last_poll_age_s')
-        if poll_age is not None:
-            collector_str = f'aktiv (Poll vor {poll_age}s)' if attachment.get('collector_live') else f'INAKTIV seit {poll_age}s!'
-        else:
-            collector_str = '—'
-
-        consec = attachment.get('consecutive_errors', 0)
-        reconnect = attachment.get('last_reconnect')
-
-        lines = [
-            '',
-            'Datenintegritaet (Diagnos D)',
-            f'  Gesamt:              {_fmt_sev(integrity_data.get("overall"))}',
-            f'  Tagesbilanz:         {_fmt_sev((by_name.get("integrity:daily_energy_balance") or {}).get("severity"))}',
-            f'  Monats-/Jahresrolle: {_fmt_sev((by_name.get("integrity:monthly_rollup") or {}).get("severity"))} / '
-            f'{_fmt_sev((by_name.get("integrity:yearly_rollup") or {}).get("severity"))}',
-            f'  WR-Version F1:       {attachment.get("inverter_vr") or "—"}',
-            f'  WR-Anknuepfungen:    {attachment.get("assessment") or "—"}',
-            f'  WR-API / Batt-API:   '
-            f'{"OK" if attachment.get("internal_api_ok") else "—"} / '
-            f'{"OK" if attachment.get("battery_api_ok") else "—"}',
-            f'  Collector:           {collector_str}',
-        ]
-
-        if consec > 0:
-            lines.append(f'  Fehlerstrang:        {consec} Polls in Folge')
-
-        if reconnect:
-            rc_success = reconnect.get('success')
-            collector_live = attachment.get('collector_live')
-            if rc_success:
-                rc_str = 'erfolgreich'
-            elif collector_live:
-                rc_str = 'Versuch fehlgeschlagen, WR liefern wieder'
-            else:
-                rc_str = 'fehlgeschlagen'
-            lines.append(
-                f'  Letzter Reconnect:   {reconnect.get("trigger", "?")} → {rc_str}'
-            )
-
-        gap_checks = [
-            by_name.get('integrity:gaps:raw_data'),
-            by_name.get('integrity:gaps:data_1min'),
-            by_name.get('integrity:gaps:data_15min'),
-            by_name.get('integrity:gaps:hourly_data'),
-        ]
-        gap_shown = 0
-        for gap_check in [c for c in gap_checks if c]:
-            if gap_check.get('gap_count', 0) <= 0:
-                continue
-            # Diff-Filter: stabile Lückenberichte unterdrücken.
-            if reportable_names is not None and gap_check.get('check') not in reportable_names:
-                continue
-            gap_shown += 1
-            lines.append('')
-            lines.append(
-                f'  [{_fmt_sev(gap_check.get("severity"))}] {gap_check.get("check")}: '
-                f'{gap_check.get("gap_count")} Lücke(n), max {gap_check.get("max_gap_s")} s'
-            )
-            if gap_check.get('followup_assessment'):
-                lines.append(f'    Folge: {gap_check.get("followup_assessment")}')
-            notes = gap_check.get('neutralization_notes') or []
-            for note in notes[:3]:
-                lines.append(f'    Kontext: {note}')
-
-        if not bad_checks:
-            lines.append('')
-            lines.append('  Keine Integritätsabweichungen im aktuellen Prüffenster.')
-        elif stale_bad_count > 0 and gap_shown == 0:
-            lines.append('')
-            lines.append(
-                '  Keine neuen Integritätsbefunde — bekannte, stabile Zustände werden'
-            )
-            lines.append(
-                '  nur protokolliert (Details: Statusdateien, s. u.).'
-            )
-
-        lines += [
-            '',
-            '  Referenzbetrieb: Regelmäßiger Solarweb-Abgleich bis 31.12.2026 vorgesehen.',
-        ]
-
-        return lines
-
     def _formatiere_sunset_bericht(
         self,
         d: dict,
         obs: ObsState,
         health_data: Optional[dict] = None,
         integrity_data: Optional[dict] = None,
+        nq_data: Optional[dict] = None,
         reportable_names: Optional[set] = None,
         alert_summary: Optional[dict] = None,
+        nq_reportable: Optional[set] = None,
     ) -> str:
-        """Formatiere den Sunset-Bericht als E-Mail-Text."""
-        start_str = datetime.fromtimestamp(d['start_ts']).strftime('%d.%m. %H:%M')
-        end_str = datetime.fromtimestamp(d['end_ts']).strftime('%d.%m. %H:%M')
-
-        def _fmt(val, einheit='kWh', dez=1):
-            if val is None:
-                return '—'
-            return f"{val:.{dez}f} {einheit}"
-
-        def _pct(val):
-            if val is None:
-                return '—'
-            return f"{val:.1f}%"
-
-        # Verbrauch = PV + Bezug - Einspeisung
-        verbrauch = d['pv_kwh'] + d['netzbezug_kwh'] - d['einspeisung_kwh']
-        # Autarkie
-        if verbrauch > 0:
-            autarkie = max(0, (1 - d['netzbezug_kwh'] / verbrauch)) * 100
-        else:
-            autarkie = 0
-
-        zeilen = [
-            'PV-System Sunset-Tagesbericht',
-            '',
-            f'{start_str}  →  {end_str}  ({d["stunden"]}h Daten)',
-            f'  SOC:   {_pct(d["soc_start"])} / {_pct(d["soc_end"])}',
-            f'  (min/max  {_pct(d["soc_min"])} / {_pct(d["soc_max"])})',
-            f'  Batt. Ladung:         {_fmt(d["batt_ladung_kwh"])}',
-            f'  Batt. Entladung:      {_fmt(d["batt_entladung_kwh"])}',
-            '',
-            f'  PV-Erzeug.:           {_fmt(d["pv_kwh"])}',
-            f'  Verbrauch:            {_fmt(verbrauch)}',
-            f'  Netzbezug:            {_fmt(d["netzbezug_kwh"])}',
-            f'  Einspeisung:          {_fmt(d["einspeisung_kwh"])}',
-            f'  Autarkie:             {autarkie:.0f}%',
-            '',
-            f'  Wärmepumpe:           {_fmt(d["wp_kwh"])}',
-        ]
-
-        if d.get('wattpilot_kwh') is not None:
-            zeilen.append(
-                f'  Wattpilot (EV):       {_fmt(d["wattpilot_kwh"])}'
-            )
-
-        zeilen += self._format_diagnos_summary(health_data, reportable_names)
-        zeilen += self._format_integrity_summary(integrity_data, reportable_names)
-        zeilen += self._format_status_quellen(health_data, integrity_data)
-
-        if alert_summary:
-            zeilen += [
-                '',
-                'Diagnos-Filter (Diff zur letzten Mail)',
-                f'  neu={alert_summary.get("new", 0)}  '
-                f'geändert={alert_summary.get("changed", 0)}  '
-                f'erinnerung={alert_summary.get("reminder", 0)}  '
-                f'unterdrückt={alert_summary.get("suppressed", 0)}  '
-                f'geheilt={alert_summary.get("healed", 0)}',
-                '  Bekannte, gleichbleibende Zustände werden nicht erneut gemeldet,',
-                '  sondern nur erinnert (nach 7 Tagen). „geheilt" = Rückkehr auf OK.',
-            ]
-
-        zeilen += [
-            '',
-            'Automatisch generiert bei Sonnenuntergang.',
-            'Konfiguration: config.py → NOTIFICATION_EVENTS',
-        ]
-
+        """Baue den Sunset-Bericht (Textformatierung: notify/report_format)."""
+        written = self._write_status_files(health_data, integrity_data, nq_data)
+        zeilen = report_format.energy_section(d)
+        zeilen += report_format.diagnos_summary(health_data, reportable_names)
+        zeilen += report_format.integrity_summary(integrity_data, reportable_names)
+        zeilen += report_format.nq_summary((nq_data or {}).get('checks'), nq_reportable)
+        zeilen += report_format.status_quellen(written)
+        zeilen += report_format.diff_counter(alert_summary)
+        zeilen += report_format.FOOTER
         return '\n'.join(zeilen)
 
-    def _format_status_quellen(
+    def _hole_nq_snapshot(self) -> Optional[dict]:
+        """Read-only NQ-Snapshot (Rolle N) zum Versandzeitpunkt."""
+        try:
+            return run_diagnos_nq()
+        except Exception as e:
+            LOG.warning(f"Sunset-Bericht: NQ-Snapshot nicht verfügbar: {e}")
+            return None
+
+    def _write_status_files(
         self,
         health_data: Optional[dict],
         integrity_data: Optional[dict],
-    ) -> list:
-        """Schreibt die Status-Markdown-Dateien und verweist in der Mail darauf.
-
-        Hält die Mail knapp: Details (jede Datenlücke mit Ursache, die
-        Host-Kennwerte) stehen in dauerhaft abrufbaren Dateien, hier nur Pfade.
-        """
-        lines = ['', 'Weiterführende Statusquellen']
+        nq_data: Optional[dict],
+    ) -> dict:
+        """Schreibt RAW-/System-/Netz-Status.md (Beiwerk; Fehler nicht fatal)."""
         try:
             from diagnos import status_report
-            written = status_report.write_status_reports(integrity_data, health_data)
-            for name in ('RAW-Status.md', 'System-Status.md'):
-                info = written.get(name)
-                if info:
-                    kb = info['size'] / 1024.0
-                    lines.append(f'  {info["path"]}  ({kb:.1f} KB)')
+            return status_report.write_status_reports(
+                integrity_data, health_data, nq_data=nq_data)
         except Exception:
-            lines.append('  (Statusdateien konnten nicht geschrieben werden)')
-        lines += [
-            '  Laufzeit-Logs: journalctl -u pv-web -u pv-automation -u pv-collector',
-            '  Voll-Status:   python3 -m diagnos.health --pretty | python3 -m diagnos.integrity --pretty',
-        ]
-        return lines
+            return {}
 
 
     def _sende_sunset_mail(self, koerper: str, severity_counts: Optional[dict] = None):
