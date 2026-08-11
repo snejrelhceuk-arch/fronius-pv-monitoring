@@ -84,7 +84,7 @@ def _nachtlast_oeffnung_noetig(obs: ObsState, matrix: dict) -> bool:
 
     # Bereits geöffnet wenn SOC_MIN unter Komfort → nicht erneut triggern
     komfort_min = int(get_param(matrix, 'komfort_reset', 'komfort_min_pct', 25))
-    if soc_min < komfort_min:
+    if soc_min <= komfort_min:
         return False
 
     now_h = _jetzt_h()
