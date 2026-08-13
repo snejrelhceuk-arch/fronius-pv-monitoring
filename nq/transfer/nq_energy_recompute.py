@@ -118,7 +118,11 @@ def _corrected(day_row: dict, next_row: dict | None) -> dict:
 
 def recompute(apply: bool = False) -> dict:
     daily = _load_all_daily()
-    counter_days = sorted(d for d, r in daily.items() if (r.get("src") or "") != "pv_backfill")
+    # pv_backfill (fremder Zähler) und sm_substitute (bewusst an SM angeglichene
+    # ungültige Tage) werden nicht neu berechnet — sonst würde die Angleichung
+    # rückgängig gemacht. Ihre *_start bleiben als Bracket für Nachbartage nutzbar.
+    _skip = ("pv_backfill", "sm_substitute")
+    counter_days = sorted(d for d, r in daily.items() if (r.get("src") or "") not in _skip)
     report = []
     writes: dict = {}   # db_path -> list of (day, corrected)
     months_touched: set[str] = set()

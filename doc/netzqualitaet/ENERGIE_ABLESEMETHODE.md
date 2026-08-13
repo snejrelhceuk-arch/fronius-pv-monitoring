@@ -70,7 +70,7 @@ Die PAC4200-Energiezähler werden **nicht** kontinuierlich gelesen, sondern:
    - `counter` = ✅ Sauber bracketiert & interpoliert, kein Reset
    - `partial` = ⚠️ Kein sauberer Rand, within-day Fallback
    - `reset_fallback` = ⚠️ Zähler-Reset erkannt, Teildelta-Summe
-   - `sm_corrected` = 🔧 Manuell mit SM überschrieben (Altlast)
+   - `sm_substitute` = 🔧 PAC ungültig (Zählerunterbrechung/Anlaufphase) → SM-Wert eingesetzt
    - `pv_backfill` = 📚 Historisch aus Produktions-DB
 
 5. **Schreiben:** `nq_energy_daily` + `nq_energy_checkpoint`
@@ -130,25 +130,48 @@ FROM nq_energy_daily WHERE day='2026-08-05';
 
 ### 5.3 Bewertungskriterien
 
+Verglichen werden **zwei unabhängige Messgeräte am selben PCC** (PAC4200 mit
+150/5A-0,2S-Wandlern vs. Fronius Primär-SM). Beide zählen **saldierend** (Netto
+über alle drei Phasen) und integrieren jeweils ihre **eigene** Wirkleistung.
+
 | Abweichung | Status | Bedeutung |
 |------------|--------|-----------|
-| < 0,5% | ✅ Normal | Unterschiedliche Messtechnik/Messorte |
-| 0,5% – 5% | ⚠️ Auffällig | Prüfen: Datenlücke? Collector-Ausfall? |
-| > 5% | ❌ Kritisch | **Systematischer Fehler** → Messmethode untersuchen! |
+| < 2% | ✅ Normal | Im kombinierten Toleranzband beider Geräte |
+| 2% – 5% | ⚠️ Auffällig | Prüfen: Datenlücke? Collector-Ausfall? Anlaufphase? |
+| > 5% | ❌ Kritisch | Systematik prüfen (s. u.) |
 
-**Historische Baseline (2026-08-08):**
-- Alle 8 PAC-Tage wurden einmalig mit SM-Werten korrigiert (`src='sm_corrected'`)
-- Aktueller Vergleich zeigt **0,0% Abweichung** für alle Tage
-- **Ziel:** Neue Abweichungen >0,5% sofort erkennen
+**IST-Befund (nur voll abgedeckte Tage, `n_samples≈288`):**
+- **Bezug (Import)** stimmt gut überein: ±0…7% (meist ±3%), streut um 0.
+- **Einspeisung (Export)** wird vom PAC **systematisch höher** gezählt:
+  typ. **+5…+26%** (absolut ≈ +0,03…+0,19 kWh/Tag).
+- Ursache ist **kein** Verdrahtungs-/Konfig-Fehler (Strombeträge, Blindleistung
+  Q, Netto-Bezug und Registerabbild stimmen zwischen beiden Geräten überein; das
+  PAC integriert seine eigene P_tot exakt — verifiziert). Es ist eine echte
+  **Zwei-Geräte-Divergenz an einem Punkt mit sehr niedrigem Leistungsfaktor**
+  (PF am PCC häufig 0,3–0,5, hohe kapazitive Blindleistung). Ein kleiner
+  Phasenwinkel-Unterschied (~0,3°, am Rand der 0,2S-Klasse), angewandt auf die
+  große Blindleistung, ergibt einen Netto-Wirkleistungs-Offset von ~4 W ≈
+  0,1 kWh/Tag. Auf den großen Bezug ist das prozentual winzig, auf die kleine
+  Einspeisung prozentual groß.
+- **Wichtig:** **Gültige** PAC-Messtage werden **nie** mit SM-Werten überschrieben
+  (das würde reale Abweichungen verschleiern). Nur **wirklich ungültige** Tage
+  (Zählerunterbrechung/Anlaufphase, z. B. vor 2026-08-05) werden per
+  `nq_energy_invalidate` **explizit** an SM angeglichen (`src='sm_substitute'`),
+  damit die kumulativen Statistiken nicht durch Startup-Artefakte verfälscht
+  werden. Rückwirkende Neuberechnung gültiger Tage nur via `nq_energy_recompute`
+  (aus echten PAC-`*_start`-Fixpunkten).
+- **Absolute Wahrheit** liefert nur der **iMS/Netzbetreiber-Zähler**
+  (`nq_ims_reading`, Fixpunkte in `doc/MESSSYSTEM_FIXPUNKTE.md`) — regelmäßig
+  ablesen, um zu entscheiden, welches Gerät näher an der Eichgröße liegt.
 
 ## 6. src-Status Übersicht
 
 | src | Qualität | Ursache | Aktion |
 |-----|----------|---------|--------|
 | `counter` | ✅ Exzellent | Sauber bracketiert, interpoliert, kein Reset | Keine |
-| `partial` | ⚠️ Akzeptabel | Kein Bracketing oder 0-Register, within-day Fallback | Bei >0,5% Abweichung prüfen |
+| `partial` | ⚠️ Akzeptabel | Kein Bracketing oder 0-Register, within-day Fallback | Bei >2% Abweichung prüfen |
 | `reset_fallback` | ⚠️ Unsicher | Zähler-Reset erkannt, Teildelta-Summe | Bei Wiederholung: Hardware prüfen |
-| `sm_corrected` | 🔧 Korrigiert | Manuell mit SM überschrieben (Altlast 2026-08-08) | Nur historisch |
+| `sm_substitute` | 🔧 Ersetzt | PAC ungültig (Zählerunterbrechung/Anlaufphase), SM eingesetzt | Nur historisch (< 2026-08-05) |
 | `pv_backfill` | 📚 Historisch | Aus Produktions-DB vor PAC-Start | Nur vor 2026-07-12 |
 
 ## 7. Timer-Kette (Übersicht)

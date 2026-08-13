@@ -5,7 +5,7 @@ role: N
 applyTo: "nq/transfer/**,nq/aggregate/**"
 tags: [netzqualitaet, nq, transfer, aggregation, primary, rolle-n]
 status: stable
-last_review: 2026-08-10
+last_review: 2026-08-13
 ---
 
 # NQ Transfer + Aggregation
@@ -23,8 +23,8 @@ fächert zu `hourly → daily` auf und hält Event-RAW dauerhaft.
 - **Event-Schnipsel-Pipeline (Primary):** `nq/transfer/nq_event_transfer.py:transfer_events` / `derive_event` / `ingest_snippets` / `_cap_event_log`
 - **GFS-Backup NQ-DB:** `scripts/backup_nq_gfs.sh` (daily/weekly/monthly, Integrität, Offsite rsync)
 - **Energie-Rollup (Primary):** `nq/transfer/nq_energy_rollup.py:rollup` (tägl. 00:05, randscharf via `compute_daily_boundary`) / `rollup_month` / `rollup_year` / `master_sm_day` (autoritativer `daily_data`-Fixpunkt)
-- **Energie-Fixpunkt-Recompute (rückwirkend, Primary):** `nq/transfer/nq_energy_recompute.py:recompute` (aufeinanderfolgende day_start-Differenz, `--apply`/Dry-Run)
-- **SM-Korrektur Altlasten (einmalig Dev, Primary):** `nq/transfer/nq_energy_sm_correct.py:correct` (überschreibt PAC-Werte mit SM, `--threshold-pct`/`--min-abs-kwh`, `--apply`/Dry-Run, `src='sm_corrected'`)
+- **Energie-Fixpunkt-Recompute (rückwirkend, Primary):** `nq/transfer/nq_energy_recompute.py:recompute` (aufeinanderfolgende day_start-Differenz, `--apply`/Dry-Run) — **einzige** zulässige rückwirkende Energie-Korrektur; leitet Deltas ausschließlich aus den echten PAC-`*_start`-Fixpunkten ab, überschreibt PAC-Messwerte **nie** mit SM-Werten (überspringt `pv_backfill` + `sm_substitute`)
+- **Ungültige PAC-Tage an SM angleichen (explizit, Primary):** `nq/transfer/nq_energy_invalidate.py:invalidate` (`--day`/`--before`, `--apply`/Dry-Run, `src='sm_substitute'`) — nur **explizit** benannte Startup-/Unterbrechungs-Tage, keine Schwellen-Automatik; gültige PAC-Tage bleiben unangetastet
 - **Fixpunkt-Backfill (einmalig, Primary):** `nq/transfer/nq_energy_backfill.py:backfill` (PV-DB `daily_data` → NQ-Fixpunkte, `src='pv_backfill'`, Dry-Run-Default)
 - **SM-Netzqualitaets-Backfill (einmalig, Primary):** `nq/transfer/nq_sm_backfill.py:backfill` (Backup-`data_15min` → `nq_sm_15min`, L-N→L-L ×√3, Merge Live→Archiv→Backups, `--commit`/Dry-Run-Default)
 - **Speicher-Reclaim eingefrorener Monate (Primary):** `nq/aggregate/nq_prune_months.py:prune` (drop `nq_agg_10s`, delete `nq_raw_slow`, bedarfs-`VACUUM`; `--commit`/Dry-Run; taeglich via `nq_primary_cap`)
