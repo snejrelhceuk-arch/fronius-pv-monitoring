@@ -265,7 +265,27 @@
             60
           ],
           "einheit": "min",
-          "beschreibung": "Morgen-Mechanik um x Minuten vor Sunrise vorziehen. Gilt für Forecast-Fetch, SOC_MIN-Zeitfenster und Verzögerungsberechnung. 0 = kein Vorlauf."
+          "beschreibung": "Vorlauf für forecast_quality=mittel/unbekannt: Fenster öffnet x Min vor Sunrise."
+        },
+        "gut_vorlauf_min": {
+          "wert": 90,
+          "bereich": [
+            30,
+            180
+          ],
+          "einheit": "min",
+          "beschreibung": "Vorlauf für forecast_quality=gut: Fenster öffnet 90 Min vor Sunrise. Verhindert Netzbezug wenn Batterie schon früh auf Nacht-Reserve-Floor (z.B. 19%) trifft."
+        },
+        "mittel_soc_min_pct": {
+          "wert": 15,
+          "bereich": [
+            5,
+            25
+          ],
+          "einheit": "%",
+          "obs_feld": "soc_min",
+          "aktor_kommando": "set_soc_min",
+          "beschreibung": "Ziel-SOC_MIN für forecast_quality=mittel (PV unsicher). Konservativ zwischen stress_min (5%) und komfort_min (25%)."
         }
       },
       "score_gewicht": 72,

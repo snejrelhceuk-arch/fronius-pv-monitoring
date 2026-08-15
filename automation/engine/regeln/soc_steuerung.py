@@ -82,9 +82,11 @@ def _nachtlast_oeffnung_noetig(obs: ObsState, matrix: dict) -> bool:
     if sunrise is None or soc_min is None or soc is None:
         return False
 
-    # Bereits geöffnet wenn SOC_MIN unter Komfort → nicht erneut triggern
-    komfort_min = int(get_param(matrix, 'komfort_reset', 'komfort_min_pct', 25))
-    if soc_min <= komfort_min:
+    # Bereits auf Ziel-Boden → nicht erneut triggern
+    # Vergleich gegen stress_min_pct (5%), NICHT komfort_min (25%) —
+    # nachmittag_soc_max kann SOC_MIN=19% setzen ohne dass die Morgen-Öffnung je lief.
+    soc_floor = float(get_param(matrix, 'morgen_soc_min', 'stress_min_pct', 5.0))
+    if soc_min <= int(soc_floor):
         return False
 
     now_h = _jetzt_h()
@@ -273,19 +275,15 @@ def _dynamische_soc_ziele(obs: ObsState, matrix: dict) -> Optional[Tuple[int, in
 class RegelMorgenSocMin(Regel):
     """SOC_MIN morgens öffnen: Batterie entladen + SOC_MAX=75% begrenzen.
 
-    Trigger-Kette:
-      Sunrise → ForecastCollector holt Prognose (Tier-3, ~0.6s)
-             → ObsState.pv_at_sunrise_1h_w wird befüllt
-             → Engine nächster 60s-Zyklus sieht Wert
-             → pv_at_sunrise_1h_w >= 1500W?  → SOC_MIN dynamisch, SOC_MAX=75%
+    Ziel-Hierarchie:
+      gut     → stress_min_pct (5%) hart — Fenster öffnet gut_vorlauf_min (90min) vor SR
+      mittel  → mittel_soc_min_pct (15%) — Fenster SR-vorlauf + mittel_verzoegerung_h
+      schlecht → kein Öffnen
 
-    SOC_MIN je nach Nachtverbrauch (gegenläufig):
-      Leichte Nacht (3 kWh): 25% — kein Drain, Batterie schonen
-      Schwere Nacht (12 kWh):  5% — voller Drain, PV lädt morgen nach
-      Fallback ohne Historie:  20% (morgen_drain_soc_min_pct)
-
-    Halte-Modus: Solange SOC > SOC_MIN+2% im Zeitfenster →
-      Einstellung beibehalten (hoher Score verhindert Rücksetzung).
+    Halte-Modus: Ziel (quality-abhängig) bereits gesetzt → Score 0.95.
+    HALTE wird gegen das echte Ziel (5/15%) geprüft, NICHT gegen komfort_min (25%):
+    nachmittag_soc_max kann SOC_MIN=19% setzen (Nacht-Reserve) ohne dass die
+    Morgen-Regel je ausgelöst hat — das darf kein False-Halte auslösen.
 
     Parametermatrix: regelkreise.morgen_soc_min
     """
@@ -295,12 +293,36 @@ class RegelMorgenSocMin(Regel):
     engine_zyklus = 'fast'
 
     def _im_zeitfenster(self, obs: ObsState, matrix: dict) -> bool:
-        """(Sunrise - Vorlauf) bis Sunrise + fenster_ende_h."""
+        """(Sunrise - Vorlauf) bis Sunrise + fenster_ende_h.
+
+        Für quality=gut wird gut_vorlauf_min (default 90min) verwendet, damit
+        bei guter Prognose SOC_MIN=5% gesetzt wird bevor die Batterie früh
+        den Nacht-Reserve-Floor (19% o.ä.) trifft und Netzbezug entsteht.
+        """
         hr = _jetzt_h()
         sunrise = obs.sunrise or 7.0
-        vorlauf_h = get_param(matrix, self.regelkreis, 'morgen_vorlauf_min', 15) / 60.0
+        quality = get_effective_forecast_quality(obs, matrix) or ''
+        if quality == 'gut':
+            vorlauf_h = get_param(matrix, self.regelkreis, 'gut_vorlauf_min', 90) / 60.0
+        else:
+            vorlauf_h = get_param(matrix, self.regelkreis, 'morgen_vorlauf_min', 30) / 60.0
         ende_h = get_param(matrix, self.regelkreis, 'fenster_ende_nach_sunrise_h', 3)
         return (sunrise - vorlauf_h) <= hr <= sunrise + ende_h
+
+    def _soc_min_ziel_morgen(self, obs: ObsState, matrix: dict) -> int:
+        """Ziel-SOC_MIN für heute morgen, streng forecast-abhängig.
+
+        gut  → stress_min_pct (5%)  — PV lädt sicher nach, Batterie vollständig nutzen.
+        sonst→ mittel_soc_min_pct (15%) — konservativ, PV unsicher.
+        _dynamische_soc_ziele() wird hier NICHT verwendet: dessen SOC_MIN basiert
+        auf der HEUTIGEN Nacht-Prognose (= leichte Nacht → 25%), was für die
+        Morgen-Entladung die falsche Richtung wäre.
+        """
+        quality = get_effective_forecast_quality(obs, matrix) or ''
+        stress_min = int(get_param(matrix, self.regelkreis, 'stress_min_pct', 5))
+        if quality == 'gut':
+            return stress_min
+        return int(get_param(matrix, self.regelkreis, 'mittel_soc_min_pct', 15))
 
     def bewerte(self, obs: ObsState, matrix: dict) -> int:
         if not ist_aktiv(matrix, self.regelkreis):
@@ -326,62 +348,64 @@ class RegelMorgenSocMin(Regel):
                      obs.soc_min, obs.batt_soc_pct or -1, obs.grid_power_w or 0)
             return score
 
-        # ── HALTE-MODUS: SOC_MIN bereits unter Komfort (Öffnung war aktiv) ──
-        komfort_min_ref = int(get_param(matrix, 'komfort_reset', 'komfort_min_pct', 25))
-        if obs.soc_min is not None and obs.soc_min < komfort_min_ref:
-            if obs.batt_soc_pct is not None and obs.batt_soc_pct > obs.soc_min + 2:
-                halte_score = int(score * 0.95)
-                LOG.debug(f"morgen_soc_min HALTE: SOC={obs.batt_soc_pct:.1f}%, "
-                          f"SOC_MIN={obs.soc_min}% → Score {halte_score}")
-                return halte_score
-            return 0  # SOC am Boden → Regel nicht mehr nötig
-
-        # ── VETO: Prognose-Qualität 'schlecht' → nicht öffnen ──
+        # ── Forecast-Qualität — VETO und Timing ──
         quality = get_effective_forecast_quality(obs, matrix) or ''
+
         if quality == 'schlecht':
             LOG.debug("morgen_soc_min: forecast_quality=schlecht → kein Öffnen")
             return 0
 
-        # ── TRIGGER: pv_at_sunrise_1h_w >= Schwelle ──
-        schwelle = get_param(matrix, self.regelkreis, 'pv_schwelle_sunrise_1h_w', 1500)
-        pv_sr1h = obs.pv_at_sunrise_1h_w
-        if pv_sr1h is None or pv_sr1h < schwelle:
-            LOG.debug(f"morgen_soc_min: PV@SR+1h={pv_sr1h or 0:.0f}W "
-                      f"< {schwelle}W → kein Trigger")
-            return 0
-
-        # ── VERZÖGERUNG: 'mittel' → erst Sunrise + 1h (abzgl. Vorlauf) ──
-        if quality == 'mittel':
-            now_h = datetime.now().hour + datetime.now().minute / 60.0
-            sunrise = obs.sunrise or 7.0
-            vorlauf_h = get_param(matrix, self.regelkreis, 'morgen_vorlauf_min', 15) / 60.0
-            verzoegerung = get_param(matrix, self.regelkreis, 'mittel_verzoegerung_h', 1.0)
-            trigger_h = (sunrise - vorlauf_h) + verzoegerung
-            if now_h < trigger_h:
-                LOG.debug(f"morgen_soc_min: forecast_quality=mittel → warte bis "
-                          f"SR-{vorlauf_h*60:.0f}min+{verzoegerung:.0f}h "
-                          f"({trigger_h:.2f}h, jetzt {now_h:.2f}h)")
+        # Für 'gut': kein pv_at_sunrise-Check nötig — quality=gut impliziert gute PV
+        if quality != 'gut':
+            # ── TRIGGER: pv_at_sunrise_1h_w >= Schwelle ──
+            schwelle = get_param(matrix, self.regelkreis, 'pv_schwelle_sunrise_1h_w', 1500)
+            pv_sr1h = obs.pv_at_sunrise_1h_w
+            if pv_sr1h is None or pv_sr1h < schwelle:
+                LOG.debug(f"morgen_soc_min: PV@SR+1h={pv_sr1h or 0:.0f}W "
+                          f"< {schwelle}W → kein Trigger")
                 return 0
 
+            # ── VERZÖGERUNG: 'mittel' → erst Sunrise + 1h (abzgl. Vorlauf) ──
+            if quality == 'mittel':
+                now_h = datetime.now().hour + datetime.now().minute / 60.0
+                sunrise = obs.sunrise or 7.0
+                vorlauf_h = get_param(matrix, self.regelkreis, 'morgen_vorlauf_min', 30) / 60.0
+                verzoegerung = get_param(matrix, self.regelkreis, 'mittel_verzoegerung_h', 1.0)
+                trigger_h = (sunrise - vorlauf_h) + verzoegerung
+                if now_h < trigger_h:
+                    LOG.debug(f"morgen_soc_min: forecast_quality=mittel → warte bis "
+                              f"SR-{vorlauf_h*60:.0f}min+{verzoegerung:.0f}h "
+                              f"({trigger_h:.2f}h, jetzt {now_h:.2f}h)")
+                    return 0
+
+        # ── HALTE-MODUS: Ziel (quality-abhängig) bereits gesetzt? ──
+        # Vergleich gegen echtes Ziel (5% oder 15%), NICHT gegen komfort_min (25%).
+        # SOC_MIN=19% vom nachmittag-Regelkreis darf kein False-Halte auslösen.
+        soc_min_ziel = self._soc_min_ziel_morgen(obs, matrix)
+        if obs.soc_min is not None and obs.soc_min <= soc_min_ziel:
+            if obs.batt_soc_pct is not None and obs.batt_soc_pct > soc_min_ziel + 2:
+                halte_score = int(score * 0.95)
+                LOG.debug(f"morgen_soc_min HALTE: SOC={obs.batt_soc_pct:.1f}%, "
+                          f"SOC_MIN={obs.soc_min}% ≤ Ziel {soc_min_ziel}% [{quality}] "
+                          f"→ Score {halte_score}")
+                return halte_score
+            return 0  # SOC am Ziel-Boden
+
+        LOG.info("morgen_soc_min: Öffnung nötig — SOC_MIN=%s%% > Ziel %s%% [%s]",
+                 obs.soc_min, soc_min_ziel, quality)
         return score
 
     def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
         komfort_max = get_param(matrix, self.regelkreis, 'morgen_soc_max_pct', 75)
-        fallback_min = int(get_param(matrix, self.regelkreis, 'morgen_drain_soc_min_pct', 20))
+        quality = get_effective_forecast_quality(obs, matrix) or ''
 
-        # ── HALTE-MODUS: bereits geöffnet → keine neue Aktion ──
-        komfort_min_ref = int(get_param(matrix, 'komfort_reset', 'komfort_min_pct', 25))
-        if obs.soc_min is not None and obs.soc_min < komfort_min_ref:
+        soc_min_ziel = self._soc_min_ziel_morgen(obs, matrix)
+
+        # ── HALTE-MODUS: Ziel bereits gesetzt → keine neue Aktion ──
+        if obs.soc_min is not None and obs.soc_min <= soc_min_ziel:
             return []
 
-        # ── Dynamisches SOC_MIN aus Nachtverbrauch-Prognose ──
-        dyn = _dynamische_soc_ziele(obs, matrix)
-        if dyn is not None:
-            soc_min_ziel = dyn[0]  # 20–25% je nach Nachtverbrauch
-        else:
-            soc_min_ziel = fallback_min  # Fallback ohne Historie
-
-        # ── ÖFFNUNG: SOC_MODE=manual, SOC_MIN dynamisch, SOC_MAX=75% ──
+        # ── ÖFFNUNG: SOC_MODE=manual, SOC_MIN auf Ziel, SOC_MAX=75% ──
         aktionen = []
         pv_sr1h = obs.pv_at_sunrise_1h_w or 0
         soc_str = f"{obs.batt_soc_pct:.0f}" if obs.batt_soc_pct is not None else "?"
@@ -396,9 +420,9 @@ class RegelMorgenSocMin(Regel):
         aktionen.append({
             'tier': 2, 'aktor': 'batterie',
             'kommando': 'set_soc_min', 'wert': soc_min_ziel,
-            'grund': (f'Morgen-Öffnung: PV@SR+1h={pv_sr1h:.0f}W ≥ Schwelle '
-                      f'→ SOC_MIN→{soc_min_ziel}% '
-                      f'({"Nacht-Prognose" if dyn else "Fallback"}, SOC={soc_str}%)'),
+            'grund': (f'Morgen-Öffnung [{quality}]: '
+                      f'SOC_MIN {obs.soc_min or "?"}%→{soc_min_ziel}% '
+                      f'(SOC={soc_str}%, PV@SR+1h={pv_sr1h:.0f}W)'),
         })
 
         if obs.soc_max is None or obs.soc_max != komfort_max:
@@ -413,8 +437,6 @@ class RegelMorgenSocMin(Regel):
                               f'{obs.soc_max or "?"}%→{komfort_max}% '
                               f'(LFP-Schonung)'),
                 })
-
-        # Hinweis: registriere_aktion() erfolgt NACH Actuator-Erfolg in engine.py (K2)
 
         return aktionen
 
