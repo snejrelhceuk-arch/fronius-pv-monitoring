@@ -1,11 +1,11 @@
 # Aggregation-Pipeline — Fronius PV-Anlage
 
-> Stand: 2026-03-01
+> Stand: 2026-08-18
 
 ## 1. Pipeline-Übersicht
 
 ```
-raw_data (3s Modbus-Polling, Retention: 7 Tage)
+raw_data (3s Modbus-Polling, Retention: 30 Tage)
 │
 ├─── aggregate_1min.py ──► data_1min         (Tag-Chart)
 │                          Retention: 90 Tage
@@ -42,7 +42,7 @@ daily_data
 
 | Tabelle | Intervall | Retention | Spalten | Verwendung |
 |---------|-----------|-----------|---------|------------|
-| `raw_data` | 3s | 7 Tage | ~76 | Echtzeit-Visu, Fehleranalyse |
+| `raw_data` | 3s | 30 Tage | ~76 | Echtzeit-Visu, Fehleranalyse |
 | `data_1min` | 1 min | 90 Tage | ~97 | Tag-Chart (P×t-Integration) |
 | `data_15min` | 15 min | 90 Tage | ~99 | Technische Basis für hourly/monthly + Forecast/Clear-Sky |
 | `hourly_data` | 1 h | 365 Tage | ~53 | Zwischenstufe für daily |
@@ -73,7 +73,7 @@ Alle Aggregationen laufen 4× pro Stunde, gestaffelt für korrekte Daten-Kette:
 ## 4. Retention-Policies (config.py)
 
 ```python
-RAW_DATA_RETENTION_DAYS = 7        # raw_data (Pi4/SD-kompatibel)
+RAW_DATA_RETENTION_DAYS = 30       # raw_data (3s-Rohdaten; techn. Rückverfolgung, RAM-tragbar auf Pi5)
 DATA_1MIN_RETENTION_DAYS = 90      # data_1min
 DATA_15MIN_RETENTION_DAYS = 90     # data_15min
 HOURLY_RETENTION_DAYS = 365        # hourly_data
@@ -82,7 +82,7 @@ DATA_MONTHLY_RETENTION_DAYS = 3650 # data_monthly (~10 Jahre)
 # monthly_statistics + yearly_statistics: PERMANENT (kein Cleanup)
 ```
 
-Bereinigung erfolgt automatisch durch `modbus_v3.py cleanup_db()` bei jedem Collector-Start.
+Bereinigung erfolgt automatisch durch `collector/poller.py` `cleanup_db()` im laufenden `pv-collector` (stündlich).
 Kein separater Cron-Job für Retention nötig.
 
 ## 5. Energie-Modell: Spalten-Mapping
@@ -185,7 +185,7 @@ Die historischen Monatswerte (CSV) fließen somit korrekt in die Jahressummen ei
 
 | Ansicht | API-Endpunkt | Datenquelle |
 |---------|-------------|-------------|
-| Tag | `/api/tag_visualization` | `data_1min` + Forecast aus `data_15min` |
+| Tag | `/api/tag_visualization` | `data_1min` (≤90 T) → `stats.data_5min_permanent` (ältere Tage, 5-min, permanent) + Forecast aus `data_15min` |
 | Monat | `/api/monat_visualization` | `daily_data` + Forecast aus `data_15min` |
 | Jahr | `/api/jahr_visualization` | `monthly_statistics` |
 | Gesamt | `/api/gesamt_visualization` | `monthly_statistics` |
@@ -244,3 +244,52 @@ python3 scripts/backfill_forecast_15min.py --days 90 --dry-run
 # Persist-DB explizit
 python3 scripts/backfill_forecast_15min.py --days 90 --persist
 ```
+
+## 10. Datenmengen, Skalierung & Backup-Impact (Pi5-Primary)
+
+> Gemessen 2026-08-18 auf **Pi5-Primary** (4 GB RAM, tmpfs `/dev/shm` 2,0 GB, microSD 64 GB / 43 GB frei) via `dbstat`. Werte = Tabelle **inkl. Indizes**, gerundet.
+
+### 10.1 Ist-Belegung je Tabelle
+
+| Tabelle | Retention | Speicher (gemessen, inkl. Index) | Ø/Tag |
+|---------|-----------|----------------------------------|-------|
+| `raw_data` | 30 T | ~495 MB @30 T (115 MB/7 T gemessen) | ~16,5 MB |
+| `data_1min` | 90 T | ~107 MB | ~1,2 MB |
+| `data_15min` | 90 T | ~7 MB | ~0,08 MB |
+| `hourly_data` | 365 T | ~3 MB (365 T) | — |
+| `daily_data` | 3650 T | ~2 MB (10 J) | — |
+| `data_monthly` | 3650 T | <0,1 MB | — |
+| `monthly_statistics` | permanent | <0,1 MB | — |
+| `yearly_statistics` | permanent | <0,1 MB | — |
+| `fritzdect_readings` | 7 T | ~31 MB | ~4,4 MB |
+| `wattpilot_readings` | 90 T | ~17 MB | ~0,2 MB |
+| `forecast_daily` | wächst langsam | ~5 MB | — |
+
+### 10.2 RAM-DB (`/dev/shm/fronius_data.db`, tmpfs)
+
+- **Vorher** (raw_data 7 T): **285 MB** gemessen.
+- **Nachher** (raw_data 30 T, eingeschwungen): **~665 MB** (+~380 MB durch die zusätzlichen 23 T raw_data).
+- tmpfs 2,0 GB → **~33 % belegt**; RAM 4 GB → nach Umstellung noch ~1,5 GB frei.
+- Der SD-Spiegel `data.db` wächst identisch (SD 43 GB frei → trivial). Pi5-FB (8 GB RAM) hat noch mehr Reserve.
+
+### 10.3 Langzeit-Skalierung (10 / 30 Jahre)
+
+**Kernbefund: RAM-DB und `data.db` sind retention-begrenzt → sie erreichen einen _stabilen Endzustand_ (~665 MB) und wachsen NICHT über die Jahre.** Nur die permanente 5-min-DB wächst nennenswert linear:
+
+| Speicher | Ort | Wachstum | 10 Jahre | 30 Jahre |
+|----------|-----|----------|----------|----------|
+| RAM-DB / `data.db` | RAM + SD | begrenzt (Retention) | ~665 MB | ~665 MB |
+| `data_stats.db` (5-min-permanent) | SD | ~80 MB/Jahr | ~0,8 GB | ~2,4 GB |
+| `monthly`/`yearly_statistics` | RAM + SD | ~KB/Jahr | <5 MB | <15 MB |
+
+`data_stats.db` (aktuell 50 MB für ~7,5 Monate, 64 664 Zeilen) ist der einzige nennenswerte Dauerwachser — auf **SD, nicht im RAM**. Selbst „für immer" bleibt die SD-Last im einstelligen GB-Bereich.
+
+### 10.4 Auswirkung auf die GFS-Backups
+
+`scripts/backup_db_gfs.sh` sichert die **gesamte** `data.db` (RAM-DB-Snapshot, gzip). Retention: **7 Sohn + 5 Vater + 12 Großvater + jährl. Urgroßvater** (≈ 24 Dauer-Kopien + 1/Jahr), zusätzlich Offsite-Kopie auf Pi5-FB (NVMe 512 GB).
+
+- Kompression gemessen: `data.db` 285 MB → **102 MB gzip** (2,79×); `raw_data` allein 108 MB → 31 MB (0,29×).
+- Nach raw_data 30 T: `data.db` ~665 MB → **~239 MB gzip/Kopie** (+~137 MB je Kopie).
+- **Mehrbedarf GFS je Standort:** ~24 Kopien × ~137 MB ≈ **~3,3 GB**; Urgroßvater +~239 MB/Jahr.
+- Ziel-Medien: SD 58 GB (43 GB frei) + NVMe 512 GB → **unkritisch**.
+- `data_stats.db` läuft **nicht** über die GFS-Kette, sondern per Tages-Sync (`scripts/stats_archive_daily.sh`, jeweils aktuelle Kopie) nach Pi5 + Failover.

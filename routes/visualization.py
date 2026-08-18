@@ -385,23 +385,31 @@ def api_tag_visualization():
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Basis-Query: Versuche erst data_1min, falls nicht verfügbar dann data_15min
+        # Basis-Query: data_1min bzw. stats.data_5min_permanent (beide volles
+        # data_1min-Schema) vs. data_15min (Detailspalten fehlen → NULL).
         def _build_tag_query(table, energy_col, where_clause):
-            """Baut die SELECT-Query tabellen-abhängig (data_1min vs data_15min)."""
-            if table == 'data_1min':
-                extra_cols = """P_Exp, P_Imp,
-                    P_inBatt, P_outBatt, P_Direct,
-                    P_inBatt_PV, P_inBatt_Grid,
-                    W_Ertrag, W_Einspeis, W_Bezug,
-                    W_inBatt, W_outBatt, W_Direct, W_Verbrauch,
-                    W_inBatt_PV, W_inBatt_Grid"""
-            else:
+            """Baut die SELECT-Query tabellen-abhängig.
+
+            Nur data_15min fehlen die Ertrags-/Verbrauchs-/Batterie-Detailspalten
+            (→ NULL). data_1min UND die permanente 5-min-STATS-Tabelle
+            (`stats.data_5min_permanent`, Schema = data_1min) fuehren sie voll →
+            echte Spalten selektieren, damit Tag-Charts fuer Tage aelter als die
+            90-Tage-Retention nicht nur SOC/Batterie zeigen.
+            """
+            if table == 'data_15min':
                 # data_15min: Fehlende Spalten als NULL
                 extra_cols = """NULL as P_Exp, NULL as P_Imp,
                     NULL as P_inBatt, NULL as P_outBatt, NULL as P_Direct,
                     P_inBatt_PV, P_inBatt_Grid,
                     NULL as W_Ertrag, NULL as W_Einspeis, NULL as W_Bezug,
                     NULL as W_inBatt, NULL as W_outBatt, NULL as W_Direct, NULL as W_Verbrauch,
+                    W_inBatt_PV, W_inBatt_Grid"""
+            else:
+                extra_cols = """P_Exp, P_Imp,
+                    P_inBatt, P_outBatt, P_Direct,
+                    P_inBatt_PV, P_inBatt_Grid,
+                    W_Ertrag, W_Einspeis, W_Bezug,
+                    W_inBatt, W_outBatt, W_Direct, W_Verbrauch,
                     W_inBatt_PV, W_inBatt_Grid"""
             return f"""
                 SELECT

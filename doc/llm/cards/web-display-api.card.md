@@ -5,7 +5,7 @@ role: B
 applyTo: "routes/**"
 tags: [web-api, blueprints, templates, formatting, read-only]
 status: stable
-last_review: 2026-08-10
+last_review: 2026-08-18
 ---
 
 # Web Display/API
@@ -50,6 +50,7 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 - Lokaler Smoke-Test von Web-Routen -> immer `http://127.0.0.1:8000/...` verwenden (Produktionsport), nicht `:5000`.
 
 ## Bekannte Fallstricke
+- **Tag-Chart-Spaltenwahl:** `routes/visualization.py:_build_tag_query` unterscheidet nur `data_15min` (Detailspalten fehlen → NULL) von `data_1min`/`stats.data_5min_permanent` (volles data_1min-Schema). Für Tage älter als die 90-T-Retention liefert die permanente 5-min-Tabelle so die vollständigen Leistungs-/Verbrauchskurven, nicht nur SOC/Batterie.
 - Display-Formatter sind template-lokal; parallele Formatter in anderen Views koennen driften.
 - **Template-/Static-Deploy:** Unter Gunicorn (Prod) cached Jinja kompilierte Templates; `templates/*.html`-Änderungen werden erst nach Reload des Web-Workers wirksam (`sudo kill -HUP $(cat /tmp/pv_web.pid)` bzw. Restart `pv-web.service`). `static/*` (JS/CSS) liefert dagegen mit `Cache-Control: no-cache` + ETag frisch aus.
 - Forecast-Persistierung schreibt in DB-Tabellen (`forecast_daily`, `data_15min`) und ist damit eine kontrollierte Ausnahme vom read-only Zielbild.

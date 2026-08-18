@@ -5,7 +5,7 @@ role: A
 applyTo: "db_init.py"
 tags: [db, schema, raw-data, aggregat]
 status: stable
-last_review: 2026-08-10
+last_review: 2026-08-18
 ---
 
 # DB-Schema
@@ -26,7 +26,7 @@ Schema-Übersicht der zentralen `data.db` (SQLite). Pflichttabellen, Aggregat-Pi
 
 ## Tabellen (Stand 2026-05)
 **Raw + Aggregat (PV-Kern):**
-- `raw_data` — PK `ts`, ~96 Spalten, 3-s-Polling, ca. 20-min-Buffer im RAM.
+- `raw_data` — PK `ts`, ~96 Spalten, 3-s-Polling, ca. 20-min-Buffer im RAM; Retention **30 Tage** (`RAW_DATA_RETENTION_DAYS`, Pi5).
 - `data_1min` — PK `ts`, P×t-Integration, Batterieaufteilung; Retention 90 Tage (`DATA_1MIN_RETENTION_DAYS`).
 - `data_15min` — Buckets + Forecast/Clear-Sky-Overlay.
 - `hourly_data` — stündliche min/max/avg.
@@ -47,7 +47,7 @@ Schema-Übersicht der zentralen `data.db` (SQLite). Pflichttabellen, Aggregat-Pi
 - `automation_log` — Aktor-Resultate (geschrieben durch `automation/engine/actuator.py`).
 
 **Stats-DB (`data_stats.db`, separat, permanent):**
-- `data_5min_permanent` — 5-min-Downsample (Schema = `data_1min`), hält Tag-Chart-Daten **dauerhaft** (RAM-DB bleibt 90 T). Web hängt sie read-only an (ATTACH `stats` in `db_utils.py`, `config.STATS_DB_PATH`); Tag-Endpunkte via `routes/helpers.py:tag_table`. Eigene DB, **kein** `db_init.py`-Pflichteintrag.
+- `data_5min_permanent` — 5-min-Downsample (Schema = `data_1min`), hält Tag-Chart-Daten **dauerhaft** (RAM-DB bleibt 90 T). Web hängt sie read-only an (ATTACH `stats` in `db_utils.py`, `config.STATS_DB_PATH`); Tag-Endpunkte via `routes/helpers.py:tag_table`. Eigene DB, **kein** `db_init.py`-Pflichteintrag. Der Tag-Endpunkt `routes/visualization.py` selektiert dabei die vollen `data_1min`-Spalten (nur `data_15min` → NULL), damit Tage > 90 T die kompletten Kurven zeigen (nicht nur SOC/Batterie).
 
 ## Invarianten
 - Pflichttabellen müssen existieren — `db_init.py` **prüft** `REQUIRED_TABLES` (kein CREATE der Kern-Tabellen); die Anlage erfolgt aus dem SQL-Schema (`doc/collector/schema/db_schema_v4_tech.sql`, `db_schema_1min.sql`). `db_init.py` legt nur Neben-/Forecast-Tabellen via `CREATE TABLE IF NOT EXISTS` an.
