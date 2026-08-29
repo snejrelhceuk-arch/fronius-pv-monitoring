@@ -46,17 +46,17 @@
                 <div id="tagNavigation" style="display:flex; gap:4px; align-items:center;">
                     <button onclick="navigate(-1)">&#9664;</button>
                     <button class="date-label" id="tagDateDisplay">Heute</button>
-                    <button onclick="navigate(1)">&#9654;</button>
+                    <button id="tagNext" onclick="navigate(1)">&#9654;</button>
                 </div>
                 <div id="monatNavigation" style="display:none; gap:4px; align-items:center;">
                     <button onclick="navigate(-1)">&#9664;</button>
                     <button class="date-label" id="monatDateDisplay">Monat</button>
-                    <button onclick="navigate(1)">&#9654;</button>
+                    <button id="monatNext" onclick="navigate(1)">&#9654;</button>
                 </div>
                 <div id="jahrNavigation" style="display:none; gap:4px; align-items:center;">
                     <button onclick="navigate(-1)">&#9664;</button>
                     <button class="date-label" id="jahrDateDisplay">Jahr</button>
-                    <button onclick="navigate(1)">&#9654;</button>
+                    <button id="jahrNext" onclick="navigate(1)">&#9654;</button>
                 </div>
                 <button class="btn-jetzt" id="btnHeute" onclick="navigateToday()">&#9201; Heute</button>
             </div>
@@ -256,6 +256,11 @@
                 // Gesamt: no navigation
                 btnHeute.style.display = 'none';
             }
+            const atFuture = isAtOrAfterToday();
+            ['tagNext', 'monatNext', 'jahrNext'].forEach(id => {
+                const b = document.getElementById(id);
+                if (b) b.disabled = atFuture;
+            });
             updateContextLinks();
             scheduleAutoRefresh();
         }
@@ -270,7 +275,24 @@
             currentMonth = a.month;
         }
 
+        // True, sobald der gewählte Zeitraum die Gegenwart erreicht/überschreitet.
+        function isAtOrAfterToday() {
+            const now = new Date();
+            if (currentView === 'tag') {
+                const d = new Date(currentDate); d.setHours(0, 0, 0, 0);
+                const n = new Date(now); n.setHours(0, 0, 0, 0);
+                return d >= n;
+            }
+            if (currentView === 'monat') {
+                return currentYear > now.getFullYear()
+                    || (currentYear === now.getFullYear() && currentMonth >= now.getMonth() + 1);
+            }
+            if (currentView === 'jahr') return currentYear >= now.getFullYear();
+            return true;
+        }
+
         function navigate(delta) {
+            if (delta > 0 && isAtOrAfterToday()) return;  // keine Navigation in die Zukunft
             if (currentView === 'tag') {
                 currentDate.setDate(currentDate.getDate() + delta);
                 syncAnchors('date');
@@ -817,16 +839,21 @@
         if (window.PVNavUI) {
             PVNavUI.initDrawer();
             const isoDay = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            const _now = new Date();
+            const _todayISO = isoDay(_now);
+            const _thisMonth = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}`;
             PVNavUI.attachCalendar(document.getElementById('tagDateDisplay'), 'day',
                 () => isoDay(currentDate),
-                v => { currentDate = new Date(`${v}T12:00:00`); syncAnchors('date'); updateNavUI(); loadData(); });
+                v => { currentDate = new Date(`${v}T12:00:00`); syncAnchors('date'); updateNavUI(); loadData(); },
+                { min: '2021-01-01', max: _todayISO });
             PVNavUI.attachCalendar(document.getElementById('monatDateDisplay'), 'month',
                 () => `${currentYear}-${String(currentMonth).padStart(2,'0')}`,
                 v => { const p = v.split('-'); currentYear = +p[0]; currentMonth = +p[1]; syncAnchors('month'); updateNavUI(); loadData(); },
-                { min: '2021-01' });
+                { min: '2021-01', max: _thisMonth });
             PVNavUI.attachCalendar(document.getElementById('jahrDateDisplay'), 'day',
                 () => isoDay(new Date(currentYear, 0, 1)),
-                v => { currentYear = new Date(`${v}T12:00:00`).getFullYear(); syncAnchors('year'); updateNavUI(); loadData(); });
+                v => { currentYear = new Date(`${v}T12:00:00`).getFullYear(); syncAnchors('year'); updateNavUI(); loadData(); },
+                { min: '2021-01-01', max: _todayISO });
         }
 
         document.addEventListener('visibilitychange', function() {

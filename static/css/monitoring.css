@@ -126,6 +126,14 @@ body {
     color: white;
 }
 
+.top-nav-bar button:disabled,
+.top-nav-bar button:disabled:hover {
+    opacity: 0.32;
+    cursor: not-allowed;
+    background: rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.8);
+}
+
 .top-nav-bar button.active {
     background: rgba(255,255,255,0.2);
     color: white;
