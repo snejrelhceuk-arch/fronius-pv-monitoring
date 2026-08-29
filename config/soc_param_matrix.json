@@ -1,7 +1,7 @@
 {
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
-  "_updated": "2026-08-02",
+  "_updated": "2026-08-29",
   "regelkreise": {
     "soc_extern": {
       "_doc": "Toleranz für extern geänderte SOC-Werte (z.B. manuell via Fronius App). Wenn SOC_MIN oder SOC_MAX außerhalb der Automation geändert werden, respektiert die Engine die Werte für die konfigurierte Dauer.",
