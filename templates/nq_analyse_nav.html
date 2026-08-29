@@ -1,0 +1,13 @@
+<!-- nq_analyse_nav.html — Sub-Navigation der NQ-Spektralanalyse-Einzelseiten.
+     Erwartet die Variable `active` (Schlüssel der aktuellen Seite). -->
+<nav class="top-nav">
+    <span class="nav-title">NQ · Spektralanalyse</span>
+</nav>
+<div class="subnav">
+    <a href="/netzqualitaet/analyse" class="{{ 'active' if active == 'hub' else '' }}"><span class="ico">🧭</span>Übersicht</a>
+    <a href="/netzqualitaet/analyse/harmonische" class="{{ 'active' if active == 'harmonische' else '' }}"><span class="ico">📡</span>Oberschwingungen</a>
+    <a href="/netzqualitaet/analyse/periodogramm" class="{{ 'active' if active == 'periodogramm' else '' }}"><span class="ico">🌐</span>Periodogramm</a>
+    <a href="/netzqualitaet/analyse/psd" class="{{ 'active' if active == 'psd' else '' }}"><span class="ico">📉</span>Leistungsdichte</a>
+    <a href="/netzqualitaet/analyse/spektrogramm" class="{{ 'active' if active == 'spektrogramm' else '' }}"><span class="ico">⚡</span>Spektrogramm</a>
+    <a href="/netzqualitaet/analyse/reflexion" class="reflect {{ 'active' if active == 'reflexion' else '' }}"><span class="ico">🛰️</span>Reflexionen</a>
+</div>

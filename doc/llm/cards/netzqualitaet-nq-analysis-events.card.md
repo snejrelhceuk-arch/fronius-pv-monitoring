@@ -5,7 +5,7 @@ role: N
 applyTo: "nq/analysis/**"
 tags: [netzqualitaet, nq, analyse, events, harmonische, frequenz, rolle-n]
 status: stable
-last_review: 2026-08-10
+last_review: 2026-08-29
 ---
 
 # NQ Analysetools Netzereignisse
@@ -28,6 +28,8 @@ global-niederfrequent (`NF_global`), sehr niederfrequent (`VLF`).
 - **Impedanz:** `config/nq_impedance.json` (R=163 mΩ, X=251 mΩ, Z=299 mΩ)
 - **Musteranalyse-Datensatz (residual-bereinigt):** `nq/analysis/nq_pattern.py:build_range` → `nq_pattern_5min` (netzseitige U/f/PF/φ, `origin`); Serve: `routes/pac4200.py:api_nq_pattern` (`/api/nq/pattern`)
 - **Spektralanalyse-Pipeline (pure numpy):** `nq/analysis/nq_spectral.py` — `welch_psd`, `lombscargle`, `decimate`/`fir_lowpass`, `log_bin`, `stft`, `morlet_cwt`, `thd_from_harmonics`; Loader `load_clean_freq`/`load_harmonics`/`load_thd_series`. Serve: `routes/pac4200.py:/api/nq/spectral/{harmonics,periodogram,psd,spectrogram}`
+- **Reflexions-/Laufwellenanalyse (pure numpy, Versuch):** `nq/analysis/nq_reflection.py` — `geometry` (CESA-Randpolygon + Grenzdistanzen/Peilungen ab `config.LATITUDE`/`LONGITUDE`), `detect_packets`, `autocorr_echo`, `match_boundary` (d = v·Δt/2), `analyze`. Konfig `config/nq_config.json` → `reflection`-Block. Serve: `routes/pac4200.py:api_nq_reflection` (`/api/nq/reflection` + `/geometry`).
+- **Web-Einzelseiten (Rolle B):** Hub `routes/pac4200.py:nq_analyse_page` + `nq_analyse_harmonische_page`/`nq_analyse_periodogramm_page`/`nq_analyse_psd_page`/`nq_analyse_spektrogramm_page`/`nq_analyse_reflexion_page`. Templates `templates/nq_analyse_view.html` + `nq_spec_*.html` + `nq_reflexion.html` + Partial `nq_analyse_nav.html`; Assets `static/css/nq-analyse.css`, `static/js/nq-analyse.js`.
 - **Gemeinsame Helfer:** `nq/nq_common.py`
 - **Methodik-Vorbild:** Legacy `nq/legacy/nq_analysis.py` (DFD, Boundary-Events)
 
@@ -39,6 +41,7 @@ global-niederfrequent (`NF_global`), sehr niederfrequent (`VLF`).
 - **HF_local:** THD-Spikes (vmax > Schwelle über ≥2 aufeinanderfolgende 10s-Buckets), U↔I-Residual-Filterung (ΔU_net = ΔU − ΔI × Z_loop, Pearson-Korrelation → lokal/netzseitig/unklar).
 - **NF_global:** DFD an :00/:15/:30/:45-Grenzen (normal vs. Anomalie), rollendes df/dt (60s, Hz/min → freq_nadir/freq_peak), Tap-Filter (Sprünge in ±30s der 15-min-Grenze → ignoriert), U-Band EN 50160 (207..253V, ≥2 × 5min-Buckets → u_rms_violation).
 - **VLF:** Stündlicher z-Score gegen 30-Tage-Rollprofil (|z| > sigma_thr → profile_anomaly), CUSUM-Changepoint (7d-pre vs. 7d-post auf nq_daily, z > vlf_changepoint_z → changepoint).
+- **Reflexion (Versuch):** Aus Event-Schnipsel (Spannung 200 ms, `nq_event_fast`) Echo via Autokorrelation → Δt → Umlaufdistanz `d = v_em·Δt/2` (v_em ~500 km/s, konfigurierbar) → nächste CESA-Netzgrenze = vermutliche Reflexionsstelle; Herkunft = Gegenrichtung (Peilung + 180°). Kontinuierliche 5-min-Frequenz (`nq_pattern_5min`) liefert ergänzend langsame Schwingungspakete (VLF). Ein-Punkt-Messung → Distanz-Hypothesen, keine gesicherte Richtung; PAC-Frequenzband ≤50 mHz (10-s-Refresh).
 
 ## Konfiguration (config/nq_config.json → "analysis")
 | Parameter | Default | Bedeutung |

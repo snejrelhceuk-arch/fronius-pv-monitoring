@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico?v={{ favicon_version }}">
+    <title>Oberschwingungen — NQ-Spektralanalyse</title>
+    <script src="/static/js/nav-context.js"></script>
+    <script src="/static/js/nav-ui.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="/static/js/nq-analyse.js"></script>
+    <link rel="stylesheet" href="/static/css/nav-ui.css">
+    <link rel="stylesheet" href="/static/css/nq-analyse.css">
+</head>
+<body>
+
+{% include 'nq_analyse_nav.html' %}
+
+<div class="content">
+    <div class="globalbar">
+        <div class="gb-group" id="rangeGroup">
+            <span class="gb-label">Zeitraum</span>
+            <button class="ctrl-btn" data-days="7">7 T</button>
+            <button class="ctrl-btn" data-days="30">30 T</button>
+            <button class="ctrl-btn" data-days="90">90 T</button>
+            <button class="ctrl-btn" data-days="365">1 J</button>
+        </div>
+        <div class="gb-group" style="margin-left:auto">
+            <button class="ctrl-btn" onclick="loadHarm()">↻ Aktualisieren</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header">
+            <span class="section-icon">📡</span>
+            <div>
+                <div class="section-title">Oberschwingungs-Spektrum <span class="badge badge-hf">HF &gt; 50 Hz</span></div>
+                <div class="section-sub">
+                    Oberhalb der Grundschwingung stammt das Spektrum aus der
+                    <strong>geräteinternen FFT des PAC4200</strong>. Dargestellt sind die
+                    Einzelharmonischen H1…H31 als Linienspektrum (Ordnung <em>n</em> → <em>n</em>·50 Hz).
+                </div>
+            </div>
+        </div>
+        <div class="section-body">
+            <div class="ctrl-row">
+                <span class="ctrl-label">Messgröße:</span>
+                <button class="ctrl-btn active" data-meas="U_LN" onclick="setMeas('U_LN',this)">U L-N</button>
+                <button class="ctrl-btn" data-meas="U_LL" onclick="setMeas('U_LL',this)">U L-L</button>
+                <button class="ctrl-btn" data-meas="I" onclick="setMeas('I',this)">Strom</button>
+            </div>
+            <div class="stat-row" id="harmStats"><div class="loading-msg">Lade Harmonische…</div></div>
+            <div class="chart-wrap" style="margin-top:14px">
+                <div class="chart-label">Linienspektrum der Einzelharmonischen (log-Amplitude)</div>
+                <div class="chart-el" id="chartHarm"></div>
+            </div>
+            <div class="chart-wrap" style="margin-top:14px">
+                <div class="chart-label">THD-Korrelation: berechnet (Harmonische) vs. PAC4200-Register</div>
+                <div class="chart-el" id="chartThd"></div>
+            </div>
+            <div class="warn-box" id="harmNote"></div>
+
+            <div class="explain">
+                <h4>Wie ist der Graf zu lesen?</h4>
+                <p>
+                    Jeder Balken ist eine <strong>Einzelharmonische</strong> der Ordnung <em>n</em> bei
+                    <em>n</em>·50 Hz (H3 = 150 Hz, H5 = 250 Hz …). Die y-Achse ist <strong>logarithmisch</strong>,
+                    damit auch energiearme Ordnungen sichtbar bleiben. Der Extrempunkt-Marker (▲) zeigt die
+                    stärkste Ordnung mit einer Deutungs-These im Tooltip.
+                </p>
+                <h4>Physikalische Deutung</h4>
+                <ul>
+                    <li><strong>Ungerade Ordnungen</strong> (H3, H5, H7 …) dominieren typischerweise und
+                        entstehen an <strong>nichtlinearen Lasten</strong>: Schaltnetzteile, LED-Treiber,
+                        Wechselrichter, Gleichrichter.</li>
+                    <li><strong>H2 / gerade Ordnungen</strong> (100 Hz) deuten auf <strong>Asymmetrie oder
+                        Gleichrichtung</strong>. Der PAC4200 führt sie nicht als Einzelregister — ihr Beitrag
+                        steckt in THD/Unsymmetrie.</li>
+                    <li>Ein Anstieg <strong>hoher</strong> Ordnungen (H11+) weist auf steilflankige
+                        Schaltvorgänge (Frequenzumrichter) hin.</li>
+                </ul>
+                <h4>THD-Korrelation</h4>
+                <p>
+                    Die <strong>berechnete THD</strong> (aus den ungeraden Einzelharmonischen) ist eine
+                    <em>untere Schranke</em> und korreliert erwartbar mit <span class="k">r &lt; 1,0</span> zum
+                    PAC4200-THD-Register, weil das Register auch gerade Ordnungen und Zwischenharmonische
+                    erfasst. Läuft die berechnete Kurve <strong>parallel</strong> zum Register, ist die
+                    Messkette konsistent; systematische Abweichungen deuten auf Register-Artefakte.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const S = { meas: 'U_LN' };
+function setMeas(m, b) { S.meas = m; b.parentElement.querySelectorAll('.ctrl-btn').forEach(x => x.classList.remove('active')); b.classList.add('active'); loadHarm(); }
+
+async function loadHarm() {
+    const { start, end } = NQA.win();
+    document.getElementById('harmStats').innerHTML = '<div class="loading-msg">Lade Harmonische…</div>';
+    let d;
+    try { d = await (await fetch(`/api/nq/spectral/harmonics?start=${start}&end=${end}&meas=${S.meas}`)).json(); }
+    catch (e) { document.getElementById('harmStats').innerHTML = '<div class="loading-msg">Fehler beim Laden.</div>'; return; }
+    if (d.error) { document.getElementById('harmStats').innerHTML = `<div class="loading-msg">${d.error}</div>`; return; }
+    document.getElementById('harmNote').textContent = d.note || '';
+
+    const sp = d.spectrum || { orders: [], values: [], freqs_hz: [], unit: '' };
+    const thdPacVals = (d.thd_pac_series && d.thd_pac_series.values || []).filter(x => isFinite(x) && x >= 0 && x <= 100);
+    const thdPac = thdPacVals.length ? NQA.avg(thdPacVals) : null;
+    document.getElementById('harmStats').innerHTML =
+        NQA.statCard('Berechnete THD', d.thd_calc_pct, '%')
+        + NQA.statCard('PAC4200 THD (Ø)', thdPac, '%')
+        + NQA.statCard('Korrelation r', d.thd_correlation, '')
+        + NQA.statCard('Ordnungen', sp.orders.length, '');
+
+    const data = sp.freqs_hz.map((f, i) => [f, Math.max(sp.values[i], 1e-6)]);
+    NQA.ec('chartHarm').setOption({
+        grid: { left: 66, right: 22, top: 30, bottom: 48 },
+        tooltip: {
+            trigger: 'axis', confine: true, formatter: p => {
+                const o = sp.orders[p[0].dataIndex];
+                return `H${o} · ${p[0].value[0].toFixed(0)} Hz<br/>${p[0].value[1].toFixed(3)} ${sp.unit}`;
+            }
+        },
+        xAxis: {
+            type: 'value', name: 'Frequenz (Hz)', nameLocation: 'middle', nameGap: 30,
+            nameTextStyle: { color: '#cbd5e1', fontSize: 11 },
+            axisLabel: { color: '#94a3b8', hideOverlap: true }, splitLine: { show: false }
+        },
+        yAxis: {
+            type: 'log', name: sp.unit || 'Amplitude', nameLocation: 'middle', nameGap: 48,
+            nameTextStyle: { color: '#cbd5e1', fontSize: 11 },
+            axisLabel: { color: '#94a3b8', hideOverlap: true }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } }
+        },
+        series: [{
+            type: 'bar', data, barWidth: '55%', itemStyle: { color: '#fca5a5' },
+            markPoint: NQA.extrema({
+                max: 'Stärkste Ordnung — hohe/ungerade Ordnung ⇒ nichtlineare Lasten (Netzteile, WR).',
+                min: 'Schwächste geführte Ordnung — nahe der Messgrenze.'
+            }, v => `${v[1].toFixed(3)} ${sp.unit} @ ${v[0].toFixed(0)} Hz`)
+        }]
+    }, true);
+
+    const c = d.thd_calc_series || { ts: [], values: [] }, p = d.thd_pac_series || { ts: [], values: [] };
+    NQA.ec('chartThd').setOption({
+        grid: { left: 52, right: 20, top: 26, bottom: 40 },
+        legend: { top: 0, textStyle: { color: '#94a3b8' }, data: ['berechnet', 'PAC4200'] },
+        tooltip: { trigger: 'axis' },
+        xAxis: { type: 'time', axisLabel: { color: '#94a3b8' } },
+        yAxis: { type: 'value', name: '%', axisLabel: { color: '#94a3b8' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
+        series: [
+            { name: 'berechnet', type: 'line', showSymbol: false, lineStyle: { width: 1.4, color: '#a5b4fc' }, data: c.ts.map((t, i) => [t * 1000, c.values[i]]) },
+            { name: 'PAC4200', type: 'line', showSymbol: false, lineStyle: { width: 1.4, color: '#86efac' }, data: p.ts.map((t, i) => [t * 1000, p.values[i]]) }
+        ]
+    }, true);
+}
+
+NQA.initRange(loadHarm);
+loadHarm();
+</script>
+{% include 'info_overlay.html' %}
+</body>
+</html>

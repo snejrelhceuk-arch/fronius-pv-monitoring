@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico?v={{ favicon_version }}">
+    <title>Reflexionen — NQ-Spektralanalyse</title>
+    <script src="/static/js/nav-context.js"></script>
+    <script src="/static/js/nav-ui.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="/static/js/nq-analyse.js"></script>
+    <link rel="stylesheet" href="/static/css/nav-ui.css">
+    <link rel="stylesheet" href="/static/css/nq-analyse.css">
+</head>
+<body>
+
+{% include 'nq_analyse_nav.html' %}
+
+<div class="content">
+    <div class="globalbar">
+        <div class="gb-group" id="rangeGroup">
+            <span class="gb-label">Zeitraum</span>
+            <button class="ctrl-btn" data-days="7">7 T</button>
+            <button class="ctrl-btn" data-days="30">30 T</button>
+            <button class="ctrl-btn" data-days="90">90 T</button>
+            <button class="ctrl-btn" data-days="365">1 J</button>
+        </div>
+        <div class="gb-group" style="margin-left:auto">
+            <button class="ctrl-btn" onclick="loadReflection()">↻ Aktualisieren</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header">
+            <span class="section-icon">🛰️</span>
+            <div>
+                <div class="section-title">Reflexionserkennung im Verbundnetz <span class="badge badge-rf">Versuch · 1 mHz…1 Hz</span></div>
+                <div class="section-sub">
+                    Störungen laufen als <strong>elektromechanische Welle</strong> über den 50-Hz-Synchronverbund
+                    und werden an den <strong>Netzgrenzen</strong> reflektiert. Aus der Echo-Laufzeit Δt folgt die
+                    Umlauf­distanz <code>d = v·Δt/2</code> zur vermutlichen Reflexionsstelle. Die Karte ist stilisiert.
+                </div>
+            </div>
+        </div>
+        <div class="section-body">
+            <div class="reflect-grid">
+                <div class="map-wrap">
+                    <svg id="euMap" viewBox="0 0 720 460" preserveAspectRatio="xMidYMid meet"></svg>
+                    <div class="map-legend">
+                        <div><span class="dot" style="background:#f59e0b"></span> Messpunkt (PCC)</div>
+                        <div><span class="dot" style="background:#60a5fa"></span> Netzgrenze CESA</div>
+                        <div><span class="dot" style="background:#10b981"></span> vermutete Reflexionsstelle</div>
+                        <div><span class="dot" style="background:#f472b6"></span> Herkunft (Gegenrichtung)</div>
+                    </div>
+                </div>
+                <div>
+                    <div class="stat-row" style="margin-top:0" id="reflStats"></div>
+                    <div class="refl-list" id="reflList" style="margin-top:12px">
+                        <div class="loading-msg">Lade Reflexionsanalyse…</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-wrap" style="margin-top:16px">
+                <div class="chart-label" id="oscLabel">Schwingung / Wellenpaket</div>
+                <div class="chart-el" id="chartOsc"></div>
+            </div>
+            <div class="hint-box" id="oscNote"></div>
+
+            <div class="thesis-box">
+                <h4>ARBEITSTHESEN</h4>
+                <ul id="theses"></ul>
+            </div>
+
+            <div class="section" style="margin-top:16px; background:transparent; border:none;">
+                <div class="chart-label">Distanzen des Standorts zu den Netzgrenzen (Δt-Erwartung)</div>
+                <table class="dist-table" id="distTable"></table>
+            </div>
+
+            <div class="explain">
+                <h4>Von der Datenbank bis zur These — nachvollziehbar</h4>
+                <ul>
+                    <li><strong>1 · Rohdaten:</strong> Netzfrequenz aus <code>nq_pattern_5min.freq</code>
+                        (5-min, residual-bereinigt) und Event-Schnipsel aus <code>nq_event_fast</code>
+                        (Spannung, 200 ms) je Eintrag in <code>nq_events</code>.</li>
+                    <li><strong>2 · Muster:</strong> Schwingungspakete werden über die Hüllkurve erkannt; im
+                        Event-Schnipsel sucht eine <strong>Autokorrelation</strong> nach einem gedämpften
+                        <strong>Echo</strong> gleicher Signatur (Korrelation, Amplituden-Verhältnis).</li>
+                    <li><strong>3 · Distanz:</strong> aus Δt folgt <code>d = v·Δt/2</code> mit der
+                        elektromechanischen Wellengeschwindigkeit <span class="k" id="vem">v</span> (Literatur
+                        200…1400 km/s). Die Geschwindigkeits-Unsicherheit spannt ein Distanzintervall auf.</li>
+                    <li><strong>4 · Reflexionsstelle:</strong> die Netzgrenze mit
+                        <code>|Distanz − d|</code> minimal ist die wahrscheinliche Reflexionsstelle
+                        (Konfidenz aus dem Rest­abstand).</li>
+                    <li><strong>5 · Herkunft:</strong> reflektiert eine Welle an einer Grenze, lag die Quelle
+                        tendenziell in der <strong>Gegenrichtung</strong> (Peilung + 180°).</li>
+                </ul>
+                <h4>Ehrliche Grenzen</h4>
+                <ul id="caveats"></ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let DATA = null, SEL = -1;
+
+function projFactory(poly, W, H, pad) {
+    let latMin = 90, latMax = -90, lonMin = 180, lonMax = -180;
+    poly.forEach(p => { latMin = Math.min(latMin, p.lat); latMax = Math.max(latMax, p.lat); lonMin = Math.min(lonMin, p.lon); lonMax = Math.max(lonMax, p.lon); });
+    const latMid = (latMin + latMax) / 2, kx = Math.cos(latMid * Math.PI / 180);
+    const xmin = lonMin * kx, xmax = lonMax * kx, spanX = xmax - xmin, spanY = latMax - latMin;
+    const availW = W - 2 * pad, availH = H - 2 * pad;
+    const scale = Math.min(availW / spanX, availH / spanY);
+    const offX = pad + (availW - spanX * scale) / 2, offY = pad + (availH - spanY * scale) / 2;
+    return (lat, lon) => [offX + (lon * kx - xmin) * scale, offY + (latMax - lat) * scale];
+}
+
+function svgEl(tag, attrs, inner) {
+    const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (inner != null) e.textContent = inner;
+    return e;
+}
+
+function renderMap() {
+    const svg = document.getElementById('euMap');
+    svg.innerHTML = '';
+    if (!DATA || !DATA.geometry) return;
+    const geo = DATA.geometry;
+    const W = 720, H = 460, pad = 26;
+    const P = projFactory(geo.boundary_polygon, W, H, pad);
+
+    // Netzgrenz-Polygon
+    let dpath = '';
+    geo.boundary_polygon.forEach((p, i) => { const [x, y] = P(p.lat, p.lon); dpath += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1) + ' '; });
+    dpath += 'Z';
+    svg.appendChild(svgEl('path', { d: dpath, fill: 'rgba(59,130,246,0.07)', stroke: 'rgba(96,165,250,0.55)', 'stroke-width': 1.6, 'stroke-linejoin': 'round' }));
+
+    // Grenz-Referenzpunkte
+    geo.boundary_points.forEach(b => {
+        const [x, y] = P(b.lat, b.lon);
+        const isSel = SEL >= 0 && DATA.reflections[SEL] && DATA.reflections[SEL].reflection.candidate
+            && DATA.reflections[SEL].reflection.candidate.key === b.key;
+        svg.appendChild(svgEl('circle', { cx: x, cy: y, r: isSel ? 6 : 3.5, fill: isSel ? '#10b981' : '#60a5fa', 'fill-opacity': isSel ? 1 : 0.7 }));
+        svg.appendChild(svgEl('text', { x: x + 6, y: y + 3, fill: isSel ? '#6ee7b7' : 'rgba(148,163,184,0.85)', 'font-size': 9 }, b.name.split(' ')[0]));
+    });
+
+    // Messpunkt
+    const [lx, ly] = P(geo.location.lat, geo.location.lon);
+    svg.appendChild(svgEl('circle', { cx: lx, cy: ly, r: 10, fill: 'rgba(245,158,11,0.18)' }));
+    svg.appendChild(svgEl('circle', { cx: lx, cy: ly, r: 4.5, fill: '#f59e0b', stroke: '#fde68a', 'stroke-width': 1 }));
+    svg.appendChild(svgEl('text', { x: lx + 8, y: ly - 6, fill: '#fcd34d', 'font-size': 10, 'font-weight': 700 }, 'PCC'));
+
+    // ausgewählte Reflexion: Linie PCC→Grenze + Herkunft (Gegenrichtung)
+    const r = SEL >= 0 ? DATA.reflections[SEL] : null;
+    if (r && r.reflection && r.reflection.candidate) {
+        const c = r.reflection.candidate;
+        const [cx, cy] = P(c.lat, c.lon);
+        svg.appendChild(svgEl('line', { x1: lx, y1: ly, x2: cx, y2: cy, stroke: '#10b981', 'stroke-width': 2, 'stroke-dasharray': '6 4' }));
+        svg.appendChild(svgEl('circle', { cx: cx, cy: cy, r: 6, fill: '#10b981', stroke: '#a7f3d0', 'stroke-width': 1.5 }));
+        // Herkunfts-Pfeil (Gegenrichtung), stilisiert als kurze Linie
+        const ob = r.reflection.origin_bearing_deg;
+        if (ob != null) {
+            const len = 60, rad = ob * Math.PI / 180;
+            const ox = lx + len * Math.sin(rad), oy = ly - len * Math.cos(rad);
+            svg.appendChild(svgEl('line', { x1: lx, y1: ly, x2: ox, y2: oy, stroke: '#f472b6', 'stroke-width': 1.8, 'stroke-dasharray': '3 3' }));
+            svg.appendChild(svgEl('circle', { cx: ox, cy: oy, r: 3.5, fill: '#f472b6' }));
+        }
+    }
+}
+
+function renderList() {
+    const el = document.getElementById('reflList');
+    if (!DATA) return;
+    const refls = DATA.reflections || [];
+    if (!refls.length) {
+        el.innerHTML = `<div class="hint-box" style="margin:0">Keine Event-Schnipsel mit belastbarem Echo im Zeitraum.
+            Die Karte zeigt die <strong>Geometrie und Erwartungswerte</strong>; unten läuft die kontinuierliche
+            Frequenz-Schwingung als Beobachtung.</div>`;
+        return;
+    }
+    el.innerHTML = refls.map((r, i) => {
+        const c = r.reflection.candidate || {};
+        const cf = r.reflection.confidence;
+        return `<div class="refl-card ${i === SEL ? 'sel' : ''}" onclick="selectRefl(${i})">
+            <div class="rc-top"><span>Event #${r.event_id} · ${r.kind || r.band}</span>
+                <span class="conf conf-${cf}">${cf}</span></div>
+            <div class="rc-sub">Echo Δt=<b>${r.echo.delta_t_s}s</b> · d≈<b>${r.reflection.distance_km} km</b>
+                → ${c.name || '?'}<br/>Korr ${r.echo.corr} · Amplitude ${r.echo.amp_ratio ?? '—'}×
+                · Herkunft ${r.reflection.origin_compass || '—'}</div>
+        </div>`;
+    }).join('');
+}
+
+function renderOsc() {
+    const chart = NQA.ec('chartOsc');
+    const lbl = document.getElementById('oscLabel'), note = document.getElementById('oscNote');
+    const r = SEL >= 0 ? DATA.reflections[SEL] : null;
+    if (r && r.series) {
+        lbl.textContent = `Event #${r.event_id} — Spannungs-Wellenform (200 ms), Echo bei Δt=${r.echo.delta_t_s}s`;
+        const data = r.series.t_s.map((t, i) => [t, r.series.v[i]]);
+        const markArea = { silent: true, itemStyle: { color: 'rgba(16,185,129,0.10)' }, data: [[{ xAxis: r.echo.delta_t_s }, { xAxis: r.series.t_s[r.series.t_s.length - 1] }]] };
+        chart.setOption({
+            grid: { left: 60, right: 20, top: 20, bottom: 42 },
+            tooltip: { trigger: 'axis', confine: true, formatter: p => `t = ${p[0].value[0]} s<br/>U = ${p[0].value[1]} ${r.unit}` },
+            xAxis: { type: 'value', name: 't (s)', nameLocation: 'middle', nameGap: 28, axisLabel: { color: '#94a3b8' }, splitLine: { show: false } },
+            yAxis: { type: 'value', name: r.unit, scale: true, axisLabel: { color: '#94a3b8' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
+            series: [{ type: 'line', showSymbol: false, data, lineStyle: { width: 1.5, color: '#6ee7b7' }, markArea, markLine: { silent: true, symbol: 'none', data: [{ xAxis: r.echo.delta_t_s, label: { formatter: 'Echo', color: '#6ee7b7', fontSize: 10 }, lineStyle: { color: '#10b981', type: 'dashed' } }] } }]
+        }, true);
+        note.innerHTML = `Der grün hinterlegte Bereich beginnt beim erkannten Echo-Lag Δt=${r.echo.delta_t_s}s — das
+            gedämpfte Nachbild des Primärimpulses (${r.echo.amp_ratio ?? '—'}× Amplitude).`;
+    } else if (DATA && DATA.series && DATA.series.ts && DATA.series.ts.length) {
+        lbl.textContent = 'Kontinuierliche Frequenzabweichung (5-min) — langsame Schwingungspakete (VLF)';
+        const s = DATA.series;
+        const data = s.ts.map((t, i) => [t * 1000, s.values[i]]);
+        chart.setOption({
+            grid: { left: 60, right: 20, top: 20, bottom: 42 },
+            tooltip: { trigger: 'axis', confine: true, formatter: p => `${new Date(p[0].value[0]).toLocaleString('de-DE')}<br/>Δf = ${p[0].value[1]} ${s.unit}` },
+            xAxis: { type: 'time', axisLabel: { color: '#94a3b8' } },
+            yAxis: { type: 'value', name: 'Δf (' + s.unit + ')', axisLabel: { color: '#94a3b8' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
+            series: [{
+                type: 'line', showSymbol: false, data, lineStyle: { width: 1, color: '#86efac' }, areaStyle: { color: 'rgba(34,197,94,0.08)' },
+                markPoint: NQA.extrema({ max: 'Stärkste positive Frequenzabweichung (Erzeugungsüberschuss).', min: 'Stärkste negative Abweichung (Lastüberschuss/Ausfall).' }, v => `${v[1]} ${s.unit}`)
+            }]
+        }, true);
+        note.innerHTML = 'Ohne Event-Echo zeigt der Chart die kontinuierliche mHz-Schwingung — VLF-Beobachtung, keine Laufwellen-Reflexion.';
+    } else {
+        lbl.textContent = 'Schwingung / Wellenpaket';
+        chart.clear();
+        note.innerHTML = 'Keine Frequenzdaten im Zeitfenster.';
+    }
+}
+
+function renderTables() {
+    if (!DATA || !DATA.geometry) return;
+    const geo = DATA.geometry, v = geo.wave_speed.v_em_km_s;
+    document.getElementById('vem').textContent = v + ' km/s';
+    document.getElementById('distTable').innerHTML =
+        `<tr><th>Netzgrenze</th><th>Distanz</th><th>Peilung</th><th>Δt-Erwartung (Echo)</th></tr>`
+        + geo.boundary_points.map(b => `<tr><td>${b.name}</td><td>${b.dist_km} km</td>
+            <td>${b.bearing_deg}° ${b.compass}</td><td>${(2 * b.dist_km / v).toFixed(2)} s</td></tr>`).join('');
+    document.getElementById('theses').innerHTML = (DATA.theses || []).map(t => `<li>${t}</li>`).join('');
+    document.getElementById('caveats').innerHTML = (DATA.caveats || []).map(t => `<li>${t}</li>`).join('');
+    document.getElementById('reflStats').innerHTML =
+        NQA.statCard('Events', DATA.events_total, '')
+        + NQA.statCard('mit Schnipsel', DATA.events_with_snippet, '')
+        + NQA.statCard('Reflexionen', (DATA.reflections || []).length, '');
+}
+
+function selectRefl(i) { SEL = i; renderList(); renderMap(); renderOsc(); }
+
+async function loadReflection() {
+    const { start, end } = NQA.win();
+    document.getElementById('reflList').innerHTML = '<div class="loading-msg">Lade Reflexionsanalyse…</div>';
+    try { DATA = await (await fetch(`/api/nq/reflection?start=${start}&end=${end}`)).json(); }
+    catch (e) { document.getElementById('reflList').innerHTML = '<div class="loading-msg">Fehler beim Laden.</div>'; return; }
+    if (DATA.error) { document.getElementById('reflList').innerHTML = `<div class="loading-msg">${DATA.error}</div>`; return; }
+    SEL = (DATA.reflections && DATA.reflections.length) ? 0 : -1;
+    renderTables(); renderList(); renderMap(); renderOsc();
+}
+
+window.addEventListener('resize', renderMap);
+NQA.initRange(loadReflection);
+loadReflection();
+</script>
+{% include 'info_overlay.html' %}
+</body>
+</html>

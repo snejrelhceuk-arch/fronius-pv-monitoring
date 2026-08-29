@@ -95,6 +95,22 @@
     "_limit_comment": "Software-Grenzwertueberwachung (WP1): der Poller vergleicht die verifiziert gelesenen Skalare (U/I/FREQ/THD) gegen 'grenzwerte'. Bei >90% dauerhaft (>limit_window_s) -> Sofort-Alarm-Mail, danach limit_mail_cooldown_s Sperre. KEINE erfundenen PAC-Status-Register (No-Go: Adressen nicht erfinden); Auswertung aus gemessenen Werten."
   },
 
+  "reflection": {
+    "_comment": "Reflexions-/Laufwellen-Analyse (nq/analysis/nq_reflection.py). v_em = elektromechanische Ausbreitungsgeschwindigkeit im Verbundnetz (Literatur 200..1400 km/s, Thorp/Seyler/Phadke 1998); Distanz d=v*Δt/2. Band = Nutzeranforderung 1 mHz..1 Hz. echo_* = Autokorrelations-Echoerkennung im Event-Schnipsel (Spannung 200 ms).",
+    "v_em_km_s": 500.0,
+    "v_em_min_km_s": 200.0,
+    "v_em_max_km_s": 1400.0,
+    "band_lo_hz": 0.001,
+    "band_hi_hz": 1.0,
+    "echo_tau_min_s": 0.5,
+    "echo_tau_max_s": 30.0,
+    "echo_min_corr": 0.5,
+    "echo_max_amp_ratio": 0.95,
+    "packet_env_k": 3.0,
+    "packet_min_len": 4,
+    "dist_tol_km": 250.0
+  },
+
   "grenzwerte": {
     "_comment": "Normgrenzen fuer Software-Ueberwachung + Chart-Warnstufen. Spannung/Frequenz/THD nutzen warning_levels (50/70/90% der Spanne zum Endwert). Strom + Leistung (Anschlussgroessen) nutzen warning_levels_load (80/100/120% des Anschlusswerts: warn=Annaeherung, high=am Anschlusswert, crit=Ueberlast). i_max_a aus pv-config (SLS-Grenze), p_max_w = Anschlussleistung (3-phasig ~35A).",
     "u_ln_min_v": 207.0,

@@ -89,9 +89,42 @@ def nq_live_page():
 
 @bp.route('/netzqualitaet/analyse')
 def nq_analyse_page():
-    """NQ-Spektralanalyse — Oberschwingungen, Lomb-Scargle-Periodogramm, Welch-PSD,
-    Transienten-Spektrogramm (STFT/Morlet-CWT). Rechenkern nq.analysis.nq_spectral."""
-    return render_template('nq_analyse_view.html')
+    """NQ-Spektralanalyse — Übersicht/Hub. Auf Einzelseiten verteilt:
+    Oberschwingungen, Lomb-Scargle-Periodogramm, Welch-PSD, Transienten-
+    Spektrogramm (STFT/Morlet-CWT) und Reflexionen. Rechenkern
+    nq.analysis.nq_spectral (+ nq.analysis.nq_reflection)."""
+    return render_template('nq_analyse_view.html', active='hub')
+
+
+@bp.route('/netzqualitaet/analyse/harmonische')
+def nq_analyse_harmonische_page():
+    """Oberschwingungs-Linienspektrum (geräteinterne FFT) + THD-Korrelation."""
+    return render_template('nq_spec_harmonische.html', active='harmonische')
+
+
+@bp.route('/netzqualitaet/analyse/periodogramm')
+def nq_analyse_periodogramm_page():
+    """Lomb-Scargle-Periodogramm (VLF/eVLF, lückenrobust)."""
+    return render_template('nq_spec_periodogramm.html', active='periodogramm')
+
+
+@bp.route('/netzqualitaet/analyse/psd')
+def nq_analyse_psd_page():
+    """Welch-PSD (LF/VLF, log-log)."""
+    return render_template('nq_spec_psd.html', active='psd')
+
+
+@bp.route('/netzqualitaet/analyse/spektrogramm')
+def nq_analyse_spektrogramm_page():
+    """Transienten-Spektrogramm (STFT / Morlet-CWT)."""
+    return render_template('nq_spec_spektrogramm.html', active='spektrogramm')
+
+
+@bp.route('/netzqualitaet/analyse/reflexion')
+def nq_analyse_reflexion_page():
+    """Reflexions-/Laufwellen-Analyse (Versuch) — stilisierte Europakarte,
+    Δt→Distanz→Reflexionsstelle. Rechenkern nq.analysis.nq_reflection."""
+    return render_template('nq_reflexion.html', active='reflexion')
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +146,7 @@ def api_pac4200_live():
                                           port=config.PAC_MODBUS_PORT,
                                           unit_id=config.PAC_UNIT_ID,
                                           timeout=3.0)
+            snap.setdefault('host', config.PAC_IP)
             return jsonify(snap), (200 if snap.get('ok') else 503)
         except Exception as exc:
             logging.exception("PAC4200 direct snapshot failed")
@@ -1073,6 +1107,35 @@ def api_nq_spectral_spectrogram():
         })
     except Exception as exc:
         logging.exception("spectral/spectrogram failed")
+        return jsonify({'error': str(exc)}), 503
+
+
+@bp.route('/api/nq/reflection')
+def api_nq_reflection():
+    """Reflexions-/Laufwellen-Analyse: Netzgrenz-Geometrie + Schwingungspakete
+    (5-min) + Event-Echo-Hypothesen (Δt→d=v·Δt/2→Reflexionsstelle).
+
+    ``?start=&end=`` (Default 30 d) oder ``?day=``, ``?signal=freq|voltage``.
+    Rechenkern nq.analysis.nq_reflection (read-only, Rolle N)."""
+    from nq.analysis import nq_reflection as refl
+    start, end = _spec_window(30)
+    signal = request.args.get('signal', 'freq')
+    try:
+        return jsonify(refl.analyze(start, end, signal))
+    except Exception as exc:
+        logging.exception("nq/reflection failed")
+        return jsonify({'error': str(exc)}), 503
+
+
+@bp.route('/api/nq/reflection/geometry')
+def api_nq_reflection_geometry():
+    """Nur die Netzgrenz-Geometrie (Standort, Randpolygon, Grenzdistanzen) —
+    schnelles Kartenrendern ohne Signalauswertung."""
+    from nq.analysis import nq_reflection as refl
+    try:
+        return jsonify(refl.geometry())
+    except Exception as exc:
+        logging.exception("nq/reflection/geometry failed")
         return jsonify({'error': str(exc)}), 503
 
 

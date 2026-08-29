@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico?v={{ favicon_version }}">
+    <title>Periodogramm — NQ-Spektralanalyse</title>
+    <script src="/static/js/nav-context.js"></script>
+    <script src="/static/js/nav-ui.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="/static/js/nq-analyse.js"></script>
+    <link rel="stylesheet" href="/static/css/nav-ui.css">
+    <link rel="stylesheet" href="/static/css/nq-analyse.css">
+</head>
+<body>
+
+{% include 'nq_analyse_nav.html' %}
+
+<div class="content">
+    <div class="globalbar">
+        <div class="gb-group" id="rangeGroup">
+            <span class="gb-label">Zeitraum</span>
+            <button class="ctrl-btn" data-days="7">7 T</button>
+            <button class="ctrl-btn" data-days="30">30 T</button>
+            <button class="ctrl-btn" data-days="90">90 T</button>
+            <button class="ctrl-btn" data-days="365">1 J</button>
+        </div>
+        <div class="gb-group">
+            <span class="gb-label">Signal</span>
+            <button class="ctrl-btn active" data-sig="freq" onclick="setSignal('freq',this)">Frequenz</button>
+            <button class="ctrl-btn" data-sig="voltage" onclick="setSignal('voltage',this)">Spannung</button>
+        </div>
+        <div class="gb-group" style="margin-left:auto">
+            <button class="ctrl-btn" onclick="loadPeriodo()">↻ Aktualisieren</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header">
+            <span class="section-icon">🌐</span>
+            <div>
+                <div class="section-title">Markt- &amp; Lastzyklen · Lomb-Scargle-Periodogramm
+                    <span class="badge badge-vlf">VLF / eVLF &lt; 50 Hz</span></div>
+                <div class="section-sub">
+                    Zyklische Muster von der <strong>15-Minuten-Handelsgrenze</strong> (1,11 mHz) bis zum
+                    <strong>Jahresgang</strong> (31,7 nHz). Lomb-Scargle ist robust gegen <strong>Datenlücken</strong>
+                    (keine FFT-Interpolationsartefakte). Vertikale Marker verorten bekannte Zyklen.
+                </div>
+            </div>
+        </div>
+        <div class="section-body">
+            <div class="ctrl-row">
+                <span class="ctrl-label">Dezimation:</span>
+                <button class="ctrl-btn active" data-dec="1" onclick="setDec(1,this)">1×</button>
+                <button class="ctrl-btn" data-dec="4" onclick="setDec(4,this)">4×</button>
+                <button class="ctrl-btn" data-dec="12" onclick="setDec(12,this)">12×</button>
+                <span class="ctrl-label" style="margin-left:10px">Frequenz-Binning:</span>
+                <button class="ctrl-btn" id="binBtn" onclick="toggleBin(this)">aus</button>
+            </div>
+            <div class="chart-wrap">
+                <div class="chart-label">Leistung über Frequenz (log-log) — Zyklus-Attribution im Tooltip</div>
+                <div class="chart-el-tall" id="chartPeriodo"></div>
+            </div>
+            <div class="hint-box" id="periodoNote"></div>
+
+            <div class="explain">
+                <h4>Wie ist der Graf zu lesen?</h4>
+                <p>
+                    Beide Achsen sind <strong>logarithmisch</strong>. Links (niedrige Frequenz) liegen die
+                    <strong>langsamen</strong> Zyklen (Jahr, Woche), rechts die <strong>schnellen</strong>
+                    (Stunde, Viertelstunde). Jede Achsen-Beschriftung nennt zusätzlich die
+                    <strong>Periodendauer</strong>. Ein <strong>Peak</strong> = ein wiederkehrender Rhythmus
+                    im Signal; der ▲-Marker zeigt den stärksten mit These im Tooltip.
+                </p>
+                <h4>Was bedeuten die Peaks?</h4>
+                <ul>
+                    <li><strong>1,11 mHz (15 min):</strong> EPEX-Viertelstundenkontrakte — Fahrplanwechsel der
+                        Kraftwerke an der Handelsgrenze prägen die Frequenz.</li>
+                    <li><strong>11,6 µHz (1 Tag):</strong> PV-Einspeisung + Tag/Nacht-Last (diurnal).</li>
+                    <li><strong>1,65 µHz (1 Woche):</strong> Werktag ↔ Wochenende (Industrielast).</li>
+                    <li><strong>31,7 nHz (1 Jahr):</strong> Saison, Heizperiode, Urlaubs-/Feiertagsphasen.</li>
+                </ul>
+                <h4>Auswertegrenzen</h4>
+                <p>
+                    Die <strong>Untergrenze</strong> = 1 Zyklus im gewählten Zeitfenster (mehr Tage → tiefere
+                    Frequenzen sichtbar). Die <strong>Obergrenze</strong> = Nyquist der (dezimierten) Abtastung.
+                    <strong>Dezimation</strong> glättet für lange Zeiträume (Anti-Aliasing-Tiefpass);
+                    <strong>Binning</strong> mittelt log-äquidistant und dämpft das Rauschen.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const S = { signal: 'freq', dec: 1, bin: false };
+function setSignal(s, b) { S.signal = s; act(b); loadPeriodo(); }
+function setDec(d, b) { S.dec = d; act(b); loadPeriodo(); }
+function toggleBin(b) { S.bin = !S.bin; b.textContent = S.bin ? 'an' : 'aus'; b.classList.toggle('active', S.bin); loadPeriodo(); }
+function act(b) { b.parentElement.querySelectorAll('.ctrl-btn').forEach(x => x.classList.remove('active')); b.classList.add('active'); }
+
+async function loadPeriodo() {
+    const { start, end } = NQA.win();
+    const url = `/api/nq/spectral/periodogram?start=${start}&end=${end}&signal=${S.signal}&decimate=${S.dec}&binning=${S.bin ? 1 : 0}`;
+    let d;
+    try { d = await (await fetch(url)).json(); } catch (e) { return; }
+    const note = document.getElementById('periodoNote');
+    if (d.error) { note.innerHTML = `<strong>${d.error}</strong> (n=${d.n || 0}). Mehr Zeitraum/Daten nötig.`; NQA.ec('chartPeriodo').clear(); return; }
+    note.innerHTML = `Auswertbarer Bereich: <strong>${NQA.fmtFreq(d.f_min_hz)}</strong> … <strong>${NQA.fmtFreq(d.f_max_hz)}</strong>
+        · n=${d.n_samples} Punkte · Dezimation ${d.decimate}×.`;
+
+    const useBin = S.bin && d.binned;
+    const F = useBin ? d.binned.freqs_hz : d.freqs_hz;
+    const P = useBin ? d.binned.power : d.power;
+    const data = F.map((f, i) => [f, Math.max(P[i], 1e-9)]);
+
+    const markLines = (d.markers || []).filter(m => m.resolvable).map(m => ({
+        xAxis: m.freq_hz, name: m.label,
+        label: { formatter: NQA.fmtPeriod(m.period_s), color: '#e2e8f0', fontSize: 10, rotate: 90, position: 'insideEndTop', padding: [2, 3], backgroundColor: 'rgba(15,23,42,0.65)', borderRadius: 2 },
+        lineStyle: { color: 'rgba(148,163,184,0.5)', type: 'dashed', width: 1 }
+    }));
+    const markMap = {}; (d.markers || []).forEach(m => markMap[m.label] = m);
+
+    NQA.ec('chartPeriodo').setOption({
+        grid: { left: 78, right: 28, top: 34, bottom: 70 },
+        tooltip: {
+            trigger: 'axis', confine: true, formatter: p => {
+                const f = p[0].value[0];
+                return `f = ${NQA.fmtFreq(f)}<br/>T = ${NQA.fmtPeriod(1 / f)}<br/>P = ${p[0].value[1].toExponential(3)}`;
+            }
+        },
+        xAxis: {
+            type: 'log', name: 'Frequenz  ·  Periodendauer', nameLocation: 'middle', nameGap: 52,
+            nameTextStyle: { color: '#cbd5e1', fontSize: 11 },
+            axisLabel: { color: '#94a3b8', fontSize: 10, lineHeight: 13, hideOverlap: true, formatter: v => NQA.fmtFreqAxis(v) },
+            splitLine: { lineStyle: { color: 'rgba(255,255,255,0.04)' } }
+        },
+        yAxis: {
+            type: 'log', name: 'Leistung', nameLocation: 'middle', nameGap: 58,
+            nameTextStyle: { color: '#cbd5e1', fontSize: 11 },
+            axisLabel: { color: '#94a3b8', hideOverlap: true }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } }
+        },
+        series: [{
+            type: 'line', showSymbol: false, data, lineStyle: { width: 1.3, color: '#86efac' },
+            areaStyle: { color: 'rgba(34,197,94,0.10)' },
+            markPoint: NQA.extrema({
+                max: 'Dominanter Zyklus — stärkster wiederkehrender Rhythmus (Handel/Last/Saison).',
+                min: 'Spektrale Senke — in diesem Band kaum periodische Energie.'
+            }, v => `${NQA.fmtFreq(v[0])} (T=${NQA.fmtPeriod(1 / v[0])})`),
+            markLine: {
+                silent: false, symbol: 'none', data: markLines,
+                tooltip: { formatter: pm => { const m = markMap[pm.name]; return m ? `<b>${m.label}</b><br/>${m.attr}<br/>T=${NQA.fmtPeriod(m.period_s)}` : pm.name; } }
+            }
+        }]
+    }, true);
+}
+
+NQA.initRange(loadPeriodo);
+loadPeriodo();
+</script>
+{% include 'info_overlay.html' %}
+</body>
+</html>

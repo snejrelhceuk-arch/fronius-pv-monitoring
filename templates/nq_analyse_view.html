@@ -4,501 +4,93 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico?v={{ favicon_version }}">
-    <title>Spektralanalyse - PV-System</title>
+    <title>Spektralanalyse · Übersicht — PV-System</title>
     <script src="/static/js/nav-context.js"></script>
     <script src="/static/js/nav-ui.js"></script>
     <link rel="stylesheet" href="/static/css/nav-ui.css">
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <link rel="stylesheet" href="/static/css/nq-analyse.css">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #0f172a; color: #e2e8f0;
-            min-height: 100vh; display: flex; flex-direction: column;
+        .hub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-top: 18px; }
+        .hub-card {
+            display: block; text-decoration: none; background: rgba(30,41,59,0.5);
+            border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px 18px; transition: all .15s;
         }
-        .top-nav {
-            display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
-            padding: 8px 16px; background: rgba(15,23,42,0.95);
-            border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0;
+        .hub-card:hover { border-color: rgba(99,102,241,0.5); background: rgba(30,41,59,0.75); transform: translateY(-2px); }
+        .hub-card.reflect:hover { border-color: rgba(16,185,129,0.5); }
+        .hub-card .hc-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+        .hub-card .hc-ico { font-size: 24px; }
+        .hub-card .hc-title { font-size: 15px; font-weight: 700; color: #f1f5f9; }
+        .hub-card .hc-desc { font-size: 12.5px; color: #94a3b8; line-height: 1.6; }
+        .intro {
+            background: rgba(30,41,59,0.5); border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 12px; padding: 18px 22px;
         }
-        .nav-title { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.8); letter-spacing: .3px; }
-
-        .content { flex: 1; overflow-y: auto; padding: 16px 16px 48px; max-width: 1240px; margin: 0 auto; width: 100%; }
-
-        /* Global control bar */
-        .globalbar {
-            display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-            background: rgba(30,41,59,0.6); border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 10px; padding: 10px 14px; margin-bottom: 20px;
-            position: sticky; top: 0; z-index: 5; backdrop-filter: blur(6px);
-        }
-        .gb-group { display: flex; align-items: center; gap: 6px; }
-        .gb-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: .4px; }
-
-        .section {
-            margin-bottom: 30px; background: rgba(30,41,59,0.5);
-            border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; overflow: hidden;
-        }
-        .section-header {
-            padding: 16px 20px 12px; border-bottom: 1px solid rgba(255,255,255,0.07);
-            display: flex; align-items: flex-start; gap: 12px;
-        }
-        .section-icon { font-size: 22px; flex-shrink: 0; margin-top: 1px; }
-        .section-title { font-size: 16px; font-weight: 700; color: #f1f5f9; margin-bottom: 4px; }
-        .section-sub { font-size: 12px; color: #94a3b8; line-height: 1.55; max-width: 900px; }
-        .section-sub strong { color: #cbd5e1; }
-        .badge {
-            display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: .4px;
-            padding: 1px 6px; border-radius: 3px; margin-left: 4px; vertical-align: middle;
-        }
-        .badge-hf { background: rgba(239,68,68,0.2); color: #fca5a5; border: 1px solid rgba(239,68,68,0.35); }
-        .badge-vlf { background: rgba(34,197,94,0.2); color: #86efac; border: 1px solid rgba(34,197,94,0.35); }
-        .badge-lf { background: rgba(99,102,241,0.25); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.4); }
-        .badge-tr { background: rgba(234,179,8,0.2); color: #fde047; border: 1px solid rgba(234,179,8,0.4); }
-
-        .section-body { padding: 16px 20px 20px; }
-
-        .chart-el { width: 100%; height: 300px; }
-        .chart-el-tall { width: 100%; height: 360px; }
-        .chart-wrap { background: rgba(15,23,42,0.5); border-radius: 8px; padding: 12px; position: relative; }
-        .chart-label { font-size: 11px; color: #64748b; margin-bottom: 6px; font-weight: 600; letter-spacing: .3px; text-transform: uppercase; }
-
-        .stat-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
-        .stat-card {
-            flex: 1; min-width: 150px; background: rgba(15,23,42,0.7);
-            border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px 14px;
-        }
-        .stat-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 4px; }
-        .stat-value { font-size: 20px; font-weight: 700; color: #f1f5f9; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .stat-unit { font-size: 11px; color: #94a3b8; margin-left: 3px; }
-
-        .ctrl-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
-        .ctrl-btn {
-            font-size: 12px; padding: 5px 12px; border-radius: 5px; cursor: pointer;
-            border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06);
-            color: rgba(255,255,255,0.7); transition: all .15s;
-        }
-        .ctrl-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
-        .ctrl-btn.active { background: rgba(99,102,241,0.25); color: #a5b4fc; border-color: rgba(99,102,241,0.5); }
-        .ctrl-label { font-size: 11px; color: #64748b; }
-
-        .hint-box {
-            font-size: 11px; color: #7c8aa0; background: rgba(255,255,255,0.03);
-            border: 1px solid rgba(255,255,255,0.06); border-radius: 6px;
-            padding: 8px 12px; margin-top: 12px; line-height: 1.65;
-        }
-        .hint-box strong { color: #94a3b8; }
-        .warn-box {
-            font-size: 11px; color: #fbbf24; background: rgba(234,179,8,0.08);
-            border: 1px solid rgba(234,179,8,0.25); border-radius: 6px;
-            padding: 8px 12px; margin-top: 12px; line-height: 1.6;
-        }
-        .loading-msg { text-align: center; padding: 30px; color: #64748b; font-size: 13px; }
-        @media (max-width: 700px) { .stat-card { min-width: 110px; } }
+        .intro h3 { font-size: 15px; color: #f1f5f9; margin: 0 0 10px; }
+        .intro p { font-size: 12.5px; color: #a9b6c9; line-height: 1.75; margin: 0 0 8px; max-width: 900px; }
+        .intro strong { color: #cbd5e1; }
+        .intro .band { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+        .intro .band span { font-size: 11px; padding: 3px 9px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; }
     </style>
 </head>
 <body>
 
-<nav class="top-nav">
-    <span class="nav-title">NQ · Spektralanalyse</span>
-</nav>
+{% include 'nq_analyse_nav.html' %}
 
 <div class="content">
-
-    <!-- Global control bar -->
-    <div class="globalbar">
-        <div class="gb-group">
-            <span class="gb-label">Zeitraum</span>
-            <button class="ctrl-btn" data-days="7" onclick="setDays(7,this)">7 T</button>
-            <button class="ctrl-btn active" data-days="30" onclick="setDays(30,this)">30 T</button>
-            <button class="ctrl-btn" data-days="90" onclick="setDays(90,this)">90 T</button>
-            <button class="ctrl-btn" data-days="365" onclick="setDays(365,this)">1 J</button>
-        </div>
-        <div class="gb-group">
-            <span class="gb-label">Signal</span>
-            <button class="ctrl-btn active" data-sig="freq" onclick="setSignal('freq',this)">Frequenz</button>
-            <button class="ctrl-btn" data-sig="voltage" onclick="setSignal('voltage',this)">Spannung</button>
-        </div>
-        <div class="gb-group" style="margin-left:auto">
-            <button class="ctrl-btn" onclick="loadAll()">↻ Aktualisieren</button>
-        </div>
-    </div>
-
-    <!-- ============================================================
-         SECTION 1: Oberschwingungs-Spektrum (HF > 50 Hz)
-    ============================================================ -->
-    <div class="section">
-        <div class="section-header">
-            <span class="section-icon">📡</span>
-            <div>
-                <div class="section-title">Oberschwingungs-Spektrum <span class="badge badge-hf">HF &gt; 50 Hz</span></div>
-                <div class="section-sub">
-                    Oberhalb der Grundschwingung stammt das Spektrum aus der
-                    <strong>geräteinternen FFT des PAC4200</strong> (die gespeicherten Abtastreihen
-                    reichen physikalisch nicht über 50 Hz). Dargestellt sind die Einzelharmonischen
-                    H1…H31 als Linienspektrum (Ordnung <em>n</em> → <em>n</em>·50 Hz).
-                    <strong>H2 (100 Hz)</strong> deutet auf Gleichrichter/Asymmetrie,
-                    ungerade Ordnungen auf nichtlineare Lasten (Netzteile, Wechselrichter).
-                    Die <strong>berechnete THD</strong> (aus den Harmonischen) wird gegen das
-                    <strong>PAC4200-THD-Register</strong> korreliert.
-                </div>
-            </div>
-        </div>
-        <div class="section-body">
-            <div class="ctrl-row">
-                <span class="ctrl-label">Messgröße:</span>
-                <button class="ctrl-btn active" data-meas="U_LN" onclick="setMeas('U_LN',this)">U L-N</button>
-                <button class="ctrl-btn" data-meas="U_LL" onclick="setMeas('U_LL',this)">U L-L</button>
-                <button class="ctrl-btn" data-meas="I" onclick="setMeas('I',this)">Strom</button>
-            </div>
-            <div class="stat-row" id="harmStats"><div class="loading-msg">Lade Harmonische…</div></div>
-            <div class="chart-wrap" style="margin-top:14px">
-                <div class="chart-label">Linienspektrum der Einzelharmonischen (log-Amplitude)</div>
-                <div class="chart-el" id="chartHarm"></div>
-            </div>
-            <div class="chart-wrap" style="margin-top:14px">
-                <div class="chart-label">THD-Korrelation: berechnet (Harmonische) vs. PAC4200-Register</div>
-                <div class="chart-el" id="chartThd"></div>
-            </div>
-            <div class="warn-box" id="harmNote"></div>
+    <div class="intro">
+        <h3>Netz-Spektralanalyse — von der Handelsminute bis zum Jahresgang</h3>
+        <p>
+            Diese Analyse zerlegt die am Netzanschlusspunkt gemessenen Größen
+            (Netzfrequenz, Spannung, Oberschwingungen) in ihre <strong>Frequenz­anteile</strong>.
+            Die Zeitreihen sind <strong>aggregierte</strong> Größen, keine Roh-Kurvenformen:
+            der PAC4200 liefert die Frequenz mit ~10 s internem Refresh (Band bis ~50 mHz),
+            die 5-min-Aggregate ergeben ein VLF-Band bis 1,667 mHz. Der Bereich <em>oberhalb</em>
+            50 Hz stammt aus den <strong>geräteinternen FFT-Registern</strong> (Einzelharmonische).
+        </p>
+        <p>
+            Jede Darstellung ist bewusst auf <strong>eine eigene Seite</strong> gelegt — mit
+            Extremwert-Tooltips (Thesen an Maxima/Minima) und einer ausführlichen Erläuterung
+            unter dem Graf. Die <strong>Reflexions-Seite</strong> ist ein Versuch, Laufwellen-Echos
+            an den Grenzen des europäischen Verbundnetzes zu erkennen.
+        </p>
+        <div class="band">
+            <span>eVLF · Jahresgang (31,7 nHz)</span>
+            <span>VLF · Handelstakt (1,11 mHz)</span>
+            <span>LF · Tag/Nacht</span>
+            <span>Transienten · Sekunden</span>
+            <span>HF · Oberschwingungen (>50 Hz)</span>
         </div>
     </div>
 
-    <!-- ============================================================
-         SECTION 2: VLF/eVLF-Periodogramm (Lomb-Scargle)
-    ============================================================ -->
-    <div class="section">
-        <div class="section-header">
-            <span class="section-icon">🌐</span>
-            <div>
-                <div class="section-title">Markt- &amp; Lastzyklen · Lomb-Scargle-Periodogramm
-                    <span class="badge badge-vlf">VLF / eVLF &lt; 50 Hz</span></div>
-                <div class="section-sub">
-                    Der Kern der Analyse: zyklische Muster von der <strong>15-Minuten-Handelsgrenze</strong>
-                    (1,11 mHz) bis hinunter zum <strong>Jahresgang</strong> (31,7 nHz).
-                    Das Lomb-Scargle-Verfahren ist gegenüber <strong>Datenlücken</strong> robust
-                    (keine FFT-Interpolationsartefakte). Doppelt-logarithmische Achsen machen die
-                    energiearmen Linien sichtbar. Vertikale Marker verorten bekannte Zyklen —
-                    Details im Tooltip (Handel, Wochenende, Jahreszeit, Urlaubszeit).
-                </div>
-            </div>
-        </div>
-        <div class="section-body">
-            <div class="ctrl-row">
-                <span class="ctrl-label">Dezimation:</span>
-                <button class="ctrl-btn active" data-dec="1" onclick="setDec(1,this)">1×</button>
-                <button class="ctrl-btn" data-dec="4" onclick="setDec(4,this)">4×</button>
-                <button class="ctrl-btn" data-dec="12" onclick="setDec(12,this)">12×</button>
-                <span class="ctrl-label" style="margin-left:10px">Frequenz-Binning:</span>
-                <button class="ctrl-btn" id="binBtn" onclick="toggleBin(this)">aus</button>
-            </div>
-            <div class="chart-wrap">
-                <div class="chart-label">Leistung über Frequenz (log-log) — Zyklus-Attribution im Tooltip</div>
-                <div class="chart-el-tall" id="chartPeriodo"></div>
-            </div>
-            <div class="hint-box" id="periodoNote"></div>
-        </div>
+    <div class="hub-grid">
+        <a class="hub-card" href="/netzqualitaet/analyse/harmonische">
+            <div class="hc-head"><span class="hc-ico">📡</span><span class="hc-title">Oberschwingungen</span></div>
+            <div class="hc-desc">Linienspektrum der Einzelharmonischen H1…H31 (n·50 Hz) aus der
+                geräteinternen FFT, mit THD-Korrelation gegen das PAC4200-Register.</div>
+        </a>
+        <a class="hub-card" href="/netzqualitaet/analyse/periodogramm">
+            <div class="hc-head"><span class="hc-ico">🌐</span><span class="hc-title">Lomb-Scargle-Periodogramm</span></div>
+            <div class="hc-desc">Zyklische Muster von der 15-Minuten-Handelsgrenze bis zum
+                Jahresgang — lückenrobust, mit Zyklus-Attribution im Tooltip.</div>
+        </a>
+        <a class="hub-card" href="/netzqualitaet/analyse/psd">
+            <div class="hc-head"><span class="hc-ico">📉</span><span class="hc-title">Leistungsdichte (Welch)</span></div>
+            <div class="hc-desc">Segment-gemittelte spektrale Leistungsdichte (Hann/Blackman)
+                im LF/VLF-Bereich, log-log dargestellt.</div>
+        </a>
+        <a class="hub-card" href="/netzqualitaet/analyse/spektrogramm">
+            <div class="hc-head"><span class="hc-ico">⚡</span><span class="hc-title">Transienten-Spektrogramm</span></div>
+            <div class="hc-desc">Zeit-Frequenz-Analyse (STFT / Morlet-CWT) für Verschiebungen
+                und Aufschwingen — helle Bänder = erhöhte Energie.</div>
+        </a>
+        <a class="hub-card reflect" href="/netzqualitaet/analyse/reflexion">
+            <div class="hc-head"><span class="hc-ico">🛰️</span><span class="hc-title">Reflexionen (Versuch)</span></div>
+            <div class="hc-desc">Laufwellen-Echos an den Netzgrenzen: Δt → Distanz → vermutliche
+                Reflexionsstelle, dargestellt auf einer stilisierten Europakarte.</div>
+        </a>
     </div>
-
-    <!-- ============================================================
-         SECTION 3: Welch-PSD (LF/VLF, log-log)
-    ============================================================ -->
-    <div class="section">
-        <div class="section-header">
-            <span class="section-icon">📉</span>
-            <div>
-                <div class="section-title">Leistungsdichte · Welch-Methode
-                    <span class="badge badge-lf">LF / VLF</span></div>
-                <div class="section-sub">
-                    Welch-PSD mit Segment-Mittelung (reduzierte Varianz) und Fenster­funktion.
-                    Da die Abtastung 300 s beträgt (Nyquist 1,667 mHz), liegt der
-                    <strong>50-Hz-Notch/Split hier außerhalb des messbaren Bereichs</strong> —
-                    gezeigt wird die niederfrequente Leistungsdichte in Log-Log-Darstellung
-                    zur Ergänzung des Periodogramms.
-                </div>
-            </div>
-        </div>
-        <div class="section-body">
-            <div class="ctrl-row">
-                <span class="ctrl-label">Fenster:</span>
-                <button class="ctrl-btn active" data-win="hann" onclick="setWin('hann',this)">Hann</button>
-                <button class="ctrl-btn" data-win="blackman" onclick="setWin('blackman',this)">Blackman</button>
-            </div>
-            <div class="chart-wrap">
-                <div class="chart-label">Spektrale Leistungsdichte (log-log)</div>
-                <div class="chart-el" id="chartPsd"></div>
-            </div>
-            <div class="hint-box" id="psdNote"></div>
-        </div>
-    </div>
-
-    <!-- ============================================================
-         SECTION 4: Transienten-Spektrogramm (STFT / Morlet-CWT)
-    ============================================================ -->
-    <div class="section">
-        <div class="section-header">
-            <span class="section-icon">⚡</span>
-            <div>
-                <div class="section-title">Transienten · Zeit-Frequenz-Analyse
-                    <span class="badge badge-tr">STFT / CWT</span></div>
-                <div class="section-sub">
-                    Zur Erkennung dynamischer Netzereignisse: <strong>Verschiebungen</strong>
-                    (driftende Dominanzfrequenzen) und <strong>Aufschwingen</strong>
-                    (kurze Ringing-Bursts). Die <strong>Morlet-Wavelet-Transformation</strong>
-                    (w₀ = 6) isoliert kurze Energiestöße besser als die STFT mit fester Fensterbreite;
-                    helle Bänder markieren erhöhte Energie zum jeweiligen Zeitpunkt/Frequenz.
-                </div>
-            </div>
-        </div>
-        <div class="section-body">
-            <div class="ctrl-row">
-                <span class="ctrl-label">Methode:</span>
-                <button class="ctrl-btn active" data-meth="cwt" onclick="setMeth('cwt',this)">Morlet-CWT</button>
-                <button class="ctrl-btn" data-meth="stft" onclick="setMeth('stft',this)">STFT</button>
-            </div>
-            <div class="chart-wrap">
-                <div class="chart-label">Spektrogramm — Zeit (x) × Frequenz (y) × Energie (Farbe)</div>
-                <div class="chart-el-tall" id="chartSpectro"></div>
-            </div>
-            <div class="hint-box" id="spectroNote"></div>
-        </div>
-    </div>
-
 </div>
 
-<script>
-// ---- global state ----
-const S = { days: 30, signal: 'freq', meas: 'U_LN', dec: 1, bin: false, win: 'hann', meth: 'cwt' };
-const charts = {};
-function ec(id) {
-    if (!charts[id]) charts[id] = echarts.init(document.getElementById(id), 'dark');
-    return charts[id];
-}
-window.addEventListener('resize', () => Object.values(charts).forEach(c => c.resize()));
-
-// kompakte Zahl: gerundet, ohne Null-Ballast (10.000 -> 10; 1.50 -> 1.5)
-function trimNum(x, dec) { return parseFloat(Number(x).toFixed(dec)).toString(); }
-// Einheit so waehlen, dass die Mantisse in [1,1000) liegt -> einfachste Zahl an die Achse.
-function fmtFreq(f) {
-    if (!isFinite(f) || f <= 0) return '0';
-    let v, u;
-    if (f >= 1)         { v = f;     u = 'Hz'; }
-    else if (f >= 1e-3) { v = f*1e3; u = 'mHz'; }
-    else if (f >= 1e-6) { v = f*1e6; u = 'µHz'; }
-    else                { v = f*1e9; u = 'nHz'; }
-    const dec = v >= 100 ? 0 : (v >= 10 ? 1 : 2);
-    return trimNum(v, dec) + ' ' + u;
-}
-// Periodendauer in runden Menscheneinheiten (15 min, 1 h, 1 d, 1 Wo, 1 Mon, 1 a).
-function fmtPeriod(sec) {
-    if (!isFinite(sec) || sec <= 0) return '—';
-    const units = [[31557600,'a'],[2629800,'Mon'],[604800,'Wo'],
-                   [86400,'d'],[3600,'h'],[60,'min'],[1,'s']];
-    for (const [s, u] of units) {
-        if (sec >= s * 0.999) {
-            const v = sec / s;
-            const dec = v >= 100 ? 0 : (v >= 10 ? 1 : 2);
-            return trimNum(v, dec) + ' ' + u;
-        }
-    }
-    return trimNum(sec, 2) + ' s';
-}
-// Log-Frequenzachse: einfachste Frequenz + zugehoerige Periodendauer (zweizeilig).
-function fmtFreqAxis(f) { return fmtFreq(f) + '\n' + fmtPeriod(1/f); }
-function win() { const e = Math.floor(Date.now()/1000); return { start: e - S.days*86400, end: e }; }
-
-// ---- highlight helpers ----
-function activate(btn, sel) {
-    if (!btn) return;
-    btn.parentElement.querySelectorAll(sel).forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-}
-function setDays(d, b){ S.days=d; activate(b,'.ctrl-btn'); loadAll(); }
-function setSignal(s, b){ S.signal=s; activate(b,'.ctrl-btn'); loadPeriodo(); loadPsd(); loadSpectro(); }
-function setMeas(m, b){ S.meas=m; activate(b,'.ctrl-btn'); loadHarm(); }
-function setDec(d, b){ S.dec=d; activate(b,'.ctrl-btn'); loadPeriodo(); }
-function toggleBin(b){ S.bin=!S.bin; b.textContent=S.bin?'an':'aus'; b.classList.toggle('active',S.bin); loadPeriodo(); }
-function setWin(w, b){ S.win=w; activate(b,'.ctrl-btn'); loadPsd(); }
-function setMeth(m, b){ S.meth=m; activate(b,'.ctrl-btn'); loadSpectro(); }
-
-// ---- Section 1: harmonics ----
-async function loadHarm() {
-    const {start, end} = win();
-    document.getElementById('harmStats').innerHTML = '<div class="loading-msg">Lade Harmonische…</div>';
-    let d;
-    try { d = await (await fetch(`/api/nq/spectral/harmonics?start=${start}&end=${end}&meas=${S.meas}`)).json(); }
-    catch(e){ document.getElementById('harmStats').innerHTML='<div class="loading-msg">Fehler beim Laden.</div>'; return; }
-    if (d.error){ document.getElementById('harmStats').innerHTML=`<div class="loading-msg">${d.error}</div>`; return; }
-    document.getElementById('harmNote').textContent = d.note || '';
-
-    const sp = d.spectrum || {orders:[],values:[],freqs_hz:[],unit:''};
-    // THD ist ein Prozentwert (0..100); implausible Registerausreißer (z. B. 1e25) verwerfen.
-    const thdPacVals = (d.thd_pac_series && d.thd_pac_series.values || []).filter(x=>isFinite(x) && x>=0 && x<=100);
-    const thdPac = thdPacVals.length ? avg(thdPacVals) : null;
-    document.getElementById('harmStats').innerHTML = `
-        ${statCard('Berechnete THD', d.thd_calc_pct, '%')}
-        ${statCard('PAC4200 THD (Ø)', thdPac, '%')}
-        ${statCard('Korrelation r', d.thd_correlation, '')}
-        ${statCard('Ordnungen', sp.orders.length, '')}`;
-
-    // line spectrum
-    const data = sp.freqs_hz.map((f,i)=>[f, Math.max(sp.values[i], 1e-6)]);
-    ec('chartHarm').setOption({
-        grid:{left:66,right:22,top:24,bottom:48},
-        tooltip:{trigger:'axis', confine:true, formatter:p=>{
-            const o=sp.orders[p[0].dataIndex];
-            return `H${o} · ${p[0].value[0].toFixed(0)} Hz<br/>${p[0].value[1].toFixed(3)} ${sp.unit}`;
-        }},
-        xAxis:{type:'value', name:'Frequenz (Hz)', nameLocation:'middle', nameGap:30,
-               nameTextStyle:{color:'#cbd5e1', fontSize:11},
-               axisLabel:{color:'#94a3b8', hideOverlap:true}, splitLine:{show:false}},
-        yAxis:{type:'log', name:sp.unit || 'Amplitude', nameLocation:'middle', nameGap:48,
-               nameTextStyle:{color:'#cbd5e1', fontSize:11},
-               axisLabel:{color:'#94a3b8', hideOverlap:true}, splitLine:{lineStyle:{color:'rgba(255,255,255,0.05)'}}},
-        series:[{type:'bar', data, barWidth:'55%', itemStyle:{color:'#fca5a5'}}]
-    }, true);
-
-    // THD correlation over time
-    const c = d.thd_calc_series||{ts:[],values:[]}, p = d.thd_pac_series||{ts:[],values:[]};
-    ec('chartThd').setOption({
-        grid:{left:52,right:20,top:26,bottom:40},
-        legend:{top:0, textStyle:{color:'#94a3b8'}, data:['berechnet','PAC4200']},
-        tooltip:{trigger:'axis'},
-        xAxis:{type:'time', axisLabel:{color:'#94a3b8'}},
-        yAxis:{type:'value', name:'%', axisLabel:{color:'#94a3b8'}, splitLine:{lineStyle:{color:'rgba(255,255,255,0.05)'}}},
-        series:[
-            {name:'berechnet', type:'line', showSymbol:false, lineStyle:{width:1.4,color:'#a5b4fc'},
-             data:c.ts.map((t,i)=>[t*1000, c.values[i]])},
-            {name:'PAC4200', type:'line', showSymbol:false, lineStyle:{width:1.4,color:'#86efac'},
-             data:p.ts.map((t,i)=>[t*1000, p.values[i]])}
-        ]
-    }, true);
-}
-
-// ---- Section 2: periodogram ----
-async function loadPeriodo() {
-    const {start, end} = win();
-    const url = `/api/nq/spectral/periodogram?start=${start}&end=${end}&signal=${S.signal}&decimate=${S.dec}&binning=${S.bin?1:0}`;
-    let d;
-    try { d = await (await fetch(url)).json(); } catch(e){ return; }
-    const note = document.getElementById('periodoNote');
-    if (d.error){ note.innerHTML = `<strong>${d.error}</strong> (n=${d.n||0}). Mehr Zeitraum/Daten nötig.`; ec('chartPeriodo').clear(); return; }
-    note.innerHTML = `Auswertbarer Bereich: <strong>${fmtFreq(d.f_min_hz)}</strong> … <strong>${fmtFreq(d.f_max_hz)}</strong>
-        · n=${d.n_samples} Punkte · Dezimation ${d.decimate}×.
-        Untergrenze = 1 Zyklus im Zeitfenster; Obergrenze = Nyquist der (dezimierten) Abtastung.`;
-
-    const useBin = S.bin && d.binned;
-    const F = useBin ? d.binned.freqs_hz : d.freqs_hz;
-    const P = useBin ? d.binned.power : d.power;
-    const data = F.map((f,i)=>[f, Math.max(P[i], 1e-9)]);
-
-    const markLines = (d.markers||[]).filter(m=>m.resolvable).map(m=>({
-        xAxis:m.freq_hz, name:m.label,
-        label:{formatter:fmtPeriod(m.period_s), color:'#e2e8f0', fontSize:10, rotate:90,
-               position:'insideEndTop', padding:[2,3], backgroundColor:'rgba(15,23,42,0.65)', borderRadius:2},
-        lineStyle:{color:'rgba(148,163,184,0.5)', type:'dashed', width:1}
-    }));
-    const markMap = {}; (d.markers||[]).forEach(m=> markMap[m.label]=m);
-
-    ec('chartPeriodo').setOption({
-        grid:{left:78,right:28,top:34,bottom:70},
-        tooltip:{trigger:'axis', confine:true, formatter:p=>{
-            const f=p[0].value[0];
-            return `f = ${fmtFreq(f)}<br/>T = ${fmtPeriod(1/f)}<br/>P = ${p[0].value[1].toExponential(3)}`;
-        }},
-        xAxis:{type:'log', name:'Frequenz  ·  Periodendauer', nameLocation:'middle', nameGap:52,
-               nameTextStyle:{color:'#cbd5e1', fontSize:11},
-               axisLabel:{color:'#94a3b8', fontSize:10, lineHeight:13, hideOverlap:true, formatter:v=>fmtFreqAxis(v)},
-               splitLine:{lineStyle:{color:'rgba(255,255,255,0.04)'}}},
-        yAxis:{type:'log', name:'Leistung', nameLocation:'middle', nameGap:58,
-               nameTextStyle:{color:'#cbd5e1', fontSize:11},
-               axisLabel:{color:'#94a3b8', hideOverlap:true}, splitLine:{lineStyle:{color:'rgba(255,255,255,0.05)'}}},
-        series:[{
-            type:'line', showSymbol:false, data, lineStyle:{width:1.3, color:'#86efac'},
-            areaStyle:{color:'rgba(34,197,94,0.10)'},
-            markLine:{silent:false, symbol:'none', data:markLines,
-                tooltip:{formatter:pm=>{ const m=markMap[pm.name]; return m?`<b>${m.label}</b><br/>${m.attr}<br/>T=${fmtPeriod(m.period_s)}`:pm.name; }}}
-        }]
-    }, true);
-}
-
-// ---- Section 3: Welch PSD ----
-async function loadPsd() {
-    const {start, end} = win();
-    let d;
-    try { d = await (await fetch(`/api/nq/spectral/psd?start=${start}&end=${end}&signal=${S.signal}&window=${S.win}`)).json(); }
-    catch(e){ return; }
-    const note = document.getElementById('psdNote');
-    if (d.error){ note.innerHTML=`<strong>${d.error}</strong> (n=${d.n||0}).`; ec('chartPsd').clear(); return; }
-    note.innerHTML = `${d.note||''} · fs=${(d.fs_hz*1e3).toFixed(3)} mHz · nperseg=${d.nperseg} · Fenster ${d.window}.`;
-    const data = d.freqs_hz.map((f,i)=>[f, Math.max(d.psd[i], 1e-12)]);
-    ec('chartPsd').setOption({
-        grid:{left:82,right:28,top:24,bottom:68},
-        tooltip:{trigger:'axis', confine:true, formatter:p=>`f = ${fmtFreq(p[0].value[0])}<br/>T = ${fmtPeriod(1/p[0].value[0])}<br/>PSD = ${p[0].value[1].toExponential(3)} ${d.psd_unit}`},
-        xAxis:{type:'log', name:'Frequenz  ·  Periodendauer', nameLocation:'middle', nameGap:52,
-               nameTextStyle:{color:'#cbd5e1', fontSize:11},
-               axisLabel:{color:'#94a3b8', fontSize:10, lineHeight:13, hideOverlap:true, formatter:v=>fmtFreqAxis(v)},
-               splitLine:{lineStyle:{color:'rgba(255,255,255,0.04)'}}},
-        yAxis:{type:'log', name:d.psd_unit, nameLocation:'middle', nameGap:64,
-               nameTextStyle:{color:'#cbd5e1', fontSize:11},
-               axisLabel:{color:'#94a3b8', hideOverlap:true}, splitLine:{lineStyle:{color:'rgba(255,255,255,0.05)'}}},
-        series:[{type:'line', showSymbol:false, data, lineStyle:{width:1.3, color:'#a5b4fc'}, areaStyle:{color:'rgba(99,102,241,0.10)'}}]
-    }, true);
-}
-
-// ---- Section 4: spectrogram ----
-async function loadSpectro() {
-    const {start, end} = win();
-    let d;
-    try { d = await (await fetch(`/api/nq/spectral/spectrogram?start=${start}&end=${end}&signal=${S.signal}&method=${S.meth}`)).json(); }
-    catch(e){ return; }
-    const note = document.getElementById('spectroNote');
-    if (d.error){ note.innerHTML=`<strong>${d.error}</strong> (n=${d.n||0}).`; ec('chartSpectro').clear(); return; }
-    const F = d.freqs_hz||[], T = d.times||[], Z = d.z||[];
-    if (!F.length || !T.length){ note.innerHTML='Keine Daten im Zeitfenster.'; ec('chartSpectro').clear(); return; }
-    note.innerHTML = `Methode: <strong>${d.method==='cwt'?'Morlet-CWT (w₀=6)':'STFT'}</strong>
-        · ${F.length}×${T.length} Zellen · helle Zellen = erhöhte Energie (Aufschwingen / Verschiebung).`;
-
-    let vmax = 1e-9;
-    const cells = [];
-    for (let yi=0; yi<F.length; yi++)
-        for (let xi=0; xi<T.length; xi++){ const v=Z[yi][xi]; if(v>vmax)vmax=v; cells.push([xi,yi,v]); }
-
-    ec('chartSpectro').setOption({
-        grid:{left:86,right:22,top:18,bottom:70},
-        tooltip:{position:'top', confine:true, formatter:p=>{
-            const t=new Date(T[p.value[0]]*1000);
-            return `${t.toLocaleString('de-DE')}<br/>f = ${fmtFreq(F[p.value[1]])}<br/>T = ${fmtPeriod(1/F[p.value[1]])}<br/>E = ${p.value[2].toExponential(2)}`;
-        }},
-        xAxis:{type:'category', data:T.map(t=>{ const dt=new Date(t*1000);
-                return S.days<=7 ? dt.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})
-                                 : dt.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}); }),
-               name:'Zeit', nameLocation:'middle', nameGap:34, nameTextStyle:{color:'#cbd5e1', fontSize:11},
-               axisLabel:{color:'#94a3b8', hideOverlap:true, interval:Math.floor(T.length/10)}, splitArea:{show:false}},
-        yAxis:{type:'category', data:F.map(f=>fmtFreq(f)),
-               axisLabel:{color:'#94a3b8', hideOverlap:true, interval:Math.floor(F.length/8)}, splitArea:{show:false}},
-        visualMap:{min:0, max:vmax, calculable:false, orient:'horizontal', left:'center', bottom:2,
-                   inRange:{color:['#0f172a','#1e3a8a','#7c3aed','#f59e0b','#fef08a']}, textStyle:{color:'#94a3b8'}},
-        series:[{type:'heatmap', data:cells, progressive:2000, emphasis:{disabled:true}}]
-    }, true);
-}
-
-function statCard(label, val, unit) {
-    let v;
-    if (val===null || val===undefined) v='—';
-    else if (typeof val==='number') {
-        if (!isFinite(val)) v='—';
-        else if (Math.abs(val)>=1e6) v=val.toExponential(1);
-        else v = Math.abs(val)<1 ? val.toFixed(3) : val.toFixed(2);
-    } else v=val;
-    return `<div class="stat-card"><div class="stat-label">${label}</div>
-            <div class="stat-value">${v}<span class="stat-unit">${unit}</span></div></div>`;
-}
-function avg(a){ return a.length ? Math.round(a.reduce((s,x)=>s+x,0)/a.length*1000)/1000 : null; }
-
-function loadAll(){ loadHarm(); loadPeriodo(); loadPsd(); loadSpectro(); }
-if (window.PVNavUI) PVNavUI.initDrawer();
-loadAll();
-</script>
+{% include 'info_overlay.html' %}
 </body>
 </html>

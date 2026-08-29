@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico?v={{ favicon_version }}">
+    <title>Transienten-Spektrogramm — NQ-Spektralanalyse</title>
+    <script src="/static/js/nav-context.js"></script>
+    <script src="/static/js/nav-ui.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="/static/js/nq-analyse.js"></script>
+    <link rel="stylesheet" href="/static/css/nav-ui.css">
+    <link rel="stylesheet" href="/static/css/nq-analyse.css">
+</head>
+<body>
+
+{% include 'nq_analyse_nav.html' %}
+
+<div class="content">
+    <div class="globalbar">
+        <div class="gb-group" id="rangeGroup">
+            <span class="gb-label">Zeitraum</span>
+            <button class="ctrl-btn" data-days="7">7 T</button>
+            <button class="ctrl-btn" data-days="30">30 T</button>
+            <button class="ctrl-btn" data-days="90">90 T</button>
+            <button class="ctrl-btn" data-days="365">1 J</button>
+        </div>
+        <div class="gb-group">
+            <span class="gb-label">Signal</span>
+            <button class="ctrl-btn active" data-sig="freq" onclick="setSignal('freq',this)">Frequenz</button>
+            <button class="ctrl-btn" data-sig="voltage" onclick="setSignal('voltage',this)">Spannung</button>
+        </div>
+        <div class="gb-group" style="margin-left:auto">
+            <button class="ctrl-btn" onclick="loadSpectro()">↻ Aktualisieren</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header">
+            <span class="section-icon">⚡</span>
+            <div>
+                <div class="section-title">Transienten · Zeit-Frequenz-Analyse <span class="badge badge-tr">STFT / CWT</span></div>
+                <div class="section-sub">
+                    Erkennt dynamische Netzereignisse: <strong>Verschiebungen</strong> (driftende
+                    Dominanzfrequenzen) und <strong>Aufschwingen</strong> (kurze Ringing-Bursts). Die
+                    <strong>Morlet-Wavelet-Transformation</strong> (w₀ = 6) isoliert kurze Energiestöße besser
+                    als die STFT mit fester Fensterbreite.
+                </div>
+            </div>
+        </div>
+        <div class="section-body">
+            <div class="ctrl-row">
+                <span class="ctrl-label">Methode:</span>
+                <button class="ctrl-btn active" data-meth="cwt" onclick="setMeth('cwt',this)">Morlet-CWT</button>
+                <button class="ctrl-btn" data-meth="stft" onclick="setMeth('stft',this)">STFT</button>
+            </div>
+            <div class="chart-wrap">
+                <div class="chart-label">Spektrogramm — Zeit (x) × Frequenz (y) × Energie (Farbe)</div>
+                <div class="chart-el-tall" id="chartSpectro"></div>
+            </div>
+            <div class="hint-box" id="spectroNote"></div>
+
+            <div class="explain">
+                <h4>Wie ist der Graf zu lesen?</h4>
+                <p>
+                    Die <strong>x-Achse ist die Zeit</strong>, die <strong>y-Achse die Frequenz</strong>, und die
+                    <strong>Farbe die Energie</strong> (dunkel = ruhig, hell/gelb = viel Energie). Ein Periodogramm
+                    zeigt <em>welche</em> Frequenzen vorkommen, das Spektrogramm zusätzlich <em>wann</em>.
+                </p>
+                <h4>Muster erkennen</h4>
+                <ul>
+                    <li><strong>Horizontales helles Band:</strong> eine über die Zeit stabile Schwingung.</li>
+                    <li><strong>Schräges Band (Chirp):</strong> eine <strong>driftende</strong> Frequenz —
+                        ein sich verschiebender Netzzustand.</li>
+                    <li><strong>Vertikaler heller Streifen:</strong> ein kurzer, breitbandiger
+                        <strong>Transient</strong> (Schalthandlung, Lastsprung) — ein „Aufschwingen".</li>
+                </ul>
+                <h4>Methodenwahl</h4>
+                <p>
+                    <strong>Morlet-CWT</strong> hat logarithmisch skalierende Auflösung: fein in der Zeit bei
+                    hohen, fein in der Frequenz bei tiefen Frequenzen — ideal für kurze Bursts.
+                    <strong>STFT</strong> nutzt ein festes Fenster (gleichmäßiges Raster) und ist schneller,
+                    verwischt aber kurze Ereignisse stärker.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const S = { signal: 'freq', meth: 'cwt' };
+function setSignal(s, b) { S.signal = s; act(b); loadSpectro(); }
+function setMeth(m, b) { S.meth = m; act(b); loadSpectro(); }
+function act(b) { b.parentElement.querySelectorAll('.ctrl-btn').forEach(x => x.classList.remove('active')); b.classList.add('active'); }
+
+async function loadSpectro() {
+    const { start, end } = NQA.win();
+    let d;
+    try { d = await (await fetch(`/api/nq/spectral/spectrogram?start=${start}&end=${end}&signal=${S.signal}&method=${S.meth}`)).json(); }
+    catch (e) { return; }
+    const note = document.getElementById('spectroNote');
+    if (d.error) { note.innerHTML = `<strong>${d.error}</strong> (n=${d.n || 0}).`; NQA.ec('chartSpectro').clear(); return; }
+    const F = d.freqs_hz || [], T = d.times || [], Z = d.z || [];
+    if (!F.length || !T.length) { note.innerHTML = 'Keine Daten im Zeitfenster.'; NQA.ec('chartSpectro').clear(); return; }
+    note.innerHTML = `Methode: <strong>${d.method === 'cwt' ? 'Morlet-CWT (w₀=6)' : 'STFT'}</strong>
+        · ${F.length}×${T.length} Zellen · helle Zellen = erhöhte Energie (Aufschwingen / Verschiebung).`;
+
+    let vmax = 1e-9;
+    const cells = [];
+    for (let yi = 0; yi < F.length; yi++)
+        for (let xi = 0; xi < T.length; xi++) { const v = Z[yi][xi]; if (v > vmax) vmax = v; cells.push([xi, yi, v]); }
+
+    NQA.ec('chartSpectro').setOption({
+        grid: { left: 86, right: 22, top: 18, bottom: 70 },
+        tooltip: {
+            position: 'top', confine: true, formatter: p => {
+                const t = new Date(T[p.value[0]] * 1000);
+                return `${t.toLocaleString('de-DE')}<br/>f = ${NQA.fmtFreq(F[p.value[1]])}<br/>T = ${NQA.fmtPeriod(1 / F[p.value[1]])}<br/>E = ${p.value[2].toExponential(2)}`;
+            }
+        },
+        xAxis: {
+            type: 'category', data: T.map(t => {
+                const dt = new Date(t * 1000);
+                return NQA.days <= 7 ? dt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+                    : dt.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+            }),
+            name: 'Zeit', nameLocation: 'middle', nameGap: 34, nameTextStyle: { color: '#cbd5e1', fontSize: 11 },
+            axisLabel: { color: '#94a3b8', hideOverlap: true, interval: Math.floor(T.length / 10) }, splitArea: { show: false }
+        },
+        yAxis: {
+            type: 'category', data: F.map(f => NQA.fmtFreq(f)),
+            axisLabel: { color: '#94a3b8', hideOverlap: true, interval: Math.floor(F.length / 8) }, splitArea: { show: false }
+        },
+        visualMap: {
+            min: 0, max: vmax, calculable: false, orient: 'horizontal', left: 'center', bottom: 2,
+            inRange: { color: ['#0f172a', '#1e3a8a', '#7c3aed', '#f59e0b', '#fef08a'] }, textStyle: { color: '#94a3b8' }
+        },
+        series: [{ type: 'heatmap', data: cells, progressive: 2000, emphasis: { disabled: true } }]
+    }, true);
+}
+
+NQA.initRange(loadSpectro);
+loadSpectro();
+</script>
+{% include 'info_overlay.html' %}
+</body>
+</html>
