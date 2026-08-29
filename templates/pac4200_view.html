@@ -169,7 +169,9 @@
                 screens = j.screens;
                 lastOk = true;
                 $('dot').className = 'dot ok';
-                $('statusText').textContent = `PAC4200 @ ${j.host} · aktualisiert ${new Date().toLocaleTimeString('de-DE')}`;
+                const src = j.source && j.source.indexOf('tech') >= 0 ? 'Tech ' : '@ ';
+                const hostLbl = j.host ? `${src}${j.host} · ` : '';
+                $('statusText').textContent = `PAC4200 · ${hostLbl}aktualisiert ${new Date().toLocaleTimeString('de-DE')}`;
             } else {
                 lastOk = false;
                 $('dot').className = 'dot err';

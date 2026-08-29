@@ -410,7 +410,8 @@ def fetch_tech_snapshot() -> dict:
     """Holt den letzten Fast/Medium/Slow/Energie-Stand von Tech und baut den
     PAC-Clone-Snapshot (values + screens) nach — **ohne** PAC-Direktzugriff.
 
-    Returns ``{ok, ts, values, units, screens, source}`` (screens leer bei Fehler).
+    Returns ``{ok, ts, values, units, screens, source, host}`` (screens leer bei
+    Fehler). ``host`` = Tech-Host, von dem der Snapshot gelesen wird.
     """
     cfg = load_config()
     host = _tech_host(cfg)
@@ -434,12 +435,12 @@ def fetch_tech_snapshot() -> dict:
         payload = json.loads(_ssh_python(host, code) or "{}")
     except Exception as exc:
         return {"ok": False, "ts": 0, "values": {}, "units": {}, "screens": [],
-                "source": "nq_tech_tmpfs", "error": str(exc)}
+                "source": "nq_tech_tmpfs", "host": host, "error": str(exc)}
 
     values = _reconstruct_values(payload)
     if not values:
         return {"ok": False, "ts": 0, "values": {}, "units": {}, "screens": [],
-                "source": "nq_tech_tmpfs", "error": "keine Tech-Daten"}
+                "source": "nq_tech_tmpfs", "host": host, "error": "keine Tech-Daten"}
 
     from nq import pac_live
     units: dict = {k: u for k, (_, u) in pac_live.FLOAT_MAP.items()}
@@ -450,7 +451,7 @@ def fetch_tech_snapshot() -> dict:
     return {"ok": True, "ts": int((ts_ms or 0) / 1000) or int(time.time()),
             "values": values, "units": units,
             "screens": pac_live._build_screens(values),
-            "source": "nq_tech_tmpfs"}
+            "source": "nq_tech_tmpfs", "host": host}
 
 
 def fetch_tech_latest_fast() -> dict:
