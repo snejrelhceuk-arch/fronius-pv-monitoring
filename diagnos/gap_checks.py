@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from diagnos.config import CRIT, DB_PATH, FAIL, OK, WARN
+from diagnos import gap_accept
 
 RAW_GAP_SCAN_HOURS = 24
 DATA_1MIN_GAP_SCAN_HOURS = 72
@@ -109,6 +110,8 @@ def _run_gap_scan(table: str, hours: int, min_gap_s: int, daylight_aware: bool =
         max_gap = 0.0
         night_gaps = 0
         settled_gaps = 0
+        accepted_gaps = 0
+        acceptances = gap_accept.load_acceptances()
         now_ts = time.time()
         for row in rows:
             start_ts = float(row[0])
@@ -119,7 +122,12 @@ def _run_gap_scan(table: str, hours: int, min_gap_s: int, daylight_aware: bool =
             max_gap = max(max_gap, gap_s)
             is_night = daylight_aware and _gap_in_darkness(start_ts, end_ts)
             is_settled = end_ts < (now_ts - GAP_SETTLE_S)
-            if is_night:
+            accepted = gap_accept.is_accepted(table, start_ts, end_ts, acceptances)
+            # Akzeptierte (bestätigte/rekonstruierte) Lücken treiben keine Schwere,
+            # ebenso Nacht-Standby und historisch gesetzte Lücken.
+            if accepted:
+                accepted_gaps += 1
+            elif is_night:
                 night_gaps += 1
             elif is_settled:
                 settled_gaps += 1
@@ -133,6 +141,7 @@ def _run_gap_scan(table: str, hours: int, min_gap_s: int, daylight_aware: bool =
                     'class': gap_type,
                     'expected_night': is_night,
                     'settled': is_settled,
+                    'accepted': bool(accepted),
                 })
 
         result = {
@@ -142,6 +151,7 @@ def _run_gap_scan(table: str, hours: int, min_gap_s: int, daylight_aware: bool =
             'gap_count': len(rows),
             'fresh_gap_count': sum(sev_counts.values()),
             'settled_gap_count': settled_gaps,
+            'accepted_gap_count': accepted_gaps,
             'max_gap_s': round(max_gap, 1),
             'classes': category_counts,
             'severity': _gap_severity(sev_counts),

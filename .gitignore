@@ -40,6 +40,7 @@ config/event_notifier_dedup.json
 config/einspeise_guard_dedup.json
 config/diagnos_alert_state.json
 config/nq_alert_state.json
+config/diagnos_gap_accept.json
 
 # TLS-Zertifikate und Schlüssel (sensibel)
 config/tls/

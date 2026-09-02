@@ -2,10 +2,10 @@
 title: Diagnos Integritaet (Bilanzen, Rollups, Gap-Scan)
 domain: diagnos
 role: D
-applyTo: "diagnos/integrity.py,diagnos/gap_checks.py,diagnos/rollup_checks.py"
-tags: [integritaet, gap-scan, rollup, balance, config-parse]
+applyTo: "diagnos/integrity.py,diagnos/gap_checks.py,diagnos/gap_accept.py,diagnos/rollup_checks.py"
+tags: [integritaet, gap-scan, gap-accept, rollup, balance, config-parse]
 status: stable
-last_review: 2026-08-10
+last_review: 2026-09-02
 ---
 
 # Diagnos Integritaet
@@ -18,6 +18,7 @@ Tiefe read-only Pruefung der Datenkonsistenz: Energiebilanz, Monats-/Jahresrollu
 - **Tagesbilanz:** `diagnos/integrity.py:check_daily_energy_balance`
 - **Rollups:** `diagnos/rollup_checks.py:check_monthly_rollup`, `check_yearly_rollup` (feld-differenziert)
 - **Gap-Scan:** `diagnos/gap_checks.py:_run_gap_scan` + `check_*_gaps` (importiert in `diagnos/integrity.py`)
+- **Gap-Akzeptanz:** `diagnos/gap_accept.py:load_acceptances`, `is_accepted` (Operator-kuratierte Lücken; State `config/diagnos_gap_accept.json`, gitignored; CLI `python3 -m diagnos.gap_accept`)
 - **WR-Zustand:** `diagnos/integrity.py:check_fronius_attachment_state`
 - **Config-Parse:** `diagnos/integrity.py:check_config_json_parse`
 - **Status-Markdown:** `diagnos/status_report.py:write_status_reports` (schreibt RAW-Status.md + System-Status.md nach `logs/diagnos/`)
@@ -28,7 +29,8 @@ Tiefe read-only Pruefung der Datenkonsistenz: Energiebilanz, Monats-/Jahresrollu
 
 ## Invarianten
 - Integritaetschecks bleiben strikt read-only (SQLite URI `mode=ro`).
-- Gap-Klassen sind fix: `micro`, `short`, `medium`, `long`; `medium/long` erzwingen mindestens `crit` — **aber nur für frische Lücken** (nicht Nacht-Standby, nicht „gesetzte" historische Lücken > `GAP_SETTLE_S`).
+- Gap-Klassen sind fix: `micro`, `short`, `medium`, `long`; `medium/long` erzwingen mindestens `crit` — **aber nur für frische Lücken** (nicht Nacht-Standby, nicht „gesetzte" historische Lücken > `GAP_SETTLE_S`, nicht **akzeptierte** Lücken).
+- **Akzeptierte Lücken** (`config/diagnos_gap_accept.json`) treiben keine Severity mehr (`accepted_gap_count` statt `fresh`), bleiben aber im Sample sichtbar (`accepted: true`). Damit tauchen bestätigte/rekonstruierte Lücken nicht mehr als Warn-Zustand auf — die Zählerstände bleiben per Backfill verifiziert.
 - `overall` entspricht immer der schlechtesten Einzelseverity.
 - Gap-Annotationen geben Kontext, reparieren aber keine Daten.
 - WR-Zustand: aktuelle Collector-Liveness schlägt eine ältere gespeicherte Vollprüfung (live + fehlerfrei ⇒ kein `crit`).
@@ -42,6 +44,7 @@ Tiefe read-only Pruefung der Datenkonsistenz: Energiebilanz, Monats-/Jahresrollu
 - Schwellwerte nachziehen -> Konstanten (`*_WARN_*`, `*_CRIT_*`) in `diagnos/integrity.py` anpassen.
 - Rollup-Toleranz nachziehen -> `ROLLUP_FLOW_WARN_PCT`/`_CRIT_PCT` in `diagnos/rollup_checks.py`.
 - Neue Tabelle in Gap-Scan aufnehmen -> neuer `check_<table>_gaps()` in `diagnos/gap_checks.py` ueber `_run_gap_scan`.
+- Bestätigte/rekonstruierte Lücke akzeptieren -> `python3 -m diagnos.gap_accept --table <t> --day YYYY-MM-DD --note "..."` (oder `--from/--to`, UTC). Danach kein Warn-Zustand mehr.
 - Neue Konfigdatei in Parse-Check -> Glob oder expliziten Pfad in `diagnos/integrity.py` erweitern.
 
 ## Bekannte Fallstricke

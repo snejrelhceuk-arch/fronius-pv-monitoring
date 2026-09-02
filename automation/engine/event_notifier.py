@@ -29,26 +29,36 @@ Siehe: doc/AUTOMATION_ARCHITEKTUR.md
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 import socket
 import sqlite3
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from email.mime.text import MIMEText
 from typing import Optional
 
 import config as app_config
 from automation.engine import credential_store
-from automation.engine import diagnos_alert_state
 from automation.engine.obs_state import ObsState
 from automation.engine.wattpilot_recovery import WattpilotRecoveryManager
 from automation.engine.notify import dedup, thresholds, mail, report_format
-from automation.engine.nq_notifier import NQNotifier
 from diagnos.health import run_all as run_diagnos_health
 from diagnos.integrity import run_all as run_diagnos_integrity
 from diagnos.nq_health import run_all as run_diagnos_nq
 
 LOG = logging.getLogger('event_notifier')
+
+# Deutsche Monatsnamen für die Tagesbericht-Kopfzeilen.
+MONATE = ('Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli',
+          'August', 'September', 'Oktober', 'November', 'Dezember')
+
+# Energie-Kernwerte (5 Werte): daily_data-Spalte (Wh) → Report-Schlüssel (kWh).
+_DD_COLS = ('W_PV_total', 'W_Consumption_total', 'W_Imp_Netz_total',
+            'W_Exp_Netz_total', 'W_Batt_Charge_total', 'W_Batt_Discharge_total')
+_DD_KEYS = ('erzeugung', 'verbrauch', 'netzbezug', 'einspeisung',
+            'batt_ladung', 'batt_entladung')
 
 
 # Persistenter Dedup-State (1×/Tag pro Key) → automation/engine/notify/dedup.py
@@ -77,9 +87,6 @@ class EventNotifier:
         self._events = getattr(app_config, 'NOTIFICATION_EVENTS', [])
         self._thresholds = getattr(app_config, 'EVENT_THRESHOLDS', {})
         self._wattpilot_recovery = WattpilotRecoveryManager()
-        # NQ-Befunde (Rolle N) teilen sich den SMTP-/Dedup-Pfad, haben aber
-        # einen eigenen Diff-State (config/nq_alert_state.json).
-        self._nq = NQNotifier(self)
 
     # ── Persistenter Dedup ──────────────────────────────────
     def _dedup_cleanup(self) -> None:
@@ -200,231 +207,228 @@ class EventNotifier:
     # Sunset-Tagesbericht (24h Sunset→Sunset)
     # ═════════════════════════════════════════════════════════
 
-    def sende_sunset_bericht(self, obs: ObsState) -> bool:
-        """Sende Sunset-Tagesbericht: 24h-Zusammenfassung Sunset→Sunset.
+    def sende_tagesbericht(self) -> bool:
+        """Sende den täglichen Energiebericht (00:00 für den abgelaufenen Kalendertag).
 
-        Eigenständiges Überwachungstool — NICHT Teil von Monitoring/Analyse.
-        Datenquelle: hourly_data direkt (kein daily_data, kein Aggregate).
+        Reiner Energie-Auszug in vier Abschnitten — Tag / Monat / Jahr / Gesamt
+        (je 5 Kernwerte; im Tag zusätzlich Stresszeit-% und Verbraucher). **Keine**
+        Diagnos-/Warn-Inhalte: Systemfehler laufen über die separaten Sofort-Alarme.
 
-        Args:
-            obs: Aktueller ObsState (für Sunset-Zeit und aktuelle Werte)
+        Datenquelle: ``daily_data`` (Counter-nah) + ``yearly_statistics`` (historische
+        Jahre). Der abgelaufene Tag wird erst gemeldet, sobald seine daily_data-Zeile
+        vorliegt (Tagesaggregation kurz nach Mitternacht) — vorher ist der Aufruf ein
+        No-Op und wird im nächsten Zyklus wiederholt.
 
         Returns:
-            True wenn erfolgreich gesendet.
+            True wenn gesendet; False wenn (noch) nicht fällig.
         """
-        event_key = 'sunset_tagesbericht'
+        event_key = 'tagesbericht'
 
         if event_key not in self._events:
             return False
         if not self._email:
             return False
-
-        # Deduplizierung: 1× pro Tag
         if self._dedup_already_sent(event_key):
-            LOG.debug("Sunset-Bericht: heute bereits gesendet")
             return False
 
         try:
-            daten = self._sammle_sunset_daten(obs)
+            daten = self._sammle_tagesdaten()
             if daten is None:
-                LOG.warning("Sunset-Bericht: Keine Daten verfügbar")
+                # daily_data des Vortags noch nicht bereit → nächster Zyklus.
                 return False
 
-            health_data = self._hole_diagnos_snapshot()
-            integrity_data = self._hole_integrity_snapshot()
-            nq_data = self._hole_nq_snapshot()
-
-            # Diff-Filter: nur neue/eskalierte/heartbeat-fällige Befunde
-            # erscheinen als "Auffälligkeit". Stabile Wiederholungen werden
-            # unterdrückt (verfallen lassen). Heilung wird via State-Reset
-            # selbsttätig gelöscht.
-            reportable_names, alert_summary, severity_counts = (
-                self._diff_diagnos_alerts(health_data, integrity_data)
-            )
-            # NQ nutzt einen eigenen Diff-State; Severity-Zähler fürs Subject mischen.
-            nq_checks = (nq_data or {}).get('checks') or []
-            nq_reportable, _nq_summary, nq_counts = self._nq.diff_nq_befunde(nq_checks)
-            for k in ('warn', 'crit', 'fail'):
-                severity_counts[k] = severity_counts.get(k, 0) + nq_counts.get(k, 0)
-
-            koerper = self._formatiere_sunset_bericht(
-                daten, obs, health_data, integrity_data, nq_data,
-                reportable_names=reportable_names,
-                alert_summary=alert_summary,
-                nq_reportable=nq_reportable,
-            )
-            self._sende_sunset_mail(koerper, severity_counts)
+            koerper = report_format.tagesbericht(daten)
+            self._sende_tagesbericht_mail(koerper)
             self._dedup_mark(event_key)
-            LOG.info(
-                f"Sunset-Tagesbericht gesendet → {self._email} "
-                f"(neu={alert_summary.get('new', 0)}, "
-                f"changed={alert_summary.get('changed', 0)}, "
-                f"reminder={alert_summary.get('reminder', 0)}, "
-                f"suppressed={alert_summary.get('suppressed', 0)}, "
-                f"healed={alert_summary.get('healed', 0)})"
-            )
+            LOG.info(f"Tagesbericht gesendet → {self._email} "
+                     f"(Tag {daten['tag']['datum']})")
+            # Status-Markdown best-effort aktualisieren (entkoppelt vom Mailtext).
+            self._aktualisiere_statusdateien()
             return True
         except Exception as e:
-            LOG.error(f"Sunset-Bericht FEHLGESCHLAGEN: {e}")
+            LOG.error(f"Tagesbericht FEHLGESCHLAGEN: {e}")
             return False
 
-    def _sammle_sunset_daten(self, obs: ObsState) -> Optional[dict]:
-        """Lese 24h-Daten aus hourly_data (Sunset gestern → jetzt).
+    def _sammle_tagesdaten(self) -> Optional[dict]:
+        """Sammle Tag/Monat/Jahr/Gesamt-Energiewerte für den abgelaufenen Tag.
 
-        Zeitfenster: Sunset gestern (≈ selbe Uhrzeit) bis jetzt.
-        Fallback: letzte 24h wenn kein Sunset-Zeitpunkt verfügbar.
+        Der Tag (00:00→00:00) kommt aus der ``daily_data``-Zeile des Vortags
+        (Counter-nah); Monat/Jahr summieren ``daily_data`` bis einschließlich
+        gestern; Gesamt ergänzt die historischen Jahre aus ``yearly_statistics``.
+
+        Gibt None zurück, solange die daily_data-Zeile des Vortags fehlt und die
+        Karenzzeit (1 h nach Mitternacht) nicht überschritten ist — der Versand
+        wird dann auf den nächsten Zyklus verschoben. Danach greift ein
+        ``hourly_data``-Fallback für den Tag.
         """
-        db_path = app_config.DB_PATH
+        heute = date.today()
+        gestern = heute - timedelta(days=1)
+        key_gestern = self._utc_midnight_ts(gestern)
+        monatsanfang = self._utc_midnight_ts(date(gestern.year, gestern.month, 1))
+        jahresanfang = self._utc_midnight_ts(date(gestern.year, 1, 1))
+
+        # Lokale Tagesgrenzen für hourly_data-Fallback + Stresszeit.
+        lokal_heute = datetime(heute.year, heute.month, heute.day).timestamp()
+        lokal_gestern = datetime(gestern.year, gestern.month, gestern.day).timestamp()
+
         try:
-            conn = sqlite3.connect(f'file:{db_path}?mode=ro', uri=True, timeout=5)
+            conn = sqlite3.connect(
+                f'file:{app_config.DB_PATH}?mode=ro', uri=True, timeout=5)
         except Exception as e:
-            LOG.error(f"Sunset-Bericht: DB nicht erreichbar: {e}")
+            LOG.error(f"Tagesbericht: DB nicht erreichbar: {e}")
             return None
-
         try:
-            now_ts = time.time()
-
-            # Sunset-Zeitpunkt: obs.sunset als Dezimalstunde heute
-            # Fenster-Start: gestern selbe Sunset-Uhrzeit
-            if obs.sunset:
-                sunset_h = obs.sunset
-                today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-                sunset_today = today + timedelta(hours=sunset_h)
-                sunset_yesterday = sunset_today - timedelta(days=1)
-                start_ts = sunset_yesterday.timestamp()
-                end_ts = sunset_today.timestamp()
+            # ── Tag (abgelaufener Kalendertag) ──
+            has_day = conn.execute(
+                'SELECT 1 FROM daily_data WHERE ts = ? LIMIT 1',
+                (key_gestern,)).fetchone()
+            fallback = False
+            if has_day:
+                tag = self._dd_bilanz(conn, 'ts = ?', (key_gestern,))
+                wp_kwh = self._dd_scalar(conn, 'W_WP_total', 'ts = ?', (key_gestern,))
             else:
-                # Fallback: letzte 24h
-                start_ts = now_ts - 86400
-                end_ts = now_ts
+                if (time.time() - lokal_heute) < 3600:
+                    return None  # Aggregation läuft noch → später erneut versuchen
+                fallback = True
+                tag, wp_kwh = self._tag_aus_hourly(conn, lokal_gestern, lokal_heute)
 
-            # ── hourly_data aggregieren ──
-            row = conn.execute("""
-                SELECT
-                    SUM(W_PV_total_delta),
-                    SUM(W_Exp_Netz_delta),
-                    SUM(W_Imp_Netz_delta),
-                    SUM(W_Batt_Charge_total),
-                    SUM(W_Batt_Discharge_total),
-                    SUM(W_PV_Direct_total),
-                    SUM(W_WP_total),
-                    MIN(SOC_Batt_min),
-                    MAX(SOC_Batt_max),
-                    AVG(SOC_Batt_avg),
-                    COUNT(*)
-                FROM hourly_data
-                WHERE ts >= ? AND ts < ?
-            """, (start_ts, end_ts)).fetchone()
+            # ── Monat / Jahr: Tage strikt vor gestern + Tag ──
+            monat = self._add_bilanz(
+                self._dd_bilanz(conn, 'ts >= ? AND ts < ?', (monatsanfang, key_gestern)),
+                tag)
+            jahr = self._add_bilanz(
+                self._dd_bilanz(conn, 'ts >= ? AND ts < ?', (jahresanfang, key_gestern)),
+                tag)
 
-            if not row or row[10] == 0:
-                return None
+            # ── Gesamt: historische Jahre + laufendes Jahr ──
+            gesamt = self._gesamt_bilanz(conn, gestern.year, jahr)
 
-            (pv_wh, exp_wh, imp_wh, batt_ch_wh, batt_dis_wh,
-             pv_direct_wh, wp_wh, soc_min, soc_max, soc_avg,
-             stunden_count) = row
+            # ── Verbraucher (nur Tag) ──
+            hp_wh = self._scalar(
+                conn, 'SELECT energy_wh FROM heizpatrone_daily WHERE ts = ?', (key_gestern,))
+            wtp_wh = self._scalar(
+                conn, 'SELECT energy_wh FROM wattpilot_daily WHERE ts = ?', (key_gestern,))
+            hp_kwh = (hp_wh / 1000.0) if hp_wh else 0.0
+            wtp_kwh = (wtp_wh / 1000.0) if wtp_wh else 0.0
+            haushalt = max(0.0, tag['verbrauch'] - wp_kwh - hp_kwh - wtp_kwh)
 
-            # ── SOC am Fenster-Start (erste Stunde) ──
-            soc_start_row = conn.execute("""
-                SELECT SOC_Batt_avg FROM hourly_data
-                WHERE ts >= ? AND ts < ?
-                ORDER BY ts ASC LIMIT 1
-            """, (start_ts, end_ts)).fetchone()
-            soc_start = soc_start_row[0] if soc_start_row else None
-
-            # ── SOC am Fenster-Ende (letzte Stunde) ──
-            soc_end_row = conn.execute("""
-                SELECT SOC_Batt_avg FROM hourly_data
-                WHERE ts >= ? AND ts < ?
-                ORDER BY ts DESC LIMIT 1
-            """, (start_ts, end_ts)).fetchone()
-            soc_end = soc_end_row[0] if soc_end_row else None
-
-            # ── Wattpilot (falls vorhanden) ──
-            wattpilot_wh = None
-            today_midnight = int(now_ts) // 86400 * 86400
-            try:
-                wtp_row = conn.execute("""
-                    SELECT energy_wh FROM wattpilot_daily
-                    WHERE ts = ?
-                """, (today_midnight,)).fetchone()
-                if wtp_row:
-                    wattpilot_wh = wtp_row[0]
-            except Exception:
-                pass  # Tabelle existiert evtl. nicht
-
-            return {
-                'start_ts': start_ts,
-                'end_ts': end_ts,
-                'stunden': stunden_count,
-                'pv_kwh': (pv_wh or 0) / 1000,
-                'einspeisung_kwh': (exp_wh or 0) / 1000,
-                'netzbezug_kwh': (imp_wh or 0) / 1000,
-                'batt_ladung_kwh': (batt_ch_wh or 0) / 1000,
-                'batt_entladung_kwh': (batt_dis_wh or 0) / 1000,
-                'pv_direkt_kwh': (pv_direct_wh or 0) / 1000,
-                'wp_kwh': (wp_wh or 0) / 1000,
-                'soc_start': soc_start,
-                'soc_end': soc_end,
-                'soc_min': soc_min,
-                'soc_max': soc_max,
-                'soc_avg': soc_avg,
-                'wattpilot_kwh': (wattpilot_wh / 1000) if wattpilot_wh else None,
-                'sunrise_h': obs.sunrise,
-                'sunset_h': obs.sunset,
-            }
-        except Exception as e:
-            LOG.error(f"Sunset-Daten Abfrage: {e}")
-            return None
+            # ── Stresszeit (nur Tag) ──
+            k_min, k_max = self._komfort_grenzen()
+            stress_pct = self._stresszeit_pct(conn, lokal_gestern, lokal_heute, k_min, k_max)
         finally:
             conn.close()
 
-    def _diff_diagnos_alerts(
-        self,
-        health_data: Optional[dict],
-        integrity_data: Optional[dict],
-    ) -> tuple[set[str], dict, dict]:
-        """Filtere Diagnos-Befunde gegen den persistenten Alert-State.
+        bis_str = gestern.strftime('%d.%m.')
+        tag.update({
+            'datum': gestern.strftime('%d.%m.%Y'),
+            'fallback': fallback,
+            'wp_kwh': wp_kwh, 'hp_kwh': hp_kwh,
+            'wattpilot_kwh': wtp_kwh, 'haushalt_kwh': haushalt,
+            'stresszeit_pct': stress_pct, 'stress_low': k_min, 'stress_high': k_max,
+        })
+        monat['label'] = f'{MONATE[gestern.month - 1]} {gestern.year}'
+        monat['bis'] = bis_str
+        jahr['label'] = str(gestern.year)
+        jahr['bis'] = bis_str
+        gesamt['label'] = 'seit Inbetriebnahme'
+        gesamt['bis'] = gestern.strftime('%d.%m.%Y')
+        return {'tag': tag, 'monat': monat, 'jahr': jahr, 'gesamt': gesamt}
 
-        Stabil-wiederkehrende Befunde (= gleicher Fingerprint) werden
-        unterdrückt; nur neue, eskalierte oder Reminder-fällige Befunde
-        landen in der Mail. Severity-Counts dieses gefilterten Sets dienen
-        als Subject-Suffix.
+    @staticmethod
+    def _utc_midnight_ts(d: date) -> int:
+        """UTC-Mitternacht des Datums — Schlüsselkonvention von daily_data."""
+        return int(datetime(d.year, d.month, d.day, tzinfo=timezone.utc).timestamp())
 
-        Returns:
-            (reportable_check_names, alert_summary, severity_counts)
-        """
+    @staticmethod
+    def _komfort_grenzen() -> tuple:
+        """SOC-Komfortband (komfort_min/komfort_max) aus battery_control.json."""
+        path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            'config', 'battery_control.json')
         try:
-            state = diagnos_alert_state.load_state()
-        except Exception as exc:
-            LOG.warning(f"Alert-State Laden fehlgeschlagen: {exc}")
-            state = {}
+            with open(path, encoding='utf-8') as f:
+                g = json.load(f).get('soc_grenzen', {})
+            return int(g.get('komfort_min', 25)), int(g.get('komfort_max', 75))
+        except Exception:
+            return 25, 75
 
-        all_checks: list = []
-        for snapshot in (health_data, integrity_data):
-            if snapshot:
-                all_checks.extend(snapshot.get('checks', []) or [])
+    def _dd_bilanz(self, conn, where: str, params: tuple) -> dict:
+        """Die 5 Energie-Kernwerte (kWh) aus daily_data für ein ts-Fenster."""
+        sel = ', '.join(f'COALESCE(SUM({c}), 0)' for c in _DD_COLS)
+        row = conn.execute(
+            f'SELECT {sel} FROM daily_data WHERE {where}', params).fetchone()
+        return {k: (row[i] or 0) / 1000.0 for i, k in enumerate(_DD_KEYS)}
 
+    def _dd_scalar(self, conn, col: str, where: str, params: tuple) -> float:
+        row = conn.execute(
+            f'SELECT COALESCE(SUM({col}), 0) FROM daily_data WHERE {where}',
+            params).fetchone()
+        return (row[0] or 0) / 1000.0 if row else 0.0
+
+    @staticmethod
+    def _add_bilanz(basis: dict, tag: dict) -> dict:
+        return {k: basis.get(k, 0) + tag.get(k, 0) for k in _DD_KEYS}
+
+    @staticmethod
+    def _scalar(conn, sql: str, params: tuple):
         try:
-            reportable, new_state, summary = diagnos_alert_state.filter_reportable(
-                all_checks, state
-            )
-        except Exception as exc:
-            LOG.error(f"Alert-Filter fehlgeschlagen, zeige alle Bad-Checks: {exc}")
-            reportable = [
-                c for c in all_checks
-                if (c.get('severity') or '').lower() in ('warn', 'crit', 'fail')
-            ]
-            new_state = state
-            summary = {'new': 0, 'changed': 0, 'reminder': 0, 'suppressed': 0, 'healed': 0}
+            row = conn.execute(sql, params).fetchone()
+            return row[0] if row and row[0] is not None else None
+        except sqlite3.Error:
+            return None
 
+    def _tag_aus_hourly(self, conn, start_ts, end_ts) -> tuple:
+        """Fallback-Tagesbilanz aus hourly_data (lokales Tagesfenster)."""
+        row = conn.execute("""
+            SELECT COALESCE(SUM(W_PV_total_delta), 0),
+                   COALESCE(SUM(W_Imp_Netz_delta), 0),
+                   COALESCE(SUM(W_Exp_Netz_delta), 0),
+                   COALESCE(SUM(W_Batt_Charge_total), 0),
+                   COALESCE(SUM(W_Batt_Discharge_total), 0),
+                   COALESCE(SUM(W_WP_total), 0)
+            FROM hourly_data WHERE ts >= ? AND ts < ?
+        """, (start_ts, end_ts)).fetchone()
+        pv, imp, exp, bch, bdis, wp = [(v or 0) / 1000.0 for v in row]
+        tag = {'erzeugung': pv, 'verbrauch': max(0.0, pv + imp - exp),
+               'netzbezug': imp, 'einspeisung': exp,
+               'batt_ladung': bch, 'batt_entladung': bdis}
+        return tag, wp
+
+    def _gesamt_bilanz(self, conn, jahr_aktuell: int, jahr_bilanz: dict) -> dict:
+        """Gesamt = historische Jahre (yearly_statistics, year<aktuell) + laufendes Jahr."""
+        gesamt = dict(jahr_bilanz)
         try:
-            diagnos_alert_state.save_state(new_state)
-        except Exception as exc:
-            LOG.warning(f"Alert-State Speichern fehlgeschlagen: {exc}")
+            row = conn.execute("""
+                SELECT COALESCE(SUM(solar_erzeugung_kwh), 0),
+                       COALESCE(SUM(gesamt_verbrauch_kwh), 0),
+                       COALESCE(SUM(netz_bezug_kwh), 0),
+                       COALESCE(SUM(netz_einspeisung_kwh), 0),
+                       COALESCE(SUM(batt_ladung_kwh), 0),
+                       COALESCE(SUM(batt_entladung_kwh), 0)
+                FROM yearly_statistics WHERE year < ?
+            """, (jahr_aktuell,)).fetchone()
+        except sqlite3.Error:
+            row = None
+        if row:
+            for i, k in enumerate(_DD_KEYS):
+                gesamt[k] = gesamt.get(k, 0) + (row[i] or 0)
+        return gesamt
 
-        reportable_names = {c.get('check') for c in reportable if c.get('check')}
-        severity_counts = diagnos_alert_state.severity_counts(reportable)
-        return reportable_names, summary, severity_counts
+    @staticmethod
+    def _stresszeit_pct(conn, start_ts, end_ts, k_min: int, k_max: int):
+        """Anteil der Tagesminuten mit SOC außerhalb des Komfortbands [k_min, k_max]."""
+        try:
+            row = conn.execute("""
+                SELECT COUNT(*),
+                       SUM(CASE WHEN SOC_Batt_avg < ? OR SOC_Batt_avg > ? THEN 1 ELSE 0 END)
+                FROM data_1min
+                WHERE ts >= ? AND ts < ? AND SOC_Batt_avg IS NOT NULL
+            """, (k_min, k_max, start_ts, end_ts)).fetchone()
+        except sqlite3.Error:
+            return None
+        if not row or not row[0]:
+            return None
+        return 100.0 * (row[1] or 0) / row[0]
 
     def _hole_diagnos_snapshot(self) -> Optional[dict]:
         """Lese einen kompakten read-only Diagnos-Snapshot zum Versandzeitpunkt."""
@@ -705,27 +709,20 @@ class EventNotifier:
             LOG.error(f"Integrity-Alarm FEHLGESCHLAGEN: {alarm_key}: {e}")
             return False
 
-    def _formatiere_sunset_bericht(
-        self,
-        d: dict,
-        obs: ObsState,
-        health_data: Optional[dict] = None,
-        integrity_data: Optional[dict] = None,
-        nq_data: Optional[dict] = None,
-        reportable_names: Optional[set] = None,
-        alert_summary: Optional[dict] = None,
-        nq_reportable: Optional[set] = None,
-    ) -> str:
-        """Baue den Sunset-Bericht (Textformatierung: notify/report_format)."""
-        written = self._write_status_files(health_data, integrity_data, nq_data)
-        zeilen = report_format.energy_section(d)
-        zeilen += report_format.diagnos_summary(health_data, reportable_names)
-        zeilen += report_format.integrity_summary(integrity_data, reportable_names)
-        zeilen += report_format.nq_summary((nq_data or {}).get('checks'), nq_reportable)
-        zeilen += report_format.status_quellen(written)
-        zeilen += report_format.diff_counter(alert_summary)
-        zeilen += report_format.FOOTER
-        return '\n'.join(zeilen)
+    def _aktualisiere_statusdateien(self) -> None:
+        """Aktualisiere die Status-Markdown-Dateien (RAW-/System-/Netz-Status.md).
+
+        Best-effort und **entkoppelt** vom Tagesbericht: Fehler hier berühren die
+        bereits versandte Energie-Mail nicht. Liefert die read-only Diagnos-
+        Snapshots an ``diagnos.status_report`` — einmal pro Tag zum Berichtszeitpunkt.
+        """
+        try:
+            health_data = self._hole_diagnos_snapshot()
+            integrity_data = self._hole_integrity_snapshot()
+            nq_data = self._hole_nq_snapshot()
+            self._write_status_files(health_data, integrity_data, nq_data)
+        except Exception as e:
+            LOG.debug(f"Statusdateien-Update übersprungen: {e}")
 
     def _hole_nq_snapshot(self) -> Optional[dict]:
         """Read-only NQ-Snapshot (Rolle N) zum Versandzeitpunkt."""
@@ -750,32 +747,16 @@ class EventNotifier:
             return {}
 
 
-    def _sende_sunset_mail(self, koerper: str, severity_counts: Optional[dict] = None):
-        """Sunset-Bericht per E-Mail senden.
-
-        ``severity_counts`` zählt die Severities der diesmal frisch zu
-        meldenden Diagnos-Befunde (nicht aller). Sind alle Counts 0,
-        bleibt der Betreff sauber — sonst wird ein Suffix wie
-        ``— FAIL(1) KRIT(2) WARN(1)`` angehängt.
-        """
+    def _sende_tagesbericht_mail(self, koerper: str) -> None:
+        """Tagesbericht per E-Mail senden — reiner Energiebericht, kein Severity-Suffix."""
         datum_str = datetime.now().strftime('%d.%m.%Y')
         betreff = f'[PV-System] Tagesbericht {datum_str}'
-        if severity_counts:
-            parts = []
-            # Reihenfolge: schwerste Stufe zuerst → beim Sortieren der
-            # Inbox bleibt der Suffix gut lesbar.
-            for label_key, label in (('fail', 'FAIL'), ('crit', 'KRIT'), ('warn', 'WARN')):
-                n = severity_counts.get(label_key, 0)
-                if n:
-                    parts.append(f'{label}({n})')
-            if parts:
-                betreff = f'{betreff} \u2014 {" ".join(parts)}'
 
         msg = MIMEText(koerper, 'plain', 'utf-8')
         msg['Subject'] = betreff
         msg['From'] = self._from
         msg['To'] = self._email
-        msg['X-PV-Event'] = 'sunset_tagesbericht'
+        msg['X-PV-Event'] = 'tagesbericht'
 
         smtp_pass = credential_store.lade('smtp_pass')
         if self._smtp_user and not smtp_pass:

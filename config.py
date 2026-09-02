@@ -318,8 +318,8 @@ NOTIFICATION_SMTP_USER = load_local_setting('PV_NOTIFICATION_SMTP_USER', 'alerts
 # Setzen via: pv-config → Benachrichtigungen → SMTP-Passwort
 NOTIFICATION_FROM = load_local_setting('PV_NOTIFICATION_FROM', 'alerts@example.invalid')
 # Meldbare Events — Keys müssen in EVENT_THRESHOLDS definiert sein
-# Sonder-Event 'sunset_tagesbericht': 24h-Zusammenfassung bei Sonnenuntergang
-NOTIFICATION_EVENTS = ['batt_temp_40', 'batt_soc_kritisch', 'netz_ueberlast', 'sls_ueberlast', 'sunset_tagesbericht']
+# Sonder-Event 'tagesbericht': täglicher Energiebericht um 00:00 (abgelaufener Kalendertag)
+NOTIFICATION_EVENTS = ['batt_temp_40', 'batt_soc_kritisch', 'netz_ueberlast', 'sls_ueberlast', 'tagesbericht']
 # Schwellwerte für Events (obs_feld, operator, schwelle)
 EVENT_THRESHOLDS = {
     'batt_temp_40':      {'obs_feld': 'batt_temp_max_c', 'op': '>=', 'schwelle': 40,  'text': 'Batterie-Temperatur ≥ 40°C'},

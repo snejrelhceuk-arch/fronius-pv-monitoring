@@ -5,7 +5,7 @@ role: A
 applyTo: "collector/fritzdect.py"
 tags: [fritzdect, collector, aha-api, ain]
 status: stable
-last_review: 2026-08-04
+last_review: 2026-09-02
 ---
 
 # FritzDECT-Collector
@@ -44,7 +44,7 @@ Liest Fritz!DECT-Steckdosen (z. B. Heizpatrone, Klimaanlage, WP-Schaltdose) via 
 - Fritz!Box-Reboot → Session ungültig → Reauth nötig.
 - Energie-Counter (`energy_total_wh`) springt bei Steckdosen-Reset → Tagesdeltas könnten negativ werden; Daily-Aggregation guarded mit `max(0, ...)`.
 - **Zähler-Freeze:** Steckdosen aktualisieren `energy_total_wh` zeitweise nur ~1×/Tag → Intraday-Delta 0 **oder zu klein** (Partial-Freeze, z. B. 36 Wh statt 1200 Wh). Abgesichert in `collector/aggregate/daily.py`: Interday-Fallback (Delta<0.1) **und** `getbasicdevicestats`-Fallback (`_fill_fritzdect_daily_from_devstats`, ~31 Tage Box-Tagesenergie). Seit 2026-08-04 ist der Box-Tageswert **autoritativ**: er überschreibt Auto-Quellen (`counter_auto`/`counter_interday`) nicht nur bei 0, sondern auch bei erkennbarer Untererfassung (Box-Wert > Delta + max(50 Wh, 15%)). Manual/recon-Quellen bleiben geschützt.
-- **Stale-Steckdose:** Ist eine Steckdose >1 h ohne frischen `fritzdect_readings`-Eintrag (Box/Steckdose nicht erreichbar), meldet `diagnos/health.py:check_fritzdect_freshness` „Stale FritzSD-<Name>“ (erscheint im Sunset-Tagesbericht). Der fehlende Tag wird automatisch aus der Box-Tagesstatistik nachgezogen, sobald wieder erreichbar.
+- **Stale-Steckdose:** Ist eine Steckdose >1 h ohne frischen `fritzdect_readings`-Eintrag (Box/Steckdose nicht erreichbar), meldet `diagnos/health.py:check_fritzdect_freshness` „Stale FritzSD-<Name>“ (WARN — sichtbar via `diagnos/health.py` und `System-Status.md`, **nicht** im täglichen Energiebericht). Der fehlende Tag wird automatisch aus der Box-Tagesstatistik nachgezogen, sobald wieder erreichbar.
 - **Status-only-Geräte:** `fussbodenheizung` ist ein DECT-Thermostat ohne Leistungsmessung (`power_w`=0, `energy_total_wh` konstanter Garbage-Wert). Nicht als Energieverbraucher aggregieren/auswerten.
 - **Metering-Geräte mit Daily-Tabelle:** heizpatrone, klimaanlage, lueftung, gefriertruhe (`*_daily`/`*_monthly`). Mapping `FRITZDECT_DAILY_DEVICES` in `daily.py`.
 

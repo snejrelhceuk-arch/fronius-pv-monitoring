@@ -623,8 +623,8 @@ automation_daemon.py  (pv-automation.service, systemd)
   ├── Actuator  (on-demand, getriggert durch Engine oder Tier-1)
   │     └── Ausführung → Read-Back → Protokoll in Persist-DB
   │
-  ├── Sunset-Erkennung  (is_day True→False Transition)
-  │     └── EventNotifier.sende_sunset_bericht() → E-Mail (1×/Tag)
+  ├── Tagesbericht  (00:00, abgelaufener Kalendertag)
+  │     └── EventNotifier.sende_tagesbericht() → E-Mail (1×/Tag)
   │
   └── Tier 3: Cron-Ableger  (1 min / 15 min Timer-Threads)
         ├── Fronius-HTTP-API (1 min)
@@ -832,4 +832,4 @@ CREATE TABLE obs_state_snapshot (
 
 ---
 
-*Letzte Aktualisierung: 2026-03-06 (12 Regelkreise, Tier-1 SOC-Recovery mit Hardware-Sync, BMS-Live-SOH, E-Mail-Benachrichtigungen, Sunset-Tagesbericht, Schaltlog-Zusammenfassung)*
+*Letzte Aktualisierung: 2026-03-06 (12 Regelkreise, Tier-1 SOC-Recovery mit Hardware-Sync, BMS-Live-SOH, E-Mail-Benachrichtigungen, täglicher Energiebericht, Schaltlog-Zusammenfassung)*

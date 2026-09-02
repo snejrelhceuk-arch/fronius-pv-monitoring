@@ -96,8 +96,8 @@ class AutomationDaemon:
         self._last_strategic = 0
         self._cycle_count = 0
 
-        # Sunset-Erkennung für Tagesbericht
-        self._war_tag: Optional[bool] = None  # is_day im vorherigen Zyklus
+        # Täglicher Energiebericht: Versand steuert der EventNotifier
+        # (00:00-Trigger via Tageswechsel, dedupliziert 1×/Tag).
 
         # SIGHUP → Matrix-Reload
         self._reload_requested = False
@@ -450,18 +450,15 @@ class AutomationDaemon:
         except Exception as e:
             LOG.error(f"Steuerbox-Override-Verarbeitung Fehler: {e}")
 
-        # 7. Sunset-Erkennung → Tagesbericht senden
-        with self._obs_lock:
-            is_day_now = self._obs.is_day
-        if self._notifier and is_day_now is not None:
-            if self._war_tag is True and is_day_now is False:
-                LOG.info("Sunset erkannt → Tagesbericht wird gesendet")
-                try:
-                    with self._obs_lock:
-                        self._notifier.sende_sunset_bericht(self._obs)
-                except Exception as e:
-                    LOG.error(f"Sunset-Tagesbericht Fehler: {e}")
-            self._war_tag = is_day_now
+        # 7. Täglicher Energiebericht (00:00 → abgelaufener Kalendertag)
+        # Der EventNotifier meldet 1×/Tag, sobald die Tagesaggregation des
+        # Vortags vorliegt; vorher/nachher ist der Aufruf ein günstiger No-Op
+        # (Dedup bzw. Karenz-Gate).
+        if self._notifier:
+            try:
+                self._notifier.sende_tagesbericht()
+            except Exception as e:
+                LOG.error(f"Tagesbericht Fehler: {e}")
 
         # Heartbeat-Log (alle 5 min)
         if self._cycle_count % (300 // OBS_COLLECT_INTERVAL) == 0:

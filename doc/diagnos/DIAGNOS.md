@@ -28,7 +28,7 @@ Datenrekonstruktion.
 | Statusberichte | [`diagnos/status_report.py`](../../diagnos/status_report.py) | RAW-/System-/Netz-Status.md |
 | Schwellwerte | [`diagnos/config.py`](../../diagnos/config.py) | zentrale Grenzwerte, Tabellen, NQ-/Log-Parameter |
 
-Der Versand (Sunset-Tagesbericht + Sofort-Alarme) läuft über den
+Der Versand (Tagesbericht + Sofort-Alarme) läuft über den
 Automation-Daemon → [`doc/diagnos/MAIL.md`](MAIL.md). Der Katalog aller Checks
 steht in [`CHECKKATALOG.md`](CHECKKATALOG.md), Taktung/Eskalation in
 [`TAKTUNG_UND_ESKALATION.md`](TAKTUNG_UND_ESKALATION.md).
