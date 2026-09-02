@@ -840,6 +840,30 @@ def _spec_window(default_days: int) -> tuple[int, int]:
     return start, end
 
 
+def _nq_earliest_ts() -> int:
+    """Frühester nq_5min-Zeitstempel über alle Monats-DBs (Messbeginn PAC4200).
+
+    Für ``?range=all`` im Periodogramm: die Spanne (und damit die längste
+    auflösbare Periode) verlängert sich mit jedem weiteren Messtag automatisch.
+    """
+    import glob
+    from nq.analysis import nq_spectral as spec
+    earliest = None
+    for path in sorted(glob.glob(os.path.join(spec._DB_DIR, 'nq_2*.db'))):
+        conn = spec._open_ro(path)
+        if conn is None:
+            continue
+        try:
+            row = conn.execute("SELECT MIN(ts) FROM nq_5min").fetchone()
+            if row and row[0] is not None:
+                earliest = row[0] if earliest is None else min(earliest, row[0])
+        except Exception:
+            pass
+        finally:
+            conn.close()
+    return int(earliest) if earliest else int(_time.time() - 30 * 86400)
+
+
 def _bounded_int_arg(name: str, default: int, lo: int, hi: int) -> int:
     value = request.args.get(name, type=int)
     if value is None:
@@ -951,26 +975,47 @@ def api_nq_spectral_harmonics():
 
 @bp.route('/api/nq/spectral/periodogram')
 def api_nq_spectral_periodogram():
-    """Lomb-Scargle-Periodogramm (VLF/eVLF) der 5-min-Reihe (Luecken-robust).
+    """Lomb-Scargle-Periodogramm (VLF/eVLF), lückenrobust.
 
-    ``?signal=freq|voltage``, ``?start=&end=`` (Default 30 d), ``?decimate=N``,
-    ``?binning=1``. Liefert log-Frequenzachse + Zyklus-Marker (Attribution).
+    ``?signal=freq|voltage``, ``?start=&end=`` (Default 30 d) oder ``?range=all``
+    (seit Messbeginn PAC4200), ``?decimate=N``, ``?binning=1``. Die Auflösung
+    wählt sich nach Spanne (5-min ≤ 75 d, sonst stündlich/täglich), damit die
+    Periodenachse mit wachsender Messdauer immer weiter reicht (Woche → Saison
+    → Jahr) und nicht an der 5-min-Retention (90 d) hängenbleibt.
     """
     from nq.analysis import nq_spectral as spec
     import numpy as _np
-    start, end = _spec_window(30)
+    if request.args.get('range') == 'all':
+        start, end = _nq_earliest_ts(), int(_time.time())
+    else:
+        start, end = _spec_window(30)
     signal = request.args.get('signal', 'freq')
     dec = _bounded_int_arg('decimate', 1, 1, 10)
     do_bin = request.args.get('binning', type=int, default=0)
+    # Auflösung nach Spanne wählen: 5-min bis 75 d, dann stündlich (bis ~2 a),
+    # dann täglich — hält die Punktzahl für Lomb-Scargle beherrschbar und reicht
+    # über die 5-min-Retention hinaus.
+    span_days = max(0.0, (end - start) / 86400.0)
+    source = '5min' if span_days <= 75 else ('hourly' if span_days <= 730 else 'daily')
     try:
-        if signal == 'voltage':
+        if source == '5min' and signal == 'voltage':
             ts, v = spec.load_clean_voltage(start, end, 1)
             x = v - (float(_np.nanmean(v)) if v.size else 0.0)
             unit = 'V'
-        else:
+        elif source == '5min':
             ts, v = spec.load_clean_freq(start, end)
             x = v - 50.0
             unit = 'Hz'
+        else:
+            _tab = 'nq_hourly' if source == 'hourly' else 'nq_daily'
+            if signal == 'voltage':
+                ts, v = spec.load_scalar_series('U_L1N', start, end, table=_tab)
+                x = v - (float(_np.nanmean(v)) if v.size else 0.0)
+                unit = 'V'
+            else:
+                ts, v = spec.load_scalar_series('FREQ', start, end, table=_tab)
+                x = v - 50.0
+                unit = 'Hz'
         if ts.size < 16:
             return jsonify({'error': 'insufficient data', 'n': int(ts.size),
                             'start': start, 'end': end}), 200
@@ -995,7 +1040,7 @@ def api_nq_spectral_periodogram():
         resp = {
             'start': start, 'end': end, 'signal': signal, 'unit': unit,
             'n_samples': int(t_used.size), 'span_s': span,
-            'decimate': dec, 'f_min_hz': f_min, 'f_max_hz': f_max,
+            'source': source, 'decimate': dec, 'f_min_hz': f_min, 'f_max_hz': f_max,
             'freqs_hz': [round(float(f), 12) for f in fg],
             'power': [round(float(p), 6) for p in power],
             'markers': markers,
