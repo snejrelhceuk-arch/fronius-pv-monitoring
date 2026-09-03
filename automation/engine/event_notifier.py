@@ -279,6 +279,14 @@ class EventNotifier:
             return None
         try:
             # ── Tag (abgelaufener Kalendertag) ──
+            # Der Tages-Aggregator (collector.aggregate.daily, Cron :05) finalisiert
+            # den Vortag erst mit dem ersten Lauf nach lokaler Mitternacht (00:05).
+            # Vorher existiert die daily_data-Zeile zwar, ist aber partiell — daher
+            # frühestens 10 min nach Mitternacht melden. Ist die Aggregation nach
+            # 60 min noch nicht durch (Cron gestört), greift der hourly_data-Fallback.
+            sek_seit_mitternacht = time.time() - lokal_heute
+            if sek_seit_mitternacht < 600:
+                return None
             has_day = conn.execute(
                 'SELECT 1 FROM daily_data WHERE ts = ? LIMIT 1',
                 (key_gestern,)).fetchone()
@@ -286,11 +294,11 @@ class EventNotifier:
             if has_day:
                 tag = self._dd_bilanz(conn, 'ts = ?', (key_gestern,))
                 wp_kwh = self._dd_scalar(conn, 'W_WP_total', 'ts = ?', (key_gestern,))
-            else:
-                if (time.time() - lokal_heute) < 3600:
-                    return None  # Aggregation läuft noch → später erneut versuchen
+            elif sek_seit_mitternacht >= 3600:
                 fallback = True
                 tag, wp_kwh = self._tag_aus_hourly(conn, lokal_gestern, lokal_heute)
+            else:
+                return None  # daily_data[gestern] fehlt noch → später erneut versuchen
 
             # ── Monat / Jahr: Tage strikt vor gestern + Tag ──
             monat = self._add_bilanz(

@@ -194,6 +194,13 @@ ohne automatische Laderaten-Eingriffe.
 | netz_ueberlast | aktiv | Mail bei `grid_power_w >= 24kW` |
 | sls_ueberlast | aktiv | Mail bei `i_max_netz_a >= 35A` |
 
+**Täglicher Energiebericht:** `NOTIFICATION_EVENTS` enthält zusätzlich das Sonder-Event
+`tagesbericht` (ohne Schwellwert). Es ist **kein Alarm**, sondern der um **00:00** für den
+abgelaufenen Kalendertag (00:00→00:00) versandte reine Energie-Auszug — Abschnitte
+Tag/Monat/Jahr/Gesamt. Trigger, Reife-Gate und Versand: siehe [MAIL.md](../diagnos/MAIL.md)
+bzw. Card `diagnos-daily-mail`. Warnungen/Systemzustände sind hier bewusst **nicht** enthalten
+(die laufen über die obigen Sofort-Alarme).
+
 **Hinweis:** Zusätzlich setzt Tier-1 Alarm-Flags im ObsState. Der aktive Batterieschutz
 läuft über SOC_MIN/SOC_MAX der Regelkreise.
 

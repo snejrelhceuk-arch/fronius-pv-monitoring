@@ -450,15 +450,20 @@ class AutomationDaemon:
         except Exception as e:
             LOG.error(f"Steuerbox-Override-Verarbeitung Fehler: {e}")
 
-        # 7. Täglicher Energiebericht (00:00 → abgelaufener Kalendertag)
-        # Der EventNotifier meldet 1×/Tag, sobald die Tagesaggregation des
-        # Vortags vorliegt; vorher/nachher ist der Aufruf ein günstiger No-Op
-        # (Dedup bzw. Karenz-Gate).
+        # 9. Täglicher Energiebericht (00:00 → abgelaufener Kalendertag)
+        # Der EventNotifier meldet 1×/Tag (Dedup), sobald die Tagesaggregation
+        # des Vortags finalisiert ist. Auf 5 min gedrosselt: der Normalfall
+        # sendet ~10 min nach Mitternacht, ein SMTP-Fehler löst keinen
+        # Wiederhol-Sturm aus (Retry erst im nächsten Slot).
         if self._notifier:
-            try:
-                self._notifier.sende_tagesbericht()
-            except Exception as e:
-                LOG.error(f"Tagesbericht Fehler: {e}")
+            if not hasattr(self, '_last_tagesbericht_check'):
+                self._last_tagesbericht_check = 0
+            if now - self._last_tagesbericht_check >= 300:
+                self._last_tagesbericht_check = now
+                try:
+                    self._notifier.sende_tagesbericht()
+                except Exception as e:
+                    LOG.error(f"Tagesbericht Fehler: {e}")
 
         # Heartbeat-Log (alle 5 min)
         if self._cycle_count % (300 // OBS_COLLECT_INTERVAL) == 0:

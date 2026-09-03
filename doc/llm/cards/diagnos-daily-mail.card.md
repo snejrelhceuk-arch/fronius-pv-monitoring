@@ -5,7 +5,7 @@ role: D
 applyTo: "automation/engine/event_notifier.py,automation/engine/notify/report_format.py"
 tags: [mail, tagesbericht, energie, smtp, credential, alarm]
 status: stable
-last_review: 2026-09-02
+last_review: 2026-09-03
 ---
 
 # Diagnos Daily-Mail
@@ -23,7 +23,7 @@ Systemfehler laufen über die separaten Sofort-Alarme (dieselbe SMTP-Infrastrukt
 - **Bericht + Versand:** `automation/engine/event_notifier.py:sende_tagesbericht`, `_sende_tagesbericht_mail`
 - **Datensammlung:** `automation/engine/event_notifier.py:_sammle_tagesdaten` (daily_data + yearly_statistics; hourly_data-Fallback; Stresszeit aus data_1min; Verbraucher aus heizpatrone_daily/wattpilot_daily)
 - **Textformatierung:** `automation/engine/notify/report_format.py:tagesbericht` (4 Abschnitte, 5 Kernwerte)
-- **Trigger (00:00):** `automation/engine/automation_daemon.py` (Aufruf je Zyklus; Dedup + daily_data-Gate steuern Fälligkeit)
+- **Trigger (00:00):** `automation/engine/automation_daemon.py` (Aufruf alle 5 min gedrosselt; Dedup + Reife-Gate steuern Fälligkeit; SMTP-Fehler löst keinen Wiederhol-Sturm aus)
 - **Sofort-Alarme (getrennt):** `automation/engine/event_notifier.py:pruefe_health_alarme`, `pruefe_integrity_alarme`, `_sende_diagnos_alarm`
 - **Statusdateien (entkoppelt):** `automation/engine/event_notifier.py:_aktualisiere_statusdateien` → `diagnos/status_report.py:write_status_reports`
 - **SMTP-Low-Level:** `automation/engine/notify/mail.py:smtp_versand`
@@ -40,7 +40,7 @@ Systemfehler laufen über die separaten Sofort-Alarme (dieselbe SMTP-Infrastrukt
 ## Invarianten
 - Versand genau 1×/Tag (Dedup `config/event_notifier_dedup.json`, Reset bei Tageswechsel).
 - `tagesbericht` muss in `NOTIFICATION_EVENTS` stehen, sonst kein Bericht.
-- Der Tag wird erst gemeldet, sobald die `daily_data`-Zeile des Vortags vorliegt (Tagesaggregation kurz nach Mitternacht); Karenz 1 h, danach `hourly_data`-Fallback (Kopf zeigt „vorläufig").
+- Der Tag wird erst gemeldet, wenn die `daily_data`-Zeile des Vortags **finalisiert** ist: der Tages-Aggregator (`collector.aggregate.daily`, Cron **:05**) schließt den Vortag erst mit dem ersten Lauf nach lokaler Mitternacht ab. Daher **frühestens 10 min** nach Mitternacht (davor ist die Zeile partiell → verschoben); ist die Aggregation nach 60 min nicht durch, greift der `hourly_data`-Fallback (Kopf zeigt „vorläufig“).
 - Tagesgrenze ist **00:00→00:00** (lokaler Kalendertag), nicht Sunset. `daily_data` ist per UTC-Mitternacht verschlüsselt, repräsentiert aber den lokalen Tag.
 - **Keine** Warnungen/Diagnos-Befunde im Bericht — kritische Zustände (CRIT/FAIL) laufen über die Sofort-Alarme.
 - Alle Daemon-Mails brauchen das **Machine-ID-gebundene** `smtp_pass`-Credential (nicht migrierbar, pro Host setzen).
