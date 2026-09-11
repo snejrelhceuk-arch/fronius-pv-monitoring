@@ -1462,8 +1462,14 @@
         function createErtragChart() {
             const axis = buildTimeAxis();
             const hasFC = axis.hasForecast;
-            const td = axis.tsData;
             const clearSky = buildClearSkyAxis();
+            // Netzausfall-Luecken: Mess-Serien auftrennen, Forecast bleibt durchgehend.
+            const outages = (window.PVChart && PVChart.detectOutages)
+                ? PVChart.detectOutages(chartData.datapoints)
+                : { gaps: [], markLine: null, markArea: null };
+            const td = (f) => (window.PVChart && PVChart.breakSeriesAtGaps)
+                ? PVChart.breakSeriesAtGaps(axis.tsData(f), outages.gaps)
+                : axis.tsData(f);
             
             const legendData = [
                 {name: 'Direktverbrauch PV', itemStyle: {color: 'rgba(255, 193, 7, 1)'}},
@@ -1612,6 +1618,8 @@
                     areaStyle: { color: 'rgba(128, 128, 128, 0.7)' },
                     lineStyle: { color: 'rgba(128, 128, 128, 1)', width: 1 },
                     markPoint: peakMarkPoint || undefined,
+                    markLine: outages.markLine || undefined,
+                    markArea: outages.markArea || undefined,
                     data: td('p_exp')
                 },
                 {
@@ -1692,8 +1700,14 @@
         function createVerbrauchChart() {
             const axis = buildTimeAxis();
             const hasFC = axis.hasForecast;
-            const td = axis.tsData;
             const clearSky = buildClearSkyAxis();
+            // Netzausfall-Luecken: Mess-Serien auftrennen, Forecast bleibt durchgehend.
+            const outages = (window.PVChart && PVChart.detectOutages)
+                ? PVChart.detectOutages(chartData.datapoints)
+                : { gaps: [], markLine: null, markArea: null };
+            const td = (f) => (window.PVChart && PVChart.breakSeriesAtGaps)
+                ? PVChart.breakSeriesAtGaps(axis.tsData(f), outages.gaps)
+                : axis.tsData(f);
             
             const legendData = [
                 {name: 'Direktverbrauch PV', itemStyle: {color: 'rgba(255, 193, 7, 1)'}},
@@ -1866,6 +1880,8 @@
                     z: 4,
                     itemStyle: { color: 'rgba(76, 175, 80, 1)' },
                     lineStyle: { color: 'rgba(76, 175, 80, 1)', width: 2 },
+                    markLine: outages.markLine || undefined,
+                    markArea: outages.markArea || undefined,
                     data: td('soc')
                 }
             );

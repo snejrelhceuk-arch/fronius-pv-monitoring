@@ -262,3 +262,84 @@
         tooltipResponsive: tooltipResponsive
     };
 })();
+
+// ── Netzausfall-Marker (ECharts) ───────────────────────────────────────
+// Datengetriebene Erkennung von Daten-Luecken (= Stromausfall ohne
+// Notstrom: es liegen KEINE Messwerte vor). Liefert fertige Overlays fuer
+// jeden Tages-Chart: zwei Marker-Linien (Netzausfall / Wiederkehr) + eine
+// schattierte Flaeche dazwischen, in der NICHTS dargestellt wird. Zusaetzlich
+// trennt breakSeriesAtGaps() Linien-Serien an der Luecke auf, damit ECharts
+// NICHT ueber den Ausfall hinweg interpoliert.
+(function () {
+    var COL = '#d9534f';                       // Ausfall-Rot
+    var AREA = 'rgba(217, 83, 79, 0.10)';      // dezente Schattierung
+
+    function _hhmm(tsSec) {
+        var d = new Date(tsSec * 1000);
+        return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+    }
+
+    // Erkennt Luecken > thresholdSec zwischen aufeinanderfolgenden Punkten.
+    // datapoints: Array mit epoch-Sekunden im Feld tsField (Default 'timestamp').
+    function detectOutages(datapoints, opts) {
+        opts = opts || {};
+        var tsField = opts.tsField || 'timestamp';
+        var thr = opts.thresholdSec || 1200;   // ab 20 min = Ausfall
+        var pts = (datapoints || []).filter(function (d) { return d && d[tsField] != null; });
+        var gaps = [];
+        for (var i = 1; i < pts.length; i++) {
+            var a = +pts[i - 1][tsField], b = +pts[i][tsField];
+            if (b - a > thr) gaps.push({ startTs: a, endTs: b });
+        }
+        return { gaps: gaps, markLine: outageMarkLine(gaps), markArea: outageMarkArea(gaps) };
+    }
+
+    // Zwei vertikale Marker-Linien je Luecke: Netzausfall (Start) + Wiederkehr (Ende).
+    function outageMarkLine(gaps) {
+        var data = [];
+        (gaps || []).forEach(function (g) {
+            data.push({
+                xAxis: g.startTs * 1000,
+                label: { show: true, formatter: 'Netzausfall\n' + _hhmm(g.startTs), position: 'insideStartTop', color: COL, fontSize: 10 }
+            });
+            data.push({
+                xAxis: g.endTs * 1000,
+                label: { show: true, formatter: 'Wiederkehr\n' + _hhmm(g.endTs), position: 'insideEndTop', color: COL, fontSize: 10 }
+            });
+        });
+        return {
+            silent: true, symbol: 'none',
+            lineStyle: { color: COL, type: 'dashed', width: 1.5, opacity: 0.9 },
+            emphasis: { disabled: true },
+            data: data
+        };
+    }
+
+    // Schattierte Flaeche zwischen Ausfall und Wiederkehr (hier keine Daten).
+    function outageMarkArea(gaps) {
+        return {
+            silent: true,
+            itemStyle: { color: AREA },
+            data: (gaps || []).map(function (g) {
+                return [{ xAxis: g.startTs * 1000 }, { xAxis: g.endTs * 1000 }];
+            })
+        };
+    }
+
+    // Trennt eine [ts_ms, value]-Serie an den Luecken auf (null einfuegen),
+    // damit die Linie ueber den Ausfall NICHT verbunden wird.
+    function breakSeriesAtGaps(series, gaps) {
+        if (!gaps || !gaps.length || !series || !series.length) return series;
+        var out = series.slice();
+        gaps.forEach(function (g) {
+            out.push([(g.startTs + (g.endTs - g.startTs) / 2) * 1000, null]);
+        });
+        out.sort(function (p, q) { return p[0] - q[0]; });
+        return out;
+    }
+
+    Object.assign(window.PVChart, {
+        detectOutages: detectOutages,
+        breakSeriesAtGaps: breakSeriesAtGaps
+    });
+})();

@@ -21,6 +21,33 @@ notiert.
 sind daher klein gegenüber SM/iMSys. Frühe PAC-Tage (Anlaufphase/Zählerunterbrechung
 vor 2026-08-05) sind ungültig und werden in der Statistik an SM angeglichen.
 
+## Irreguläre Drei-System-Fixpunkte
+
+Diese Tabelle enthält die **seltenen synchronisierten Ablesungen** aller drei
+Messsysteme. Für den PAC wird, falls nötig, auf den Zielzeitpunkt zwischen zwei
+5-min-Snapshots **linear interpoliert**.
+
+| Ablesezeit (lokal) | iMSys Import | iMSys Export | SM Import | SM Export | PAC Import | PAC Export | Detail |
+|---|---:|---:|---:|---:|---:|---:|---|
+| 2026-08-13 20:36 | 4604.000 | 215.000 | 17133.227 | 875.356 | 45.522 | 27.281 | iMS manuell; SM `raw_data` 20:36:28; PAC `nq_energy_raw` 20:34:45 |
+| 2026-09-01 19:00 | 4629.000 | 229.000 | 17158.378 | 887.583 | 70.177 | 40.814 | iMS manuell; SM `raw_data` 18:59:58; PAC interpoliert zwischen 18:57:11 und 19:02:11 |
+
+## Aktueller Intervallvergleich
+
+Intervall: **2026-08-13 20:36 → 2026-09-01 19:00**
+
+| System | Δ Import kWh | Δ Export kWh | Abweichung Import vs iMSys | Abweichung Export vs iMSys |
+|---|---:|---:|---:|---:|
+| iMSys | 25.000 | 14.000 | 0.00 % | 0.00 % |
+| Primär-SM F1 | 25.151 | 12.227 | +0.60 % | -12.66 % |
+| PAC4200 | 24.655 | 13.533 | -1.38 % | -3.33 % |
+
+**Einordnung dieses Intervalls:**
+- **Bezug (Import):** Beide Systeme liegen nahe am iMSys. Der **Primär-SM** ist in diesem Intervall minimal näher (+0,60 % vs. -1,38 % PAC).
+- **Einspeisung (Export):** Der **PAC4200** liegt klar näher am iMSys (-3,33 % vs. -12,66 % Primär-SM).
+- Damit bestätigt der iMSys die seit August sichtbare Richtung: Dass der PAC bei der täglichen Seite `Energievergleich` gegenüber dem Primär-SM meist **höhere Exportwerte** zeigt, bedeutet **nicht automatisch einen PAC-Fehler**. In diesem Intervall war vielmehr der **Primär-SM beim Export zu niedrig**.
+- Aussagegrenze: Der iMSys liefert nur **ganze kWh**, daher bleibt für dieses Einzelintervall eine Auflösung von grob ±1 kWh je Richtung. Trotzdem ist der PAC hier beim Export deutlich näher an der eichrechtlichen Referenz.
+
 ## Fixpunkte (Monatsverbräuche/Einspeisung)
 
 Die folgende Tabelle zeigt die **Energiemengen** (Deltas) der drei Messsysteme zwischen den Stichtagen. Basis sind die Zählerstände zu 00:00 Uhr (day_start) des Folgemonats; der letzte Eintrag (Aug 1–13) deckt nur den Zeitraum 01.08. bis 13.08. ab. PAC-Daten existieren erst ab der REFORMATION (2026-07-11).
