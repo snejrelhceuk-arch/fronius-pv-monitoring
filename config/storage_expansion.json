@@ -1,0 +1,56 @@
+{
+  "_doc": "Parameter fuer die Speicherausbau-Amortisationsanalyse (/analyse/speicherausbau). Read-only Entscheidungsmodell (Rolle B). Werte sind Default-Annahmen und werden im UI per Schieber ueberschrieben.",
+  "_updated": "2026-09-11",
+  "wirtschaft": {
+    "strompreis_eur_kwh": 0.30,
+    "_strompreis_doc": "Bezugspreis. Default wird zur Laufzeit aus config.get_strompreis(aktueller Monat) gezogen; dieser Wert ist Fallback.",
+    "einspeiseverguetung_eur_kwh": 0.0,
+    "_einspeise_doc": "Nulleinspeiser: abgeregelter Ueberschuss hat keinen Erloes. Jede vermiedene Bezugs-kWh ist daher den vollen Bezugspreis wert.",
+    "strompreis_steigerung_pct_a": 3.0,
+    "_steigerung_doc": "Jaehrliche Strompreissteigerung fuer die dynamische Amortisationsprognose (in die Zukunft).",
+    "payback_grenze_jahre": 10.0,
+    "_payback_doc": "Amortisationsgrenze des Bedieners: Zubau lohnt nur, solange die marginale Amortisation darunter bleibt."
+  },
+  "kosten": {
+    "wr_fix_eur": 4000,
+    "_wr_doc": "Einmalkosten Hybrid-WR + Installation (50 kW, baut Microgrid, verwaltet Zusatzspeicher, 4 MPPT). Faellt einmalig fuer den gesamten Ausbau an.",
+    "batt_eur_pro_kwh_nominal": 160,
+    "_batt_doc": "Speicherpreis je nominaler kWh (Dyness Stack100: ~8.000 EUR / 51,2 kWh ~= 156 EUR/kWh).",
+    "pv_eur_pro_kwp": 250,
+    "_pv_doc": "Module + Montage je kWp Zubau an vorhandener freier MPPT-Kapazitaet."
+  },
+  "technik": {
+    "usable_fraction": 0.90,
+    "_usable_doc": "Nutzbarer Anteil der nominalen Speicherkapazitaet (LFP, Reserve oben/unten).",
+    "rt_efficiency": 0.90,
+    "_rt_doc": "Round-Trip-Wirkungsgrad (AC-AC) des Zusatzspeichers.",
+    "batt_kalender_jahre": 15,
+    "batt_zyklen_lebensdauer": 6000,
+    "_zyklen_doc": "LFP-Vollzyklen bis ~80% Restkapazitaet. Amortisation muss vor min(Kalender, Zyklen/Jahr) liegen.",
+    "soc_cap_detect_pct": 73,
+    "_soc_cap_doc": "Ab diesem SOC gilt der Bestandsspeicher als voll/gedeckelt (Komfort-Deckel ~75%). In diesen Intervallen wird Abregelung gegen die Clear-Sky-Prognose rekonstruiert.",
+    "max_zubau_batt_kwh": 55,
+    "max_zubau_pv_kwp": 20,
+    "wr_leistung_kw": 50,
+    "mppt_frei": 4
+  },
+  "bestand": {
+    "pv_kwp": 37.59,
+    "batt_kwh_nominal": 20.48,
+    "_doc": "Bestandsanlage (aus config.py gespiegelt). Der Ausbau kommt on-top."
+  },
+  "presets": [
+    {
+      "name": "Solis S6-EH3P 50K-H + Dyness Stack100 51,2 kWh",
+      "batt_kwh_nominal": 51.2,
+      "pv_kwp": 0,
+      "preis_eur": 11940
+    },
+    {
+      "name": "50 kW Hybrid-WR + 25 kWh Speicher",
+      "batt_kwh_nominal": 25.0,
+      "pv_kwp": 0,
+      "preis_eur": 8500
+    }
+  ]
+}

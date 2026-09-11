@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico?v={{ favicon_version }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png?v={{ favicon_version }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <title>Speicher-Ausbau — Amortisationsnachweis</title>
+    <link rel="stylesheet" href="/static/css/analyse-dark.css?v=20260302">
+    <link rel="stylesheet" href="/static/css/nav-ui.css">
+    <script src="/static/js/nav-context.js"></script>
+    <script src="/static/js/nav-ui.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        .intro { font-size: 14px; line-height: 1.5; }
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 18px 26px;
+            margin: 10px 0 6px;
+        }
+        .ctrl { display: flex; flex-direction: column; gap: 6px; }
+        .ctrl label {
+            font-size: 12px; text-transform: uppercase; letter-spacing: .5px;
+            color: rgba(255,255,255,0.55); display: flex; justify-content: space-between;
+        }
+        .ctrl label b { color: #67c1f5; font-size: 14px; text-transform: none; letter-spacing: 0; }
+        .ctrl input[type=range] { width: 100%; accent-color: #4c9aff; }
+        .toggles { display: flex; gap: 22px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+        .toggles label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: rgba(255,255,255,0.8); text-transform: none; }
+        .presets { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+        .preset-btn {
+            background: rgba(76,154,255,0.16); border: 1px solid rgba(76,154,255,0.4);
+            color: #cfe6ff; border-radius: 8px; padding: 7px 12px; cursor: pointer; font-size: 12.5px;
+        }
+        .preset-btn:hover { background: rgba(76,154,255,0.28); }
+        .result-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 14px; margin-top: 8px;
+        }
+        .result-card {
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 10px; padding: 14px; text-align: center;
+        }
+        .result-card .label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: rgba(255,255,255,0.5); }
+        .result-card .value { font-size: 24px; font-weight: 700; margin-top: 6px; color: rgba(255,255,255,0.95); }
+        .result-card .sub { font-size: 11px; color: rgba(255,255,255,0.45); margin-top: 3px; }
+        .value.good { color: #46d17a; } .value.bad { color: #ff7a7a; } .value.warn { color: #ffc861; }
+        .verdict {
+            margin-top: 18px; padding: 16px 20px; border-radius: 10px; font-size: 15px; line-height: 1.5;
+            border-left: 4px solid #ffc861; background: rgba(255,200,97,0.10); color: rgba(255,255,255,0.9);
+        }
+        .verdict.ok { border-left-color: #46d17a; background: rgba(70,209,122,0.10); }
+        .verdict.no { border-left-color: #ff7a7a; background: rgba(255,122,122,0.10); }
+        .chart { width: 100%; height: 360px; }
+        .chart-sm { width: 100%; height: 320px; }
+        .period-note { font-size: 12px; color: rgba(255,255,255,0.45); margin-top: 6px; }
+        @media (max-width: 640px) { .chart { height: 320px; } .container { padding: 16px; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="top-nav"></div>
+
+        <div class="header-info">
+            <h3>🔋 Speicher-Ausbau — Nachweis vermeidbarer Netzbezug</h3>
+            <p class="intro">
+                Modell auf Basis der realen 5-Minuten-Messdaten. Ein <strong>virtueller Zusatzspeicher</strong>
+                variabler Größe lädt aus dem heute ungenutzten Überschuss und deckt damit den gemessenen
+                Netzbezug. Weil die Anlage <strong>Nulleinspeiser</strong> ist, wird überschüssige PV bei vollem
+                Bestandsspeicher (SOC-Deckel ~75&nbsp;%) <strong>abgeregelt</strong>. Diese Abregelung wird gegen die
+                selbstkalibrierte Clear-Sky-Prognose rekonstruiert — genau hier liegt das Einspeicher-Potenzial.
+                Der Schieber zeigt: ein <em>kleinerer wie größerer</em> Ausbau ist wirtschaftlich schlechter als das Optimum.
+            </p>
+            <p class="period-note" id="period-note">Zeitraum wird geladen…</p>
+        </div>
+
+        <!-- Kennzahlen Bestand -->
+        <div class="summary-cards" id="baseline-cards"></div>
+
+        <!-- Steuerung -->
+        <div class="section">
+            <div class="section-title">Szenario einstellen</div>
+            <div class="controls">
+                <div class="ctrl">
+                    <label>Zusatz-Speicher <b><span id="v-batt">25</span> kWh</b></label>
+                    <input type="range" id="s-batt" min="0" max="55" step="1" value="25">
+                </div>
+                <div class="ctrl">
+                    <label>PV-Zubau <b><span id="v-pv">0</span> kWp</b></label>
+                    <input type="range" id="s-pv" min="0" max="20" step="1" value="0">
+                </div>
+                <div class="ctrl">
+                    <label>Strompreis <b><span id="v-price">30,0</span> ct/kWh</b></label>
+                    <input type="range" id="s-price" min="20" max="50" step="0.5" value="30">
+                </div>
+                <div class="ctrl">
+                    <label>Speicherpreis <b><span id="v-bcost">160</span> €/kWh</b></label>
+                    <input type="range" id="s-bcost" min="80" max="400" step="10" value="160">
+                </div>
+                <div class="ctrl">
+                    <label>WR-Fixkosten <b><span id="v-wr">4.000</span> €</b></label>
+                    <input type="range" id="s-wr" min="0" max="10000" step="250" value="4000">
+                </div>
+                <div class="ctrl">
+                    <label>PV-Kosten <b><span id="v-pvcost">250</span> €/kWp</b></label>
+                    <input type="range" id="s-pvcost" min="0" max="600" step="10" value="250">
+                </div>
+            </div>
+            <div class="toggles">
+                <label><input type="checkbox" id="t-curtail" checked> Abregelung rekonstruieren (Clear-Sky)</label>
+                <label><input type="checkbox" id="t-dynamic" checked> Strompreissteigerung berücksichtigen</label>
+            </div>
+            <div class="presets" id="presets"></div>
+        </div>
+
+        <!-- Ergebnis beim gewählten Ausbau -->
+        <div class="section">
+            <div class="section-title">Ergebnis beim gewählten Ausbau</div>
+            <div class="result-grid" id="result-grid"></div>
+            <div class="verdict" id="verdict">…</div>
+        </div>
+
+        <!-- Hauptkurve -->
+        <div class="section">
+            <div class="section-title">Vermiedener Netzbezug &amp; Amortisation über die Speichergröße</div>
+            <div id="chart-main" class="chart"></div>
+        </div>
+
+        <!-- Monatsbilanz -->
+        <div class="section">
+            <div class="section-title">Monatsbilanz beim gewählten Ausbau</div>
+            <div id="chart-monthly" class="chart-sm"></div>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        "use strict";
+        // ── deutsche Formatierung ──────────────────────────────────
+        const nf0 = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 });
+        const nf1 = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+        const eur = (v) => nf0.format(Math.round(v)) + ' €';
+
+        const AX = 'rgba(255,255,255,0.75)', GRID = 'rgba(255,255,255,0.10)';
+        const dark = { textStyle: { color: AX } };
+
+        let SWEEP = null;       // aktuelle /sweep-Antwort
+        let ECON = {};          // Wirtschaftsparameter (aus UI)
+        let mainChart, monthlyChart;
+
+        const $ = (id) => document.getElementById(id);
+        function debounce(fn, ms) { let t; return function () { clearTimeout(t); t = setTimeout(fn, ms); }; }
+
+        // ── lineare Interpolation der Kurve nach nominaler kWh ──────
+        function interpAvoided(nom) {
+            const c = SWEEP.curve;
+            if (nom <= c[0].batt_nom_kwh) return c[0].avoided_kwh_year;
+            for (let i = 1; i < c.length; i++) {
+                if (nom <= c[i].batt_nom_kwh) {
+                    const a = c[i - 1], b = c[i];
+                    const f = (nom - a.batt_nom_kwh) / (b.batt_nom_kwh - a.batt_nom_kwh || 1);
+                    return a.avoided_kwh_year + f * (b.avoided_kwh_year - a.avoided_kwh_year);
+                }
+            }
+            return c[c.length - 1].avoided_kwh_year;
+        }
+        function autarkyFor(nom) {
+            const c = SWEEP.curve;
+            for (let i = 1; i < c.length; i++) if (nom <= c[i].batt_nom_kwh) return c[i].autarky_pct;
+            return c[c.length - 1].autarky_pct;
+        }
+
+        function investFor(nom, pv) {
+            return (nom > 0 || pv > 0 ? ECON.wr : 0) + ECON.bcost * nom + ECON.pvcost * pv;
+        }
+        // dynamische Amortisation: Jahre bis kumulierte Ersparnis >= Invest,
+        // mit jährlicher Strompreissteigerung. 0 => nie innerhalb 40 a.
+        function dynamicPayback(invest, annualSavings0) {
+            if (annualSavings0 <= 0 || invest <= 0) return 0;
+            if (!ECON.dynamic) return invest / annualSavings0;
+            let cum = 0, esc = ECON.esc / 100.0;
+            for (let y = 1; y <= 40; y++) {
+                cum += annualSavings0 * Math.pow(1 + esc, y - 1);
+                if (cum >= invest) {
+                    const prev = cum - annualSavings0 * Math.pow(1 + esc, y - 1);
+                    return (y - 1) + (invest - prev) / (annualSavings0 * Math.pow(1 + esc, y - 1));
+                }
+            }
+            return 0;
+        }
+
+        // ── Optimum: minimale Gesamt-Amortisation über die Kurve ───
+        function findOptimum(pv) {
+            let best = null;
+            SWEEP.curve.forEach((c) => {
+                if (c.batt_nom_kwh <= 0) return;
+                const inv = investFor(c.batt_nom_kwh, pv);
+                const sav = c.avoided_kwh_year * ECON.price;
+                const pb = dynamicPayback(inv, sav);
+                if (pb > 0 && (best === null || pb < best.pb)) best = { nom: c.batt_nom_kwh, pb, avoided: c.avoided_kwh_year };
+            });
+            return best;
+        }
+        // marginale Amortisationsgrenze: größte Kapazität mit Grenz-Payback <= Limit
+        function marginalFrontier(pv) {
+            const c = SWEEP.curve; let frontier = 0;
+            for (let i = 1; i < c.length; i++) {
+                const dInv = ECON.bcost * (c[i].batt_nom_kwh - c[i - 1].batt_nom_kwh);
+                const dSav = (c[i].avoided_kwh_year - c[i - 1].avoided_kwh_year) * ECON.price;
+                const mpb = dSav > 0 ? dInv / dSav : Infinity;
+                if (mpb <= ECON.limit) frontier = c[i].batt_nom_kwh;
+            }
+            return frontier;
+        }
+
+        function readEcon() {
+            ECON = {
+                price: parseFloat($('s-price').value) / 100.0,
+                bcost: parseFloat($('s-bcost').value),
+                wr: parseFloat($('s-wr').value),
+                pvcost: parseFloat($('s-pvcost').value),
+                esc: SWEEP ? SWEEP.econ_defaults.strompreis_steigerung_pct_a : 3.0,
+                limit: SWEEP ? SWEEP.econ_defaults.payback_grenze_jahre : 10.0,
+                dynamic: $('t-dynamic').checked,
+            };
+        }
+
+        // ── UI-Update (ohne Refetch) ───────────────────────────────
+        function render() {
+            if (!SWEEP || !SWEEP.ok) return;
+            readEcon();
+            const nom = parseFloat($('s-batt').value);
+            const pv = parseFloat($('s-pv').value);
+            $('v-batt').textContent = nom; $('v-pv').textContent = pv;
+            $('v-price').textContent = nf1.format(parseFloat($('s-price').value));
+            $('v-bcost').textContent = nf0.format(ECON.bcost);
+            $('v-wr').textContent = nf0.format(ECON.wr);
+            $('v-pvcost').textContent = nf0.format(ECON.pvcost);
+
+            const avoided = interpAvoided(nom);
+            const usable = nom * SWEEP.tech.usable_fraction;
+            const savings = avoided * ECON.price;
+            const invest = investFor(nom, pv);
+            const payback = dynamicPayback(invest, savings);
+            const cycles = usable > 0.01 ? avoided / usable : 0;
+            const opt = findOptimum(pv);
+            const frontier = marginalFrontier(pv);
+            const limit = ECON.limit;
+
+            // Ergebnis-Karten
+            const pbClass = payback === 0 ? 'bad' : (payback <= limit ? 'good' : (payback <= limit * 1.6 ? 'warn' : 'bad'));
+            const pbTxt = payback === 0 ? '&gt; 40 a' : nf1.format(payback) + ' a';
+            $('result-grid').innerHTML = `
+                <div class="result-card"><div class="label">Vermiedener Netzbezug</div><div class="value">${nf0.format(avoided)} kWh/a</div><div class="sub">von ${nf0.format(SWEEP.baseline.import_kwh_year)} kWh/a Bezug</div></div>
+                <div class="result-card"><div class="label">Ersparnis</div><div class="value good">${eur(savings)}/a</div><div class="sub">@ ${nf1.format(ECON.price * 100)} ct/kWh</div></div>
+                <div class="result-card"><div class="label">Investition</div><div class="value">${eur(invest)}</div><div class="sub">WR + ${nf0.format(nom)} kWh + ${nf0.format(pv)} kWp</div></div>
+                <div class="result-card"><div class="label">Amortisation</div><div class="value ${pbClass}">${pbTxt}</div><div class="sub">Grenze ${nf0.format(limit)} a${ECON.dynamic ? ', dyn.' : ''}</div></div>
+                <div class="result-card"><div class="label">Vollzyklen</div><div class="value ${cycles < 80 ? 'warn' : ''}">${nf0.format(cycles)}/a</div><div class="sub">${nf1.format(usable)} kWh nutzbar</div></div>
+                <div class="result-card"><div class="label">Autarkie</div><div class="value">${nf1.format(autarkyFor(nom))} %</div><div class="sub">Bestand ${nf1.format(SWEEP.baseline.autarky_pct)} %</div></div>`;
+
+            // Verdikt
+            const v = $('verdict');
+            let cls = 'no', msg;
+            const optTxt = opt ? `${nf0.format(opt.nom)} kWh (Amortisation ${nf1.format(opt.pb)} a)` : '—';
+            if (payback > 0 && payback <= limit) {
+                cls = 'ok';
+                msg = `✅ Bei diesem Ausbau amortisiert sich die Investition in <strong>${nf1.format(payback)} Jahren</strong> — innerhalb der ${nf0.format(limit)}-Jahres-Grenze. Wirtschaftliches Optimum: <strong>${optTxt}</strong>.`;
+            } else if (opt && opt.pb <= limit) {
+                cls = 'ok';
+                msg = `⚠️ Der gewählte Ausbau amortisiert erst in ${pbTxt}. Das Optimum liegt bei <strong>${optTxt}</strong> — kleiner oder größer ist schlechter.`;
+            } else {
+                cls = 'no';
+                const best = opt ? `${nf1.format(opt.pb)} a bei ${nf0.format(opt.nom)} kWh` : '—';
+                msg = `❌ Kein Ausbau amortisiert innerhalb der ${nf0.format(limit)}-Jahres-Grenze. Bestes Szenario: <strong>${best}</strong>. `
+                    + `Die vermiedene Bezugsmenge ist durch die <em>saisonale</em> Lücke begrenzt: Sommerüberschuss lässt sich nicht in den Winter verschieben.`;
+            }
+            v.className = 'verdict ' + cls; v.innerHTML = msg;
+
+            drawMain(nom, pv, opt, frontier);
+        }
+
+        // ── Hauptchart: avoided + Amortisation über nominale kWh ───
+        function drawMain(nom, pv, opt, frontier) {
+            const c = SWEEP.curve;
+            const xs = c.map((d) => d.batt_nom_kwh);
+            const avoided = c.map((d) => Math.round(d.avoided_kwh_year));
+            const payback = c.map((d) => {
+                const inv = investFor(d.batt_nom_kwh, pv);
+                const sav = d.avoided_kwh_year * ECON.price;
+                const pb = dynamicPayback(inv, sav);
+                return pb === 0 ? null : +pb.toFixed(1);
+            });
+            const markLines = [];
+            markLines.push({ xAxis: nom, lineStyle: { color: '#4c9aff', width: 2 }, label: { formatter: 'gewählt', color: '#9cc7ff' } });
+            if (opt) markLines.push({ xAxis: opt.nom, lineStyle: { color: '#46d17a', type: 'dashed' }, label: { formatter: 'Optimum', color: '#46d17a' } });
+
+            mainChart.setOption({
+                backgroundColor: 'transparent', textStyle: dark.textStyle,
+                tooltip: { trigger: 'axis', backgroundColor: 'rgba(15,23,42,0.95)', borderColor: GRID,
+                    valueFormatter: null,
+                    formatter: (ps) => {
+                        let s = `<b>${ps[0].axisValue} kWh</b> (nominal)`;
+                        ps.forEach((p) => { s += `<br>${p.marker} ${p.seriesName}: <b>${p.value == null ? '–' : nf0.format(p.value)}</b>${p.seriesName.indexOf('Amort') >= 0 ? ' a' : ' kWh/a'}`; });
+                        return s;
+                    } },
+                legend: { data: ['Vermiedener Netzbezug', 'Amortisation'], textStyle: { color: AX }, top: 0 },
+                grid: { left: 55, right: 60, top: 40, bottom: 45 },
+                xAxis: { type: 'category', data: xs, name: 'Zusatz-Speicher (kWh nominal)', nameLocation: 'middle', nameGap: 28,
+                    axisLine: { lineStyle: { color: GRID } }, axisLabel: { color: AX } },
+                yAxis: [
+                    { type: 'value', name: 'kWh/a', axisLabel: { color: AX }, splitLine: { lineStyle: { color: GRID } } },
+                    { type: 'value', name: 'Jahre', position: 'right', axisLabel: { color: AX, formatter: '{value}' }, splitLine: { show: false },
+                      max: Math.max(ECON.limit * 3, 30) }
+                ],
+                series: [
+                    { name: 'Vermiedener Netzbezug', type: 'line', smooth: true, symbol: 'none', data: avoided,
+                      areaStyle: { color: 'rgba(76,154,255,0.20)' }, lineStyle: { color: '#4c9aff', width: 2 },
+                      markLine: { silent: true, symbol: 'none', data: markLines } },
+                    { name: 'Amortisation', type: 'line', yAxisIndex: 1, smooth: true, symbol: 'none', data: payback,
+                      lineStyle: { color: '#ffc861', width: 2 },
+                      markLine: { silent: true, symbol: 'none', data: [{ yAxis: ECON.limit, lineStyle: { color: '#ff7a7a', type: 'dashed' }, label: { position: 'insideStartTop', formatter: ECON.limit + '-a-Grenze', color: '#ff7a7a' } }] } }
+                ]
+            });
+        }
+
+        // ── Monatschart (aus /detail) ──────────────────────────────
+        function drawMonthly(detail) {
+            if (!detail || !detail.ok) return;
+            const m = detail.monthly;
+            monthlyChart.setOption({
+                backgroundColor: 'transparent', textStyle: dark.textStyle,
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, backgroundColor: 'rgba(15,23,42,0.95)', borderColor: GRID },
+                legend: { data: ['Rest-Netzbezug', 'Vermieden', 'Abregelung (Potenzial)'], textStyle: { color: AX }, top: 0 },
+                grid: { left: 50, right: 20, top: 40, bottom: 30 },
+                xAxis: { type: 'category', data: m.map((d) => d.month.slice(5)), axisLabel: { color: AX }, axisLine: { lineStyle: { color: GRID } } },
+                yAxis: { type: 'value', name: 'kWh', axisLabel: { color: AX }, splitLine: { lineStyle: { color: GRID } } },
+                series: [
+                    { name: 'Rest-Netzbezug', type: 'bar', stack: 'b', data: m.map((d) => d.rest_kwh), itemStyle: { color: '#ff7a7a' } },
+                    { name: 'Vermieden', type: 'bar', stack: 'b', data: m.map((d) => d.avoided_kwh), itemStyle: { color: '#46d17a' } },
+                    { name: 'Abregelung (Potenzial)', type: 'line', symbol: 'none', data: m.map((d) => d.curtailed_kwh), lineStyle: { color: '#ffc861', type: 'dashed' }, itemStyle: { color: '#ffc861' } }
+                ]
+            });
+        }
+
+        // ── Datenfluss ─────────────────────────────────────────────
+        function baselineCards() {
+            const b = SWEEP.baseline, p = SWEEP.period;
+            $('period-note').innerHTML = `Simulationsfenster: <strong>${p.start} … ${p.end}</strong> (${p.days} Tage, ×${nf1.format(p.annual_factor)} auf Jahr). `
+                + `Bestand: ${nf1.format(b.pv_kwp)} kWp PV, ${nf1.format(b.batt_bestand_kwh)} kWh Speicher.`
+                + (p.have_clearsky ? '' : ' ⚠️ Clear-Sky nicht verfügbar — Abregelung nicht rekonstruiert.');
+            $('baseline-cards').innerHTML = `
+                <div class="summary-card"><div class="label">Netzbezug Bestand</div><div class="value">${nf0.format(b.import_kwh_year)} kWh/a</div><div class="sub">Autarkie ${nf1.format(b.autarky_pct)} %</div></div>
+                <div class="summary-card"><div class="label">Abgeregelt (geschätzt)</div><div class="value warn">${nf0.format(b.curtailed_kwh_year)} kWh/a</div><div class="sub">ungenutztes Potenzial</div></div>
+                <div class="summary-card"><div class="label">Einspeisung</div><div class="value">${nf0.format(b.export_kwh_year)} kWh/a</div><div class="sub">Nulleinspeiser</div></div>
+                <div class="summary-card"><div class="label">Verbrauch</div><div class="value">${nf0.format(b.load_kwh_year)} kWh/a</div><div class="sub">Haushalt + WP + EV</div></div>`;
+        }
+
+        const fetchDetail = debounce(function () {
+            const nom = parseFloat($('s-batt').value), pv = parseFloat($('s-pv').value);
+            const cur = $('t-curtail').checked ? 1 : 0;
+            fetch(`/api/analyse/speicher/detail?batt=${nom}&add_pv=${pv}&curtail=${cur}`)
+                .then((r) => r.json()).then(drawMonthly).catch(() => {});
+        }, 350);
+
+        const fetchSweep = debounce(function () {
+            const pv = parseFloat($('s-pv').value);
+            const cur = $('t-curtail').checked ? 1 : 0;
+            fetch(`/api/analyse/speicher/sweep?add_pv=${pv}&curtail=${cur}`)
+                .then((r) => r.json()).then((res) => {
+                    if (!res || !res.ok) { $('verdict').innerHTML = '⚠️ ' + ((res && res.error) || 'Keine Daten'); return; }
+                    const first = SWEEP === null;
+                    SWEEP = res;
+                    if (first) {
+                        $('s-batt').max = Math.round(res.tech.max_zubau_batt_kwh);
+                        $('s-pv').max = Math.round(res.tech.max_zubau_pv_kwp);
+                        $('s-price').value = (res.econ_defaults.strompreis_eur_kwh * 100).toFixed(1);
+                        $('s-bcost').value = res.econ_defaults.batt_eur_pro_kwh_nominal;
+                        $('s-wr').value = res.econ_defaults.wr_fix_eur;
+                        $('s-pvcost').value = res.econ_defaults.pv_eur_pro_kwp;
+                        buildPresets();
+                    }
+                    baselineCards();
+                    render();
+                    fetchDetail();
+                }).catch((e) => { $('verdict').innerHTML = '⚠️ Fehler: ' + e; });
+        }, 250);
+
+        function buildPresets() {
+            const wrap = $('presets');
+            wrap.innerHTML = '<span style="color:rgba(255,255,255,0.5);font-size:12px;align-self:center">Angebote:</span>';
+            (SWEEP.presets || []).forEach((p) => {
+                const btn = document.createElement('button');
+                btn.className = 'preset-btn';
+                btn.textContent = `${p.name} — ${eur(p.preis_eur)}`;
+                btn.onclick = () => {
+                    $('s-batt').value = Math.min(p.batt_kwh_nominal, parseFloat($('s-batt').max));
+                    $('s-pv').value = p.pv_kwp || 0;
+                    // Preis auf Angebot mappen: Fix = Angebot − Speicheranteil
+                    const bcost = parseFloat($('s-bcost').value);
+                    $('s-wr').value = Math.max(0, Math.round(p.preis_eur - bcost * p.batt_kwh_nominal));
+                    render(); fetchDetail();
+                };
+                wrap.appendChild(btn);
+            });
+        }
+
+        // ── Init ───────────────────────────────────────────────────
+        window.addEventListener('DOMContentLoaded', function () {
+            if (window.PVNavUI && PVNavUI.initDrawer) {
+                try { PVNavUI.initDrawer({ barSelector: '.top-nav' }); } catch (e) {}
+            }
+            mainChart = echarts.init($('chart-main'));
+            monthlyChart = echarts.init($('chart-monthly'));
+            window.addEventListener('resize', () => { mainChart.resize(); monthlyChart.resize(); });
+
+            // Sliders die nur die Wirtschaft ändern → instant render()
+            ['s-batt', 's-price', 's-bcost', 's-wr', 's-pvcost'].forEach((id) => $(id).addEventListener('input', render));
+            // Batterie-Slider zusätzlich Monatschart nachladen (Release)
+            $('s-batt').addEventListener('change', fetchDetail);
+            $('t-dynamic').addEventListener('change', render);
+            // Physik-ändernde Regler → Refetch /sweep
+            $('s-pv').addEventListener('change', fetchSweep);
+            $('t-curtail').addEventListener('change', fetchSweep);
+
+            fetchSweep();
+        });
+    })();
+    </script>
+</body>
+</html>

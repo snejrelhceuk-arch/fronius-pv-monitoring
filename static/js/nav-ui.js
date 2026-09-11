@@ -38,6 +38,7 @@
         { href: '/analyse/pv', label: 'PV-Übersicht', sub: true },
         { href: '/analyse/haushalt', label: 'Haushalt', sub: true },
         { href: '/analyse/amortisation', label: 'Amortisation', sub: true },
+        { href: '/analyse/speicherausbau', label: '🔋 Speicher-Ausbau', sub: true },
         { href: '/analyse/primaerenergie', label: '🌍 Primärenergie', sub: true, stale: true },
         { sep: true },
         { heading: 'Netzqualität' },

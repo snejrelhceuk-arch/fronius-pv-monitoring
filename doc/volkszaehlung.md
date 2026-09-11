@@ -4,30 +4,30 @@
 
 ## Übersicht
 
-**Gesamtgröße (Textdateien gezählt):** 2696 MB
-**Gesamtzeilen (Code/Doku/Daten):** 335.977 Zeilen
-**Gezählte Dateien:** 533
-**Ausgeschlossene Verzeichnisse:** 27 (.venv, __pycache__, node_modules, .git …)
+**Gesamtgröße (Textdateien gezählt):** 2697 MB
+**Gesamtzeilen (Code/Doku/Daten):** 337.539 Zeilen
+**Gezählte Dateien:** 786
+**Ausgeschlossene Verzeichnisse:** 28 (.venv, __pycache__, node_modules, .git …)
 
 ## Nach Sprache/Typ
 
 | Sprache/Typ | Dateien | Zeilen | Anteil |
 |---|---|---|---|
-| **CSV** | 33 | 220.416 | 65.6% |
-| **Python** | 193 | 59.629 | 17.7% |
-| **Markdown** | 134 | 23.063 | 6.9% |
-| **HTML** | 27 | 15.624 | 4.7% |
+| **CSV** | 33 | 220.450 | 65.3% |
+| **Python** | 196 | 60.229 | 17.8% |
+| **Markdown** | 136 | 23.254 | 6.9% |
+| **HTML** | 28 | 16.057 | 4.8% |
 | **Shell** | 63 | 4.993 | 1.5% |
-| **JSON** | 21 | 4.328 | 1.3% |
+| **JSON** | 268 | 4.631 | 1.4% |
 | **TXT** | 4 | 2.904 | 0.9% |
 | **SQL** | 10 | 1.427 | 0.4% |
 | **CSS** | 5 | 1.288 | 0.4% |
-| **JavaScript** | 5 | 1.111 | 0.3% |
+| **JavaScript** | 5 | 1.112 | 0.3% |
 | **YAML** | 3 | 562 | 0.2% |
 | **systemd** | 31 | 538 | 0.2% |
 | **CONF** | 3 | 70 | 0.0% |
 | **TOML** | 1 | 24 | 0.0% |
-| **Total** | 533 | 335.977 | 100% |
+| **Total** | 786 | 337.539 | 100% |
 
 ## Python-Code nach ABCDEN-Rollen
 
@@ -35,7 +35,7 @@
 |---|---|---|---|
 | **C** Automation | `automation/` | 42 | 14.157 |
 | **A** Collector | `collector/` | 18 | 4.712 |
-| **B** Web-API | `routes/` | 19 | 10.869 |
+| **B** Web-API | `routes/` | 20 | 10.936 |
 | **D** Diagnos | `diagnos/` | 10 | 2.293 |
 | **E** Steuerbox | `steuerbox/` | 5 | 1.235 |
 | **N** Netzqualität | `nq/` | 37 | 9.066 |

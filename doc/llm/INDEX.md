@@ -39,6 +39,7 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 | **system: .role-Guards, Failover, Publish-Audit, Backup-GFS** | [`system-ops-guards.card.md`](./cards/system-ops-guards.card.md) | stable |
 | **system: Hosts/Pi-Topologie, Deployment, rsync-Sync, Dienst→Host-Map** | [`system-hosts.card.md`](./cards/system-hosts.card.md) | stable |
 | **web: Blueprints, FroniusReadOnly, Display-Formatierung** | [`web-display-api.card.md`](./cards/web-display-api.card.md) | stable |
+| **web: Speicherausbau/PV-Zubau, vermeidbarer Netzbezug, Amortisation, Abregelungs-Rekonstruktion** | [`web-analyse-speicherausbau.card.md`](./cards/web-analyse-speicherausbau.card.md) | stable |
 | **web: Flow-Ansicht, SVG-Skalierung, Mobile-Pan, Bubble-Koordinaten** | [`web-flow-view.card.md`](./cards/web-flow-view.card.md) | stable |
 
 ## Cards nach Domäne
@@ -85,6 +86,7 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 
 ### web
 - [`web-display-api.card.md`](./cards/web-display-api.card.md) — Blueprints, Read-only API, Formatierung
+- [`web-analyse-speicherausbau.card.md`](./cards/web-analyse-speicherausbau.card.md) — Speicherausbau-Amortisationsmodell (vermeidbarer Netzbezug, Abregelung, Optimum)
 - [`web-flow-view.card.md`](./cards/web-flow-view.card.md) — Flow-Ansicht: SVG-Rendering, Breakpoints, Mobile-Pan
 
 ## Konventionen
