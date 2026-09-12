@@ -39,6 +39,58 @@ def _resolve_sm_power(cursor, latest_row, field_name, now_ts, row_ts, max_age_s=
     return float(value or 0), row_ts, 'latest'
 
 
+def _resolve_soc_percent(cursor, latest_row, now_ts, row_ts, max_jump_pct=3.0, fallback_window_s=7200):
+    """Resolve SOC [%] robust gegen fehlende/ausreisserhafte Einzelwerte.
+
+    Prioritaet:
+    1) Aktueller Wert aus latest_row (wenn gueltig 0..100)
+    2) Letzter gueltiger Vorwert aus dem Zeitfenster
+
+    Wenn der aktuelle Wert gegenueber dem Vorwert um mehr als max_jump_pct springt,
+    wird der Vorwert genutzt (Ausreisserfilter).
+    """
+
+    def _valid_soc(value):
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            return None
+        if 0.0 <= v <= 100.0:
+            return v
+        return None
+
+    latest_soc = _valid_soc(latest_row.get('SOC_Batt'))
+    min_ts = now_ts - fallback_window_s
+
+    prev_soc = None
+    try:
+        cursor.execute(
+            """
+            SELECT SOC_Batt
+            FROM raw_data
+            WHERE ts < ? AND ts >= ? AND SOC_Batt IS NOT NULL
+            ORDER BY ts DESC
+            LIMIT 1
+            """,
+            (row_ts, min_ts),
+        )
+        prev = cursor.fetchone()
+        if prev:
+            prev_soc = _valid_soc(prev[0])
+    except Exception:
+        prev_soc = None
+
+    if latest_soc is None:
+        if prev_soc is not None:
+            return prev_soc, 'fallback_missing'
+        return 0.0, 'default_zero'
+
+    if prev_soc is not None and abs(latest_soc - prev_soc) > float(max_jump_pct):
+        return prev_soc, 'fallback_jump'
+
+    return latest_soc, 'latest'
+
+
 @bp.route('/api/zoom')
 def api_zoom():
     """Adaptive Auflösung basierend auf Zeitbereich - ALLE Spalten"""
@@ -671,6 +723,7 @@ def api_flow_realtime():
         if c3:
             p_f2_raw, p_f2_ts, p_f2_source = _resolve_sm_power(c3, latest, 'P_F2', now, ts)
             p_f3_raw, p_f3_ts, p_f3_source = _resolve_sm_power(c3, latest, 'P_F3', now, ts)
+            soc_batt, soc_source = _resolve_soc_percent(c3, latest, now, ts)
         else:
             p_f2_raw = float(latest.get('P_F2', 0) or 0)
             p_f3_raw = float(latest.get('P_F3', 0) or 0)
@@ -678,6 +731,12 @@ def api_flow_realtime():
             p_f3_ts = ts
             p_f2_source = 'latest'
             p_f3_source = 'latest'
+            try:
+                _soc_raw = float(latest.get('SOC_Batt', 0) or 0)
+                soc_batt = _soc_raw if 0.0 <= _soc_raw <= 100.0 else 0.0
+            except (TypeError, ValueError):
+                soc_batt = 0.0
+            soc_source = 'latest'
 
         if conn3:
             conn3.close()
@@ -687,7 +746,6 @@ def api_flow_realtime():
         p_netz = latest.get('P_Netz', 0) or 0
         i_batt = latest.get('I_Batt_API', 0) or 0
         u_batt = latest.get('U_Batt_API', 0) or 0
-        soc_batt = latest.get('SOC_Batt', 0) or 0
         chastate_batt = latest.get('ChaSt_Batt', 0)
         p_wp = latest.get('P_WP', 0) or 0
 
@@ -796,6 +854,7 @@ def api_flow_realtime():
             'battery': {
                 'power': p_akku,
                 'soc': soc,
+                'soc_source': soc_source,
                 'soh': battery_soh,
                 'state': chastate_batt,
                 'charging': p_akku > 0,

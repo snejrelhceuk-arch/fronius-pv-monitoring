@@ -1619,13 +1619,17 @@
         const s = (a,b) => Math.round(a*(1-w) + b*w);
         const sf = (a,b) => parseFloat((a*(1-w) + b*w).toFixed(1));
         const sf2 = (a,b) => parseFloat((a*(1-w) + b*w).toFixed(2));
+        const socRaw = Number(n?.battery?.soc);
+        const socStable = Number.isFinite(socRaw)
+            ? Math.max(0, Math.min(100, socRaw))
+            : Math.max(0, Math.min(100, Number(o?.battery?.soc) || 0));
         return {
             timestamp: n.timestamp, age_seconds: n.age_seconds,
             producers: { f1:s(o.producers.f1,n.producers.f1), f2:s(o.producers.f2,n.producers.f2),
                          f3:s(o.producers.f3,n.producers.f3), pv_total:s(o.producers.pv_total,n.producers.pv_total),
                          pv_today_kwh:sf2(o.producers.pv_today_kwh||0,n.producers.pv_today_kwh||0),
                          autarkie_today:sf(o.producers.autarkie_today||0,n.producers.autarkie_today||0) },
-            battery:   { power:s(o.battery.power,n.battery.power), soc:sf(o.battery.soc,n.battery.soc),
+            battery:   { power:s(o.battery.power,n.battery.power), soc:parseFloat(socStable.toFixed(1)),
                          soh:sf(o.battery.soh||100,n.battery.soh||100),
                          state:n.battery.state, charging:n.battery.charging, discharging:n.battery.discharging },
             grid:      { power:s(o.grid.power,n.grid.power), importing:n.grid.importing, exporting:n.grid.exporting,
@@ -1705,7 +1709,7 @@
         document.getElementById('value-battery').textContent = fmt(Math.abs(bp));
 
         // Zeige verbleibende Kapazität in kWh (kein Bezeichner).
-        const socPct = Number(d.battery.soc) || 0;
+        const socPct = Math.max(0, Math.min(100, Number(d.battery.soc) || 0));
         const capEl = document.getElementById('sub-battery-soc');
         // Verwende ausschließlich die konfigurierte Default-Kapazität (PV_BATTERY_KWH).
         const capacity_kwh = Number(DEFAULT_BATTERY_CAPACITY);
