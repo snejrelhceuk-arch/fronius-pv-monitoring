@@ -4,7 +4,7 @@ domain: web
 role: B
 applyTo: "templates/flow_view.html"
 status: stable
-last_review: 2026-08-10
+last_review: 2026-09-12
 ---
 
 # Flow-Ansicht Rendering-Mechanik

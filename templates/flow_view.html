@@ -759,6 +759,10 @@
                         <feGaussianBlur stdDeviation="2.5" result="blur"/>
                         <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
                     </filter>
+                    <!-- ClipPath für Batterie-Füllung (rechteckig, innerhalb Kreis) -->
+                    <clipPath id="battery-clip">
+                        <circle cx="350" cy="322" r="55"></circle>
+                    </clipPath>
                 </defs>
 
                 <!-- ═══ FLOW-LEITUNGEN (Hintergrund) ═══ -->
@@ -914,15 +918,19 @@
                     <text x="350" y="170" text-anchor="middle"
                         fill="#fbbf24" font-size="13" font-weight="700" id="sub-pv-autarkie">0%</text>
 
-                <!-- Batterie -->
-                    <circle cx="350" cy="322" r="55" fill="none"
-                        stroke="#10b981" stroke-width="3" id="node-battery"/>
-                    <text x="350" y="304" text-anchor="middle"
-                      fill="#10b981" font-size="15" font-weight="600">Batterie</text>
-                    <text x="350" y="325" text-anchor="middle"
-                      fill="white" font-size="18" font-weight="700" id="value-battery">0 W</text>
-                    <text x="350" y="342" text-anchor="middle"
-                      fill="#10b981" font-size="13" font-weight="700" id="sub-battery-soc">SOC: 0%</text>
+                                <!-- Batterie -->
+                                        <!-- Rechteck-Füllung, wird per JS in Höhe des SOC skaliert (geclippt auf Kreis) -->
+                                        <rect id="battery-fill" x="295" y="377" width="110" height="0"
+                                                    fill="rgba(16,185,129,0.12)" clip-path="url(#battery-clip)" pointer-events="none" />
+                                        <circle cx="350" cy="322" r="55" fill="none"
+                                                stroke="#10b981" stroke-width="3" id="node-battery"/>
+                                        <text x="350" y="304" text-anchor="middle"
+                                            fill="#10b981" font-size="15" font-weight="600">Batterie</text>
+                                        <text x="350" y="325" text-anchor="middle"
+                                            fill="white" font-size="18" font-weight="700" id="value-battery">0 W</text>
+                                        <!-- Zeigt verbleibende Kapazität (kWh). Kein Label, nur Kapazität. -->
+                                        <text x="350" y="342" text-anchor="middle"
+                                            fill="#10b981" font-size="13" font-weight="700" id="sub-battery-soc">-- kWh</text>
 
                     <!-- Datum + Uhrzeit (mittig zwischen F1- und Netz-Bubble) -->
                     <text x="212" y="105" text-anchor="middle"
@@ -948,7 +956,10 @@
                 <circle cx="350" cy="135" r="58" fill="transparent"
                         class="flow-clickable" id="click-pv"/>
                 <circle cx="500" cy="225" r="58" fill="transparent"
-                        class="flow-clickable" id="click-consumption"/>
+                    class="flow-clickable" id="click-consumption"/>
+                <!-- Klickzone für Batterie: Springt in die Analyse → Batterie -->
+                <circle cx="350" cy="322" r="55" fill="transparent"
+                    class="flow-clickable" id="click-battery"/>
 
                 <!-- ═══ SUB-ERZEUGER (kurze Linien, Fluss immer → PV) ═══ -->
                 <g class="sub-producers">
@@ -1212,6 +1223,11 @@
         window.location.href = '/verbraucher?' + todayParam();
     });
 
+    document.getElementById('click-battery').addEventListener('click', function() {
+        // Springe in die Analyse-Seite 'Batterie' mit heutigem Tag-Kontext
+        window.location.href = '/analyse/batterie?' + todayParam();
+    });
+
     const N = {  // Knoten-Koordinaten + Radien
         netz:       {x:200, y:225, r:58},
         pv:         {x:350, y:135, r:58},
@@ -1363,7 +1379,14 @@
         const vals = { pv: pctPV, netz: pctNetz, battery: pctBatt };
         for (const [key, cfg] of Object.entries(GAUGE_CFG)) {
             const el = document.getElementById(`gauge-val-${key}`);
-            const pct = vals[key];
+            if (!el) continue;
+            // Batterie-Gauge im Kreisform entfernen: stattdessen nutzen wir eine
+            // transparente Rechteck-Füllung innerhalb des Kreises.
+            if (key === 'battery') {
+                el.setAttribute('d', '');
+                continue;
+            }
+            const pct = vals[key] || 0;
             if (pct < 0.005) {
                 el.setAttribute('d', '');
             } else {
@@ -1678,7 +1701,34 @@
 
         const bp = d.battery.power;
         document.getElementById('value-battery').textContent = fmt(Math.abs(bp));
-        document.getElementById('sub-battery-soc').textContent = `SOC: ${String(d.battery.soc).replace('.', ',')}%`;
+
+        // Zeige verbleibende Kapazität in kWh (kein Bezeichner). Fallback: -- kWh
+        const socPct = Number(d.battery.soc) || 0;
+        const capEl = document.getElementById('sub-battery-soc');
+        let capSourceVal = null;
+        if (lastFlowStatusData) {
+            capSourceVal = lastFlowStatusData.bms_est_capacity_kwh ?? lastFlowStatusData.bms_max_capacity_kwh ?? lastFlowStatusData.bms_est_capacity_kwh;
+        }
+        if (capSourceVal != null && Number.isFinite(Number(capSourceVal))) {
+            const remaining = Math.max(0, Number(capSourceVal) * socPct / 100.0);
+            capEl.textContent = `${remaining.toFixed(1).replace('.', ',')} kWh`;
+        } else {
+            capEl.textContent = '-- kWh';
+        }
+
+        // Aktualisiere das Füllrechteck innerhalb der Batterie (hochskaliert nach SOC)
+        const battFill = document.getElementById('battery-fill');
+        if (battFill && typeof N !== 'undefined' && N.battery) {
+            const pct = Math.max(0, Math.min(1, socPct / 100));
+            const h = Math.round(pct * (N.battery.r * 2));
+            const w = N.battery.r * 2;
+            const x = Math.round(N.battery.x - N.battery.r);
+            const y = Math.round(N.battery.y - N.battery.r + (N.battery.r * 2 - h));
+            battFill.setAttribute('x', String(x));
+            battFill.setAttribute('y', String(y));
+            battFill.setAttribute('width', String(w));
+            battFill.setAttribute('height', String(h));
+        }
 
         const gp = d.grid.power;
         document.getElementById('value-netz').textContent = `${fmt(d.grid.importing ? gp : -gp).replace(/ (W|kW)/, '')}/${flowDevicesData.pac?.power !== null && flowDevicesData.pac?.power !== undefined ? fmt(flowDevicesData.pac.power) : '--W'}`;
