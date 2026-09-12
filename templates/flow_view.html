@@ -1707,18 +1707,9 @@
         // Zeige verbleibende Kapazität in kWh (kein Bezeichner).
         const socPct = Number(d.battery.soc) || 0;
         const capEl = document.getElementById('sub-battery-soc');
-        // Priorität: BMS-Estimate (bms_est_capacity_kwh) > bms_max_capacity_kwh > Default aus config
-        let capSourceVal = null;
-        if (lastFlowStatusData) {
-            capSourceVal = lastFlowStatusData.bms_est_capacity_kwh ?? lastFlowStatusData.bms_max_capacity_kwh ?? null;
-        }
-        let capacity_kwh = null;
-        if (capSourceVal != null && Number.isFinite(Number(capSourceVal))) {
-            capacity_kwh = Number(capSourceVal);
-        } else if (typeof DEFAULT_BATTERY_CAPACITY === 'number' && Number.isFinite(DEFAULT_BATTERY_CAPACITY)) {
-            capacity_kwh = Number(DEFAULT_BATTERY_CAPACITY);
-        }
-        if (capacity_kwh != null) {
+        // Verwende ausschließlich die konfigurierte Default-Kapazität (PV_BATTERY_KWH).
+        const capacity_kwh = Number(DEFAULT_BATTERY_CAPACITY);
+        if (Number.isFinite(capacity_kwh)) {
             const remaining = Math.max(0, capacity_kwh * socPct / 100.0);
             capEl.textContent = `${remaining.toFixed(1).replace('.', ',')} kWh`;
         } else {
