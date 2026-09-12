@@ -1119,6 +1119,8 @@
     const API_BASE = {{ api_base_url | tojson }};
     const apiUrl = (path) => API_BASE ? `${API_BASE}${path}` : path;
     const DEFAULT_VIEWBOX = '130 -40 590 460';
+    // Default-Batteriekapazität (kWh) aus config.py (Fallback für UI-Berechnungen)
+    const DEFAULT_BATTERY_CAPACITY = {{ PV_BATTERY_KWH|tojson }};
 
     const flowChartEl = document.querySelector('.flow-chart');
     const overlayToggleEl = document.getElementById('overlayToggle');
@@ -1702,15 +1704,22 @@
         const bp = d.battery.power;
         document.getElementById('value-battery').textContent = fmt(Math.abs(bp));
 
-        // Zeige verbleibende Kapazität in kWh (kein Bezeichner). Fallback: -- kWh
+        // Zeige verbleibende Kapazität in kWh (kein Bezeichner).
         const socPct = Number(d.battery.soc) || 0;
         const capEl = document.getElementById('sub-battery-soc');
+        // Priorität: BMS-Estimate (bms_est_capacity_kwh) > bms_max_capacity_kwh > Default aus config
         let capSourceVal = null;
         if (lastFlowStatusData) {
-            capSourceVal = lastFlowStatusData.bms_est_capacity_kwh ?? lastFlowStatusData.bms_max_capacity_kwh ?? lastFlowStatusData.bms_est_capacity_kwh;
+            capSourceVal = lastFlowStatusData.bms_est_capacity_kwh ?? lastFlowStatusData.bms_max_capacity_kwh ?? null;
         }
+        let capacity_kwh = null;
         if (capSourceVal != null && Number.isFinite(Number(capSourceVal))) {
-            const remaining = Math.max(0, Number(capSourceVal) * socPct / 100.0);
+            capacity_kwh = Number(capSourceVal);
+        } else if (typeof DEFAULT_BATTERY_CAPACITY === 'number' && Number.isFinite(DEFAULT_BATTERY_CAPACITY)) {
+            capacity_kwh = Number(DEFAULT_BATTERY_CAPACITY);
+        }
+        if (capacity_kwh != null) {
+            const remaining = Math.max(0, capacity_kwh * socPct / 100.0);
             capEl.textContent = `${remaining.toFixed(1).replace('.', ',')} kWh`;
         } else {
             capEl.textContent = '-- kWh';

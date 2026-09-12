@@ -398,7 +398,8 @@ def index():
 @bp.route('/flow')
 def flow():
     """Energieflow Echtzeit-Visualisierung"""
-    return render_template('flow_view.html')
+    # Übergibt die konfigurierbare Default-Batteriekapazität an das Template
+    return render_template('flow_view.html', PV_BATTERY_KWH=config.PV_BATTERY_KWH)
 
 
 @bp.route('/monitoring')
