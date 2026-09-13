@@ -260,9 +260,14 @@ INVEST_PV_2024 = 8000            # EUR (Erweiterung 13kWp + Optimierer)
 INVEST_BATT_2026 = 3000          # EUR (2. BYD HVS Tower, parallel)
 INVEST_WP_2021 = 12000           # EUR (Wärmepumpe, Baujahr 2021)
 INVEST_HEIZUNG_2021 = 12000      # EUR (Heizungsinvestition als Nutzenergie-Block, ab 2021)
-INVEST_WALLBOX_2024 = 2000       # EUR (Wallbox/Wallboxen, ab 2024)
-GESAMT_INVEST_PV = INVEST_PV_2021 + INVEST_PV_2024 + INVEST_BATT_2026  # 35.000 EUR
-GESAMT_INVEST_HAUSHALT = GESAMT_INVEST_PV + INVEST_WP_2021  # 47.000 EUR
+INVEST_WALLBOX_2024 = 1000       # EUR (Wallbox Fronius Wattpilot, April 2024)
+INVEST_WALLBOX_2026 = 1000       # EUR (Wallbox Flex, Ersatz, Mai 2026)
+# Aktualisierte Modul-Preise (gekauft): 2×2,56 kWh
+INVEST_BATT_MODULES_2026 = 1600  # EUR (2×2.56 kWh Module — Lieferung Sep 2026)
+
+GESAMT_INVEST_PV = INVEST_PV_2021 + INVEST_PV_2024 + INVEST_BATT_2026 + INVEST_BATT_MODULES_2026  # 36.600 EUR
+# Haushalt-Gesamt umfasst PV-Gesamt + Wärmepumpe + Wallboxen (2024 + 2026)
+GESAMT_INVEST_HAUSHALT = GESAMT_INVEST_PV + INVEST_WP_2021 + INVEST_WALLBOX_2024 + INVEST_WALLBOX_2026
 
 HAUSHALT_BASIS_KWH = 3000        # kWh/Jahr Grundlast (Licht, Komfort, Lüftung)
 

@@ -227,7 +227,7 @@ def _get_nav_context(args):
     return ctx
 
 
-def _build_energy_costs_data(years_data, invest_pv_2021, invest_pv_2024, invest_batt_2026=0, invest_heating_2021=None,
+def _build_energy_costs_data(years_data, invest_pv_2021, invest_pv_2024, invest_batt_2026=0, invest_batt_modules_2026=0, invest_heating_2021=None,
                              invest_wallbox_2024=0, scop=3.7, eta_holz=0.5, bev_100km=15.0, verbrenner_l=6.0,
                              kraftstoff_kwh_l=10.0, wp_basis=None, heizkosten_ersparnis=None, invest_wp_2021=None):
     """Kostensystematik nach Nutzenergie: PV-Preis aus PV-Investition / PV-Erzeugung, zusätzliche Investitionen für Heizung und Mobilität als gewichtete Nutzenergie-Kosten."""
@@ -266,7 +266,7 @@ def _build_energy_costs_data(years_data, invest_pv_2021, invest_pv_2024, invest_
             heating_invest_year = 0
             mobility_invest_year = invest_wallbox_2024
         elif year == 2026:
-            pv_invest_year = invest_batt_2026
+            pv_invest_year = invest_batt_2026 + invest_batt_modules_2026
             heating_invest_year = 0
             mobility_invest_year = 0
         else:
@@ -802,14 +802,17 @@ def analyse():
     verbrenner_l = config.VERBRENNER_L_100KM
     kraftstoff_kwh_l = config.KRAFTSTOFF_KWH_PRO_L
     invest_heating_2021 = getattr(config, 'INVEST_HEIZUNG_2021', invest_wp_2021)
-    invest_wallbox_2024 = getattr(config, 'INVEST_WALLBOX_2024', 2000)
+    invest_wallbox_2024 = getattr(config, 'INVEST_WALLBOX_2024', 1000)
+    invest_wallbox_2026 = getattr(config, 'INVEST_WALLBOX_2026', 0)
     invest_batt_2026 = getattr(config, 'INVEST_BATT_2026', 3000)
+    invest_batt_modules_2026 = getattr(config, 'INVEST_BATT_MODULES_2026', 0)
 
     energy_costs_data = _build_energy_costs_data(
         years_data,
         invest_pv_2021=invest_pv_2021,
         invest_pv_2024=invest_pv_2024,
         invest_batt_2026=invest_batt_2026,
+        invest_batt_modules_2026=invest_batt_modules_2026,
         invest_heating_2021=invest_heating_2021,
         invest_wallbox_2024=invest_wallbox_2024,
         scop=scop,
@@ -906,11 +909,15 @@ def analyse():
 
     try:
         return render_template(template,
-                             invest_pv_2021=invest_pv_2021,
-                             invest_pv_2024=invest_pv_2024,
-                             invest_wp_2021=invest_wp_2021,
-                             gesamt_invest_pv=gesamt_invest_pv,
-                             gesamt_invest_haushalt=gesamt_invest_haushalt,
+                 invest_pv_2021=invest_pv_2021,
+                 invest_pv_2024=invest_pv_2024,
+                 invest_wp_2021=invest_wp_2021,
+                 invest_batt_2026=invest_batt_2026,
+                 invest_batt_modules_2026=invest_batt_modules_2026,
+                 invest_wallbox_2024=invest_wallbox_2024,
+                 invest_wallbox_2026=invest_wallbox_2026,
+                 gesamt_invest_pv=gesamt_invest_pv,
+                 gesamt_invest_haushalt=gesamt_invest_haushalt,
                              yearly_data=list(years_data.values()),
                              amort_pv_data=amort_pv_data,
                              amort_haushalt_data=amort_haushalt_data,

@@ -309,8 +309,13 @@
         <!-- Investitionsübersicht (nach den ersten beiden Tabellen) -->
         <div class="header-info">
             <h3>📊 Investitionsübersicht</h3>
-            <p><strong>Jan 2022:</strong> 24.000 € (PV-Anlage + Batterie) + 12.000 € (Wärmepumpe)</p>
-            <p><strong>Jan 2024:</strong> 8.000 € (PV-Erweiterung/Wattpilot)</p>
+            <p><strong>Nov 2021:</strong> {{ "{:,.0f}".format(invest_pv_2021) }} € (PV-Anlage + Batterie) + {{ "{:,.0f}".format(invest_wp_2021) }} € (Wärmepumpe)</p>
+            <p><strong>Apr 2024:</strong> Fronius Wattpilot (erste Wallbox) — {{ "{:,.0f}".format(invest_wallbox_2024) }} €</p>
+            <p><strong>Okt 2025:</strong> PV-Zubau (36×0,45 kWp) — Kosten in der Investliste</p>
+            <p><strong>Mai 2026:</strong> Wattpilot Flex (Ersatz) — {{ "{:,.0f}".format(invest_wallbox_2026) }} €</p>
+            <p><strong>2026:</strong> Zweite BYD 10,2 kWh — {{ "{:,.0f}".format(invest_batt_2026) }} €</p>
+            <p><strong>Sep 2026:</strong> 2×2,56 kWh Module (Aufstockung auf je 12,8 kWh) — {{ "{:,.0f}".format(invest_batt_modules_2026) }} € (Lieferung Ende Sep)</p>
+            <br>
             <p><strong>PV-Gesamt:</strong> {{ "{:,.0f}".format(gesamt_invest_pv) }} €</p>
             <p><strong>Haushalt-Gesamt:</strong> {{ "{:,.0f}".format(gesamt_invest_haushalt) }} €</p>
             <br>

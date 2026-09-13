@@ -321,11 +321,14 @@ Ratio: 0,27 kWh Batterie pro kWp PV (extrem niedrig)
 
 ### ROI-Überlegungen
 
-**Investition (geschätzt):**
-- Phase 1 (2021): ~20.000 € (21,4 kWp + Gen24 + Batterie)
-- Phase 2 (2025): ~15.000 € (16,2 kWp + Gen24 + Symo)
-- Batterie 2 (2026): ~3.000 € (2. BYD HVS Tower)
-- **Gesamt: ~38.000 €**
+**Investition (geschätzt / historisch gebucht):**
+- Nov 2021: 24.000 € (ursprünglich gebucht: PV-Anlage + Batterie)
+- 2024 (Erweiterung): 8.000 € (PV-Zubau / erste Wallbox Fronius Wattpilot)
+- Okt 2025: PV-Zubau 36×0,45 kWp (Kosten bereits in der Investliste erfasst)
+- 2026: Zweite BYD HVS (10,24 kWh) – 3.000 €
+- Mai 2026: Ersatz-Wallbox (Wattpilot Flex) – 1.000 €
+- Sep 2026: 2×2,56 kWh Module (Aufstockung auf je 12,8 kWh) – 1.600 € (Lieferung Ende Sep)
+- **Gesamt (bisher erfasst): ca. 35.000 € (PV inkl. Batterie-Erweiterung) + Wallboxen/Module separat**
 
 **Amortisation:**
 - Bei 5.000 €/Jahr Ersparnis: **7,6 Jahre**
