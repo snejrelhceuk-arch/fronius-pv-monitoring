@@ -396,6 +396,15 @@
             }
         }
 
+        function applyViewFromUrl(params) {
+            const requestedView = params.get('view');
+            if (requestedView === 'ertrag' || requestedView === 'verbrauch') {
+                currentView = requestedView;
+                return true;
+            }
+            return false;
+        }
+
         function applyStateFromUrl() {
             const navState = PVNavContext.parse(window.location.search);
             if (!navState.hasContext) {
@@ -452,6 +461,9 @@
             }
 
             applyEmbedMode();
+            if (!isEmbedMode) {
+                applyViewFromUrl(params);
+            }
 
             // Buttons entsprechend State setzen
             document.getElementById('btnErtrag').classList.toggle('view-active', currentView === 'ertrag');

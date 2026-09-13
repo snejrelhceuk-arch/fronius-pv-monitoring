@@ -803,6 +803,8 @@
                       fill="white" font-size="16" font-weight="700" id="value-netz">0 W</text>
                 <text x="200" y="250" text-anchor="middle"
                       fill="#ef4444" font-size="13" font-weight="700" id="sub-netz">0 kWh</text>
+                    <text x="200" y="266" text-anchor="middle"
+                        fill="#ef4444" font-size="13" font-weight="700" id="sub-netz-share">--%</text>
 
                     <!-- PV Prognose-Icon (rechts oben vom PV-Kreis, mit Abstand zur PV-Gesamt-Bubble) -->
                     <g id="pv-forecast-icon" transform="translate(457 105)" style="pointer-events:none;">
@@ -931,6 +933,8 @@
                                         <!-- Zeigt verbleibende Kapazität (kWh). Kein Label, nur Kapazität. -->
                                         <text x="350" y="342" text-anchor="middle"
                                             fill="#10b981" font-size="13" font-weight="700" id="sub-battery-soc">-- kWh</text>
+                                        <text x="350" y="356" text-anchor="middle"
+                                            fill="#10b981" font-size="13" font-weight="700" id="sub-battery-pct">--%</text>
 
                     <!-- Datum + Uhrzeit (mittig zwischen F1- und Netz-Bubble) -->
                     <text x="212" y="105" text-anchor="middle"
@@ -953,6 +957,8 @@
                       fill="#60a5fa" font-size="13" font-weight="700" id="sub-consumption">0 kWh</text>
 
                 <!-- ═══ KLICKBARE OVERLAY-KREISE (Navigation) ═══ -->
+                <circle cx="200" cy="225" r="58" fill="transparent"
+                    class="flow-clickable" id="click-netz"/>
                 <circle cx="350" cy="135" r="58" fill="transparent"
                         class="flow-clickable" id="click-pv"/>
                 <circle cx="500" cy="225" r="58" fill="transparent"
@@ -1216,6 +1222,11 @@
     }
 
     document.getElementById('monitorOverlayLink').href = '/monitoring?' + todayParam();
+
+    document.getElementById('click-netz').addEventListener('click', function() {
+        // Monitoring soll hier direkt auf Verbrauch öffnen (nicht Erzeugung).
+        window.location.href = '/monitoring?' + todayParam() + '&view=verbrauch';
+    });
 
     document.getElementById('click-pv').addEventListener('click', function() {
         window.location.href = '/erzeuger?' + todayParam();
@@ -1711,6 +1722,7 @@
         // Zeige verbleibende Kapazität in kWh (kein Bezeichner).
         const socPct = Math.max(0, Math.min(100, Number(d.battery.soc) || 0));
         const capEl = document.getElementById('sub-battery-soc');
+        const socEl = document.getElementById('sub-battery-pct');
         // Verwende ausschließlich die konfigurierte Default-Kapazität (PV_BATTERY_KWH).
         const capacity_kwh = Number(DEFAULT_BATTERY_CAPACITY);
         if (Number.isFinite(capacity_kwh)) {
@@ -1718,6 +1730,9 @@
             capEl.textContent = `${remaining.toFixed(1).replace('.', ',')} kWh`;
         } else {
             capEl.textContent = '-- kWh';
+        }
+        if (socEl) {
+            socEl.textContent = `${socPct.toFixed(1).replace('.', ',')}%`;
         }
 
         // Aktualisiere das Füllrechteck innerhalb der Batterie (hochskaliert nach SOC)
@@ -1737,6 +1752,17 @@
         const gp = d.grid.power;
         document.getElementById('value-netz').textContent = `${fmt(d.grid.importing ? gp : -gp).replace(/ (W|kW)/, '')}/${flowDevicesData.pac?.power !== null && flowDevicesData.pac?.power !== undefined ? fmt(flowDevicesData.pac.power) : '--W'}`;
         document.getElementById('sub-netz').textContent = `${String(d.grid.import_today_kwh).replace('.', ',')} kWh`;
+        const netzShareEl = document.getElementById('sub-netz-share');
+        if (netzShareEl) {
+            const consumptionToday = Number(d.consumption.total_today_kwh);
+            const importToday = Number(d.grid.import_today_kwh);
+            if (Number.isFinite(consumptionToday) && consumptionToday > 0 && Number.isFinite(importToday)) {
+                const gridSharePct = Math.max(0, Math.min(100, (importToday / consumptionToday) * 100.0));
+                netzShareEl.textContent = `${gridSharePct.toFixed(1).replace('.', ',')}%`;
+            } else {
+                netzShareEl.textContent = '--%';
+            }
+        }
 
         document.getElementById('value-consumption').textContent = fmt(Math.max(0, d.consumption.total));
         document.getElementById('sub-consumption').textContent = `${String(d.consumption.total_today_kwh).replace('.', ',')} kWh`;
