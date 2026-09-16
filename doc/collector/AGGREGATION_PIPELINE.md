@@ -70,6 +70,9 @@ Alle Aggregationen laufen 4× pro Stunde, gestaffelt für korrekte Daten-Kette:
 
 **Staffelung**: Jede Stufe wartet 2–4 Minuten nach der Vorgängerstufe, damit die Quelldaten vollständig vorliegen.
 
+Der Statistik-Lauf schreibt zusätzlich `battery_health_daily` (SOH-Historie +
+intervallbezogene Vollzyklen; `collector/aggregate/battery_health.py`).
+
 ## 4. Retention-Policies (config.py)
 
 ```python

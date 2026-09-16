@@ -82,6 +82,15 @@ PV_INVERTER_KW = 26.5       # F1=12kW + F2=10kW + F3=4.5kW
 PV_BATTERY_KWH = 20.48      # BYD HVS parallel (2x usable)
 PV_NULLEINSPEISUNG = True    # Nulleinspeiser
 
+# Batterie-Kapazitäts-Ausbaustufen (Nominal-kWh) für die Vollzyklen-Berechnung.
+# Grenzen als (Jahr, Monat) inklusive; der Monat gilt voll mit der jeweiligen Kapazität.
+# 10.24 = 1× BYD HVS-Turm, 20.48 = 2× (parallel), 25.6 = +5.12 kWh Modulausbau.
+BATTERY_CAPACITY_BASE_KWH = 10.24
+BATTERY_CAPACITY_PHASES = [
+    ((2026, 3), 20.48),    # ab März 2026: Verdopplung auf 20.48 kWh
+    ((2026, 10), 25.6),    # ab Oktober 2026: Modulausbau auf 25.6 kWh
+]
+
 # --- Netzwerk ---
 INVERTER_IP = load_local_setting('PV_INVERTER_IP', '192.0.2.122')
 MODBUS_PORT = 502
@@ -307,11 +316,14 @@ VERBRENNER_L_100KM = 6.0         # Verbrenner-Referenz (l/100 km)
 KRAFTSTOFF_KWH_PRO_L = 10.0      # Energiegehalt Kraftstoff (kWh/l)
 
 # --- Primärenergie-Übersicht (manuell gepflegte statische Seite) ---
-# Es gibt keine stabile, frei automatisierbare Quartalsquelle für die
-# Primärenergie-Importdaten → Seite wird manuell gepflegt. Datenstand setzen
-# und Verfallstimer: nach STALE_MONTHS erscheint ein Aktualitäts-Hinweis.
-PRIMAERENERGIE_STAND = '2026-06-20'   # Datum der letzten manuellen Pflege (YYYY-MM-DD)
-PRIMAERENERGIE_STALE_MONTHS = 3       # Hinweis nach 3 Monaten (Quartal)
+# AGEB veröffentlicht Primärenergie-Daten quartalsweise als XLSX (Q1 ~Mai,
+# Halbjahr ~Aug, Q1–Q3 ~Nov, Jahr ~Dez). Die Seite ist aber eine Synthese aus
+# AGEB (Mengen) + Destatis/BAFA (Importwerte) + BDEW (Preise) + IEA (Projektion)
+# — keine Einzelquelle deckt das automatisierbar ab → bewusst manuell gepflegt.
+# Der Verfallstimer (STALE_MONTHS ≈ AGEB-Quartalstakt) blendet nach Ablauf einen
+# Aktualitäts-Hinweis am Menüpunkt ein und stößt die nächste manuelle Pflege an.
+PRIMAERENERGIE_STAND = '2026-09-16'   # Datum der letzten manuellen Pflege/Prüfung (YYYY-MM-DD)
+PRIMAERENERGIE_STALE_MONTHS = 3       # Hinweis nach 3 Monaten (AGEB-Quartalstakt)
 
 # --- E-Mail-Benachrichtigungen ---
 # Einmalige Meldung bei kritischen Events (Deduplizierung: 1× pro Event-Typ pro Tag)
@@ -376,3 +388,16 @@ def get_grundpreis(year, month):
         total += price
     
     return round(total / days_in_month, 2)
+
+
+def battery_capacity_kwh_for(year, month):
+    """Nominelle Batteriekapazität (kWh) für einen Kalendermonat gemäß Ausbaustufen.
+
+    Basis der intervallbezogenen Vollzyklen-Berechnung (Σ Ladung / Kapazität).
+    Der Monat gilt jeweils voll mit der zum Monatsersten gültigen Ausbaustufe.
+    """
+    cap = BATTERY_CAPACITY_BASE_KWH
+    for (y, m), c in BATTERY_CAPACITY_PHASES:
+        if (year, month) >= (y, m):
+            cap = c
+    return cap

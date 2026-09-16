@@ -22,6 +22,14 @@
             justify-content: space-between;
             margin-bottom: 30px;
         }
+        /* Gruppen-Kopf "Batterie" über Ladung/Entladung/Vollzyklen/η (kleine Schrift) */
+        .batt-group {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            opacity: 0.7;
+        }
     </style>
 </head>
 <body>
@@ -62,17 +70,21 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Jahr</th>
-                        <th>Solar-Erzeugung</th>
-                        <th>Spez. Ertrag</th>
-                        <th>Direktverbrauch</th>
-                        <th>Batt.-Ladung</th>
-                        <th>Batt.-Entladung</th>
-                        <th>Batt.-Wirkungsgrad</th>
-                        <th>Einspeisung</th>
-                        <th>Netzbezug</th>
-                        <th>Autarkie</th>
-                        <th>☀ Sonnenstd.</th>
+                        <th rowspan="2">Jahr</th>
+                        <th rowspan="2">Erzeugung</th>
+                        <th rowspan="2">spezif. Ertrag</th>
+                        <th rowspan="2">direkt</th>
+                        <th colspan="4" class="batt-group">Batterie</th>
+                        <th rowspan="2">Einspeisung</th>
+                        <th rowspan="2">Netzbezug</th>
+                        <th rowspan="2">Autarkie</th>
+                        <th rowspan="2">☀ Sonnenstd.</th>
+                    </tr>
+                    <tr>
+                        <th>Ladung</th>
+                        <th>Entladung</th>
+                        <th>Vollzyklen</th>
+                        <th>η</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -84,6 +96,7 @@
                         <td><strong>{{ "{:,.0f}".format(year.direkt).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
                         <td><strong>{{ "{:,.0f}".format(year.batt_lad).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
                         <td><strong>{{ "{:,.0f}".format(year.batt_entl).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
+                        <td><strong>{{ "{:,.0f}".format(year.vollzyklen).replace(",", "X").replace(".", ",").replace("X", ".") }}</strong></td>
                         <td><strong>{{ "%.1f"|format(year.batt_wirkungsgrad)|replace(".", ",") }}%</strong></td>
                         <td><strong>{{ "{:,.0f}".format(year.netz_einsp).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
                         <td><strong>{{ "{:,.0f}".format(year.netz_bezug).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
@@ -100,6 +113,7 @@
                         <td>{{ "{:,.0f}".format(totals.direkt).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>
                         <td>{{ "{:,.0f}".format(totals.batt_lad).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>
                         <td>{{ "{:,.0f}".format(totals.batt_entl).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>
+                        <td>{{ "{:,.0f}".format(totals.vollzyklen).replace(",", "X").replace(".", ",").replace("X", ".") }}</td>
                         <td>{{ "%.1f"|format(totals.batt_wirkungsgrad)|replace(".", ",") }}%</td>
                         <td>{{ "{:,.0f}".format(totals.netz_einsp).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>
                         <td>{{ "{:,.0f}".format(totals.netz_bezug).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>

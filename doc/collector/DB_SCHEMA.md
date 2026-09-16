@@ -90,6 +90,14 @@ Persistiert Tages-Prognosen und Clear-Sky für historischen Vergleich im Tag-Cha
 Absolute Zählerstände zu definierten Zeitpunkten (Stunde, Tag, Monat, Jahr).
 Ermöglicht exakte Delta-Berechnung auch über Lücken hinweg.
 
+### battery_health_daily
+SOH-Historie + intervallbezogene Vollzyklen im Tagesintervall
+(`day_ts` PK, `soh_pct`, `capacity_kwh`, `charge_kwh`, `discharge_kwh`,
+`full_cycles`, `updated_ts`). Befüllt von `collector/aggregate/battery_health.py`
+im Statistik-Cron-Takt: SOH best-effort live vom BMS (nur laufender Tag, die
+Vergangenheit bleibt erhalten), Vollzyklen = Tagesladung / Nominal-Kapazität der
+Ausbaustufe (`config.battery_capacity_kwh_for`).
+
 ## Datenquellen je Tabelle
 
 | Tabelle | Schreiber | Leser |
@@ -103,6 +111,7 @@ Ermöglicht exakte Delta-Berechnung auch über Lücken hinweg.
 | `monthly_statistics` | aggregate_statistics.py | web_api.py (Analyse) |
 | `automation_log` | actuator.py (Engine) | web_api.py (Dashboard) |
 | `wattpilot_readings` | wattpilot_collector.py | web_api.py |
+| `battery_health_daily` | collector.aggregate.battery_health | web_api.py (Batterie-Analyse) |
 
 > **Unverletzlichkeit des Produktionsprozesses:** Neue Spalten sollten nur dann eingeführt werden, wenn sie in der Produktionspipeline klar definiert, schema-versioniert und in allen Produzenten/Readern konsistent behandelt werden. Für SOC- oder andere Betriebsdaten bedeutet das: erst Schema-Änderung, dann Backfill/Schreibpfade, dann Read-Path, danach Monitoring. So bleiben Aggregation, Retention und Reproduzierbarkeit unverändert.
 

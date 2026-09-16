@@ -5,7 +5,7 @@ role: A
 applyTo: "collector/aggregate/**"
 tags: [aggregation, pipeline, cron, retention]
 status: stable
-last_review: 2026-08-10
+last_review: 2026-09-16
 ---
 
 # Aggregation-Pipeline
@@ -20,6 +20,7 @@ Alle Aggregate liegen seit Refactor 2026-05-16 im Paket `collector/aggregate/` u
 - **Daily:** `collector/aggregate/daily.py`
 - **Monthly (technisch):** `collector/aggregate/monthly.py`
 - **Statistik (kWh+Kosten):** `collector/aggregate/statistics.py`
+- **Batterie-Gesundheit (SOH + Vollzyklen):** `collector/aggregate/battery_health.py` (aus `statistics.py`-`__main__` mitgerufen; schreibt `battery_health_daily`)
 - **Korrekturen:** `statistics_corrections.py` + `config/statistics_corrections.json`
 
 ## Pipeline-Reihenfolge

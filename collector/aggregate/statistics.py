@@ -429,4 +429,10 @@ if __name__ == "__main__":
     logging.info("=== Statistik-Aggregation ===")
     update_monthly_statistics()
     update_yearly_statistics()
+    # Batterie-Gesundheit (SOH-Historie + Vollzyklen) im selben Cron-Takt fortschreiben.
+    try:
+        from collector.aggregate.battery_health import update_battery_health_daily
+        update_battery_health_daily()
+    except Exception as e:
+        logging.error(f"battery_health_daily übersprungen: {e}")
     logging.info("=== Statistik-Aggregation abgeschlossen ===")

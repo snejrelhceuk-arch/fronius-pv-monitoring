@@ -5,7 +5,7 @@ role: A
 applyTo: "db_init.py"
 tags: [db, schema, raw-data, aggregat]
 status: stable
-last_review: 2026-08-18
+last_review: 2026-09-16
 ---
 
 # DB-Schema
@@ -45,6 +45,9 @@ Schema-Übersicht der zentralen `data.db` (SQLite). Pflichttabellen, Aggregat-Pi
 
 **Automation:**
 - `automation_log` — Aktor-Resultate (geschrieben durch `automation/engine/actuator.py`).
+
+**Batterie-Gesundheit:**
+- `battery_health_daily` — `day_ts` PK, `soh_pct`, `capacity_kwh`, `charge_kwh`, `discharge_kwh`, `full_cycles`, `updated_ts`. SOH-Historie (best-effort BMS-Live, träge fortgeschrieben) + intervallbezogene Vollzyklen (Σ Tagesladung / Nominal-Kapazität der Ausbaustufe). Producer `collector/aggregate/battery_health.py` (im Statistik-Cron-Takt).
 
 **Stats-DB (`data_stats.db`, separat, permanent):**
 - `data_5min_permanent` — 5-min-Downsample (Schema = `data_1min`), hält Tag-Chart-Daten **dauerhaft** (RAM-DB bleibt 90 T). Web hängt sie read-only an (ATTACH `stats` in `db_utils.py`, `config.STATS_DB_PATH`); Tag-Endpunkte via `routes/helpers.py:tag_table`. Eigene DB, **kein** `db_init.py`-Pflichteintrag. Der Tag-Endpunkt `routes/visualization.py` selektiert dabei die vollen `data_1min`-Spalten (nur `data_15min` → NULL), damit Tage > 90 T die kompletten Kurven zeigen (nicht nur SOC/Batterie).

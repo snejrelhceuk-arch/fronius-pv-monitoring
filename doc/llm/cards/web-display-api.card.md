@@ -5,7 +5,7 @@ role: B
 applyTo: "routes/**"
 tags: [web-api, blueprints, templates, formatting, read-only]
 status: stable
-last_review: 2026-09-13
+last_review: 2026-09-16
 ---
 
 # Web Display/API
@@ -50,6 +50,7 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 - Lokaler Smoke-Test von Web-Routen -> immer `http://127.0.0.1:8000/...` verwenden (Produktionsport), nicht `:5000`.
 
 ## Bekannte Fallstricke
+- **Batterie-Vollzyklen (`/api/verbraucher/batterie`):** `summary.full_cycles` = intervallbezogen Σ Ladung / Nominal-Kapazität (`config.battery_capacity_kwh_for`, Ausbaustufen 10.24/20.48/25.6 kWh). Tag aus `daily_data`, Monat/Jahr/Gesamt aus `monthly_statistics` — deckungsgleich mit der PV-Übersicht (`routes/pages.py`, Spalte „Vollzyklen“). SOH-Historie + Tages-Vollzyklen persistiert `battery_health_daily` (Rolle A, `collector/aggregate/battery_health.py`). Der Batterie-View (`templates/batterie_view.html`) nutzt dasselbe `monitoring.css`-Gerüst wie Erzeuger/Verbraucher.
 - **Tag-Chart-Spaltenwahl:** `routes/visualization.py:_build_tag_query` unterscheidet nur `data_15min` (Detailspalten fehlen → NULL) von `data_1min`/`stats.data_5min_permanent` (volles data_1min-Schema). Für Tage älter als die 90-T-Retention liefert die permanente 5-min-Tabelle so die vollständigen Leistungs-/Verbrauchskurven, nicht nur SOC/Batterie.
 - Display-Formatter sind template-lokal; parallele Formatter in anderen Views koennen driften.
 - **Template-/Static-Deploy:** Unter Gunicorn (Prod) cached Jinja kompilierte Templates; `templates/*.html`-Änderungen werden erst nach Reload des Web-Workers wirksam (`sudo kill -HUP $(cat /tmp/pv_web.pid)` bzw. Restart `pv-web.service`). `static/*` (JS/CSS) liefert dagegen mit `Cache-Control: no-cache` + ETag frisch aus.

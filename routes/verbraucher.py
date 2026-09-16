@@ -354,6 +354,50 @@ def _period_efficiency_pct(cursor, start_ts, end_ts, table):
     return round(discharge / charge * 100.0, 1)
 
 
+def _period_full_cycles(cursor, period, start_ts, end_ts, year=None, month=None):
+    """Intervallbezogene Vollzyklen = Σ (Ladung / Nominal-Kapazität der Ausbaustufe).
+
+    Monat/Jahr/Gesamt aus monthly_statistics (batt_ladung_kwh, eichgenaue
+    Counter-Basis — konsistent zur PV-Übersicht). Tag aus daily_data
+    (W_Batt_Charge_total, nur dort tagesgenau). Kapazitäts-Ausbaustufen
+    (10.24 → 20.48 → 25.6 kWh) via config.battery_capacity_kwh_for.
+    """
+    total = 0.0
+    have = False
+    try:
+        if period == 'tag':
+            rows = cursor.execute(
+                "SELECT ts, W_Batt_Charge_total FROM daily_data WHERE ts >= ? AND ts < ?",
+                (start_ts, end_ts),
+            ).fetchall()
+            for ts, charge_wh in rows:
+                if not charge_wh:
+                    continue
+                d = datetime.fromtimestamp(ts)
+                cap = config.battery_capacity_kwh_for(d.year, d.month)
+                if cap > 0:
+                    total += (charge_wh / 1000.0) / cap
+                    have = True
+        else:
+            if period == 'monat':
+                q = "SELECT year, month, batt_ladung_kwh FROM monthly_statistics WHERE year = ? AND month = ?"
+                params = (year, month)
+            elif period == 'jahr':
+                q = "SELECT year, month, batt_ladung_kwh FROM monthly_statistics WHERE year = ?"
+                params = (year,)
+            else:  # gesamt
+                q = "SELECT year, month, batt_ladung_kwh FROM monthly_statistics"
+                params = ()
+            for y, m, charge_kwh in cursor.execute(q, params):
+                cap = config.battery_capacity_kwh_for(y, m)
+                if cap > 0 and charge_kwh:
+                    total += charge_kwh / cap
+                    have = True
+    except Exception:
+        return None
+    return round(total, 2) if have else None
+
+
 def _aggregate_soc_buckets(points, key_fn, interval_s=None):
     """Aggregiert SOC-Punkte je Bucket (key_fn(ts)) zu Max/Min + Stress-Dauer."""
     if interval_s is None:
@@ -573,6 +617,7 @@ def api_verbraucher_batterie():
         cursor = conn.cursor()
         points, table = _fetch_soc_points(cursor, start_ts, end_ts)
         efficiency_pct = _period_efficiency_pct(cursor, start_ts, end_ts, table)
+        full_cycles = _period_full_cycles(cursor, period, start_ts, end_ts, year, month)
         conn.close()
 
         thresholds = {'high': SOC_STRESS_HIGH_PCT, 'low': SOC_STRESS_LOW_PCT}
@@ -581,6 +626,7 @@ def api_verbraucher_batterie():
         if period == 'tag':
             summary = _summarize_soc_points(points)
             summary['efficiency_pct'] = efficiency_pct
+            summary['full_cycles'] = full_cycles
             tag_points = _downsample_soc_points(points, bucket_s=300)
             return jsonify({
                 'period': period,
@@ -648,6 +694,7 @@ def api_verbraucher_batterie():
             'high_stress_pct': round(high_stress_minutes / available_minutes * 100.0, 1) if available_minutes else 0.0,
             'low_stress_pct': round(low_stress_minutes / available_minutes * 100.0, 1) if available_minutes else 0.0,
             'efficiency_pct': efficiency_pct,
+            'full_cycles': full_cycles,
         }
 
         response = {

@@ -663,6 +663,22 @@ def ensure_forecast_table():
             ON heizpatrone_monthly(year, month)
         """)
         
+        # Batterie-Gesundheit (Tagesintervall): SOH-Historie + intervallbezogene
+        # Vollzyklen (Σ Tagesladung / Nominal-Kapazität der jeweiligen Ausbaustufe).
+        # SOH wird nur best-effort live vom BMS erfasst und träge fortgeschrieben;
+        # full_cycles ist aus daily_data deterministisch rekonstruierbar.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS battery_health_daily (
+                day_ts INTEGER PRIMARY KEY,
+                soh_pct REAL,
+                capacity_kwh REAL,
+                charge_kwh REAL,
+                discharge_kwh REAL,
+                full_cycles REAL,
+                updated_ts INTEGER DEFAULT (strftime('%s','now'))
+            )
+        """)
+        
         # Fritz!DECT Echtzeitdaten (10s Polling): HP + Klimaanlage
         conn.execute("""
             CREATE TABLE IF NOT EXISTS fritzdect_readings (

@@ -567,6 +567,7 @@ def analyse():
                 'heizpatrone_el': 0,  # gemessene Heizpatrone (heizpatrone_kwh)
                 'batt_entl': 0,
                 'batt_lad': 0,
+                'vollzyklen': 0,  # Σ Monatsladung / Nominal-Kapazität der Ausbaustufe
                 'netz_bezug': 0,
                 'netz_einsp': 0,
                 'gesamt_verbr': 0,
@@ -585,6 +586,10 @@ def analyse():
         years_data[year]['heizpatrone_el'] += heizpatrone_el
         years_data[year]['batt_entl'] += batt_entl
         years_data[year]['batt_lad'] += batt_lad
+        # Intervallbezogene Vollzyklen: Monatsladung / zur Ausbaustufe gültige Kapazität.
+        _batt_cap = config.battery_capacity_kwh_for(year, month)
+        if _batt_cap > 0:
+            years_data[year]['vollzyklen'] += batt_lad / _batt_cap
         years_data[year]['netz_bezug'] += netz_bezug
         years_data[year]['netz_einsp'] += netz_einsp
         years_data[year]['gesamt_verbr'] += gesamt_verbr
@@ -832,6 +837,7 @@ def analyse():
         'direkt': sum(d['direkt'] for d in years_data.values()),
         'batt_lad': sum(d['batt_lad'] for d in years_data.values()),
         'batt_entl': sum(d['batt_entl'] for d in years_data.values()),
+        'vollzyklen': sum(d['vollzyklen'] for d in years_data.values()),
         'netz_einsp': sum(d['netz_einsp'] for d in years_data.values()),
         'netz_bezug': sum(d['netz_bezug'] for d in years_data.values()),
         'gesamt_verbr': sum(d['gesamt_verbr'] for d in years_data.values()),
