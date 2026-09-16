@@ -22,13 +22,36 @@
             justify-content: space-between;
             margin-bottom: 30px;
         }
+        .pv-kpis-table thead th {
+            text-align: center;
+            vertical-align: middle;
+        }
+        .pv-kpis-table thead th:first-child {
+            text-align: center;
+        }
         /* Gruppen-Kopf "Batterie" über Ladung/Entladung/Vollzyklen/η (kleine Schrift) */
         .batt-group {
             font-size: 11px;
-            font-weight: 600;
+            font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.6px;
-            opacity: 0.7;
+            opacity: 1;
+            color: #4ade80;
+            text-align: left !important;
+            padding-left: 14px;
+            box-shadow: inset 1px 0 0 rgba(74,222,128,0.55), inset -1px 0 0 rgba(74,222,128,0.55);
+        }
+        .pv-kpis-table th.batt-col,
+        .pv-kpis-table td.batt-col {
+            box-shadow: inset 1px 0 0 rgba(74,222,128,0.28);
+        }
+        .pv-kpis-table th.batt-start,
+        .pv-kpis-table td.batt-start {
+            box-shadow: inset 1px 0 0 rgba(74,222,128,0.55);
+        }
+        .pv-kpis-table th.batt-end,
+        .pv-kpis-table td.batt-end {
+            box-shadow: inset 1px 0 0 rgba(74,222,128,0.28), inset -1px 0 0 rgba(74,222,128,0.55);
         }
     </style>
 </head>
@@ -67,7 +90,7 @@
 
         <div class="section">
             <div class="section-title">Jährliche PV-Kennzahlen</div>
-            <table>
+            <table class="pv-kpis-table">
                 <thead>
                     <tr>
                         <th rowspan="2">Jahr</th>
@@ -81,10 +104,10 @@
                         <th rowspan="2">☀ Sonnenstd.</th>
                     </tr>
                     <tr>
-                        <th>Ladung</th>
-                        <th>Entladung</th>
-                        <th>Vollzyklen</th>
-                        <th>η</th>
+                        <th class="batt-col batt-start">Ladung</th>
+                        <th class="batt-col">Entladung</th>
+                        <th class="batt-col">Vollzyklen</th>
+                        <th class="batt-col batt-end">η</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -94,10 +117,10 @@
                         <td><strong>{{ "{:,.0f}".format(year.solar).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
                         <td><strong>{{ "{:,.0f}".format(year.spez_ertrag).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh/kWp</strong></td>
                         <td><strong>{{ "{:,.0f}".format(year.direkt).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
-                        <td><strong>{{ "{:,.0f}".format(year.batt_lad).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
-                        <td><strong>{{ "{:,.0f}".format(year.batt_entl).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
-                        <td><strong>{{ "{:,.0f}".format(year.vollzyklen).replace(",", "X").replace(".", ",").replace("X", ".") }}</strong></td>
-                        <td><strong>{{ "%.1f"|format(year.batt_wirkungsgrad)|replace(".", ",") }}%</strong></td>
+                        <td class="batt-col batt-start"><strong>{{ "{:,.0f}".format(year.batt_lad).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
+                        <td class="batt-col"><strong>{{ "{:,.0f}".format(year.batt_entl).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
+                        <td class="batt-col"><strong>{{ "{:,.0f}".format(year.vollzyklen).replace(",", "X").replace(".", ",").replace("X", ".") }}</strong></td>
+                        <td class="batt-col batt-end"><strong>{{ "%.1f"|format(year.batt_wirkungsgrad)|replace(".", ",") }}%</strong></td>
                         <td><strong>{{ "{:,.0f}".format(year.netz_einsp).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
                         <td><strong>{{ "{:,.0f}".format(year.netz_bezug).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</strong></td>
                         <td><strong>{{ "%.1f"|format(year.autarkie)|replace(".", ",") }}%</strong></td>
@@ -111,10 +134,10 @@
                         <td>{{ "{:,.0f}".format(totals.solar).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>
                         <td>{{ "{:,.0f}".format(totals.spez_ertrag).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh/kWp</td>
                         <td>{{ "{:,.0f}".format(totals.direkt).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>
-                        <td>{{ "{:,.0f}".format(totals.batt_lad).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>
-                        <td>{{ "{:,.0f}".format(totals.batt_entl).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>
-                        <td>{{ "{:,.0f}".format(totals.vollzyklen).replace(",", "X").replace(".", ",").replace("X", ".") }}</td>
-                        <td>{{ "%.1f"|format(totals.batt_wirkungsgrad)|replace(".", ",") }}%</td>
+                        <td class="batt-col batt-start">{{ "{:,.0f}".format(totals.batt_lad).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>
+                        <td class="batt-col">{{ "{:,.0f}".format(totals.batt_entl).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>
+                        <td class="batt-col">{{ "{:,.0f}".format(totals.vollzyklen).replace(",", "X").replace(".", ",").replace("X", ".") }}</td>
+                        <td class="batt-col batt-end">{{ "%.1f"|format(totals.batt_wirkungsgrad)|replace(".", ",") }}%</td>
                         <td>{{ "{:,.0f}".format(totals.netz_einsp).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>
                         <td>{{ "{:,.0f}".format(totals.netz_bezug).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh</td>
                         <td>{{ "%.1f"|format(totals.autarkie)|replace(".", ",") }}%</td>
