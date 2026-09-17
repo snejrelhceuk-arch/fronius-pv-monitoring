@@ -241,7 +241,8 @@ def poll_once():
 
         # Dauerhafter Nachweis fuer Netzbetreiber: minutliche WP-Leistungsmaxima.
         wp_power = get_val('sec_sm_WP', 'meter_data', 'W')
-        wp.track_wp_power_protocol(poll_end, wp_power)
+        grid_power = get_val('prim_sm', 'meter_data', 'W')
+        wp.track_wp_power_protocol(poll_end, wp_power, grid_power)
 
         with sunspec_cache_lock:
             sunspec_cache['devices'] = devices
@@ -338,6 +339,7 @@ def poller_loop():
     att.load_attachment_state()
 
     # Dauerprotokoll fuer Netzbetreiber aus vorhandenen 1min-Daten auffuellen.
+    wp.migrate_wp_protocol_add_grid_draw()
     wp.backfill_wp_protocol_from_db()
 
     estate.restore_energy_state()

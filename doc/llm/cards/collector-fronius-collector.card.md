@@ -5,7 +5,7 @@ role: A
 applyTo: "collector/**,collector.py"
 tags: [collector, fronius, modbus, solar-api]
 status: stable
-last_review: 2026-06-13
+last_review: 2026-09-17
 ---
 
 # Fronius-Collector
@@ -20,7 +20,7 @@ Liest Fronius GEN24 zyklisch (3 s) via Modbus + ergänzt Solar-API-Werte (HTTP).
   - `collector/sunspec.py` — `read_device_data`, `parse_model`, `parse_sunspec_value/string`, `extract_device_data`
   - `collector/buffer.py` — `ram_buffer`, `save_raw_data`, `flush_buffer_to_db` (Batch-Write)
   - `collector/energy_state.py` — `energy_state` Dict + `restore_energy_state`/`save_energy_state`
-  - `collector/wp_power_protocol.py` — Netzbetreiber-CSV-Nachweis (minutliches WP-Max)
+  - `collector/wp_power_protocol.py` — Netzbetreiber-CSV-Nachweis (minutliches WP-Max + Netzbezug am Peak)
   - `collector/attachment_state.py` — Versions-Snapshot + Anknuepfungs-Vollpruefung bei Versionswechsel
   - `collector/pid_lock.py` — Single-Instance-Schutz
 - **Entry-Script:** `collector.py` → `from collector import poller_loop, flush_buffer_to_db`
@@ -41,6 +41,7 @@ Liest Fronius GEN24 zyklisch (3 s) via Modbus + ergänzt Solar-API-Werte (HTTP).
 - **Read-only-Trennung:** Web-API nutzt `routes/helpers.py:FroniusReadOnly` — keine Schreibwege Richtung GEN24 (Rolle B = read-only). Bewusste Code-Duplette zur Absicherung der ABCDE-Rollentrennung.
 - **Persist-Sicherheit:** Bei DB-Fehler bleibt der RAM-Buffer erhalten und wird beim nächsten Tick erneut geschrieben.
 - **Netzbetreiber-Nachweisdatei ist permanent/endlos:** `logs/wp_netzbetreiber_leistung.csv` wird bewusst append-only gefuehrt (keine Rotation/Trunkierung), da rechtlich relevanter Langzeit-Nachweis.
+- **Netzbezug-Spalte `grid_draw_w`:** je Minute der Netzbezug (`P_Netz` >=0) im Moment des WP-Maximums. Belegt, dass Grenzwert-Ueberschreitungen in der Eigenversorgung (PV/Batterie) liegen. Live via `collector/poller.py` (`prim_sm`-Leistung an `track_wp_power_protocol`); rueckwaerts rekonstruiert aus `data_1min.P_Netz_avg` (`migrate_wp_protocol_add_grid_draw`, idempotent, atomarer Rewrite). Leeres Feld = keine DB-Deckung (unbekannt).
 
 ## No-Gos
 - Keine Modbus-Schreibzugriffe an die Batterie-Register (40309/40311/40316/40317/40321) im Collector.
@@ -67,3 +68,4 @@ Liest Fronius GEN24 zyklisch (3 s) via Modbus + ergänzt Solar-API-Werte (HTTP).
 ## Human-Doku
 - `doc/collector/DB_SCHEMA.md`
 - `doc/collector/AGGREGATION_PIPELINE.md`
+- `doc/collector/WP_LEISTUNGSNACHWEIS.md`

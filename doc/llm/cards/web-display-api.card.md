@@ -5,7 +5,7 @@ role: B
 applyTo: "routes/**"
 tags: [web-api, blueprints, templates, formatting, read-only]
 status: stable
-last_review: 2026-09-16
+last_review: 2026-09-17
 ---
 
 # Web Display/API
@@ -21,6 +21,7 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 - **DB-Zugriff:** `routes/helpers.py:get_db_connection`
 - **Page-Routen:** `routes/pages.py` (z. B. `maschinenraum`, `netzqualitaet`)
 - **Forecast-API + Persistierung:** `routes/forecast.py:api_forecast_tag`, `routes/helpers.py:store_forecast_daily`
+- **WP-Leistungsnachweis (Netzbetreiber):** `routes/verbraucher.py:api_verbraucher_wp_leistung` — Zeitreihe WP-Max + Netzbezug (`grid_draw_w`) je Punkt aus `logs/wp_netzbetreiber_leistung.csv`; View `templates/wp_leistung_view.html` (Tooltip belegt Eigenversorgung bei Ueberschreitung).
 - **Display-Formatter:** `templates/tag_view.html:formatValue`
 
 ## Inputs / Outputs

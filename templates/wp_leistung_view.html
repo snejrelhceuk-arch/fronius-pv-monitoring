@@ -291,7 +291,8 @@
     function computeStatsForRange(dataPoints, startTs, endTs) {
         const inRange = dataPoints.filter(p => p.ts >= startTs && p.ts <= endTs);
         if (inRange.length === 0) {
-            return { maxW: 0, maxTs: null, dayMax: null, monthMax: null, violations: 0, count: 0 };
+            return { maxW: 0, maxTs: null, dayMax: null, monthMax: null, violations: 0, count: 0,
+                     violGridMax: null, violGridAvg: null };
         }
 
         let maxW = -1;
@@ -300,12 +301,23 @@
         const dayMap = new Map();
         const monthMap = new Map();
 
+        let violGridMax = null;
+        let violGridSum = 0;
+        let violGridCount = 0;
+
         for (const p of inRange) {
             if (p.power_w > maxW) {
                 maxW = p.power_w;
                 maxTs = p.ts;
             }
-            if (p.within_limit === 0) violations += 1;
+            if (p.within_limit === 0) {
+                violations += 1;
+                if (p.grid_draw_w != null) {
+                    violGridMax = (violGridMax == null) ? p.grid_draw_w : Math.max(violGridMax, p.grid_draw_w);
+                    violGridSum += p.grid_draw_w;
+                    violGridCount += 1;
+                }
+            }
 
             const d = new Date(p.ts * 1000);
             const dayKey = d.toISOString().slice(0, 10);
@@ -321,8 +333,10 @@
 
         const dayMax = Array.from(dayMap.values()).sort((a, b) => b.max_w - a.max_w)[0] || null;
         const monthMax = Array.from(monthMap.values()).sort((a, b) => b.max_w - a.max_w)[0] || null;
+        const violGridAvg = violGridCount > 0 ? (violGridSum / violGridCount) : null;
 
-        return { maxW, maxTs, dayMax, monthMax, violations, count: inRange.length };
+        return { maxW, maxTs, dayMax, monthMax, violations, count: inRange.length,
+                 violGridMax, violGridAvg };
     }
 
     function renderInfo(stats, startTs, endTs, sourceText = '') {
@@ -341,6 +355,18 @@
             ? `${stats.violations} Ueberschreitungen`
             : 'Keine Ueberschreitung';
 
+        // Netzbezug im Moment der Ueberschreitungen: belegt Eigenversorgung (PV/Batterie).
+        let gridState = '\u2014';
+        let gridSelfSupply = false;
+        if (stats.violations > 0) {
+            if (stats.violGridMax != null) {
+                gridState = `max ${stats.violGridMax.toFixed(0)} W \u00b7 \u00d8 ${stats.violGridAvg.toFixed(0)} W`;
+                gridSelfSupply = stats.violGridMax < 200;
+            } else {
+                gridState = 'n/a';
+            }
+        }
+
         info.innerHTML = `
             <div class="info-chip">
                 <span class="k">Bereich</span>
@@ -357,6 +383,10 @@
             <div class="info-chip ${stats.violations > 0 ? 'warn' : ''}">
                 <span class="k">Grenzwert 4.2 kW</span>
                 <span class="v">${limitState}</span>
+            </div>
+            <div class="info-chip">
+                <span class="k">Netzbezug bei Ueberschr.</span>
+                <span class="v">${gridState}${gridSelfSupply ? ' \u2713 Eigenversorgung' : ''}</span>
             </div>
             <div class="info-chip">
                 <span class="k">Punkte (sichtbar)</span>
@@ -380,10 +410,10 @@
         }
         chart = echarts.init(document.getElementById('wpLeistungChart'));
 
-        const lineData = points.map(p => [p.ts * 1000, p.power_w]);
+        const lineData = points.map(p => [p.ts * 1000, p.power_w, (p.grid_draw_w == null ? null : p.grid_draw_w)]);
         const violationData = points
             .filter(p => p.within_limit === 0)
-            .map(p => [p.ts * 1000, p.power_w]);
+            .map(p => [p.ts * 1000, p.power_w, (p.grid_draw_w == null ? null : p.grid_draw_w)]);
 
         const option = {
             animation: false,
@@ -391,12 +421,26 @@
                 trigger: 'axis',
                 formatter: function(params) {
                     if (!params || params.length === 0) return '';
-                    const ts = Math.floor(params[0].value[0] / 1000);
-                    const power = params[0].value[1];
-                    const limitText = power > limitW ? '<span style="color:#ef4444">Ueberschreitung</span>' : 'OK';
-                    return `<strong>${formatTs(ts)}</strong><br/>` +
+                    const v = params[0].value;
+                    const ts = Math.floor(v[0] / 1000);
+                    const power = v[1];
+                    const grid = (v.length > 2 ? v[2] : null);
+                    const over = power > limitW;
+                    const limitText = over ? '<span style="color:#ef4444">Ueberschreitung</span>' : 'OK';
+                    let html = `<strong>${formatTs(ts)}</strong><br/>` +
                         `WP Max: <strong>${power.toFixed(1)} W</strong><br/>` +
                         `Limit ${limitW.toFixed(0)} W: ${limitText}`;
+                    if (grid != null) {
+                        if (over) {
+                            const mode = grid < 200
+                                ? '<span style="color:#16a34a">Eigenversorgung</span>'
+                                : (grid < power * 0.5 ? 'ueberw. Eigenversorgung' : 'Netzanteil');
+                            html += `<br/>Netzbezug: <strong>${grid.toFixed(0)} W</strong> (${mode})`;
+                        } else {
+                            html += `<br/>Netzbezug: ${grid.toFixed(0)} W`;
+                        }
+                    }
+                    return html;
                 }
             },
             legend: {

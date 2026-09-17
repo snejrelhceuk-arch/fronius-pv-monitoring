@@ -18,7 +18,7 @@ bp = Blueprint('verbraucher', __name__)
 
 
 def _read_wp_protocol_points(start_ts, end_ts):
-    """Liest WP-Leistungsprotokoll als (ts, power_w, within_limit)."""
+    """Liest WP-Leistungsprotokoll als (ts, power_w, within_limit, grid_draw_w)."""
     protocol_file = getattr(
         config,
         'WP_POWER_PROTOCOL_FILE',
@@ -39,7 +39,14 @@ def _read_wp_protocol_points(start_ts, end_ts):
                     continue
                 power_w = float(row.get('wp_max_w') or 0.0)
                 within_limit = int(float(row.get('within_limit') or 1))
-                points.append((ts, abs(power_w), 1 if within_limit != 0 else 0))
+                grid_raw = row.get('grid_draw_w')
+                grid_draw = None
+                if grid_raw not in (None, ''):
+                    try:
+                        grid_draw = max(0.0, float(grid_raw))
+                    except (TypeError, ValueError):
+                        grid_draw = None
+                points.append((ts, abs(power_w), 1 if within_limit != 0 else 0, grid_draw))
             except Exception:
                 continue
 
@@ -74,16 +81,17 @@ def _read_wp_points_from_db_fallback(start_ts, end_ts):
         limit_w = float(getattr(config, 'WP_LEISTUNG_LIMIT_W', 4200))
         cursor.execute(
             f"""
-            SELECT ts, ABS(COALESCE(P_WP_max, 0))
+            SELECT ts, ABS(COALESCE(P_WP_max, 0)), P_Netz_avg
             FROM {table}
             WHERE ts >= ? AND ts <= ?
             ORDER BY ts
             """,
             (start_ts, end_ts),
         )
-        for ts, power_w in cursor.fetchall():
+        for ts, power_w, p_netz in cursor.fetchall():
             p = abs(float(power_w or 0.0))
-            points.append((int(ts), p, 1 if p <= limit_w else 0))
+            grid_draw = None if p_netz is None else max(0.0, float(p_netz))
+            points.append((int(ts), p, 1 if p <= limit_w else 0, grid_draw))
     finally:
         conn.close()
 
@@ -91,7 +99,7 @@ def _read_wp_points_from_db_fallback(start_ts, end_ts):
 
 
 def _downsample_wp_points(points, start_ts, end_ts, max_points):
-    """Verdichtet Zeitreihe per Bucket-Maximum, behält Peaks für Nachweis."""
+    """Verdichtet Zeitreihe per Bucket-Maximum, behält Peaks (+ Netzbezug am Peak)."""
     if len(points) <= max_points:
         return points, 0
 
@@ -102,25 +110,28 @@ def _downsample_wp_points(points, start_ts, end_ts, max_points):
     bucket_ts = None
     bucket_max = 0.0
     bucket_within = 1
+    bucket_grid = None
 
-    for ts, power_w, within_limit in points:
+    for ts, power_w, within_limit, grid_draw in points:
         current_bucket = (ts // bucket_s) * bucket_s
         if bucket_ts is None:
             bucket_ts = current_bucket
 
         if current_bucket != bucket_ts:
-            sampled.append((bucket_ts, bucket_max, bucket_within))
+            sampled.append((bucket_ts, bucket_max, bucket_within, bucket_grid))
             bucket_ts = current_bucket
             bucket_max = 0.0
             bucket_within = 1
+            bucket_grid = None
 
         if power_w > bucket_max:
             bucket_max = power_w
+            bucket_grid = grid_draw
         if within_limit == 0:
             bucket_within = 0
 
     if bucket_ts is not None:
-        sampled.append((bucket_ts, bucket_max, bucket_within))
+        sampled.append((bucket_ts, bucket_max, bucket_within, bucket_grid))
 
     return sampled, bucket_s
 
@@ -134,14 +145,22 @@ def _compute_wp_stats(points):
             'violations': 0,
             'day_max': None,
             'month_max': None,
+            'violation_grid_max_w': None,
+            'violation_grid_avg_w': None,
         }
 
     max_point = max(points, key=lambda p: p[1])
-    violations = sum(1 for _, _, within in points if within == 0)
+    violations = sum(1 for _, _, within, _ in points if within == 0)
+
+    violation_grids = [g for _, _, within, g in points if within == 0 and g is not None]
+    violation_grid_max = round(max(violation_grids), 1) if violation_grids else None
+    violation_grid_avg = (
+        round(sum(violation_grids) / len(violation_grids), 1) if violation_grids else None
+    )
 
     day_map = {}
     month_map = {}
-    for ts, power_w, _ in points:
+    for ts, power_w, _, _ in points:
         dt = datetime.fromtimestamp(ts)
         day_key = dt.strftime('%Y-%m-%d')
         month_key = dt.strftime('%Y-%m')
@@ -158,6 +177,8 @@ def _compute_wp_stats(points):
         'max_w': round(max_point[1], 1),
         'max_ts': int(max_point[0]),
         'violations': int(violations),
+        'violation_grid_max_w': violation_grid_max,
+        'violation_grid_avg_w': violation_grid_avg,
         'day_max': {
             'day': day_max['label'],
             'max_w': round(day_max['max_w'], 1),
@@ -1076,8 +1097,9 @@ def api_verbraucher_wp_leistung():
                 'ts': int(ts),
                 'power_w': round(power_w, 1),
                 'within_limit': int(within),
+                'grid_draw_w': (round(grid, 1) if grid is not None else None),
             }
-            for ts, power_w, within in sampled
+            for ts, power_w, within, grid in sampled
         ]
 
         return jsonify({
