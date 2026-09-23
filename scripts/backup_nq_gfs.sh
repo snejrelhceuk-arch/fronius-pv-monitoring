@@ -6,7 +6,7 @@
 # Sichert die aktuelle NQ-Monats-DB (nq/db/nq_YYYY-MM.db) nach
 # backup/db/nq/{daily,weekly,monthly} und auf Pi5-FB (Offsite).
 # Integritätsprüfung: gzip + PRAGMA integrity_check + Kerntabellen
-# (nq_daily, nq_energy_daily, nq_agg_10s).
+# (nq_5min, nq_hourly, nq_daily).
 #
 # Cron (Primary 03:00, nach Transfer 00:10 + Aggregation 00:15):
 #   0 3 * * * /srv/pv-system/scripts/backup_nq_gfs.sh
@@ -28,7 +28,9 @@ BACKUP_BASE="${BACKUP_BASE:-${BASE}/backup/db/nq}"
 LOG_FILE="${LOG_FILE:-/tmp/nq_backup_gfs.log}"
 
 PI5_BACKUP_HOST="${PI5_BACKUP_HOST:-${PV_PI5_BACKUP_HOST:-backup-user@backup-host}}"
-PI5_BACKUP_BASE="${PI5_BACKUP_BASE:-${PV_PI5_BACKUP_BASE:-/srv/pv-system/backup/db/nq}}"
+# Immer in ein eigenes nq/-Unterverzeichnis (spiegelt lokale backup/db/nq-Struktur,
+# hält NQ-Backups von den Haupt-DB-Backups im selben PV_PI5_BACKUP_BASE getrennt).
+PI5_BACKUP_BASE="${PI5_BACKUP_BASE:-${PV_PI5_BACKUP_BASE:-/srv/pv-system/backup/db}/nq}"
 
 # Retention
 DAILY_KEEP=7
@@ -67,7 +69,7 @@ check_backup_integrity() {
             local tbl_count
             tbl_count=$(sqlite3 "$tmp_check" \
                 "SELECT COUNT(*) FROM sqlite_master WHERE type='table' \
-                 AND name IN ('nq_daily','nq_energy_daily','nq_agg_10s');" \
+                 AND name IN ('nq_5min','nq_hourly','nq_daily');" \
                 2>/dev/null || echo "0")
             if [ "$tbl_count" -ge 3 ]; then
                 log "  ✓ $label Integrität OK (3/3 NQ-Kerntabellen)"

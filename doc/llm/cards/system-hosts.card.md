@@ -5,7 +5,7 @@ role: meta
 applyTo: "scripts/**"
 tags: [hosts, deployment, rsync, sync, pi, tech, failover, kueche, rolle-n]
 status: stable
-last_review: 2026-08-10
+last_review: 2026-09-23
 ---
 
 # System Hosts + Deployment
@@ -43,10 +43,12 @@ ssh admin@$PV_TECH_IP 'sudo -n systemctl restart pv-nq-poller.service'
 ```
 (Poller ist idempotent, `Restart=always`, ~0,5 s PAC-Lücke bei Neustart.)
 
+**Tech-Reboot (nicht nur Restart):** immer `scripts/1_reboot_Tech.sh` oder `scripts/pv_tech_safe_reboot.sh` — beide ziehen zuerst die tmpfs-NQ-Aggregate per `pv_nq_flush.sh` nach Primary. Ohne Flush gehen bis zu 4 h 5-min-Daten verloren (Tech ist RAM-first ohne SD-Persist).
+
 ## Dienst → Host (Kurz)
 - **Primary:** `pv-web`, `pv-automation`, `pv-collector`, NQ-Primary-Timer
   (`pv-nq-agg-transfer`, `pv-nq-aggregate`, `pv-nq-analysis(-hf-nf)`, `pv-nq-energy-rollup(-month/-year)`,
-  `pv-nq-primary-cap`, `pv-nq-event-transfer`).
+  `pv-nq-primary-cap`, `pv-nq-event-transfer`, `pv-nq-backup` (GFS tägl. 03:00)).
 - **Tech:** `pv-nq-poller`, `pv-nq-energy`, `pv-wp-bridge`.
 - **FB:** `pv-ticker`, Failover-/Backup-Empfang.
 - **Küche:** Kiosk, Longterm-GFS-Offload.

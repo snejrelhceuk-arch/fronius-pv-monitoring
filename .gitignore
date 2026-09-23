@@ -127,6 +127,8 @@ config/systemd/pv-nq-agg-transfer.service
 config/systemd/pv-nq-agg-transfer.timer
 config/systemd/pv-nq-aggregate.service
 config/systemd/pv-nq-aggregate.timer
+config/systemd/pv-nq-backup.service
+config/systemd/pv-nq-backup.timer
 
 # Generierte Monats-Reports (PDF/CSV) — reproduzierbar via scripts/monthly_pdf_report.py
 reports/monthly/

@@ -51,7 +51,8 @@ case "$ROLE" in
         pv-nq-event-transfer.service pv-nq-event-transfer.timer \
         pv-nq-analysis.service     pv-nq-analysis.timer \
         pv-nq-analysis-hf-nf.service pv-nq-analysis-hf-nf.timer \
-        pv-nq-primary-cap.service  pv-nq-primary-cap.timer; do
+        pv-nq-primary-cap.service  pv-nq-primary-cap.timer \
+        pv-nq-backup.service       pv-nq-backup.timer; do
         install_unit "$u" || true
         [[ "$u" == *.timer ]] && TIMERS+=("$u")
     done

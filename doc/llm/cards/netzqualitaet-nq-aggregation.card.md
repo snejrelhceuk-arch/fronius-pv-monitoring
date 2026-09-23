@@ -5,7 +5,7 @@ role: N
 applyTo: "nq/transfer/**,nq/aggregate/**"
 tags: [netzqualitaet, nq, transfer, aggregation, primary, rolle-n]
 status: stable
-last_review: 2026-08-13
+last_review: 2026-09-23
 ---
 
 # NQ Transfer + Aggregation
@@ -21,7 +21,8 @@ fächert zu `hourly → daily` auf und hält Event-RAW dauerhaft.
 - **Aggregationskaskade (Primary):** `nq/aggregate/nq_aggregate.py:run` (stage: `5min`|`hourly`|`daily`|`all`)
 - **Transienten (Tech):** `nq/aggregate/nq_transients.py:run_tech` / `detect_transients_in_window` / `analyze_jumps`
 - **Event-Schnipsel-Pipeline (Primary):** `nq/transfer/nq_event_transfer.py:transfer_events` / `derive_event` / `ingest_snippets` / `_cap_event_log`
-- **GFS-Backup NQ-DB:** `scripts/backup_nq_gfs.sh` (daily/weekly/monthly, Integrität, Offsite rsync)
+- **GFS-Backup NQ-DB:** `scripts/backup_nq_gfs.sh` (daily/weekly/monthly, Integritäts-Gate `nq_5min`/`nq_hourly`/`nq_daily`, Offsite-rsync nach `backup/db/nq/`) — **täglich 03:00** via `config/systemd/pv-nq-backup.timer`
+- **Flush vor Tech-Reboot:** `scripts/pv_nq_flush.sh` zieht anhängige tmpfs-Aggregate sofort nach Primary; genutzt von `scripts/pv_tech_safe_reboot.sh` und `scripts/1_reboot_Tech.sh` (Tech ist RAM-first ohne SD-Persist)
 - **Energie-Rollup (Primary):** `nq/transfer/nq_energy_rollup.py:rollup` (tägl. 00:05, randscharf via `compute_daily_boundary`) / `rollup_month` / `rollup_year` / `master_sm_day` (autoritativer `daily_data`-Fixpunkt)
 - **Energie-Fixpunkt-Recompute (rückwirkend, Primary):** `nq/transfer/nq_energy_recompute.py:recompute` (aufeinanderfolgende day_start-Differenz, `--apply`/Dry-Run) — **einzige** zulässige rückwirkende Energie-Korrektur; leitet Deltas ausschließlich aus den echten PAC-`*_start`-Fixpunkten ab, überschreibt PAC-Messwerte **nie** mit SM-Werten (überspringt `pv_backfill` + `sm_substitute`)
 - **Ungültige PAC-Tage an SM angleichen (explizit, Primary):** `nq/transfer/nq_energy_invalidate.py:invalidate` (`--day`/`--before`, `--apply`/Dry-Run, `src='sm_substitute'`) — nur **explizit** benannte Startup-/Unterbrechungs-Tage, keine Schwellen-Automatik; gültige PAC-Tage bleiben unangetastet
@@ -41,6 +42,7 @@ fächert zu `hourly → daily` auf und hält Event-RAW dauerhaft.
 - **Idempotenter Ingest:** doppelte Übernahme verändert das Ergebnis nicht (PKs, `INSERT OR REPLACE`/`ON CONFLICT`).
 - NQ schreibt ausschließlich in `nq/db/` — **niemals** in `data.db`/Produktionstabellen.
 - **Event-RAW wird nicht aggregiert** und dauerhaft aufbewahrt (Transienten-Rekonstruktion).
+- **Persistenz Rolle N:** Techs tmpfs hat KEIN SD-Persist — Dauerhaftigkeit entsteht erst durch den Transfer nach Primary. Vor jedem Tech-Reboot daher `pv_nq_flush.sh` (Roh-200ms/1s ist bauartbedingt flüchtig, geht bewusst verloren). Primary-`nq/db/` wird durch `pv-nq-backup.timer` (GFS + Offsite auf FB) gesichert.
 - Bucket-Grenzen über `localtime`; Monats-DB-Rotation wie Legacy `nq/legacy/db/`.
 
 ## No-Gos
