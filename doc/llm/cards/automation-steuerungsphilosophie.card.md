@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/engine.py"
 tags: [philosophie, prioritaet, matrix, external-respect]
 status: stable
-last_review: 2026-06-06
+last_review: 2026-09-23
 ---
 
 # Steuerungsphilosophie
@@ -17,6 +17,7 @@ last_review: 2026-06-06
 - **Engine-Zyklus:** `automation/engine/engine.py:Engine.zyklus`
 - **Regel-Registry:** `automation/engine/engine.py:_register_default_regeln`
 - **Parameter-Matrix:** `automation/engine/param_matrix.py:lade_matrix`
+- **Prognose-Stufe (Automation):** `automation/engine/param_matrix.py:get_forecast_tier` / `classify_forecast_kwh`
 - **Matrix-Quelle:** `config/soc_param_matrix.json` (Single Source of Truth)
 - **ExternalRespect (HP):** `automation/engine/regeln/geraete.py:RegelHeizpatrone._cancel_conflicting_overrides`
 - **ExternalRespect (WP):** Engine schreibt Sollwerte über `waermepumpe.py:_registriere_engine_wert`; der frühere Lese-Pfad `_prüfe_extern_respekt` wurde 2026-05-29 als Dead Code entfernt.
@@ -36,6 +37,8 @@ last_review: 2026-06-06
 **ExternalRespect:** Wird eine extern (App, Hand, anderes System) ausgelöste Schaltung erkannt, akzeptiert die Engine sie und tritt für `extern_respekt_s` (Matrix, Default 1800 s) zurück. Voraussetzung: Engine registriert eigene erfolgreiche Schreibvorgänge, sonst Fehlinterpretation.
 
 **Matrix als Single Source:** Alle Schwellen, Hysteresen, Zeiten in `config/soc_param_matrix.json`. Hartcodierung ist No-Go.
+
+**Prognose-Klassifikation (getrennt halten):** Automation entscheidet über die **absolute** Tages-kWh-Stufe (`param_matrix.py:get_forecast_tier`, Schwellen `forecast_bewertung` in der Matrix) — Regel-Bedingungen vergleichen Zahlen-Stufen (`FC_TIER_SCHLECHT/MITTEL/GUT`), **keine** Synonym-Strings. Die ClearSky-relative Charakterisierung (`solar_forecast.classify_day_relative`, Prognose/ClearSky-Verhältnis) ist reine **Anzeige** (Flow/Tag) und darf nie in Regel-Bedingungen einfließen (sonst wäre ein klarer Wintertag fälschlich "gut" für die Lastplanung).
 
 ## No-Gos
 - Keine Hartcodierung von Schwellen.

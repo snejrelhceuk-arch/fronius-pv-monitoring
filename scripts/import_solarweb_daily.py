@@ -44,7 +44,7 @@ logging.basicConfig(
 )
 
 SOLARWEB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                             'imports', 'solarweb')
+                             'doc', 'csv')
 
 CSV_FILES = sorted(glob.glob(
     os.path.join(SOLARWEB_DIR, 'solarweb_daily_*_working.csv')

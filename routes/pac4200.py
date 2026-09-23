@@ -711,19 +711,32 @@ def nq_energy_compare_page():
     return render_template('nq_energie_vergleich_view.html')
 
 
-@bp.route('/api/nq/energy_compare')
-def api_nq_energy_compare():
-    """Read-only Tages-Vergleich PAC4200 (korrigierte Fixpunkte) ↔ Master-SM.
+def _sm_days_kwh() -> dict:
+    """Batch-Read: ``{day: {'imp_kwh','exp_kwh'}}`` für alle Tage aus ``daily_data``
+    (read-only, Säule B). Tagesgrenzen-Fixpunkte ``W_Imp/Exp_Netz_start/-end``."""
+    db = getattr(config, 'DB_PATH', None)
+    out: dict[str, dict] = {}
+    if not db or not os.path.exists(db):
+        return out
+    try:
+        c = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5.0)
+        cur = c.execute(
+            "SELECT ts, W_Imp_Netz_start, W_Imp_Netz_end, W_Exp_Netz_start, W_Exp_Netz_end "
+            "FROM daily_data WHERE W_Imp_Netz_start IS NOT NULL AND W_Imp_Netz_end IS NOT NULL")
+        for ts, i0, i1, e0, e1 in cur.fetchall():
+            day = _time.strftime('%Y-%m-%d', _time.localtime(ts))
+            out[day] = {'imp_kwh': round((i1 - i0) / 1000.0, 3),
+                        'exp_kwh': round(abs((e1 or 0.0) - (e0 or 0.0)) / 1000.0, 3)}
+        c.close()
+    except Exception:
+        return out
+    return out
 
-    ``?days=N`` (Default 90, max 400) oder ``?all=1``. Nur echte PAC-Zählertage
-    (``src`` ≠ ``pv_backfill``). Liefert je Tag Import/Export beider Quellen,
-    absolute + prozentuale Abweichung. Keine Bewertung/Analyse.
-    """
-    all_days = request.args.get('all', type=int, default=0)
-    days = min(request.args.get('days', type=int, default=90), 400)
 
-    start = 0 if all_days else int(_time.time()) - days * 86400
-    rows_by_day: dict[str, dict] = {}
+def _pac_days_kwh() -> dict:
+    """``{day: {'imp_kwh','exp_kwh'}}`` aller echten PAC-Zählertage
+    (``nq_energy_daily``, ``src`` ≠ ``pv_backfill``)."""
+    out: dict[str, dict] = {}
     for db_path in sorted(glob(os.path.join(_NQ_PRIMARY_DIR, 'nq_*.db'))):
         conn = _open_legacy(db_path)
         if not conn:
@@ -737,32 +750,190 @@ def api_nq_energy_compare():
         finally:
             conn.close()
         for day, imp, exp in rows:
-            rows_by_day[day] = {'imp': imp, 'exp': exp}
+            out[day] = {'imp_kwh': round((imp or 0.0) / 1000.0, 3),
+                        'exp_kwh': round((exp or 0.0) / 1000.0, 3)}
+    return out
 
+
+def _energy_day_items(pac_by_day: dict, sm_by_day: dict) -> list:
+    """Baue je Tag ein Vergleichs-Item (PAC vs Master-SM, Δ abs/%)."""
     items = []
-    for day in sorted(rows_by_day):
-        t0, t1 = _local_day_bounds(day)
-        if not all_days and t0 < start:
-            continue
-        r = rows_by_day[day]
-        pac_imp = round((r['imp'] or 0.0) / 1000.0, 3)
-        pac_exp = round((r['exp'] or 0.0) / 1000.0, 3)
-        sm = _sm_day_kwh(t0, t1)
+    for day in sorted(pac_by_day):
+        pac = pac_by_day[day]
+        sm = sm_by_day.get(day)
         sm_imp = sm['imp_kwh'] if sm else None
         sm_exp = sm['exp_kwh'] if sm else None
-        d_imp = round(pac_imp - sm_imp, 3) if sm_imp is not None else None
-        d_exp = round(pac_exp - sm_exp, 3) if sm_exp is not None else None
-        d_imp_pct = round(100.0 * d_imp / sm_imp, 1) if (sm_imp and d_imp is not None) else None
-        d_exp_pct = round(100.0 * d_exp / sm_exp, 1) if (sm_exp and d_exp is not None) else None
+        d_imp = round(pac['imp_kwh'] - sm_imp, 3) if sm_imp is not None else None
+        d_exp = round(pac['exp_kwh'] - sm_exp, 3) if sm_exp is not None else None
         items.append({
-            'day': day,
-            'pac_imp_kwh': pac_imp, 'sm_imp_kwh': sm_imp,
-            'd_imp_kwh': d_imp, 'd_imp_pct': d_imp_pct,
-            'pac_exp_kwh': pac_exp, 'sm_exp_kwh': sm_exp,
-            'd_exp_kwh': d_exp, 'd_exp_pct': d_exp_pct,
+            'label': day, 'day': day,
+            'pac_imp_kwh': pac['imp_kwh'], 'sm_imp_kwh': sm_imp,
+            'd_imp_kwh': d_imp,
+            'd_imp_pct': round(100.0 * d_imp / sm_imp, 1) if (sm_imp and d_imp is not None) else None,
+            'pac_exp_kwh': pac['exp_kwh'], 'sm_exp_kwh': sm_exp,
+            'd_exp_kwh': d_exp,
+            'd_exp_pct': round(100.0 * d_exp / sm_exp, 1) if (sm_exp and d_exp is not None) else None,
+        })
+    return items
+
+
+def _aggregate_energy(day_items: list, key_len: int) -> list:
+    """Summiere Tages-Items auf Monat (key_len=7) bzw. Jahr (key_len=4).
+
+    Δ nur über Tage mit PAC UND SM (fairer Vergleich); ``n_days`` = PAC-Tage,
+    ``n_cmp`` = davon mit SM.
+    """
+    buckets: dict[str, dict] = {}
+    order = []
+    for it in day_items:
+        key = it['day'][:key_len]
+        if key not in buckets:
+            buckets[key] = {'pac_imp': 0.0, 'pac_exp': 0.0, 'sm_imp': 0.0,
+                            'sm_exp': 0.0, 'n_days': 0, 'n_cmp': 0}
+            order.append(key)
+        b = buckets[key]
+        b['n_days'] += 1
+        if it['sm_imp_kwh'] is None:
+            continue
+        b['pac_imp'] += it['pac_imp_kwh']
+        b['pac_exp'] += it['pac_exp_kwh']
+        b['sm_imp'] += it['sm_imp_kwh']
+        b['sm_exp'] += it['sm_exp_kwh']
+        b['n_cmp'] += 1
+    items = []
+    for key in order:
+        b = buckets[key]
+        has = b['n_cmp'] > 0
+        pac_imp, sm_imp = round(b['pac_imp'], 2), round(b['sm_imp'], 2)
+        pac_exp, sm_exp = round(b['pac_exp'], 2), round(b['sm_exp'], 2)
+        d_imp = round(pac_imp - sm_imp, 2) if has else None
+        d_exp = round(pac_exp - sm_exp, 2) if has else None
+        items.append({
+            'label': key, 'n_days': b['n_days'], 'n_cmp': b['n_cmp'],
+            'pac_imp_kwh': pac_imp if has else None, 'sm_imp_kwh': sm_imp if has else None,
+            'd_imp_kwh': d_imp,
+            'd_imp_pct': round(100.0 * d_imp / sm_imp, 1) if (has and sm_imp) else None,
+            'pac_exp_kwh': pac_exp if has else None, 'sm_exp_kwh': sm_exp if has else None,
+            'd_exp_kwh': d_exp,
+            'd_exp_pct': round(100.0 * d_exp / sm_exp, 1) if (has and sm_exp) else None,
+        })
+    return items
+
+
+def _ims_readings() -> list:
+    """Alle iMSys-Ablesungen (kumulative Zählerstände) aus ``nq_ims_reading``,
+    dedupliziert und nach Zeit sortiert."""
+    seen: dict[int, dict] = {}
+    for db_path in sorted(glob(os.path.join(_NQ_PRIMARY_DIR, 'nq_*.db'))):
+        conn = _open_legacy(db_path)
+        if not conn:
+            continue
+        try:
+            rows = conn.execute(
+                "SELECT ts, day, imp_kwh, exp_kwh, source, note FROM nq_ims_reading").fetchall()
+        except Exception:
+            rows = []
+        finally:
+            conn.close()
+        for ts, day, imp, exp, src, note in rows:
+            seen[ts] = {'ts': ts, 'day': day, 'imp_kwh': imp, 'exp_kwh': exp,
+                        'source': src, 'note': note}
+    return [seen[k] for k in sorted(seen)]
+
+
+def _ims_intervals(readings: list, pac_by_day: dict, sm_by_day: dict) -> list:
+    """Intervall-Vergleich zwischen aufeinanderfolgenden iMSys-Fixpunkten.
+
+    iMSys-Δ aus den Zählerständen; PAC/SM über die Tagesgrenzen ``[day_a, day_b)``
+    summiert (Näherung — die präzisen synchronisierten Fixpunkte stehen in
+    doc/MESSSYSTEM_FIXPUNKTE.md). Abweichung jeweils gegen iMSys (eichrechtl. Referenz).
+    """
+    def _dev(val, ref):
+        if val is None or ref is None or ref == 0:
+            return None, None
+        return round(val - ref, 3), round(100.0 * (val - ref) / ref, 1)
+
+    out = []
+    for a, b in zip(readings, readings[1:]):
+        try:
+            d = datetime.strptime(a['day'], '%Y-%m-%d').date()
+            end = datetime.strptime(b['day'], '%Y-%m-%d').date()
+        except Exception:
+            continue
+        ims_imp = round(b['imp_kwh'] - a['imp_kwh'], 3) if (a['imp_kwh'] is not None and b['imp_kwh'] is not None) else None
+        ims_exp = round(b['exp_kwh'] - a['exp_kwh'], 3) if (a['exp_kwh'] is not None and b['exp_kwh'] is not None) else None
+        pac_imp = pac_exp = sm_imp = sm_exp = 0.0
+        n_days = n_pac = n_sm = 0
+        while d < end:
+            ds = d.isoformat()
+            n_days += 1
+            pac = pac_by_day.get(ds)
+            if pac:
+                pac_imp += pac['imp_kwh']; pac_exp += pac['exp_kwh']; n_pac += 1
+            sm = sm_by_day.get(ds)
+            if sm:
+                sm_imp += sm['imp_kwh']; sm_exp += sm['exp_kwh']; n_sm += 1
+            d += timedelta(days=1)
+        sm_imp_r = round(sm_imp, 3) if n_sm else None
+        sm_exp_r = round(sm_exp, 3) if n_sm else None
+        pac_imp_r = round(pac_imp, 3) if n_pac else None
+        pac_exp_r = round(pac_exp, 3) if n_pac else None
+        d_sm_imp, d_sm_imp_pct = _dev(sm_imp_r, ims_imp)
+        d_sm_exp, d_sm_exp_pct = _dev(sm_exp_r, ims_exp)
+        d_pac_imp, d_pac_imp_pct = _dev(pac_imp_r, ims_imp)
+        d_pac_exp, d_pac_exp_pct = _dev(pac_exp_r, ims_exp)
+        out.append({
+            'from': a['day'], 'to': b['day'],
+            'n_days': n_days, 'n_pac': n_pac, 'n_sm': n_sm,
+            'ims_imp_kwh': ims_imp, 'ims_exp_kwh': ims_exp,
+            'sm_imp_kwh': sm_imp_r, 'sm_exp_kwh': sm_exp_r,
+            'pac_imp_kwh': pac_imp_r, 'pac_exp_kwh': pac_exp_r,
+            'd_sm_imp_kwh': d_sm_imp, 'd_sm_imp_pct': d_sm_imp_pct,
+            'd_sm_exp_kwh': d_sm_exp, 'd_sm_exp_pct': d_sm_exp_pct,
+            'd_pac_imp_kwh': d_pac_imp, 'd_pac_imp_pct': d_pac_imp_pct,
+            'd_pac_exp_kwh': d_pac_exp, 'd_pac_exp_pct': d_pac_exp_pct,
+        })
+    return out
+
+
+@bp.route('/api/nq/energy_compare')
+def api_nq_energy_compare():
+    """Read-only Vergleich PAC4200 ↔ Master-SM (↔ iMSys).
+
+    ``?agg=day|month|year|ims`` (Default ``day``). ``day``: ``?days=N`` (Default
+    90, max 400) oder ``?all=1``. Monat/Jahr summieren die Tages-Deltas (Δ nur
+    über Tage mit PAC UND SM). ``ims`` liefert die iMSys-Ablesungen + Intervall-
+    Vergleich (iMSys ↔ SM ↔ PAC). Nur echte PAC-Zählertage. Keine Bewertung.
+    """
+    agg = (request.args.get('agg') or 'day').lower()
+    pac_by_day = _pac_days_kwh()
+    sm_by_day = _sm_days_kwh()
+
+    if agg == 'ims':
+        readings = _ims_readings()
+        return jsonify({
+            'agg': 'ims',
+            'readings': readings,
+            'intervals': _ims_intervals(readings, pac_by_day, sm_by_day),
+            'from': 'iMSys ↔ PAC4200 ↔ Master-SM',
         })
 
-    return jsonify({'items': items, 'from': 'PAC4200 vs Master-SM'})
+    day_items = _energy_day_items(pac_by_day, sm_by_day)
+
+    if agg == 'month':
+        return jsonify({'agg': 'month', 'items': _aggregate_energy(day_items, 7),
+                        'from': 'PAC4200 vs Master-SM (Monatssummen)'})
+    if agg == 'year':
+        return jsonify({'agg': 'year', 'items': _aggregate_energy(day_items, 4),
+                        'from': 'PAC4200 vs Master-SM (Jahressummen)'})
+
+    # Default: Tages-Ansicht mit Fenster (days/all)
+    all_days = request.args.get('all', type=int, default=0)
+    days = min(request.args.get('days', type=int, default=90), 400)
+    if not all_days:
+        start_day = _time.strftime('%Y-%m-%d', _time.localtime(_time.time() - days * 86400))
+        day_items = [it for it in day_items if it['day'] >= start_day]
+    return jsonify({'agg': 'day', 'items': day_items, 'from': 'PAC4200 vs Master-SM'})
 
 
 # ---------------------------------------------------------------------------

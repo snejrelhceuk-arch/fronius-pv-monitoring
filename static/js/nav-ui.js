@@ -257,10 +257,34 @@
         return cfg;
     }
 
+    // Obergrenze der Werteachse so, dass ein Peak-/Extremwert-Marker (Pin + Label
+    // ueber dem Datenpunkt) IMMER innerhalb des Rahmens bleibt. dataMax = groesster
+    // gezeichneter Serienwert; peakVal = Wert, auf dem der Marker sitzt (kann dataMax
+    // uebersteigen, z. B. eine nicht gezeichnete Summenkurve). opts: {floor, cap,
+    // round, headroom}. Der cap wird nur so weit angewandt, dass der Marker sichtbar bleibt.
+    function peakHeadroomMax(dataMax, peakVal, opts) {
+        opts = opts || {};
+        var round = opts.round || 1000;
+        var floor = opts.floor || 0;
+        var headroom = opts.headroom != null ? opts.headroom : 0.15;
+        var dMax = Number.isFinite(dataMax) ? dataMax : 0;
+        var hasPeak = Number.isFinite(peakVal) && peakVal > 0;
+        var top = Math.max(dMax, hasPeak ? peakVal : 0);
+        top = Math.ceil((top * (1 + headroom)) / round) * round;   // Luft fuer Pin + Label
+        top = Math.max(top, floor);
+        if (opts.cap != null && isFinite(opts.cap)) {
+            // Deckel nur so weit, dass der Peak samt Luft sichtbar bleibt.
+            var needed = hasPeak ? Math.ceil((peakVal * (1 + headroom)) / round) * round : floor;
+            top = Math.max(needed, Math.min(top, opts.cap));
+        }
+        return top;
+    }
+
     window.PVChart = {
         isSmallScreen: isSmallScreen,
         xAxisLabel: xAxisLabel,
-        tooltipResponsive: tooltipResponsive
+        tooltipResponsive: tooltipResponsive,
+        peakHeadroomMax: peakHeadroomMax
     };
 })();
 

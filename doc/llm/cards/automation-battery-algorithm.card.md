@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/aktoren/aktor_batterie.py"
 tags: [batterie, soc, fronius, modbus]
 status: stable
-last_review: 2026-08-15
+last_review: 2026-09-23
 ---
 
 # Battery-Algorithm
@@ -43,6 +43,7 @@ Setzt SOC-Grenzen (`soc_min`, `soc_max`) und Lademodus an der Fronius GEN24 — 
 ## Bekannte Fallstricke
 - Legacy-State-Dateien sind **nur Fallback**, keine Quelle der Wahrheit. Quelle = Fronius-Live-Wert + Matrix.
 - **Morgen-SOC_MIN Ziel ist forecast-abhängig**: `gut` → `stress_min_pct` (5%, hart). `mittel` → `mittel_soc_min_pct` (15%). `schlecht` → kein Öffnen. Kein `_dynamische_soc_ziele()` für den Morgen-Pfad — dessen SOC_MIN basiert auf der Nacht-Prognose (leichte Nacht → 25%), was für die Morgen-Entladung falsch wäre.
+- **Forecast-Stufe = absolut, numerisch:** Die Regel-Bedingungen in `soc_steuerung.py` vergleichen `get_forecast_tier(obs, matrix)` (`FC_TIER_GUT`/`MITTEL`/`SCHLECHT` aus der **absoluten** Tages-kWh-Klassifikation), nicht Synonym-Strings. Die ClearSky-relative Anzeige-Charakterisierung ist bewusst getrennt (s. `automation-steuerungsphilosophie.card.md`).
 - **HALTE-MODUS gegen Ziel, nicht gegen komfort_min (25%)**: `nachmittag_soc_max` kann SOC_MIN=19% als Nacht-Reserve setzen. Die Morgen-Regel erkennt das NICHT als „gesetzt“ — sie sieht 19% > Ziel 5% und öffnet weiter.
 - **Frühes Fenster für gut-Prognose**: `gut_vorlauf_min=90min` öffnet das Zeitfenster 90 Minuten vor SR (statt 30 min), damit SOC_MIN=5% gesetzt wird bevor die Batterie auf den Nacht-Reserve-Floor trifft und Netzbezug entsteht.
 - Wattpilot-Ladung kann SOC kritisch ziehen → siehe `automation-regel-wattpilot.card.md` (RegelWattpilotBattSchutz hebt `soc_min` an).

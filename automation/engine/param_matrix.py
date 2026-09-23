@@ -126,6 +126,33 @@ def get_effective_forecast_quality(obs, matrix: dict | None = None) -> str | Non
     return classify_forecast_kwh(getattr(obs, 'forecast_kwh', None), matrix)
 
 
+# ── Numerische Tagesgüte-Stufen für Automations-Bedingungen ──────────────
+# Automation entscheidet über ABSOLUTE Tages-kWh (Lastplanung braucht die real
+# verfügbare Energie, nicht ein ClearSky-Verhältnis). Die Regel-Bedingungen
+# vergleichen daher Zahlen-Stufen statt Synonym-Strings — bewusst getrennt von
+# der ClearSky-relativen Charakterisierung der Anzeige (classify_day_relative).
+FC_TIER_UNBEKANNT = 0
+FC_TIER_SCHLECHT = 1
+FC_TIER_MITTEL = 2
+FC_TIER_GUT = 3
+
+_FC_TIER_BY_NAME = {'schlecht': FC_TIER_SCHLECHT, 'mittel': FC_TIER_MITTEL, 'gut': FC_TIER_GUT}
+
+
+def forecast_tier_of(quality) -> int:
+    """Numerische Tagesgüte-Stufe aus dem Klassifikations-String (0=unbekannt)."""
+    return _FC_TIER_BY_NAME.get((quality or '').lower(), FC_TIER_UNBEKANNT)
+
+
+def get_forecast_tier(obs, matrix: dict | None = None) -> int:
+    """Numerische Tagesgüte-Stufe (absolut, aus Tages-kWh) für Automations-Bedingungen.
+
+    0=unbekannt, 1=schlecht, 2=mittel, 3=gut. Leitet sich aus derselben
+    kWh-Absolutklassifikation wie get_effective_forecast_quality ab.
+    """
+    return forecast_tier_of(get_effective_forecast_quality(obs, matrix))
+
+
 def get_regelkreis(matrix: dict, name: str) -> dict:
     """Hole einen Regelkreis nach Name."""
     return matrix.get('regelkreise', {}).get(name, {})

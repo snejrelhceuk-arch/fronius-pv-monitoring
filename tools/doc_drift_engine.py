@@ -85,10 +85,29 @@ def _iter_cards() -> list[Path]:
 
 
 def _glob_apply_to(pattern: str) -> list[Path]:
-    """`applyTo`-Pattern (glob) zu konkreten Dateien aufloesen."""
+    """`applyTo`-Pattern zu konkreten Dateien aufloesen.
+
+    `applyTo` kann mehrere komma-getrennte Glob-Muster enthalten
+    (z. B. ``collector/**,collector.py``). Jedes Teilmuster wird einzeln
+    aufgeloest — ein kombiniertes Muster wuerde pathlib mit ``**`` sprengen.
+    """
     if not pattern:
         return []
-    return [p for p in REPO_ROOT.glob(pattern) if p.is_file()]
+    files: list[Path] = []
+    seen: set[Path] = set()
+    for part in pattern.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            matches = REPO_ROOT.glob(part)
+        except ValueError:
+            continue
+        for p in matches:
+            if p.is_file() and p not in seen:
+                seen.add(p)
+                files.append(p)
+    return files
 
 
 # ----------------------- Drift-Checks ----------------------- #
@@ -259,6 +278,17 @@ def _signature(msg: str) -> str:
 # ----------------------- Main ----------------------- #
 
 def main() -> int:
+    # Rollen-Guard: Die Drift-Engine ist ein Primary-Werkzeug. Auf Failover-/
+    # Mirror-Hosts liegt der Workspace als read-only Kopie vor — das Schreiben
+    # der Task-Dateien schlägt dort mit PermissionError fehl. Dort sauber als
+    # No-Op beenden (aktiv nur bei Rolle 'primary' bzw. fehlender .role).
+    role_file = REPO_ROOT / ".role"
+    if role_file.exists():
+        role = role_file.read_text(encoding="utf-8", errors="ignore").strip().lower()
+        if role and role != "primary":
+            print(f"doc-drift: Rolle '{role}' != primary — übersprungen (No-Op).")
+            return 0
+
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--write", action="store_true", help="Tasks schreiben (sonst Dry-Run)")
     ap.add_argument("--cleanup", action="store_true", help="Veraltete Tasks entfernen")

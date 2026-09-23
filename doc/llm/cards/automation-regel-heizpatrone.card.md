@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/regeln/geraete.py"
 tags: [heizpatrone, fritzdect, ww-speicher, prognose]
 status: stable
-last_review: 2026-07-23
+last_review: 2026-09-23
 ---
 
 # Regel Heizpatrone
@@ -30,7 +30,7 @@ Zusätzlich pausiert die Regel bei aktivem `afternoon_charge_request` den HP-Bet
 
 ## Invarianten
 - **Grundprinzip:** Die Heizpatrone ist ein Verbraucher für PV-Überschuss. Sie darf grundsätzlich **keinen Netzbezug verursachen**. Toleriert sind ausschließlich kurze Schaltverluste durch Lastwechsel/Erzeugungsschwankungen (Wattpilot-Start, Wolkenfront, Backofen), bis die Wechselrichter sich angepasst haben.
-- Prognose-Klassifikation: `<40 kWh = schlecht`, `40–100 = mittel`, `≥100 = gut` → bestimmt Freigabegrad pro Phase.
+- Prognose-Klassifikation (**absolut**, aus Tages-Rest-kWh): `<40 kWh = schlecht`, `40–100 = mittel`, `≥100 kWh = gut` → bestimmt Freigabegrad pro Phase. Die Bedingungen (`_potenzial`/`_hp_parallel_erlaubt`/`_min_lade_nach_potenzial`/`_batt_entladung_toleriert`) vergleichen die numerische Stufe (`FC_TIER_*` via `forecast_tier_of`), nicht Synonym-Strings; ClearSky-relative Anzeige bleibt getrennt.
 - AUS-Schwellen (immer aktiv): `WW_Temp ≥ 78 °C` (Hart), `SOC ≤ stop_entladung_unter` (5 %), `SOC ≤ extern_aus_soc_pct` (15 %, nur bei Extern-EIN), Netzbezug-Energie-Integral, `PV<1500 W` in PV-only-Phasen.
 - **WP-Koordinations-Cap (`_dynamic_temp_max_c`, seit 2026-05-28):** kontextabhängige Verschaerfung der WW-Temp-Schwelle, damit der Dimplex-WP-Lauf möglich bleibt und der mechanische Thermostat (~72 °C) nicht hart abwirft.
   - `now_h < drain_fenster_ende_h` (Morgens) → Cap = `drain_aus_ww_temp_c` (Default 55 °C, Bereich 50–65).

@@ -238,7 +238,7 @@ läuft über SOC_MIN/SOC_MAX der Regelkreise.
 
 ### 4.2 morgen_soc_min — Morgenöffnung (Priorität 2)
 
-**Zweck:** Morgens die SOC-Untergrenze (SOC_MIN) von Komfort (25%) auf Stress (5%) senken, damit die Batterie vor der PV-Übernahme möglichst leer wird. So steht mittags maximale Kapazität zum Laden bereit.
+**Zweck:** Morgens die SOC-Untergrenze (SOC_MIN) von Komfort (20%) auf Stress (5%) senken, damit die Batterie vor der PV-Übernahme möglichst leer wird. So steht mittags maximale Kapazität zum Laden bereit.
 
 **Score:** 72
 **Zyklus:** fast
@@ -247,7 +247,7 @@ läuft über SOC_MIN/SOC_MAX der Regelkreise.
 
 | Parameter | Standard | Bereich | Wirkung |
 |-----------|----------|---------|---------|
-| komfort_min | 25% | 10–40% | **SOC_MIN im Normalzustand.** LFP-schonend: Die Batterie wird nie unter diesen Wert entladen, solange keine Regel sie "öffnet". Höher = konservativer (mehr Reserve), niedriger = mehr nutzbare Kapazität. |
+| komfort_min | 20% | 10–40% | **SOC_MIN im Normalzustand.** LFP-schonend: Die Batterie wird nie unter diesen Wert entladen, solange keine Regel sie "öffnet". Höher = konservativer (mehr Reserve), niedriger = mehr nutzbare Kapazität. |
 | stress_min | 5% | 0–15% | **SOC_MIN bei Öffnung.** An Sonnentagen wird SOC_MIN auf diesen Wert gesenkt: Die Batterie darf morgens fast komplett entleert werden. **0% ist riskant** — die BYD kann abschalten. Empfohlen: 5%. |
 | min_prognose | 5.0 kWh | 1–20 kWh | **Mindest-Tagesprognose, damit die Öffnung stattfindet.** Wenn der Forecast weniger als diesen Wert vorhersagt, bleibt SOC_MIN auf Komfort. An bewölkten Tagen (z.B. Prognose 3 kWh) wird nicht geöffnet, um Reserve zu behalten. **Höher = vorsichtiger**, nur an wirklich guten Tagen wird geöffnet. |
 | pv_bestaetigung | 100 W | 50–500 W | **Live-PV-Schwelle.** Die Öffnung passiert erst, wenn tatsächlich PV-Leistung über diesem Wert gemessen wird. Verhindert, dass bei Nebel/Hochnebel blind geöffnet wird, obwohl die Sonne astronomisch schon da ist. Höher = konservativer. |
@@ -261,7 +261,7 @@ läuft über SOC_MIN/SOC_MAX der Regelkreise.
 **Typisches Szenario (morgen_vorlauf = 15 min):**
 1. 06:45 Sunrise in 15 Min. → Forecast-Fetch wird getriggert (Vorlauf)
 2. 06:45 Prognose 25 kWh, Bewölkung 20% → Zeitfenster ab 06:45 offen
-3. 06:50 PV@SR+1h = 2000 W > 1500 W Schwelle → **SOC_MIN wird von 25% auf 5% gesenkt**
+3. 06:50 PV@SR+1h = 2000 W > 1500 W Schwelle → **SOC_MIN wird von 20% auf 5% gesenkt**
 4. Batterie entlädt sich auf ~5% durch Hausverbrauch
 5. 10:00 PV übernimmt → Batterie wird geladen (SOC_MAX = 75%)
 
@@ -315,17 +315,17 @@ Score um 16:30h:     55  (Deadline, voller Score)
 
 | Phase | SOC_MIN | SOC_MAX | Effekt |
 |-------|---------|---------|--------|
-| Nacht (0–7h) | 25% | 75% | Komfort-Bereich, Batterie entlädt langsam |
+| Nacht (0–7h) | 20% | 75% | Komfort-Bereich, Batterie entlädt langsam |
 | Morgen (7–12h) | **5%** | 75% | Batterie entleert sich, PV füllt bis 75% |
 | Nachmittag (12–16h) | 5% | 75% | PV-Überschuss → Einspeisung (Batterie bei 75% gedeckelt) |
 | Nachmittag (16–18h) | 5% | **100%** | SOC_MAX geöffnet → PV füllt Batterie komplett |
-| Abend (18–0h) | zurück auf 25% | 100% | Volle Batterie versorgt den Abend |
+| Abend (18–0h) | zurück auf 20% | 100% | Volle Batterie versorgt den Abend |
 
 ---
 
 ### 4.4 komfort_reset — Abend-Reset auf Komfortwerte (Priorität 2)
 
-**Zweck:** Abends die Batterie-SOC-Grenzen auf den Komfort-Bereich (25–75%) zurücksetzen. Schützt LFP-Zellen vor dauerhaftem Stress-Zustand (z.B. SOC_MIN=5% über Nacht). Zusätzlich: intelligenter Früh-Reset am Nachmittag, wenn die PV-Restprognose nicht für eine Erholung reicht.
+**Zweck:** Abends die Batterie-SOC-Grenzen auf den Komfort-Bereich (20–75%) zurücksetzen. Schützt LFP-Zellen vor dauerhaftem Stress-Zustand (z.B. SOC_MIN=5% über Nacht). Zusätzlich: intelligenter Früh-Reset am Nachmittag, wenn die PV-Restprognose nicht für eine Erholung reicht.
 
 **Score:** 70
 **Zyklus:** fast
@@ -334,38 +334,38 @@ Score um 16:30h:     55  (Deadline, voller Score)
 
 | Abend-SOC | Morgen-Prognose | Entscheidung |
 |-----------|-----------------|-------------|
-| SOC > 25% | ≥ 20 kWh | SOC_MIN bleibt bei 5% — draint über Nacht, morgens Drain-Algo |
-| SOC > 25% | < 20 kWh | SOC_MIN → 25% (Nachtladung nötig) |
-| **SOC ≤ 25%** | **egal** | **SOC_MIN → 25% — Stress vermeiden!** |
+| SOC > 20% | ≥ 20 kWh | SOC_MIN bleibt bei 5% — draint über Nacht, morgens Drain-Algo |
+| SOC > 20% | < 20 kWh | SOC_MIN → 20% (Nachtladung nötig) |
+| **SOC ≤ 20%** | **egal** | **SOC_MIN → 20% — Stress vermeiden!** |
 
 > **Kernregel:** Ist die Batterie abends bereits im Stress-Bereich (SOC ≤ komfort_min),
 > wird SOC_MIN **immer** auf Komfort zurückgesetzt. Nur wenn noch genug Ladung vorhanden
 > ist UND morgen genug PV kommt, darf SOC_MIN niedrig bleiben.
 
 **Früh-Reset (Nachmittag):**
-Wenn nachmittags (ab `frueh_reset_ab_h`) die PV-Restprognose unter `erholung_schwelle_kwh` fällt, wird SOC_MIN sofort auf 25% angehoben. Hysterese (`erholung_hysterese_kwh`) verhindert Flackern.
+Wenn nachmittags (ab `frueh_reset_ab_h`) die PV-Restprognose unter `erholung_schwelle_kwh` fällt, wird SOC_MIN sofort auf 20% angehoben. Hysterese (`erholung_hysterese_kwh`) verhindert Flackern.
 
 | Parameter | Standard | Bereich | Wirkung |
 |-----------|----------|---------|--------|
-| komfort_min | 25% | 10–40% | **SOC_MIN im Normalzustand.** LFP-optimiert: unter 25% = Stress. |
+| komfort_min | 20% | 10–40% | **SOC_MIN im Normalzustand.** LFP-optimiert: unter 20% = Stress. |
 | komfort_max | 75% | 60–90% | **SOC_MAX im Normalzustand.** LFP-optimiert: über 75% = Stress. |
 | reset_nach_sunset_h | 0 h | 0–3 h | **Abend-Reset-Zeitpunkt.** 0 = sofort bei Sunset. |
 | frueh_reset_ab_h | 13 h | 11–16 h | **Frühester Zeitpunkt für Nachmittags-Früh-Reset.** |
-| erholung_schwelle | 10 kWh | 5–20 kWh | **Prognose-Rest < Schwelle → Früh-Reset (SOC_MIN sofort auf 25%).** |
+| erholung_schwelle | 10 kWh | 5–20 kWh | **Prognose-Rest < Schwelle → Früh-Reset (SOC_MIN sofort auf 20%).** |
 | erholung_hysterese | 2 kWh | 1–5 kWh | **Anti-Flicker:** Aufhebung erst bei Schwelle + Hysterese. |
 | nachtlade_schwelle | 20 kWh | 5–50 kWh | **Morgen-Prognose für Abend-Override.** Nur wenn SOC > komfort_min UND Morgen ≥ Schwelle bleibt SOC_MIN niedrig. |
 
 **Beispiel (sonniger Tag, Batterie leer):**
 ```
 18:30 Uhr: SOC = 17%, Morgen-Prognose = 107 kWh
-→ SOC (17%) ≤ komfort_min (25%) → Komfort-Reset: SOC_MIN 5% → 25%
-→ Grid-Ladung über Nacht auf 25%, Stress-Zustand vermieden
+→ SOC (17%) ≤ komfort_min (20%) → Komfort-Reset: SOC_MIN 5% → 20%
+→ Grid-Ladung über Nacht auf 20%, Stress-Zustand vermieden
 ```
 
 **Beispiel (sonniger Tag, Batterie voll):**
 ```
 18:30 Uhr: SOC = 45%, Morgen-Prognose = 107 kWh
-→ SOC (45%) > komfort_min (25%) UND Prognose (107) ≥ 20 kWh
+→ SOC (45%) > komfort_min (20%) UND Prognose (107) ≥ 20 kWh
 → SOC_MIN bleibt bei 5% → draint über Nacht → morgens Drain-Algo
 ```
 
@@ -455,7 +455,7 @@ Klarer Junitag:        140 kWh  → gut       → alle Verbraucher parallel erla
 
 **Zweck:** Schützt die Batterie vor Tiefentladung durch EV-Ladung mit dem Fronius WattPilot (bis zu 22 kW). Schutz erfolgt ausschließlich über SOC_MIN-Anhebung (keine automatische Ratensteuerung).
 
-**Zusatzlogik:** In den letzten 2 Stunden vor Sonnenuntergang setzt die Regel bei laufender EV-Ladung und `SOC < 25%` den `SOC_MIN` auf 25%, damit die Batterie nicht weiter entleert wird.
+**Zusatzlogik:** In den letzten 2 Stunden vor Sonnenuntergang setzt die Regel bei laufender EV-Ladung und `SOC < 20%` den `SOC_MIN` auf 20%, damit die Batterie nicht weiter entleert wird.
 
 **Score:** 60
 **Zyklus:** fast
@@ -464,8 +464,8 @@ Klarer Junitag:        140 kWh  → gut       → alle Verbraucher parallel erla
 |-----------|----------|---------|---------|
 | ev_leistung_schwelle | 2000 W | 500–5000 W | **Mindest-EV-Leistung damit die Regel greift.** Erst ab 2 kW EV-Ladung wird die Batterie geschützt. Unter 2 kW ist die Last unkritisch. |
 | soc_min_puffer | 5% | 3–15% | **SOC_MIN-Anhebung.** Wenn SOC innerhalb dieses Puffers über SOC_MIN liegt, wird SOC_MIN temporär angehoben. Verhindert Grenzwert-Oszillation. |
-| soc_min_netz | 25% | 15–40% | **SOC_MIN bei Netzumstellung.** Wenn die Batterie zu stark beansprucht wird, wird SOC_MIN auf diesen Wert gesetzt → Batterie hält 25% Reserve und das Haus bezieht aus dem Netz. |
-| sunset_guard_h | 2 h (fix) | — | **Fester Sunset-Guard.** Letzte 2h vor Sunset + EV-Ladung + SOC < 25% → SOC_MIN auf 25%. |
+| soc_min_netz | 20% | 15–40% | **SOC_MIN bei Netzumstellung.** Wenn die Batterie zu stark beansprucht wird, wird SOC_MIN auf diesen Wert gesetzt → Batterie hält 20% Reserve und das Haus bezieht aus dem Netz. |
+| sunset_guard_h | 2 h (fix) | — | **Fester Sunset-Guard.** Letzte 2h vor Sunset + EV-Ladung + SOC < 20% → SOC_MIN auf 20%. |
 | wolken_toleranz | 300 s | 60–600 s | **Wolkentoleranz.** Kurze PV-Einbrüche (Wolkendurchgang) werden X Sekunden lang toleriert, bevor die Schutzregel greift. Verhindert Flip-Flop bei wechselnder Bewölkung. |
 
 ---
@@ -1059,7 +1059,7 @@ Bei gleichzeitig aktiven Regeln entscheidet der Score:
 | heizpatrone | 40 | P2 Steuerung |
 | zellausgleich | 30 | P3 Wartung |
 
-**Beispiel:** Wenn `morgen_soc_min` (72) SOC_MIN auf 5% setzen will und `wattpilot_battschutz` (60) SOC_MIN auf 25% anheben will, gewinnt die Morgenöffnung — die verbleibende SOC-Schutzgrenze kommt aus den Tier-1-Alarm-Schwellen und SOC_MIN-Steuerung der aktiven Regeln.
+**Beispiel:** Wenn `morgen_soc_min` (72) SOC_MIN auf 5% setzen will und `wattpilot_battschutz` (60) SOC_MIN auf 20% anheben will, gewinnt die Morgenöffnung — die verbleibende SOC-Schutzgrenze kommt aus den Tier-1-Alarm-Schwellen und SOC_MIN-Steuerung der aktiven Regeln.
 
 ### Einheiten-Referenz
 

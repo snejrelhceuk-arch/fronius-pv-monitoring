@@ -128,6 +128,40 @@ DEFAULT_MODEL_COEFFS = {
 # nicht importiert oder gelesen werden kann.
 DEFAULT_QUALITY_THRESHOLDS = (40.0, 100.0)
 
+# ClearSky-relative Tagesgüte-Charakterisierung (nur ANZEIGE, nicht Automation).
+# Verhältnis Prognose/ClearSky in Prozent → Wolke/Sonne-Einstufung. Bewusst
+# getrennt von der absoluten kWh-Klassifikation (die die Automation nutzt),
+# damit z. B. ein klarer Wintertag nicht als "schlecht" erscheint.
+RELATIVE_QUALITY_THRESHOLDS_PCT = (40.0, 70.0)   # < schlecht | < mittel | ≥ gut
+
+
+def clearsky_ratio_pct(expected_kwh, clearsky_kwh):
+    """Prognose-zu-ClearSky-Verhältnis in Prozent (None, wenn nicht berechenbar)."""
+    try:
+        if expected_kwh is None or not clearsky_kwh or float(clearsky_kwh) <= 0:
+            return None
+        return float(expected_kwh) / float(clearsky_kwh) * 100.0
+    except (TypeError, ValueError):
+        return None
+
+
+def classify_day_relative(expected_kwh, clearsky_kwh):
+    """ClearSky-relative Tagesgüte für die Anzeige: 'schlecht' | 'mittel' | 'gut'.
+
+    <40 % ClearSky = schlecht (Wolke), 40–70 % = mittel (Sonne+Wolke),
+    ≥70 % = gut (Sonne). None, wenn kein ClearSky-Bezug möglich.
+    """
+    ratio = clearsky_ratio_pct(expected_kwh, clearsky_kwh)
+    if ratio is None:
+        return None
+    schlecht_unter, mittel_unter = RELATIVE_QUALITY_THRESHOLDS_PCT
+    if ratio < schlecht_unter:
+        return 'schlecht'
+    if ratio < mittel_unter:
+        return 'mittel'
+    return 'gut'
+
+
 # WMO Wetter-Codes → Klartext
 WMO_CODES = {
     0: "Klar",

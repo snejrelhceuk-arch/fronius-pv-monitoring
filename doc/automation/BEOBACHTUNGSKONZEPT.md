@@ -56,7 +56,7 @@ Hersteller-/Produktvorgaben. Latenz ~200 ms.
 
 | Datenpunkt | Kanal | Intervall | Quelle |
 |---|---|---|---|
-| 5-min-Aggregat PV/Verbrauch/Netz | CSV Export | täglich (Cron) | imports/solarweb/ |
+| 5-min-Aggregat PV/Verbrauch/Netz | CSV Export | täglich (Cron) | doc/csv/ |
 | Historische kWh-Daten | SolarWeb API | bei Bedarf | scripts/import_solarweb_daily.py |
 
 **Status:** ✅ Import aktiv. Nur für Retrospektive/Kalibrierung, nicht für Echtzeit-Steuerung.

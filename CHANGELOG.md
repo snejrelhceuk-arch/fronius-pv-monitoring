@@ -5,6 +5,47 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.0.0] - 2026-09-23
+
+Großer Versionssprung: die prognosebasierte Batterie-Automation wurde grundlegend überarbeitet, neue Analyse-Werkzeuge (Speicherausbau-Amortisation, Batterie-Redesign) kamen hinzu, das System wurde gegen Netzausfälle gehärtet und der Betrieb aller vier Pi-Hosts durchgängig automatisiert.
+
+### Automation (Rolle C)
+- **Prognose → numerische Tagesgüte-Stufen:** Alle prognoseabhängigen Regeln (Morgen-SOC-Min, Nachmittag-SOC-Max, Komfort-Reset, Nachtlast-Öffnung, Heizpatrone, Klimaanlage) vergleichen jetzt numerische Tiers (`FC_TIER_SCHLECHT/MITTEL/GUT`, absolut aus der Tages-kWh-Prognose) statt Qualitäts-Strings — konsistent und beweisbar verhaltensgleich. (`automation/engine/param_matrix.py`, `automation/engine/regeln/soc_steuerung.py`, `automation/engine/regeln/geraete.py`)
+- **Getrennte Anzeige-Klassifikation:** Neue ClearSky-relative Tagesgüte (`classify_day_relative`, Schwellen 40 %/70 %) ausschließlich für die Anzeige — ein klarer, ertragsarmer Wintertag erscheint nicht mehr als „schlecht“, während die Automation weiterhin die absolut verfügbare Energie für die Lastplanung nutzt. (`solar_forecast.py`, `routes/system/battery.py`)
+- **Komfort-SOC-Untergrenze 25 % → 20 %** (`komfort_min`, `soc_min_netz`): mehr nutzbare Kapazität bei erhaltener LFP-Schonung; Handbuch (`doc/automation/PV_CONFIG_HANDBUCH.md`) auf den IST-Stand nachgezogen.
+- **Automation-Neustart-Skript** `scripts/restart_automation.sh`: systemd-Restart mit Selbstprüfung (PID-Wechsel, Journal-Traceback-Scan, frischer RAM-DB-Heartbeat = Engine-Loop lebt).
+
+### Web / Analyse (Rolle B)
+- **Speicherausbau-Amortisationsnachweis** (`/analyse/speicherausbau`): vermeidbarer Netzbezug, Abregelungs-Rekonstruktion, Optimum und Amortisationsrechnung. (`web-analyse-speicherausbau.card.md`)
+- **Analyse-Batterie Redesign:** intervallbezogene Vollzyklen und SOH-Historie; PV-Übersicht mit eigener Batterie-Gruppe (Kopf links/grün, zentrierter Header).
+- **PV-Übersicht:** Bestenliste (Top-3-Medaillen) und Extremwerte-Tabellen (U/f/P_max) im deutschen Zahlenformat; Investitionsaufstellung aktualisiert.
+- **Flow-Ansicht:** Batterie-Bubble zeigt kWh (Clip-Fill) mit Deep-Link zu `/analyse/batterie`, 4. Infozeilen für Netz/Batterie, mobil pannbar, SOC-stabilisiert.
+
+### Netzqualität (Rolle N)
+- **Spektralanalyse auf Einzelseiten** inkl. Reflexionserkennung; Periodogramm „Seit Beginn“ mit spannenabhängiger Auflösung.
+- **PAC4200-Clone-Host** + Info-Overlay (IST-Stand); ehrlicher PAC4200↔Fronius-SM-Energievergleich (ungültige Tage explizit angeglichen).
+
+### Diagnos (Rolle D)
+- **Tagesbericht:** Reife-Gate + Versand-Drossel, reiner Energie-Auszug (00:00) und Lücken-Akzeptanz.
+- NQ-Beobachtung, feld-differenzierter Rollup-Fix, Log-Überlaufwache.
+
+### Infrastruktur / Betrieb
+- **Netzausfall-Härtung (2026-09-08):** Zeit-Sync-Gate (daten-schreibende Dienste warten auf `time-sync.target`), Uhr-Skew-Fix und Chart-Marker für Netzausfälle.
+- **Host-weites Upgrade-Skript** `scripts/upgrade_all_pis.sh` (alle vier Pis von Primary aus, role-guarded).
+- **Rollenbasierte Reboot-Skripte** `scripts/1_reboot_Tech.sh`, `2_reboot_K.sh`, `3_reboot_FB.sh`, `4_reboot_Prim.sh` mit Selbstprüfung (boot_id-Wechsel, Dienst-/Timer-Status, FB-tmpfs-Mirror = Failover-Bereitschaft; Primary abgeleitet von `secure_shutdown.sh`).
+- **Doku-Drift-Engine rollenbasiert:** läuft nur auf Primary, No-Op auf Failover-/Mirror-Hosts; komma-getrennte `applyTo`-Muster werden korrekt aufgelöst. (`tools/doc_drift_engine.py`)
+- **SolarWeb-CSV konsolidiert** nach `doc/csv/` (Single Source, versioniert, auf alle Hosts gesynct) — `imports/`-Dupletten entfernt. (`scripts/fetch_solarweb_daily.py`, `scripts/import_solarweb_daily.py`)
+- **Workspace-Backup Pi5** `scripts/backup_workspace.sh` (Datums-Snapshot + optionaler DB-Backup-Sync).
+
+### Fixes
+- **Morgen-SOC_MIN** öffnet bei guter Prognose zuverlässig auf 5 %; **Nachtlast-Öffnung** entblockt, wenn `SOC_MIN == komfort_min`.
+- **Tag-Chart** routet ältere Tage vollständig aus der 5-min-Permanent-DB (30 Tage `raw_data`).
+
+### Removed
+- Verwaiste Entwicklungs-Artefakte (Planungs-Prompt, Materialplan-/Stellungnahme-Vorlagen); generierte Monats-Reports (`reports/monthly/`) aus dem Tracking genommen und gitignored.
+
+---
+
 ## [2.0.0] - 2026-08-08
 
 ### Changed

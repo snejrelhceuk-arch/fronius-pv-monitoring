@@ -47,7 +47,7 @@ def _ex_time(ts):
 
 
 def _extremes_tag(cur, date_param):
-    """Tages-Extremwerte (Leistung, Spannung, Frequenz, cos φ) inkl. Uhrzeit."""
+    """Tages-Extremwerte (Leistung, Spannung, Frequenz) inkl. Uhrzeit."""
     if not date_param:
         date_param = datetime.now().strftime('%Y-%m-%d')
     overall = {}
@@ -106,20 +106,11 @@ def _extremes_tag(cur, date_param):
             'max': round(fmax[1], 3), 'max_label': _ex_time(fmax[0]),
         }
 
-    # Leistungsfaktor – nur raw_data (≤7 Tage)
-    pfmin = _ex_one(cur, 'raw_data', 'PF_Netz', w1 + " AND PF_Netz BETWEEN -1.0 AND 1.0", p1, 'ASC')
-    pfmax = _ex_one(cur, 'raw_data', 'PF_Netz', w1 + " AND PF_Netz BETWEEN -1.0 AND 1.0", p1, 'DESC')
-    if pfmin and pfmax:
-        overall['powerfactor'] = {
-            'min': round(pfmin[1], 3), 'min_label': _ex_time(pfmin[0]),
-            'max': round(pfmax[1], 3), 'max_label': _ex_time(pfmax[0]),
-        }
-
     return {'period': 'tag', 'overall': overall, 'by_key': {}}
 
 
 def _vf_pf_extremes(cur, t0, t1, label_kind):
-    """Spannung (L-L), Frequenz, cos φ – Min/Max mit Zeitstempel-Label.
+    """Spannung (L-L), Frequenz – Min/Max mit Zeitstempel-Label.
 
     Quelle data_1min (Minute, ≤90 Tage, mit Zeit). Fallback data_monthly
     (Monatsaggregat, ohne präzise Zeit). label_kind: 'time'|'date'|'datey'.
@@ -158,16 +149,6 @@ def _vf_pf_extremes(cur, t0, t1, label_kind):
         if fn and fx:
             out['frequency'] = {'min': round(fn[1], 3), 'min_label': lab(fn[0]),
                                 'max': round(fx[1], 3), 'max_label': lab(fx[0])}
-        try:
-            pn = _ex_one(cur, 'data_1min', 'PF_Netz_min',
-                         "ts >= ? AND ts < ? AND PF_Netz_min BETWEEN -1 AND 1", p, 'ASC')
-            px = _ex_one(cur, 'data_1min', 'PF_Netz_max',
-                         "ts >= ? AND ts < ? AND PF_Netz_max BETWEEN -1 AND 1", p, 'DESC')
-            if pn and px:
-                out['powerfactor'] = {'min': round(pn[1], 3), 'min_label': lab(pn[0]),
-                                      'max': round(px[1], 3), 'max_label': lab(px[0])}
-        except Exception:
-            pass
         if out:
             return out
 
@@ -194,7 +175,7 @@ def _vf_pf_extremes(cur, t0, t1, label_kind):
 
 
 def _extremes_monat(cur, year, month):
-    """Pro Tag: Peak-Leistung (System) + Spannung/Frequenz/cos φ mit Uhrzeit."""
+    """Pro Tag: Peak-Leistung (System) + Spannung/Frequenz mit Uhrzeit."""
     if not year or not month:
         now = datetime.now()
         year, month = now.year, now.month
@@ -220,7 +201,7 @@ def _extremes_monat(cur, year, month):
 
 
 def _extremes_jahr(cur, year):
-    """Pro Monat: größter/kleinster Tagesertrag, System-Peak-Tag, Spannung/Frequenz/cos φ (mit Datum)."""
+    """Pro Monat: größter/kleinster Tagesertrag, System-Peak-Tag, Spannung/Frequenz (mit Datum)."""
     if not year:
         year = datetime.now().year
     first_ts = int(datetime(year, 1, 1).timestamp())
@@ -260,7 +241,7 @@ def _extremes_jahr(cur, year):
 
 
 def _extremes_gesamt(cur):
-    """Pro Jahr: ertragsreichster/-ärmster Monat, System-Peak (Tag), Spannung/Frequenz/cos φ (mit Datum)."""
+    """Pro Jahr: ertragsreichster/-ärmster Monat, System-Peak (Tag), Spannung/Frequenz (mit Datum)."""
     cur.execute("""
         SELECT CAST(strftime('%Y', datetime(ts, 'unixepoch', 'localtime')) AS INTEGER) AS y,
                CAST(strftime('%m', datetime(ts, 'unixepoch', 'localtime')) AS INTEGER) AS m,
@@ -299,13 +280,10 @@ def api_period_extremes():
     """Einheitliche Perioden-Extremwerte für konsistente Tooltips in Monitoring
     (tag_view) und Analyse (erzeuger/verbraucher).
 
-    period=tag    -> overall {power, voltage, frequency, powerfactor} (inkl. Uhrzeit)
+    period=tag    -> overall {power, voltage, frequency} (inkl. Uhrzeit)
     period=monat  -> by_key[day]   {power, frequency}
     period=jahr   -> by_key[month] {yield_max, yield_min, power, voltage, frequency}
     period=gesamt -> by_key[year]  {yield_max, yield_min, power, voltage, frequency}
-
-    Hinweis: cos φ (PF) nur aus raw_data (≤7 Tage) verfügbar; in Monat/Jahr/Gesamt
-    daher historisch nicht enthalten (siehe PF-Aggregation in data_1min).
     """
     try:
         period = request.args.get('period', 'tag')

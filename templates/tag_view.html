@@ -1099,7 +1099,7 @@
                 console.log('Daten geladen:', chartData.datapoints.length, 'Punkte',
                              chartData.forecast ? '(PROGNOSE)' : '(MESSDATEN)');
                 
-                // Tages-Extremwerte (Spannung/Frequenz/cos φ mit Uhrzeit) für Tooltip
+                // Tages-Extremwerte (Spannung/Frequenz mit Uhrzeit) für Tooltip
                 tagExtremes = null;
                 if (window.PVExtremes && daysAhead <= 0) {
                     try {
@@ -1173,8 +1173,13 @@
             });
             
             const kwh = chartData.expected_kwh || 0;
-            const quality = chartData.quality || '?';
-            const qualityEmoji = quality === 'gut' ? '☀️' : quality === 'mittel' ? '⛅' : '☁️';
+            const csKwh = clearSkyData ? clearSkyData.total_kwh : null;
+            // Tagesgüte ClearSky-relativ (Anzeige): <40 % Wolke, 40–70 % gemischt, ≥70 % Sonne.
+            // Absolutwerte würden klare Wintertage fälschlich als „schlecht" zeigen.
+            const ratioPct = (csKwh && csKwh > 0) ? (kwh / csKwh * 100) : null;
+            const qualityEmoji = ratioPct != null
+                ? (ratioPct >= 70 ? '☀️' : ratioPct >= 40 ? '⛅' : '☁️')
+                : (chartData.quality === 'gut' ? '☀️' : chartData.quality === 'mittel' ? '⛅' : '☁️');
             const weather = chartData.weather_text || '';
             const sunrise = chartData.sunrise ? chartData.sunrise.substring(11, 16) : '';
             const sunset = chartData.sunset ? chartData.sunset.substring(11, 16) : '';
@@ -1183,7 +1188,6 @@
             const tempMax = chartData.temp_max != null ? chartData.temp_max : '?';
             
             const titleText = `${qualityEmoji} Prognose: ${kwh.toFixed(1)} kWh — ${weather}`;
-            const csKwh = clearSkyData ? clearSkyData.total_kwh : null;
             const subtitleText = `☀ ${sunrise}–${sunset}  |  ${sunshine.toFixed(1)}h Sonne  |  ${tempMin}°/${tempMax}°C` +
                 (csKwh ? `  |  ☼ Clear Sky: ${csKwh.toFixed(1)} kWh` : '');
             
@@ -1372,15 +1376,16 @@
         }
         
         // Dynamische Y-Achse: Minimum 10kW, auf 5kW-Stufen aufgerundet
-        function calcYMax() {
+        function calcYMax(markerPeak) {
             let maxVal = 10000; // Minimum 10 kW
-            // Monitoring-Daten prüfen
             if (chartData && chartData.datapoints) {
                 chartData.datapoints.forEach(dp => {
                     if (dp.p_produktion > maxVal) maxVal = dp.p_produktion;
                     // Auch Stacked-Summe prüfen (Ertrag-Chart)
                     const stacked = (dp.p_direct_ertrag || 0) + (dp.p_inbatt_pv || 0) + (dp.p_exp || 0);
                     if (stacked > maxVal) maxVal = stacked;
+                    // Verbrauch kann Erzeugung übersteigen (Peak-Marker Verbrauch-Chart).
+                    if (dp.p_haushalt > maxVal) maxVal = dp.p_haushalt;
                 });
             }
             // Forecast-Daten prüfen
@@ -1393,8 +1398,11 @@
             if (clearSkyData && clearSkyData.peak_w && clearSkyData.peak_w > maxVal) {
                 maxVal = clearSkyData.peak_w;
             }
-            // Auf 5000er-Stufen aufrunden (10000, 15000, 20000, 25000, 30000)
-            return Math.ceil(maxVal / 5000) * 5000;
+            // Peak-Marker (Pin + Label) darf den oberen Rahmen nie touchieren → Luft lassen,
+            // auf 5000er-Stufen (10000, 15000, 20000, 25000, 30000).
+            return (window.PVChart && PVChart.peakHeadroomMax)
+                ? PVChart.peakHeadroomMax(maxVal, markerPeak, { floor: 10000, round: 5000 })
+                : Math.ceil(maxVal / 5000) * 5000;
         }
         
         // Tages-Grenzen: immer 00:00 – 23:59 des aktuellen Tages
@@ -1696,7 +1704,7 @@
                 },
                 xAxis: getTimeXAxis(),
                 yAxis: [
-                    { type: 'value', name: mobile ? '' : 'Leistung (W)', position: 'left', min: 0, max: calcYMax(),
+                    { type: 'value', name: mobile ? '' : 'Leistung (W)', position: 'left', min: 0, max: calcYMax(peakVal),
                       axisLabel: mobile ? { fontSize: 9, formatter: v => v >= 1000 ? (v/1000)+'k' : String(v) } : {} },
                     { type: 'value', name: mobile ? '' : '%', position: 'right', min: 0, max: 100, scale: false,
                       axisLabel: mobile ? { fontSize: 9 } : {} }
@@ -1704,7 +1712,7 @@
                 series: series
             };
             
-            console.log('Ertrag-Option gesetzt, yMax:', calcYMax());
+            console.log('Ertrag-Option gesetzt, yMax:', calcYMax(peakVal));
             if (window.PVChart && option.tooltip) option.tooltip = PVChart.tooltipResponsive(option.tooltip);
             chart.setOption(option);
         }
@@ -1933,7 +1941,7 @@
                 },
                 xAxis: getTimeXAxis(),
                 yAxis: [
-                    { type: 'value', name: mobile ? '' : 'Leistung (W)', position: 'left', min: 0, max: calcYMax(),
+                    { type: 'value', name: mobile ? '' : 'Leistung (W)', position: 'left', min: 0, max: calcYMax(vPeakVal),
                       axisLabel: mobile ? { fontSize: 9, formatter: v => v >= 1000 ? (v/1000)+'k' : String(v) } : {} },
                     { type: 'value', name: mobile ? '' : '%', position: 'right', min: 0, max: 100, scale: false,
                       axisLabel: mobile ? { fontSize: 9 } : {} }

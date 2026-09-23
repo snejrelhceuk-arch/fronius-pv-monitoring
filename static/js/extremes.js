@@ -35,7 +35,7 @@
     }
 
     // Extremwert-Block für einen Balken (Monat=Tag, Jahr=Monat, Gesamt=Jahr).
-    // Auf kleinen Bildschirmen kompakter (V/f/cosφ einzeilig, kürzere Labels).
+    // Auf kleinen Bildschirmen kompakter (V/f einzeilig, kürzere Labels).
     function lines(entry, opts) {
         opts = opts || {};
         var mobile = opts.mobile != null ? opts.mobile : isMobile();
@@ -53,18 +53,13 @@
 
         var v = rangeLine('Spannung', entry.voltage, 'V', mobile ? 0 : 1, mobile);
         var f = rangeLine('Frequenz', entry.frequency, 'Hz', mobile ? 2 : 3, mobile);
-        var pf = entry.powerfactor
-            ? (mobile
-                ? 'cos φ: ' + de(entry.powerfactor.min, 2) + ' – ' + de(entry.powerfactor.max, 2)
-                : 'cos φ: ' + de(entry.powerfactor.min, 2) + lbl(entry.powerfactor.min_label) + ' – ' + de(entry.powerfactor.max, 2) + lbl(entry.powerfactor.max_label))
-            : null;
-        [v, f, pf].forEach(function (x) { if (x) out.push(x); });
+        [v, f].forEach(function (x) { if (x) out.push(x); });
 
         if (!out.length) return '';
         return '<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>' + out.join('<br/>');
     }
 
-    // Tages-Extremwerte (Peak + Spannung/Frequenz/cosφ mit Uhrzeit).
+    // Tages-Extremwerte (Peak + Spannung/Frequenz mit Uhrzeit).
     function tagLines(overall, opts) {
         opts = opts || {};
         var mobile = opts.mobile != null ? opts.mobile : isMobile();
@@ -73,12 +68,7 @@
         if (overall.power) out.push('Peak-Leistung: ' + de(overall.power.kw, 2) + ' kW' + lbl(overall.power.label));
         var v = rangeLine('Spannung', overall.voltage, 'V', mobile ? 0 : 1, mobile);
         var f = rangeLine('Frequenz', overall.frequency, 'Hz', mobile ? 2 : 3, mobile);
-        var pf = overall.powerfactor
-            ? (mobile
-                ? 'cos φ: ' + de(overall.powerfactor.min, 2) + ' – ' + de(overall.powerfactor.max, 2)
-                : 'cos φ: ' + de(overall.powerfactor.min, 2) + lbl(overall.powerfactor.min_label) + ' – ' + de(overall.powerfactor.max, 2) + lbl(overall.powerfactor.max_label))
-            : null;
-        [v, f, pf].forEach(function (x) { if (x) out.push(x); });
+        [v, f].forEach(function (x) { if (x) out.push(x); });
         if (!out.length) return '';
         return out.join('<br/>');
     }

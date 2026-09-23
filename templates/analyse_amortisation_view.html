@@ -20,15 +20,6 @@
     <div class="container">
         <div class="top-nav"></div>
 
-        {% if freq_extremes %}
-        <div class="freq-info-line">
-            Netzfrequenz:
-            {% if freq_extremes.f_max %}<span class="freq-max">Max. {{ "%.3f"|format(freq_extremes.f_max)|replace('.', ',') }} Hz</span> ({{ freq_extremes.f_max_label }} Uhr){% endif %}
-            {% if freq_extremes.f_max and freq_extremes.f_min %} · {% endif %}
-            {% if freq_extremes.f_min %}<span class="freq-min">Min. {{ "%.3f"|format(freq_extremes.f_min)|replace('.', ',') }} Hz</span> ({{ freq_extremes.f_min_label }} Uhr){% endif %}
-        </div>
-        {% endif %}
-
         <!-- Summary Cards -->
         <div class="summary-cards">
             <div class="summary-card">

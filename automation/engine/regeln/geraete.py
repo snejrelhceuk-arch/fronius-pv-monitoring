@@ -25,6 +25,7 @@ from automation.engine.regeln.basis import Regel
 from automation.engine.param_matrix import (
     ist_aktiv, get_param, get_score_gewicht,
     classify_forecast_kwh, get_effective_forecast_quality,
+    get_forecast_tier, forecast_tier_of, FC_TIER_MITTEL, FC_TIER_GUT,
 )
 from automation.engine.schaltlog import logge_extern
 
@@ -428,9 +429,10 @@ class RegelHeizpatrone(Regel):
                     mittel (40-100):        HP + WP ok, HP + EV → HP pausiert
                     schlecht (<40):         HP nicht automatisch (nur Extern)
         """
-        if potenzial == 'gut':
+        tier = forecast_tier_of(potenzial)
+        if tier >= FC_TIER_GUT:
             return True  # Alles parallel erlaubt
-        if potenzial == 'mittel':
+        if tier == FC_TIER_MITTEL:
             return not ev_aktiv  # WP ok, EV → HP pausiert
         # schlecht: kein Parallelbetrieb
         return not (wp_aktiv or ev_aktiv)
@@ -445,9 +447,10 @@ class RegelHeizpatrone(Regel):
         Returns: Schwellwert in Watt
         """
         basis = get_param(matrix, self.regelkreis, 'min_ladeleistung_w', 5000)
-        if potenzial == 'gut':
+        tier = forecast_tier_of(potenzial)
+        if tier >= FC_TIER_GUT:
             return max(2000, basis * 0.5)    # 50% → 2500W
-        if potenzial == 'mittel':
+        if tier == FC_TIER_MITTEL:
             return max(2500, basis * 0.7)    # 70% → 3500W
         # schlecht: volle Schwelle
         return basis
@@ -529,9 +532,10 @@ class RegelHeizpatrone(Regel):
                                                                 füllen noch nicht nötig)
                     schlecht (<40):       nie toleriert
         """
-        if potenzial == 'gut':
+        tier = forecast_tier_of(potenzial)
+        if tier >= FC_TIER_GUT:
             return True
-        if potenzial == 'mittel':
+        if tier == FC_TIER_MITTEL:
             # Batterie ist noch gedeckelt → Entladung ist "normal"
             return soc_max_eff <= 75
         return False  # schlecht → keine Toleranz
@@ -568,8 +572,7 @@ class RegelHeizpatrone(Regel):
           2) Entweder Lastdeckung jetzt+30min ODER positiver Trend bis +30min
              mit ausreichender SOC-Brücke für die Übergangszeit.
         """
-        quality = get_effective_forecast_quality(obs, matrix) or ''
-        tagesqualitaet_gut = quality == 'gut'
+        tagesqualitaet_gut = get_forecast_tier(obs, matrix) >= FC_TIER_GUT
         if not tagesqualitaet_gut:
             return False, ''
 
@@ -953,7 +956,7 @@ class RegelHeizpatrone(Regel):
                 wp_ok = (obs.wp_power_w or 0) < d_wp
                 ev_ok = (obs.ev_power_w or 0) < d_ev
                 soc_ok = soc > drain_start_soc
-                forecast_ok = (get_effective_forecast_quality(obs, matrix) or '') in ('gut', 'mittel')
+                forecast_ok = get_forecast_tier(obs, matrix) >= FC_TIER_MITTEL
 
                 # Prognose zeigt ≥ drain_min_prognose_kw zeitnah (sunrise + Horizont)
                 # Nicht den ganzen Tag prüfen — Nachmittagssonne rechtfertigt
@@ -1452,7 +1455,7 @@ class RegelHeizpatrone(Regel):
                 wp_ok = (obs.wp_power_w or 0) < d_wp
                 ev_ok = (obs.ev_power_w or 0) < d_ev
                 soc_ok = soc > drain_start_soc
-                forecast_ok = (get_effective_forecast_quality(obs, matrix) or '') in ('gut', 'mittel')
+                forecast_ok = get_forecast_tier(obs, matrix) >= FC_TIER_MITTEL
 
                 # Prognose zeitnah: nur Stunden bis sunrise + Horizont
                 prognose_stark = False
@@ -1940,7 +1943,7 @@ class RegelKlimaanlage(RegelHeizpatrone):
         return float(get_param(matrix, self.regelkreis, 'initial_temp_c', 15))
 
     def _forecast_ist_gut(self, obs: ObsState, matrix: dict) -> bool:
-        return (get_effective_forecast_quality(obs, matrix) or '') == 'gut'
+        return get_forecast_tier(obs, matrix) >= FC_TIER_GUT
 
     def _start_temp_nach_sunrise(self, obs: ObsState, matrix: dict) -> float:
         """Start-Schwelle nach Sunrise abhängig von der Prognosequalität."""

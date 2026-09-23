@@ -25,6 +25,7 @@ from automation.engine.regeln.soc_extern import soc_extern_tracker
 from automation.engine.param_matrix import (
     ist_aktiv, get_param, get_score_gewicht,
     get_effective_forecast_quality, get_forecast_quality_thresholds,
+    get_forecast_tier, forecast_tier_of, FC_TIER_SCHLECHT, FC_TIER_MITTEL, FC_TIER_GUT,
 )
 
 LOG = logging.getLogger('engine')
@@ -73,7 +74,7 @@ def _nachtlast_oeffnung_noetig(obs: ObsState, matrix: dict) -> bool:
     Stunden vor Sunrise Netzbezug entsteht, wird SOC_MIN frühzeitig geöffnet.
     So bleibt Nachtlast bei gutem Forecast nicht unnötig am Netz.
     """
-    if (get_effective_forecast_quality(obs, matrix) or '') != 'gut':
+    if get_forecast_tier(obs, matrix) < FC_TIER_GUT:
         return False
 
     sunrise = obs.sunrise
@@ -301,8 +302,7 @@ class RegelMorgenSocMin(Regel):
         """
         hr = _jetzt_h()
         sunrise = obs.sunrise or 7.0
-        quality = get_effective_forecast_quality(obs, matrix) or ''
-        if quality == 'gut':
+        if get_forecast_tier(obs, matrix) >= FC_TIER_GUT:
             vorlauf_h = get_param(matrix, self.regelkreis, 'gut_vorlauf_min', 90) / 60.0
         else:
             vorlauf_h = get_param(matrix, self.regelkreis, 'morgen_vorlauf_min', 30) / 60.0
@@ -318,9 +318,8 @@ class RegelMorgenSocMin(Regel):
         auf der HEUTIGEN Nacht-Prognose (= leichte Nacht → 25%), was für die
         Morgen-Entladung die falsche Richtung wäre.
         """
-        quality = get_effective_forecast_quality(obs, matrix) or ''
         stress_min = int(get_param(matrix, self.regelkreis, 'stress_min_pct', 5))
-        if quality == 'gut':
+        if get_forecast_tier(obs, matrix) >= FC_TIER_GUT:
             return stress_min
         return int(get_param(matrix, self.regelkreis, 'mittel_soc_min_pct', 15))
 
@@ -348,15 +347,16 @@ class RegelMorgenSocMin(Regel):
                      obs.soc_min, obs.batt_soc_pct or -1, obs.grid_power_w or 0)
             return score
 
-        # ── Forecast-Qualität — VETO und Timing ──
+        # ── Forecast-Qualität — VETO und Timing (Absolut-Stufe; Logs mit Klartext) ──
         quality = get_effective_forecast_quality(obs, matrix) or ''
+        tier = forecast_tier_of(quality)
 
-        if quality == 'schlecht':
+        if tier == FC_TIER_SCHLECHT:
             LOG.debug("morgen_soc_min: forecast_quality=schlecht → kein Öffnen")
             return 0
 
         # Für 'gut': kein pv_at_sunrise-Check nötig — quality=gut impliziert gute PV
-        if quality != 'gut':
+        if tier != FC_TIER_GUT:
             # ── TRIGGER: pv_at_sunrise_1h_w >= Schwelle ──
             schwelle = get_param(matrix, self.regelkreis, 'pv_schwelle_sunrise_1h_w', 1500)
             pv_sr1h = obs.pv_at_sunrise_1h_w
@@ -366,7 +366,7 @@ class RegelMorgenSocMin(Regel):
                 return 0
 
             # ── VERZÖGERUNG: 'mittel' → erst Sunrise + 1h (abzgl. Vorlauf) ──
-            if quality == 'mittel':
+            if tier == FC_TIER_MITTEL:
                 now_h = datetime.now().hour + datetime.now().minute / 60.0
                 sunrise = obs.sunrise or 7.0
                 vorlauf_h = get_param(matrix, self.regelkreis, 'morgen_vorlauf_min', 30) / 60.0
@@ -596,8 +596,7 @@ class RegelNachmittagSocMax(Regel):
             # entlastet BMS-Hysterese (kein ständiges Nachladen).
             if ziel_max == 100 and obs.soc_mode == 'manual':
                 min_soc = int(get_param(matrix, self.regelkreis, 'auto_switch_min_soc_pct', 15))
-                quality = get_effective_forecast_quality(obs, matrix) or ''
-                if quality != 'gut':
+                if get_forecast_tier(obs, matrix) < FC_TIER_GUT:
                     return 0  # Prognose unsicher → Phase 1 halten
                 if obs.batt_soc_pct is None or obs.batt_soc_pct <= min_soc:
                     return 0  # SOC zu niedrig → erst weiter laden
@@ -678,10 +677,9 @@ class RegelNachmittagSocMax(Regel):
         # UND SOC > min_soc (default 15%). PV-Refill ist gesichert → kein Bedarf
         # mehr für manuelles 100%-Halten; Auto entlastet BMS-Hysterese.
         min_soc = int(get_param(matrix, self.regelkreis, 'auto_switch_min_soc_pct', 15))
-        quality_now = get_effective_forecast_quality(obs, matrix) or ''
         if (soc_max_ziel == 100 and obs.soc_mode == 'manual'
                 and obs.soc_max == 100
-                and quality_now == 'gut'
+                and get_forecast_tier(obs, matrix) >= FC_TIER_GUT
                 and obs.batt_soc_pct is not None and obs.batt_soc_pct > min_soc):
             LOG.info(
                 "nachmittag_soc_max: Prognose=gut, SOC %.1f%% > %d%% → Fronius Auto-Modus"
@@ -783,7 +781,7 @@ class RegelKomfortReset(Regel):
         Erweitert (2026-04-06): Prüft SOC_MIN < Komfort statt <= Stress,
         da der Morgen-Algorithmus jetzt dynamisch 5-25% setzt.
         """
-        if (get_effective_forecast_quality(obs, matrix) or '') != 'gut':
+        if get_forecast_tier(obs, matrix) < FC_TIER_GUT:
             return False
 
         sunrise = obs.sunrise

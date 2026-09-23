@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Holt tägliche Energiedaten aus dem Fronius Solarweb-Portal und schreibt sie
-in imports/solarweb/solarweb_daily_YYYY-MM_working.csv.
+in doc/csv/solarweb_daily_YYYY-MM_working.csv.
 
 Authentifizierung: Solarweb-Username/Passwort aus .secrets (Schlüssel: Passwort)
 API: Interne Solarweb Chart-API (/Chart/GetChartNew) über Browser-Session.
@@ -41,7 +41,7 @@ LOG = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SECRETS_PATH = REPO_ROOT / '.secrets'
-SOLARWEB_DIR = REPO_ROOT / 'imports' / 'solarweb'
+SOLARWEB_DIR = REPO_ROOT / 'doc' / 'csv'
 
 PV_SYSTEM_ID = 'e8220064-2767-4646-a534-12f14c07ebb9'
 SOLARWEB_BASE = 'https://www.solarweb.com'

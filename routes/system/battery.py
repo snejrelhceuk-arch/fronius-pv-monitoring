@@ -90,7 +90,6 @@ def _build_flow_status_result(now, api):
         if day_fc:
             expected_kwh = day_fc.get('expected_kwh') if day_fc else None
             clearsky_kwh = day_fc.get('clearsky_kwh') if day_fc else None
-            ratio_pct = None
 
             if clearsky_kwh is None:
                 try:
@@ -106,14 +105,13 @@ def _build_flow_status_result(now, api):
                     logging.debug(f"PV-ClearSky für Flow-Status nicht verfügbar: {cs_err}")
 
             quality = day_fc.get('quality') if day_fc else None
-            if expected_kwh is not None and clearsky_kwh and clearsky_kwh > 0:
-                ratio_pct = (float(expected_kwh) / float(clearsky_kwh)) * 100.0
-                if ratio_pct < 40.0:
-                    quality = 'schlecht'
-                elif ratio_pct < 70.0:
-                    quality = 'mittel'
-                else:
-                    quality = 'gut'
+            # Charakterisierung ClearSky-relativ (Anzeige) — überschreibt die
+            # absolute kWh-Einstufung, sobald ein ClearSky-Bezug vorliegt.
+            from solar_forecast import classify_day_relative, clearsky_ratio_pct
+            ratio_pct = clearsky_ratio_pct(expected_kwh, clearsky_kwh)
+            rel_quality = classify_day_relative(expected_kwh, clearsky_kwh)
+            if rel_quality is not None:
+                quality = rel_quality
 
             # Emoji-Mapping wie in solar_forecast.py
             def _quality_emoji(quality):

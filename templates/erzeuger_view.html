@@ -546,7 +546,10 @@
                     nameLocation: 'end',
                     min: 0,
                     max: function(value) {
-                        return Math.min(30000, Math.max(10000, Math.ceil(value.max / 1000) * 1000));
+                        // Peak-Marker (Gesamtkurve) darf den oberen Rahmen nie touchieren → Luft lassen.
+                        return (window.PVChart && PVChart.peakHeadroomMax)
+                            ? PVChart.peakHeadroomMax(value.max, peakVal, { floor: 10000, cap: 30000, round: 1000 })
+                            : Math.min(30000, Math.max(10000, Math.ceil(value.max / 1000) * 1000));
                     },
                     axisLabel: {
                         formatter: function(value) {

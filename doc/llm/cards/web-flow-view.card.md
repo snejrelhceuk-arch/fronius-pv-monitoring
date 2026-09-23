@@ -4,7 +4,7 @@ domain: web
 role: B
 applyTo: "templates/flow_view.html"
 status: stable
-last_review: 2026-09-13
+last_review: 2026-09-23
 ---
 
 # Flow-Ansicht Rendering-Mechanik
@@ -21,6 +21,7 @@ Wirkung.
 - **SVG-Skalierung/Pan:** `templates/flow_view.html:adjustSvgViewBox` (setzt viewBox + Mobile-Wrapper)
 - **Overlay-/Layout-Sync:** `templates/flow_view.html:syncOverlayLayout` (ruft `adjustSvgViewBox`)
 - **Live-Daten:** `routes/realtime.py:/api/flow_realtime`, `/api/flow_devices`; `routes/system/battery.py:/api/flow_status`
+- **Tagesgüte-Icon (ClearSky-relativ):** `routes/system/battery.py:_build_flow_status_result` setzt `pv_forecast_quality/-emoji` über `solar_forecast.classify_day_relative` (Prognose/ClearSky: <40 % ☁️ schlecht, 40–70 % ⛅ mittel, ≥70 % ☀️ gut) — **nicht** die absolute kWh-Einstufung. Renderer `templates/flow_view.html:setPvForecastIcon`.
 
 ## Rendering-Mechanik (IST)
 - **Ein festes SVG** mit `viewBox="130 -40 590 460"` (Konstante `DEFAULT_VIEWBOX`). Alle Knoten

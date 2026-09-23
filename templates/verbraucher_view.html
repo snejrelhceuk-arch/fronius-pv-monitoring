@@ -502,7 +502,10 @@
                     nameLocation: 'end',
                     min: 0,
                     max: function(value) {
-                        return Math.min(30000, Math.max(10000, Math.ceil(value.max / 1000) * 1000));
+                        // Peak-Marker sitzt auf dem Gesamtverbrauch (nicht gezeichnet) → Luft dafür lassen.
+                        return (window.PVChart && PVChart.peakHeadroomMax)
+                            ? PVChart.peakHeadroomMax(value.max, peakVal, { floor: 10000, cap: 30000, round: 1000 })
+                            : Math.min(30000, Math.max(10000, Math.ceil(value.max / 1000) * 1000));
                     },
                     axisLabel: { formatter: '{value} W' }
                 },
