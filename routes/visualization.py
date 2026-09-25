@@ -819,15 +819,16 @@ def jahr_visualization():
         for row in rows:
             month, solar, bezug, einsp, batt_lad, batt_entl, direkt, gesamt, heiz, wattpilot, sonnenstd = row
 
-            # Legacy-Logik fuer historische Jahre: Wattpilot dem Direktverbrauch zuordnen.
-            # (Anzeige-Konsolidierung; ändert nicht die Gesamtbilanz.)
-            direkt_monitoring = (direkt or 0) + ((wattpilot or 0) if year <= 2025 else 0)
-            # Konsistente Quelle für Verbrauch + Autarkie: gesamt_verbrauch_kwh aus
-            # monthly_statistics (counter-basiert via statistics.py). Fallback nur,
-            # wenn DB-Wert fehlt (historische Lücken).
+            # Direktverbrauch als Energiebilanz-Residuen: der Ertrag-Stapel geht exakt
+            # auf PV auf (solar−einsp−batt_lad), der Verbrauch-Stapel exakt auf den
+            # Gesamtverbrauch (gesamt−batt_entl−bezug). Wattpilot-aus-PV steckt bereits
+            # im Residual — kein separater Aufschlag (früher wurde fälschlich auch der
+            # netzgeladene Wattpilot-Anteil doppelt auf die Erzeugung addiert).
             gesamtverbrauch = (gesamt or 0)
             if gesamtverbrauch <= 0:
-                gesamtverbrauch = direkt_monitoring + (batt_entl or 0) + (bezug or 0)
+                gesamtverbrauch = (solar or 0) - (einsp or 0) - (batt_lad or 0) + (batt_entl or 0) + (bezug or 0)
+            direkt_ertrag = max(0.0, (solar or 0) - (einsp or 0) - (batt_lad or 0))
+            direkt_verbrauch = max(0.0, gesamtverbrauch - (batt_entl or 0) - (bezug or 0))
             autarkie = ((1 - (bezug or 0) / gesamtverbrauch) * 100) if gesamtverbrauch > 0 else 0
 
             datapoints.append({
@@ -835,7 +836,8 @@ def jahr_visualization():
                 'label': f'{month:02d}/{year}',
                 'w_einspeisung': round(einsp or 0, 2),
                 'w_batterieladung': round(batt_lad or 0, 2),
-                'w_direktverbrauch': round(direkt_monitoring, 2),
+                'w_direktverbrauch': round(direkt_ertrag, 2),
+                'w_direktverbrauch_verbrauch': round(direkt_verbrauch, 2),
                 'w_wattpilot': round(wattpilot or 0, 2),
                 'w_netzbezug': round(bezug or 0, 2),
                 'w_batterieentladung': round(batt_entl or 0, 2),
@@ -895,12 +897,16 @@ def gesamt_visualization():
             if not solar or solar < 1:
                 continue
 
-            # Legacy-Logik fuer historische Jahre: Wattpilot dem Direktverbrauch zuordnen.
-            direkt_monitoring = (direkt or 0) + ((wattpilot or 0) if year <= 2025 else 0)
-            # Konsistente Quelle: SUM(gesamt_verbrauch_kwh). Fallback nur bei DB-Lücke.
+            # Direktverbrauch als Energiebilanz-Residuen: der Ertrag-Stapel geht exakt
+            # auf PV auf (solar−einsp−batt_lad), der Verbrauch-Stapel exakt auf den
+            # Gesamtverbrauch (gesamt−batt_entl−bezug). Wattpilot-aus-PV steckt bereits
+            # im Residual — kein separater Aufschlag (früher wurde fälschlich auch der
+            # netzgeladene Wattpilot-Anteil doppelt auf die Erzeugung addiert).
             gesamtverbrauch = (gesamt or 0)
             if gesamtverbrauch <= 0:
-                gesamtverbrauch = direkt_monitoring + (batt_entl or 0) + (bezug or 0)
+                gesamtverbrauch = (solar or 0) - (einsp or 0) - (batt_lad or 0) + (batt_entl or 0) + (bezug or 0)
+            direkt_ertrag = max(0.0, (solar or 0) - (einsp or 0) - (batt_lad or 0))
+            direkt_verbrauch = max(0.0, gesamtverbrauch - (batt_entl or 0) - (bezug or 0))
             autarkie = ((1 - (bezug or 0) / gesamtverbrauch) * 100) if gesamtverbrauch > 0 else 0
 
             datapoints.append({
@@ -908,7 +914,8 @@ def gesamt_visualization():
                 'label': str(year),
                 'w_einspeisung': round(einsp or 0, 2),
                 'w_batterieladung': round(batt_lad or 0, 2),
-                'w_direktverbrauch': round(direkt_monitoring, 2),
+                'w_direktverbrauch': round(direkt_ertrag, 2),
+                'w_direktverbrauch_verbrauch': round(direkt_verbrauch, 2),
                 'w_wattpilot': round(wattpilot or 0, 2),
                 'w_netzbezug': round(bezug or 0, 2),
                 'w_batterieentladung': round(batt_entl or 0, 2),

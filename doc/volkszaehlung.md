@@ -1,41 +1,41 @@
 # Volkszählung — PV-System Workspace
 
-> Stand: 2026-09-23 · auto-generiert von `tools/generate_volkszaehlung.py` (pre-commit).
+> Stand: 2026-09-26 · auto-generiert von `tools/generate_volkszaehlung.py` (pre-commit).
 
 ## Übersicht
 
-**Gesamtgröße (Textdateien gezählt):** 2845 MB
-**Gesamtzeilen (Code/Doku/Daten):** 357.189 Zeilen
-**Gezählte Dateien:** 790
+**Gesamtgröße (Textdateien gezählt):** 3029 MB
+**Gesamtzeilen (Code/Doku/Daten):** 361.982 Zeilen
+**Gezählte Dateien:** 813
 **Ausgeschlossene Verzeichnisse:** 28 (.venv, __pycache__, node_modules, .git …)
 
 ## Nach Sprache/Typ
 
 | Sprache/Typ | Dateien | Zeilen | Anteil |
 |---|---|---|---|
-| **CSV** | 24 | 237.394 | 66.5% |
-| **Python** | 197 | 60.848 | 17.0% |
-| **Markdown** | 134 | 23.205 | 6.5% |
-| **HTML** | 28 | 16.295 | 4.6% |
+| **CSV** | 24 | 240.511 | 66.4% |
+| **Python** | 197 | 61.041 | 16.9% |
+| **Markdown** | 147 | 23.820 | 6.6% |
+| **HTML** | 28 | 16.398 | 4.5% |
 | **Shell** | 69 | 5.438 | 1.5% |
-| **JSON** | 274 | 4.696 | 1.3% |
-| **TXT** | 4 | 4.261 | 1.2% |
+| **JSON** | 282 | 4.720 | 1.3% |
+| **TXT** | 4 | 4.576 | 1.3% |
 | **SQL** | 10 | 1.427 | 0.4% |
-| **CSS** | 5 | 1.275 | 0.4% |
-| **JavaScript** | 5 | 1.126 | 0.3% |
+| **JavaScript** | 6 | 1.424 | 0.4% |
+| **CSS** | 6 | 1.403 | 0.4% |
 | **systemd** | 33 | 568 | 0.2% |
 | **YAML** | 3 | 562 | 0.2% |
 | **CONF** | 3 | 70 | 0.0% |
 | **TOML** | 1 | 24 | 0.0% |
-| **Total** | 790 | 357.189 | 100% |
+| **Total** | 813 | 361.982 | 100% |
 
 ## Python-Code nach ABCDEN-Rollen
 
 | Rolle | Verzeichnis | .py-Dateien | Zeilen |
 |---|---|---|---|
-| **C** Automation | `automation/` | 42 | 14.185 |
+| **C** Automation | `automation/` | 42 | 14.197 |
 | **A** Collector | `collector/` | 19 | 4.937 |
-| **B** Web-API | `routes/` | 20 | 11.192 |
+| **B** Web-API | `routes/` | 20 | 11.210 |
 | **D** Diagnos | `diagnos/` | 10 | 2.293 |
 | **E** Steuerbox | `steuerbox/` | 5 | 1.235 |
 | **N** Netzqualität | `nq/` | 37 | 9.066 |
@@ -44,14 +44,14 @@
 
 1. `automation/engine/regeln/geraete.py` — 2.303 Zeilen
 1. `solar_geometry.py` — 1.980 Zeilen
-1. `routes/pac4200.py` — 1.842 Zeilen
+1. `routes/pac4200.py` — 1.845 Zeilen
+1. `pv-config.py` — 1.550 Zeilen
 1. `routes/verbraucher.py` — 1.421 Zeilen
-1. `pv-config.py` — 1.393 Zeilen
 1. `solar_forecast.py` — 1.177 Zeilen
 1. `automation/engine/regeln/waermepumpe.py` — 1.132 Zeilen
 1. `routes/realtime.py` — 1.080 Zeilen
 1. `automation/engine/regeln/soc_steuerung.py` — 1.057 Zeilen
-1. `routes/visualization.py` — 937 Zeilen
+1. `routes/visualization.py` — 944 Zeilen
 
 ## Ausgeschlossene Bereiche
 

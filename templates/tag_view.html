@@ -956,7 +956,12 @@
 
         function getDirectConsumptionForBars(dp, year) {
             if (!dp) return 0;
-            return dp.w_direktverbrauch || 0;
+            // Verbrauchsbalken nutzt das Verbrauchs-Residual (gesamt−batt_entl−netzbezug),
+            // damit der Stapel exakt dem Gesamtverbrauch entspricht. Fallback = Ertrags-Feld
+            // (Tages-/Monatspfad liefert kein separates Verbrauchs-Residual).
+            return (dp.w_direktverbrauch_verbrauch != null
+                ? dp.w_direktverbrauch_verbrauch
+                : dp.w_direktverbrauch) || 0;
         }
 
         /**

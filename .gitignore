@@ -48,6 +48,9 @@ config/tls/
 # Lokale Kontroll-Datei (nicht im Repo)
 ToExamine.md
 
+# Lokale Planungs-/Entscheidungsfläche (nicht im Repo, siehe doc/PLAN/README.md)
+doc/PLAN/
+
 # Host-Rolle (pro Pi individuell, siehe doc/DUAL_HOST_ARCHITECTURE.md)
 .role
 .state/
