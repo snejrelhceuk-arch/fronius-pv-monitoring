@@ -203,7 +203,7 @@ function renderOsc() {
         const markArea = { silent: true, itemStyle: { color: 'rgba(16,185,129,0.10)' }, data: [[{ xAxis: r.echo.delta_t_s }, { xAxis: r.series.t_s[r.series.t_s.length - 1] }]] };
         chart.setOption({
             grid: { left: 60, right: 20, top: 20, bottom: 42 },
-            tooltip: { trigger: 'axis', confine: true, formatter: p => `t = ${p[0].value[0]} s<br/>U = ${p[0].value[1]} ${r.unit}` },
+            tooltip: PVChart.tooltipResponsive({ trigger: 'axis', confine: true, formatter: p => `t = ${p[0].value[0]} s<br/>U = ${p[0].value[1]} ${r.unit}` }),
             xAxis: { type: 'value', name: 't (s)', nameLocation: 'middle', nameGap: 28, axisLabel: { color: '#94a3b8' }, splitLine: { show: false } },
             yAxis: { type: 'value', name: r.unit, scale: true, axisLabel: { color: '#94a3b8' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
             series: [{ type: 'line', showSymbol: false, data, lineStyle: { width: 1.5, color: '#6ee7b7' }, markArea, markLine: { silent: true, symbol: 'none', data: [{ xAxis: r.echo.delta_t_s, label: { formatter: 'Echo', color: '#6ee7b7', fontSize: 10 }, lineStyle: { color: '#10b981', type: 'dashed' } }] } }]
@@ -216,7 +216,7 @@ function renderOsc() {
         const data = s.ts.map((t, i) => [t * 1000, s.values[i]]);
         chart.setOption({
             grid: { left: 60, right: 20, top: 20, bottom: 42 },
-            tooltip: { trigger: 'axis', confine: true, formatter: p => `${new Date(p[0].value[0]).toLocaleString('de-DE')}<br/>Δf = ${p[0].value[1]} ${s.unit}` },
+            tooltip: PVChart.tooltipResponsive({ trigger: 'axis', confine: true, formatter: p => `${new Date(p[0].value[0]).toLocaleString('de-DE')}<br/>Δf = ${p[0].value[1]} ${s.unit}` }),
             xAxis: { type: 'time', axisLabel: { color: '#94a3b8' } },
             yAxis: { type: 'value', name: 'Δf (' + s.unit + ')', axisLabel: { color: '#94a3b8' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
             series: [{

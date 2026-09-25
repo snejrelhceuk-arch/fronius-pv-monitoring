@@ -127,6 +127,20 @@
         burger.innerHTML = '☰';
         bar.insertBefore(burger, bar.firstChild);
 
+        // Direkter Flow-Schnellzugriff neben dem Menü-Button (nicht auf /flow selbst).
+        var herePath = window.location.pathname.replace(/\/$/, '') || '/';
+        if (herePath !== '/flow') {
+            var flowBtn = document.createElement('a');
+            flowBtn.className = 'pv-flow-quick';
+            flowBtn.href = '/flow';
+            flowBtn.setAttribute('aria-label', 'Flow-Ansicht öffnen');
+            flowBtn.title = 'Flow-Ansicht';
+            flowBtn.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">'
+                + '<circle cx="5" cy="12" r="2.4"/><circle cx="19" cy="6" r="2.4"/><circle cx="19" cy="18" r="2.4"/>'
+                + '<path d="M7 11 L17 6.5 M7 13 L17 17.5"/></svg><span>Flow</span>';
+            bar.insertBefore(flowBtn, burger.nextSibling);
+        }
+
         var backdrop = document.createElement('div');
         backdrop.className = 'pv-drawer-backdrop';
 
@@ -245,14 +259,25 @@
     // Tooltip-Eigenschaften: im Container halten (confine) und auf kleinen
     // Screens Größe begrenzen + ohne sichtbaren Scrollbalken scrollbar machen
     // (Klasse pv-echarts-tip, Scrollbar in nav-ui.css ausgeblendet).
+    // Schwach transparenter Tooltip-"Skin": der Chart scheint dezent durch (Blur),
+    // damit die Kurve unter dem Tooltip lesbar bleibt. Formatter/trigger/axisPointer
+    // des Aufrufers bleiben erhalten; Hintergrund/Rahmen werden vereinheitlicht.
     function tooltipResponsive(base) {
         var cfg = base || {};
         cfg.confine = true;
         cfg.className = 'pv-echarts-tip';
+        cfg.backgroundColor = 'rgba(15,23,42,0.60)';
+        cfg.borderColor = 'rgba(148,163,184,0.35)';
+        cfg.borderWidth = cfg.borderWidth || 1;
+        cfg.textStyle = Object.assign({ color: '#e2e8f0' }, cfg.textStyle || {});
+        var skin = 'backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);'
+            + 'box-shadow:0 6px 20px rgba(0,0,0,0.30);border-radius:8px;';
         if (isSmallScreen()) {
             cfg.extraCssText = 'max-width:88vw;max-height:58vh;overflow-y:auto;white-space:normal;'
-                + (cfg.extraCssText || '');
-            cfg.textStyle = Object.assign({ fontSize: 11 }, cfg.textStyle || {});
+                + skin + (cfg.extraCssText || '');
+            cfg.textStyle = Object.assign({ fontSize: 11 }, cfg.textStyle);
+        } else {
+            cfg.extraCssText = skin + (cfg.extraCssText || '');
         }
         return cfg;
     }

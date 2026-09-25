@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/aktoren/aktor_wattpilot.py"
 tags: [wattpilot, ev-lader, websocket, soc-schutz]
 status: stable
-last_review: 2026-09-23
+last_review: 2026-09-26
 ---
 
 # Regel Wattpilot
@@ -31,6 +31,7 @@ Schützt die Hausbatterie vor EV-Ladung via Wattpilot (Fronius/go-e Wallbox). He
 - Auth-Hash wird pro Session aus `authRequired.hash` abgeleitet (`bcrypt` für Flex, sonst `pbkdf2`) und gilt für Read + `setValue`.
 - SLS-Schutz (Hauptsicherung 35 A) hat Vorrang: `RegelSlsSchutz` ruft `reduce_current` ohne Matrix-Pfad.
 - WS-Sessions konkurrieren mit Fronius- und go-e-App; Aktor toleriert Verdrängung mit Retry (max 3).
+- **Multi-Master-Konsolidierung:** Am Wattpilot schreiben potenziell F1, go-e-App, Home Assistant und C. Verbindlich: **alle** pv-system-Schaltwünsche laufen über **C** (via E-Intent `wattpilot_mode`/`wattpilot_start_stop`/`wattpilot_amp`) — **kein** paralleler WS-Client aus der Web-UI (B). Flow-Bubble-Komfort ist reiner **Deep-Link** ins Cockpit (E) mit Multi-Master-Hinweis. Empfehlung: HA-Direktschreibpfad mittelfristig auf E-Intents umstellen, um die Master-Zahl zu senken.
 
 ## No-Gos
 - **Kein automatischer `rbt`-Reset (Wattpilot-Reboot)** ohne explizite Freigabe — sensibler Recovery-Pfad (`reminders.md`, 2026-04-06: noch ungeprüft).

@@ -5,7 +5,7 @@ role: B
 applyTo: "routes/**"
 tags: [web-api, blueprints, templates, formatting, read-only]
 status: stable
-last_review: 2026-09-23
+last_review: 2026-09-26
 ---
 
 # Web Display/API
@@ -16,7 +16,8 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 ## Code-Anchor
 - **App + Blueprint-Setup:** `web_api.py` (`app.register_blueprint(...)`)
 - **NQ2-API (PAC4200/NQ):** `routes/pac4200.py` (`api_pac4200_live`, `api_nq_energy`, `api_nq_event`, `api_nq_aggregates`, `nq_chart_page`)
-- **Energievergleich (PAC4200 ↔ SM ↔ iMSys):** `routes/pac4200.py:api_nq_energy_compare` (`/api/nq/energy_compare?agg=day|month|year|ims`); Tag/Monat/Jahr summieren die Tages-Deltas (Δ nur ueber Tage mit PAC UND SM), `ims` liefert `nq_ims_reading` + Intervall-Vergleich (Näherung auf Tagesgrenzen; präzise Fixpunkte in `doc/MESSSYSTEM_FIXPUNKTE.md`). View `templates/nq_energie_vergleich_view.html` (Aggregations-Umschalter).
+- **Energievergleich (PAC4200 ↔ SM ↔ iMSys):** `routes/pac4200.py:api_nq_energy_compare` (`/api/nq/energy_compare?agg=day|month|year|ims`); Tag/Monat/Jahr summieren die Tages-Deltas (Δ nur ueber Tage mit PAC UND SM), `ims` liefert `nq_ims_reading` + Intervall-Vergleich (Näherung auf Tagesgrenzen; präzise Fixpunkte in `doc/MESSSYSTEM_FIXPUNKTE.md`). Die Tagesansicht führt eine **Quelle**-Spalte aus `_pac_days_kwh` (`src`/`n_samples`): `PAC ✓` (counter, n/288), `Teil-Tag` (partial), `SM-Ersatz` (sm_substitute). View `templates/nq_energie_vergleich_view.html` mit Erklärbox der drei Messsysteme + iMSys-Klartext-Zusammenfassung (mittlere |Abweichung| SM/PAC vs. iMSys).
+- **Tooltip-Skin (schwach transparent):** `static/js/nav-ui.js:PVChart.tooltipResponsive` vereinheitlicht alle ECharts-Tooltips (halbtransparenter Hintergrund + Blur, `.pv-echarts-tip`), damit die Kurve unter dem Tooltip lesbar bleibt. Charts reichen ihre `tooltip`-Option hier durch.
 - **Perioden-Extremwerte (Tooltips):** `routes/visualization.py:api_period_extremes` liefert Peak-Leistung, Spannung L-L, Frequenz (Datum/Uhrzeit) — **ohne** cos φ. Geteilter Formatter `static/js/extremes.js` (Monitoring/Analyse-Tooltips).
 - **Chart-Peak-Marker:** `static/js/nav-ui.js:PVChart.peakHeadroomMax(dataMax, peakVal, {floor,cap,round})` — Y-Achsen-Obergrenze mit Luft, damit der Peak-Pin (Wert-Label) nie den oberen Rahmen touchiert (verbraucher/erzeuger/tag_view).
 - **NQ read-only Datenzugriff:** `nq/tech_read.py` (`fetch_tech_snapshot`, `fetch_aggregates`, `fetch_agg` = 5min-Merge Primary+Tech, `fetch_agg_fast` = 10s aus Tech-RAM)

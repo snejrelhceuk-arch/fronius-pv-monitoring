@@ -117,12 +117,12 @@ async function loadHarm() {
     const data = sp.freqs_hz.map((f, i) => [f, Math.max(sp.values[i], 1e-6)]);
     NQA.ec('chartHarm').setOption({
         grid: { left: 66, right: 22, top: 30, bottom: 48 },
-        tooltip: {
+        tooltip: PVChart.tooltipResponsive({
             trigger: 'axis', confine: true, formatter: p => {
                 const o = sp.orders[p[0].dataIndex];
                 return `H${o} · ${p[0].value[0].toFixed(0)} Hz<br/>${p[0].value[1].toFixed(3)} ${sp.unit}`;
             }
-        },
+        }),
         xAxis: {
             type: 'value', name: 'Frequenz (Hz)', nameLocation: 'middle', nameGap: 30,
             nameTextStyle: { color: '#cbd5e1', fontSize: 11 },
@@ -146,7 +146,7 @@ async function loadHarm() {
     NQA.ec('chartThd').setOption({
         grid: { left: 52, right: 20, top: 26, bottom: 40 },
         legend: { top: 0, textStyle: { color: '#94a3b8' }, data: ['berechnet', 'PAC4200'] },
-        tooltip: { trigger: 'axis' },
+        tooltip: PVChart.tooltipResponsive({ trigger: 'axis' }),
         xAxis: { type: 'time', axisLabel: { color: '#94a3b8' } },
         yAxis: { type: 'value', name: '%', axisLabel: { color: '#94a3b8' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
         series: [

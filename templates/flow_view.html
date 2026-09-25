@@ -11,6 +11,9 @@
     <script src="/static/js/nav-context.js"></script>
     <script src="/static/js/nav-ui.js"></script>
     <link rel="stylesheet" href="/static/css/nav-ui.css">
+    <link rel="stylesheet" href="/static/css/flow-bubbles.css">
+    <script>window.PV_STEUERBOX_URL = {{ (steuerbox_cockpit_url or '')|tojson }};</script>
+    <script src="/static/js/flow-bubbles.js" defer></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -48,6 +51,22 @@
         }
 
         .nav-main { display: flex; gap: 8px; }
+
+        /* Dezente Begrüßungs-/Statuszeile neben dem Menü-Button. Nie umbrechen:
+           bei wenig Platz kürzt die JS-Logik, CSS-Ellipsis fängt den Rest ab. */
+        .flow-greeting {
+            flex: 1 1 auto;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 12.5px;
+            font-style: italic;
+            color: rgba(226, 232, 240, 0.60);
+            letter-spacing: 0.2px;
+            padding-left: 2px;
+        }
+        @media (max-width: 420px) { .flow-greeting { display: none; } }
 
         .nav-main a {
             display: none !important;
@@ -711,6 +730,7 @@
     <div class="top-nav">
         <div class="top-nav-inner">
             <div class="nav-main"></div>
+            <div class="flow-greeting" id="flow-greeting" aria-live="polite"></div>
         </div>
     </div>
 
@@ -958,19 +978,19 @@
 
                 <!-- ═══ KLICKBARE OVERLAY-KREISE (Navigation) ═══ -->
                 <circle cx="200" cy="225" r="58" fill="transparent"
-                    class="flow-clickable" id="click-netz"/>
+                    class="flow-clickable" id="click-netz" data-bubble="netz"/>
                 <circle cx="350" cy="135" r="58" fill="transparent"
-                        class="flow-clickable" id="click-pv"/>
+                        class="flow-clickable" id="click-pv" data-bubble="pv"/>
                 <circle cx="500" cy="225" r="58" fill="transparent"
-                    class="flow-clickable" id="click-consumption"/>
+                    class="flow-clickable" id="click-consumption" data-bubble="consumption"/>
                 <!-- Klickzone für Batterie: Springt in die Analyse → Batterie -->
                 <circle cx="350" cy="322" r="55" fill="transparent"
-                    class="flow-clickable" id="click-battery"/>
+                    class="flow-clickable" id="click-battery" data-bubble="battery"/>
 
                 <!-- ═══ SUB-ERZEUGER (kurze Linien, Fluss immer → PV) ═══ -->
                 <g class="sub-producers">
                 <circle cx="250" cy="30" r="39" fill="none"
-                        stroke="#fcd34d" stroke-width="2" id="circle-f1"/>
+                        stroke="#fcd34d" stroke-width="2" id="circle-f1" data-bubble="f1"/>
                 <text x="250" y="24" text-anchor="middle"
                         fill="#fcd34d" font-size="14" font-weight="600" id="label-f1">F1</text>
                 <text x="250" y="42" text-anchor="middle"
@@ -978,7 +998,7 @@
                         font-weight="600" id="value-f1">0 W</text>
 
                 <circle cx="350" cy="15" r="39" fill="none"
-                        stroke="#fcd34d" stroke-width="2" id="circle-f2"/>
+                        stroke="#fcd34d" stroke-width="2" id="circle-f2" data-bubble="f2"/>
                 <text x="350" y="9" text-anchor="middle"
                         fill="#fcd34d" font-size="14" font-weight="600" id="label-f2">F2</text>
                 <text x="350" y="27" text-anchor="middle"
@@ -986,7 +1006,7 @@
                         font-weight="600" id="value-f2">0 W</text>
 
                 <circle cx="450" cy="30" r="39" fill="none"
-                        stroke="#fcd34d" stroke-width="2" id="circle-f3"/>
+                        stroke="#fcd34d" stroke-width="2" id="circle-f3" data-bubble="f3"/>
                 <text x="450" y="24" text-anchor="middle"
                         fill="#fcd34d" font-size="14" font-weight="600" id="label-f3">F3</text>
                 <text x="450" y="42" text-anchor="middle"
@@ -999,7 +1019,7 @@
                 <!-- ═══ SUB-VERBRAUCHER (kurze Linien, Fluss immer → Verbraucher) ═══ -->
                 <g class="sub-consumers">
                                         <circle cx="665" cy="190" r="39" fill="none"
-                        stroke="#dbeafe" stroke-width="2" id="circle-household"/>
+                        stroke="#dbeafe" stroke-width="2" id="circle-household" data-bubble="household"/>
                                         <text x="665" y="183" text-anchor="middle"
                       fill="#dbeafe" font-size="13" font-weight="600">Haushalt</text>
                                         <text x="665" y="202" text-anchor="middle"
@@ -1007,7 +1027,7 @@
                       font-weight="600" id="value-household">0W</text>
 
                                         <circle cx="660" cy="315" r="55" fill="none"
-                        stroke="#93c5fd" stroke-width="2" id="circle-wattpilot"/>
+                        stroke="#93c5fd" stroke-width="2" id="circle-wattpilot" data-bubble="wattpilot"/>
                                         <text x="660" y="297" text-anchor="middle"
                       fill="#93c5fd" font-size="15" font-weight="600">Wattpilot</text>
                                         <text x="660" y="318" text-anchor="middle"
@@ -1018,7 +1038,7 @@
                       id="sub-wattpilot"></text>
 
                                         <circle cx="500" cy="340" r="39" fill="none"
-                        stroke="#60a5fa" stroke-width="2" id="circle-heatpump"/>
+                        stroke="#60a5fa" stroke-width="2" id="circle-heatpump" data-bubble="heatpump"/>
                                         <text x="500" y="333" text-anchor="middle"
                       fill="#60a5fa" font-size="14" font-weight="600">WP</text>
                                         <text x="500" y="352" text-anchor="middle"
@@ -1027,7 +1047,7 @@
 
                                 <!-- Heizpatrone (Fritz!DECT) oben links, Abzweig von Verbrauch -->
                                         <circle cx="565" cy="50" r="32" fill="none"
-                        stroke="#ea580c" stroke-width="2" id="circle-heizpatrone"/>
+                        stroke="#ea580c" stroke-width="2" id="circle-heizpatrone" data-bubble="heizpatrone"/>
                                         <text x="565" y="46" text-anchor="middle"
                       fill="#ea580c" font-size="11" font-weight="600">HP</text>
                                         <text x="565" y="61" text-anchor="middle"
@@ -1036,7 +1056,7 @@
 
                                 <!-- Klimaanlage (Fritz!DECT) oben rechts, Abzweig von Verbrauch -->
                                         <circle cx="660" cy="80" r="32" fill="none"
-                        stroke="#00bcd4" stroke-width="2" id="circle-klima"/>
+                        stroke="#00bcd4" stroke-width="2" id="circle-klima" data-bubble="klima"/>
                                         <text x="660" y="76" text-anchor="middle"
                       fill="#00bcd4" font-size="11" font-weight="600">Klima</text>
                                         <text x="660" y="91" text-anchor="middle"
@@ -2083,9 +2103,31 @@
         } catch(e) { console.warn('BatteryDetail:', e); }
     }
 
+    // Dezente, breitenrobuste Begrüßung/Statuszeile neben dem Menü-Button.
+    // Kein Zeilenumbruch: bei wenig Platz wird gekürzt (Stufen + CSS-Ellipsis).
+    function pvGreeting(d) {
+        var el = document.getElementById('flow-greeting');
+        if (!el) return;
+        var h = new Date().getHours();
+        var greet = h < 5 ? 'Gute Nacht' : h < 11 ? 'Guten Morgen'
+            : h < 17 ? 'Guten Tag' : h < 22 ? 'Guten Abend' : 'Gute Nacht';
+        var q = d && d.pv_forecast_quality;
+        var emoji = (d && d.pv_forecast_emoji) || '';
+        var phrase = '', shortPhrase = '';
+        if (q === 'gut') { phrase = 'viel Sonne erwartet'; shortPhrase = 'sonnig'; }
+        else if (q === 'mittel') { phrase = 'wechselhafter Tag'; shortPhrase = 'wechselhaft'; }
+        else if (q === 'schlecht') { phrase = 'wenig Sonne — bewusst verbrauchen'; shortPhrase = 'sparsam'; }
+        var w = window.innerWidth, txt;
+        if (w >= 900) txt = greet + ' Beerwalde' + (phrase ? ' · ' + phrase : '') + (emoji ? ' ' + emoji : '');
+        else if (w >= 600) txt = greet + (shortPhrase ? ' · ' + shortPhrase : '') + (emoji ? ' ' + emoji : '');
+        else txt = greet + (emoji ? ' ' + emoji : '');
+        el.textContent = txt;
+    }
+
     function renderFlowStatusDetail(d) {
         if (!d) return;
         try {
+            pvGreeting(d);
             document.getElementById('bd-soh').textContent = d.soh != null ? d.soh : '--';
 
             // PV-Prognose-Icon setzen
@@ -2284,6 +2326,7 @@
     fetchFlow();
     fetchFlowDevices();
     fetchBatteryDetail();
+    pvGreeting(null);   // sofortige, zeitbasierte Begrüßung (Forecast folgt via flow_status)
     fetchFailoverStatus();
     fetchBackupStatus();
     initInfoRowPinning();

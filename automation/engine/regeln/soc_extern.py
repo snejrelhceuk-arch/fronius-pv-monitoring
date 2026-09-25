@@ -42,6 +42,7 @@ class SocExternTracker:
     """
 
     _GRACE_S = 300  # Engine-Aktionen bis zu 5 Min nach Erzeugung als "eigene" akzeptieren
+    _LOG_DEDUP_S = 900  # identische EXTERN-Meldung max. alle 15 Min protokollieren
 
     def __init__(self):
         self._prev_min: Optional[int] = None
@@ -54,6 +55,9 @@ class SocExternTracker:
         # Extern-Erkennung
         self._extern_ts: float = 0
         self._extern_grund: str = ''
+        # Dedup der Protokollierung (verhindert Schaltlog-Spam)
+        self._last_log_grund: str = ''
+        self._last_log_ts: float = 0.0
         # Pro-Zyklus Guard
         self._letzter_zyklus_ts: float = 0
 
@@ -83,10 +87,7 @@ class SocExternTracker:
                 self._extern_ts = now
                 self._extern_grund = f'SOC_MIN {self._prev_min}%→{soc_min}%'
                 respekt_s = get_param(matrix, 'soc_extern', 'extern_respekt_s', 1800)
-                LOG.info(f'SOC extern geändert erkannt: {self._extern_grund} '
-                         f'→ Toleranz {respekt_s}s aktiv')
-                logge_extern('batterie', self._extern_grund,
-                             f'Toleranz {respekt_s}s')
+                self._log_extern_dedup('batterie', self._extern_grund, respekt_s)
 
         # ── SOC_MAX Prüfung ──
         if (self._prev_max is not None and soc_max is not None
@@ -100,13 +101,24 @@ class SocExternTracker:
                 self._extern_ts = now
                 self._extern_grund = f'SOC_MAX {self._prev_max}%→{soc_max}%'
                 respekt_s = get_param(matrix, 'soc_extern', 'extern_respekt_s', 1800)
-                LOG.info(f'SOC extern geändert erkannt: {self._extern_grund} '
-                         f'→ Toleranz {respekt_s}s aktiv')
-                logge_extern('batterie', self._extern_grund,
-                             f'Toleranz {respekt_s}s')
+                self._log_extern_dedup('batterie', self._extern_grund, respekt_s)
 
         self._prev_min = soc_min
         self._prev_max = soc_max
+
+    def _log_extern_dedup(self, aktor: str, grund: str, respekt_s: int) -> None:
+        """Protokolliert eine erkannte Extern-Änderung, unterdrückt aber identische
+        Wiederholungen innerhalb von ``_LOG_DEDUP_S``. Verhindert Schaltlog-Spam,
+        wenn der SOC-Readback während manual/auto-Übergängen oszilliert (dieselbe
+        Transition würde sonst im Sekundentakt neu protokolliert). Beeinflusst nur
+        die Protokollierung — die Toleranzsteuerung bleibt unverändert."""
+        now = time.time()
+        if grund == self._last_log_grund and (now - self._last_log_ts) < self._LOG_DEDUP_S:
+            return
+        self._last_log_grund = grund
+        self._last_log_ts = now
+        LOG.info(f'SOC extern geändert erkannt: {grund} → Toleranz {respekt_s}s aktiv')
+        logge_extern(aktor, grund, f'Toleranz {respekt_s}s')
 
     def _ist_engine_aktion(self, pending_wert: Optional[int],
                            pending_ts: float, obs_wert: int) -> bool:

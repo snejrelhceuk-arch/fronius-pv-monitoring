@@ -501,6 +501,7 @@
             ]
         };
 
+        if (window.PVChart && option.tooltip) option.tooltip = PVChart.tooltipResponsive(option.tooltip);
         chart.setOption(option);
 
         // Immer alle Daten anzeigen

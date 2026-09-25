@@ -4,7 +4,7 @@ domain: web
 role: B
 applyTo: "templates/flow_view.html"
 status: stable
-last_review: 2026-09-23
+last_review: 2026-09-26
 ---
 
 # Flow-Ansicht Rendering-Mechanik
@@ -17,11 +17,21 @@ bekannter Fallstrick-Herd: Beschnitt entsteht an **drei** unabhängigen Stellen 
 Wirkung.
 
 ## Code-Anchor
-- **Seite/Route:** `routes/pages.py:flow` → `templates/flow_view.html`
+- **Seite/Route:** `routes/pages.py:flow` → `templates/flow_view.html` (injiziert `steuerbox_cockpit_url` aus `config.STEUERBOX_EXTERNAL_PORT`/`STEUERBOX_COCKPIT_URL`, getattr-robust)
 - **SVG-Skalierung/Pan:** `templates/flow_view.html:adjustSvgViewBox` (setzt viewBox + Mobile-Wrapper)
 - **Overlay-/Layout-Sync:** `templates/flow_view.html:syncOverlayLayout` (ruft `adjustSvgViewBox`)
 - **Live-Daten:** `routes/realtime.py:/api/flow_realtime`, `/api/flow_devices`; `routes/system/battery.py:/api/flow_status`
+- **Bubble-Kontext-Rollup (P1.0/P1.1/H1):** `static/js/flow-bubbles.js` + `static/css/flow-bubbles.css`; Bubbles tragen `data-bubble="…"` im SVG.
+- **Begrüßungs-/Statuszeile:** `templates/flow_view.html:pvGreeting` (dezent, breitenrobust, kein Umbruch)
+- **Flow-Schnellzugriff in der Nav:** `static/js/nav-ui.js:initDrawer` (`.pv-flow-quick` neben dem Burger, außer auf `/flow`)
+- **Tooltip-Skin (schwach transparent):** `static/js/nav-ui.js:tooltipResponsive` (+ `static/css/nav-ui.css:.pv-echarts-tip`)
 - **Tagesgüte-Icon (ClearSky-relativ):** `routes/system/battery.py:_build_flow_status_result` setzt `pv_forecast_quality/-emoji` über `solar_forecast.classify_day_relative` (Prognose/ClearSky: <40 % ☁️ schlecht, 40–70 % ⛅ mittel, ≥70 % ☀️ gut) — **nicht** die absolute kWh-Einstufung. Renderer `templates/flow_view.html:setPvForecastIcon`.
+
+## Kontext-Rollup je Bubble (Komfort/Info/Deep)
+- Hover (Desktop) bzw. Long-Press (Touch, ~520 ms) auf einer Bubble öffnet ein **HTML-Overlay-Rollup** (`.fb-rollup`, `position:fixed`, an der Bubble-Bildschirmposition). Kurzer Tap behält die bestehende Schnell-Navigation der Haupt-Bubbles.
+- Drei Gruppen: **[K] Komfort** = Deep-Link auf das Steuerbox-Cockpit (Schicht E, `#card-wp`/`#card-wattpilot`/`#card-battery`/`#card-toggles`), **[I] Info** = read-only Navigations-/Monitoring-Links, **[D] Deep** = Maschinenraum bzw. reiner Guard-Hinweis.
+- **Rolle B bleibt read-only:** kein direkter Aktor-/POST-Pfad aus der Bubble. Komfort läuft ausschließlich als Deep-Link ins Cockpit (mTLS/Allowlist der Steuerbox). Wattpilot-Komfort trägt einen Multi-Master-Hinweis (kein paralleler WS-Client).
+- Menü-Katalog + Interaktionslogik in `static/js/flow-bubbles.js` (`MENU`), Bubble-Zuordnung über `data-bubble` im SVG.
 
 ## Rendering-Mechanik (IST)
 - **Ein festes SVG** mit `viewBox="130 -40 590 460"` (Konstante `DEFAULT_VIEWBOX`). Alle Knoten
@@ -55,7 +65,8 @@ Wirkung.
 - **viewBox nie beschneiden** (kein `"80 70 500 320"` o. ä.) — schneidet die rechten Knoten hart ab.
 - **Sub-Bubbles nie per `display:none` ausblenden** — dann laufen die Flussleitungen ins Leere.
 - **SVG nicht per `height:100%` auf die Wrapper-Höhe strecken** — erzeugt Leerraum + Kleinskalierung.
-- Keine Aktor-/Schreibzugriffe (Rolle B, read-only).
+- Keine Aktor-/Schreibzugriffe (Rolle B, read-only). Bubble-Komfort **nur** als Deep-Link ins Cockpit (E), nie als direkter POST/WS aus der Web-UI.
+- Begrüßungszeile nie mehrzeilig: bei wenig Platz kürzen (Stufen in `pvGreeting`) bzw. `<420 px` ausblenden — kein Zeilenumbruch.
 
 ## Häufige Aufgaben
 - Bubble verschieben/hinzufügen → SVG-Koordinaten in `templates/flow_view.html` **innerhalb**

@@ -126,12 +126,12 @@ async function loadPeriodo() {
 
     NQA.ec('chartPeriodo').setOption({
         grid: { left: 78, right: 28, top: 34, bottom: 70 },
-        tooltip: {
+        tooltip: PVChart.tooltipResponsive({
             trigger: 'axis', confine: true, formatter: p => {
                 const f = p[0].value[0];
                 return `f = ${NQA.fmtFreq(f)}<br/>T = ${NQA.fmtPeriod(1 / f)}<br/>P = ${p[0].value[1].toExponential(3)}`;
             }
-        },
+        }),
         xAxis: {
             type: 'log', name: 'Frequenz  ·  Periodendauer', nameLocation: 'middle', nameGap: 52,
             nameTextStyle: { color: '#cbd5e1', fontSize: 11 },

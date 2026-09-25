@@ -929,6 +929,7 @@
             
             // WICHTIG: notMerge=true → Chart komplett neu aufbauen
             // Sonst bleiben alte Y-Achsen stehen!
+            if (window.PVChart && option.tooltip) option.tooltip = PVChart.tooltipResponsive(option.tooltip);
             chart.setOption(option, true);
             
             // Live-Modus prüfen (rechter Rand = aktuelle Zeit?)

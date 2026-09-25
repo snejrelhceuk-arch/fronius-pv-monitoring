@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/engine.py"
 tags: [philosophie, prioritaet, matrix, external-respect]
 status: stable
-last_review: 2026-09-23
+last_review: 2026-09-26
 ---
 
 # Steuerungsphilosophie
@@ -20,6 +20,7 @@ last_review: 2026-09-23
 - **Prognose-Stufe (Automation):** `automation/engine/param_matrix.py:get_forecast_tier` / `classify_forecast_kwh`
 - **Matrix-Quelle:** `config/soc_param_matrix.json` (Single Source of Truth)
 - **ExternalRespect (HP):** `automation/engine/regeln/geraete.py:RegelHeizpatrone._cancel_conflicting_overrides`
+- **ExternalRespect (SOC/Batterie):** `automation/engine/regeln/soc_extern.py:SocExternTracker.aktualisiere` (erkennt extern geänderte SOC-Grenzen). `_log_extern_dedup` protokolliert identische Transitionen max. alle 15 Min — verhindert Schaltlog-Spam, wenn der SOC-Readback während manual/auto-Übergängen oszilliert (reine Logging-Ebene, Toleranzsteuerung unverändert).
 - **ExternalRespect (WP):** Engine schreibt Sollwerte über `waermepumpe.py:_registriere_engine_wert`; der frühere Lese-Pfad `_prüfe_extern_respekt` wurde 2026-05-29 als Dead Code entfernt.
 
 ## Inputs / Outputs
@@ -53,6 +54,7 @@ last_review: 2026-09-23
 
 ## Bekannte Fallstricke
 - ExternalRespect-Endlos-Hold: Wenn Aktor schreibt, Engine aber nicht registriert → nächste Lesung wird als "extern" interpretiert. Lösung: `_registriere_erfolgreiche_soc_aktionen()` nach jedem Aktor-OK.
+- **EXTERN-SOC-Falsch-Positive:** Beim `afternoon_charge_request`-Override + manual/auto-Umschaltung kann der Fronius-SOC_MAX-Readback zwischen 75/100 oszillieren → der Tracker meldet mehrfach dieselbe "EXTERN"-Transition. `_log_extern_dedup` entschärft das Schaltlog; die Kennzahl "externe SOC-Toggles" im Schaltlog ist daher **nicht** 1:1 gleich echten Nutzeraktionen.
 - Wattpilot-rbt-Reset (Recovery): noch ungeprüft, vorsichtig behandeln.
 - ~40 versteckte Parameter in `pv-config.py` ohne Matrix-Eintrag — offen (Audit-TODO).
 - Reihenfolge in `_register_default_regeln` = Tiebreaker bei gleichem Score.

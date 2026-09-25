@@ -112,12 +112,12 @@ async function loadSpectro() {
 
     NQA.ec('chartSpectro').setOption({
         grid: { left: 86, right: 22, top: 18, bottom: 70 },
-        tooltip: {
+        tooltip: PVChart.tooltipResponsive({
             position: 'top', confine: true, formatter: p => {
                 const t = new Date(T[p.value[0]] * 1000);
                 return `${t.toLocaleString('de-DE')}<br/>f = ${NQA.fmtFreq(F[p.value[1]])}<br/>T = ${NQA.fmtPeriod(1 / F[p.value[1]])}<br/>E = ${p.value[2].toExponential(2)}`;
             }
-        },
+        }),
         xAxis: {
             type: 'category', data: T.map(t => {
                 const dt = new Date(t * 1000);

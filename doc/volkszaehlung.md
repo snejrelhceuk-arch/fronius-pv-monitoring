@@ -5,7 +5,7 @@
 ## Übersicht
 
 **Gesamtgröße (Textdateien gezählt):** 3029 MB
-**Gesamtzeilen (Code/Doku/Daten):** 361.982 Zeilen
+**Gesamtzeilen (Code/Doku/Daten):** 361.983 Zeilen
 **Gezählte Dateien:** 813
 **Ausgeschlossene Verzeichnisse:** 28 (.venv, __pycache__, node_modules, .git …)
 
@@ -13,7 +13,7 @@
 
 | Sprache/Typ | Dateien | Zeilen | Anteil |
 |---|---|---|---|
-| **CSV** | 24 | 240.511 | 66.4% |
+| **CSV** | 24 | 240.512 | 66.4% |
 | **Python** | 197 | 61.041 | 16.9% |
 | **Markdown** | 147 | 23.820 | 6.6% |
 | **HTML** | 28 | 16.398 | 4.5% |
@@ -27,7 +27,7 @@
 | **YAML** | 3 | 562 | 0.2% |
 | **CONF** | 3 | 70 | 0.0% |
 | **TOML** | 1 | 24 | 0.0% |
-| **Total** | 813 | 361.982 | 100% |
+| **Total** | 813 | 361.983 | 100% |
 
 ## Python-Code nach ABCDEN-Rollen
 

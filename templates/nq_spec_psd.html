@@ -100,7 +100,7 @@ async function loadPsd() {
     const data = d.freqs_hz.map((f, i) => [f, Math.max(d.psd[i], 1e-12)]);
     NQA.ec('chartPsd').setOption({
         grid: { left: 82, right: 28, top: 24, bottom: 68 },
-        tooltip: { trigger: 'axis', confine: true, formatter: p => `f = ${NQA.fmtFreq(p[0].value[0])}<br/>T = ${NQA.fmtPeriod(1 / p[0].value[0])}<br/>PSD = ${p[0].value[1].toExponential(3)} ${d.psd_unit}` },
+        tooltip: PVChart.tooltipResponsive({ trigger: 'axis', confine: true, formatter: p => `f = ${NQA.fmtFreq(p[0].value[0])}<br/>T = ${NQA.fmtPeriod(1 / p[0].value[0])}<br/>PSD = ${p[0].value[1].toExponential(3)} ${d.psd_unit}` }),
         xAxis: {
             type: 'log', name: 'Frequenz  ·  Periodendauer', nameLocation: 'middle', nameGap: 52,
             nameTextStyle: { color: '#cbd5e1', fontSize: 11 },

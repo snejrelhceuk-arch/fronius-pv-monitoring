@@ -108,6 +108,12 @@ NQ_TECH_IP = load_local_setting('PV_TECH_IP', '192.0.2.181')
 # --- Steuerbox (Operator-Intent-API, Schicht E) ---
 STEUERBOX_HOST = load_local_setting('PV_STEUERBOX_HOST', '0.0.0.0')
 STEUERBOX_PORT = int(load_local_setting('PV_STEUERBOX_PORT', '11933'))
+# Extern (Browser) erreichbarer Cockpit-Port — i. d. R. der nginx-TLS-Port
+# (Reverse-Proxy → interner Flask-Bind). Für die Flow-Bubble-Deep-Links.
+STEUERBOX_EXTERNAL_PORT = int(load_local_setting('PV_STEUERBOX_EXTERNAL_PORT', '11933'))
+# Optionale, explizite Cockpit-URL (Deep-Link-Ziel der Flow-Bubbles). Leer =>
+# die Web-Route leitet sie aus dem Request-Host + STEUERBOX_EXTERNAL_PORT (https) ab.
+STEUERBOX_COCKPIT_URL = load_local_setting('PV_STEUERBOX_COCKPIT_URL', '')
 # Kommagetrennte CIDR-Liste (Default: Loopback + LAN-Subnetz)
 STEUERBOX_ALLOWLIST = [
     x.strip() for x in load_local_setting(

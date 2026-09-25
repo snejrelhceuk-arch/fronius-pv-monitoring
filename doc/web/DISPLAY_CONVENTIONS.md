@@ -38,6 +38,33 @@ Zentrale JS-Funktion `formatValue(value, unit)` mit automatischer SI-Präfix-Ska
 | 123456 | kWh | `123,5 MWh` |
 | 1234 | EUR | `1.234 EUR` |
 | 150000 | EUR | `150,0 kEUR` |
+
+---
+
+## 1a. Tooltip-Transparenz (schwach durchscheinend)
+
+Alle ECharts-Tooltips laufen über `static/js/nav-ui.js:PVChart.tooltipResponsive`. Der
+Helper vereinheitlicht sie auf einen **schwach transparenten** Hintergrund
+(`rgba(15,23,42,0.60)`) mit Blur (Klasse `.pv-echarts-tip`), damit die Kurve unter dem
+Tooltip lesbar bleibt. Charts reichen ihre `tooltip`-Option hier durch — entweder
+`option.tooltip = PVChart.tooltipResponsive(option.tooltip)` oder inline
+`tooltip: PVChart.tooltipResponsive({ … })`. Formatter/Trigger/axisPointer des Charts bleiben
+erhalten; nur Hintergrund/Rahmen/Blur werden gesetzt.
+
+---
+
+## 1b. Flow-Ansicht: Bubble-Kontext, Begrüßung, Schnellzugriff
+
+- **Kontext-Rollup je Bubble** (`static/js/flow-bubbles.js`, `static/css/flow-bubbles.css`):
+  Hover (Desktop) bzw. Long-Press (Touch) öffnet ein halbtransparentes Rollup mit drei
+  Gruppen — **Komfort** (Deep-Link ins Steuerbox-Cockpit, Schicht E), **Info** (read-only
+  Navigations-Links), **Deep** (Maschinenraum bzw. Guard-Hinweis). Rolle B bleibt read-only:
+  kein direkter Aktor-/POST-Pfad aus der Web-UI.
+- **Begrüßungs-/Statuszeile** neben dem Menü-Button (`templates/flow_view.html:pvGreeting`):
+  dezent, tageszeit- und forecast-abhängig. **Nie mehrzeilig** — bei wenig Platz wird
+  gekürzt (Breiten-Stufen) bzw. `<420 px` ganz ausgeblendet.
+- **Flow-Schnellzugriff** in der Seiten-Navigation (`static/js/nav-ui.js:initDrawer`,
+  `.pv-flow-quick`): direkter Grafik-Button neben dem Burger auf allen Seiten außer `/flow`.
 | 456 | VA | `456,0 VA` |
 | 2340 | VA | `2.340 VA` |
 | 150000 | VA | `150,0 kVA` |

@@ -21,6 +21,32 @@
 }
 .pv-burger:hover { background: rgba(255, 255, 255, 0.25); }
 
+/* Direkter Flow-Schnellzugriff (neben dem Menü-Button, außer auf /flow) */
+.pv-flow-quick {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 30px;
+    padding: 0 11px 0 9px;
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    background: rgba(56, 189, 248, 0.14);
+    border-radius: 5px;
+    color: #bae6fd;
+    font-size: 12.5px;
+    font-weight: 600;
+    text-decoration: none;
+    line-height: 1;
+    flex: 0 0 auto;
+    transition: background 0.15s, color 0.15s;
+}
+.pv-flow-quick:hover { background: rgba(56, 189, 248, 0.26); color: #e0f2fe; }
+.pv-flow-quick svg { fill: none; stroke: currentColor; stroke-width: 1.7; }
+.pv-flow-quick svg circle { fill: currentColor; stroke: none; }
+@media (max-width: 480px) {
+    .pv-flow-quick span { display: none; }   /* schmale Screens: nur Icon */
+    .pv-flow-quick { padding: 0 8px; }
+}
+
 /* Backdrop hinter der Schublade */
 .pv-drawer-backdrop {
     position: fixed;
@@ -145,9 +171,11 @@
     .top-nav a.nav-sub { display: none; }
 }
 
-/* ECharts-Tooltip auf kleinen Screens: scrollbar (ohne sichtbaren Balken),
- * damit lange Tooltips im Viewport bleiben (siehe PVChart.tooltipResponsive). */
+/* ECharts-Tooltip: schwach transparent (Skin in PVChart.tooltipResponsive) +
+ * auf kleinen Screens scrollbar (ohne sichtbaren Balken), damit lange Tooltips
+ * im Viewport bleiben. */
 .pv-echarts-tip {
+    border-radius: 8px;
     scrollbar-width: none;          /* Firefox */
     -ms-overflow-style: none;       /* alte Edge/IE */
 }

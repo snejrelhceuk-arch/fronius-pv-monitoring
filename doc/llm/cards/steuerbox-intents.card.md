@@ -5,7 +5,7 @@ role: E
 applyTo: "steuerbox/**"
 tags: [intent, overrides, respekt, hard-guards, audit]
 status: stable
-last_review: 2026-06-28
+last_review: 2026-09-26
 ---
 
 # Steuerbox Intents
@@ -54,6 +54,7 @@ Schicht E nimmt Operator-Intents entgegen, validiert sie und schreibt sie als Ov
 - MQTT-Button in HA: Bridge subscribt `{state_prefix}/{node_id}/cmd/afternoon_charge_request` (payload `PRESS`/`ON`) und POSTet Intent lokal zu `HA_BRIDGE_STEUERBOX_BASE/api/ops/intent`.
 - HA-Wattpilot anbinden -> MQTT-Topics der Bridge read-only für Telemetrie nutzen; Schaltvorgänge bleiben in HA auf der bestehenden Wattpilot-Integration.
 - Für Energy-Dashboards liefert die Bridge Wattpilot-Gesamtenergie und Session-Energie als dedizierte MQTT-Sensoren.
+- **Flow-Bubble-Komfort (Web B → Cockpit E):** Die Flow-Bubbles verlinken Komfort-Aktionen als **Deep-Link** auf das Cockpit (`steuerbox/templates/cockpit.html`, Anker `#card-wp`/`#card-wattpilot`/`#card-battery`/`#card-toggles`), nie als direkter POST aus der Web-UI. Ziel-URL: `config.STEUERBOX_COCKPIT_URL` bzw. abgeleitet aus Host + `config.STEUERBOX_EXTERNAL_PORT` (nginx-TLS-Port, i. d. R. 11933; **nicht** der interne Flask-Bind `STEUERBOX_PORT`). Details: `web-flow-view.card.md`.
 
 ## Bekannte Fallstricke
 - Sicherheitsdoku beschreibt teils Bearer-Token; Ist-Stand im Code: Auth via mTLS-Reverse-Proxy, Validator prueft nur Allowlist.

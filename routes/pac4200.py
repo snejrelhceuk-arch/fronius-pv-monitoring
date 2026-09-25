@@ -734,8 +734,9 @@ def _sm_days_kwh() -> dict:
 
 
 def _pac_days_kwh() -> dict:
-    """``{day: {'imp_kwh','exp_kwh'}}`` aller echten PAC-Zählertage
-    (``nq_energy_daily``, ``src`` ≠ ``pv_backfill``)."""
+    """``{day: {'imp_kwh','exp_kwh','src','n'}}`` aller echten PAC-Zählertage
+    (``nq_energy_daily``, ``src`` ≠ ``pv_backfill``). ``src`` macht Teil-Tage
+    (``partial``) und SM-Ersatztage (``sm_substitute``) transparent."""
     out: dict[str, dict] = {}
     for db_path in sorted(glob(os.path.join(_NQ_PRIMARY_DIR, 'nq_*.db'))):
         conn = _open_legacy(db_path)
@@ -743,15 +744,16 @@ def _pac_days_kwh() -> dict:
             continue
         try:
             rows = conn.execute(
-                "SELECT day, wh_imp_delta, wh_exp_delta "
+                "SELECT day, wh_imp_delta, wh_exp_delta, src, n_samples "
                 "FROM nq_energy_daily WHERE src != 'pv_backfill'").fetchall()
         except Exception:
             rows = []
         finally:
             conn.close()
-        for day, imp, exp in rows:
+        for day, imp, exp, src, n in rows:
             out[day] = {'imp_kwh': round((imp or 0.0) / 1000.0, 3),
-                        'exp_kwh': round((exp or 0.0) / 1000.0, 3)}
+                        'exp_kwh': round((exp or 0.0) / 1000.0, 3),
+                        'src': src, 'n': n}
     return out
 
 
@@ -773,6 +775,7 @@ def _energy_day_items(pac_by_day: dict, sm_by_day: dict) -> list:
             'pac_exp_kwh': pac['exp_kwh'], 'sm_exp_kwh': sm_exp,
             'd_exp_kwh': d_exp,
             'd_exp_pct': round(100.0 * d_exp / sm_exp, 1) if (sm_exp and d_exp is not None) else None,
+            'pac_src': pac.get('src'), 'pac_n': pac.get('n'),
         })
     return items
 

@@ -687,7 +687,7 @@
 
             mainChart.setOption({
                 grid: { left: 55, right: 55, top: gridTop, bottom: 66 },
-                tooltip: {
+                tooltip: PVChart.tooltipResponsive({
                     trigger: 'axis',
                     axisPointer: { type: 'cross', snap: false },
                     formatter: params => {
@@ -739,7 +739,7 @@
 
                         return lines.join('<br>');
                     }
-                },
+                }),
                 legend: {
                     data: viewMode === 'lokal'
                         ? ['L1-L2', 'L2-L3', 'L3-L1', 'Frequenz']

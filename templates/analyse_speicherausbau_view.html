@@ -298,7 +298,7 @@
 
             mainChart.setOption({
                 backgroundColor: 'transparent', textStyle: dark.textStyle,
-                tooltip: { trigger: 'axis', backgroundColor: 'rgba(15,23,42,0.95)', borderColor: GRID,
+                tooltip: PVChart.tooltipResponsive({ trigger: 'axis', backgroundColor: 'rgba(15,23,42,0.95)', borderColor: GRID,
                     valueFormatter: null,
                     formatter: (ps) => {
                         let s = `<b>${ps[0].axisValue} kWh</b> (nominal)`;
@@ -331,7 +331,7 @@
             const m = detail.monthly;
             monthlyChart.setOption({
                 backgroundColor: 'transparent', textStyle: dark.textStyle,
-                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, backgroundColor: 'rgba(15,23,42,0.95)', borderColor: GRID },
+                tooltip: PVChart.tooltipResponsive({ trigger: 'axis', axisPointer: { type: 'shadow' }, backgroundColor: 'rgba(15,23,42,0.95)', borderColor: GRID }),
                 legend: { data: ['Rest-Netzbezug', 'Vermieden', 'Abregelung (Potenzial)'], textStyle: { color: AX }, top: 0 },
                 grid: { left: 50, right: 20, top: 40, bottom: 30 },
                 xAxis: { type: 'category', data: m.map((d) => d.month.slice(5)), axisLabel: { color: AX }, axisLine: { lineStyle: { color: GRID } } },

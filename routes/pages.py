@@ -399,7 +399,15 @@ def index():
 def flow():
     """Energieflow Echtzeit-Visualisierung"""
     # Übergibt die konfigurierbare Default-Batteriekapazität an das Template
-    return render_template('flow_view.html', PV_BATTERY_KWH=config.PV_BATTERY_KWH)
+    # sowie die Cockpit-URL der Steuerbox (Schicht E) für die Komfort-Deep-Links
+    # der Flow-Bubbles. Web (B) bleibt read-only — Komfort läuft nur über E.
+    host = (request.host or '').split(':')[0]
+    ext_port = getattr(config, 'STEUERBOX_EXTERNAL_PORT', 11933)
+    cockpit_url = getattr(config, 'STEUERBOX_COCKPIT_URL', '') or (
+        f'https://{host}:{ext_port}/' if host else '')
+    return render_template('flow_view.html',
+                           PV_BATTERY_KWH=config.PV_BATTERY_KWH,
+                           steuerbox_cockpit_url=cockpit_url)
 
 
 @bp.route('/monitoring')

@@ -55,6 +55,22 @@
         table.cmp td.warn { color: #fbbf24; }
         table.cmp td.bad { color: #f87171; font-weight: 600; }
         .gb-sub { display: flex; align-items: center; gap: 10px; margin-left: 14px; padding-left: 14px; border-left: 1px solid rgba(255,255,255,0.12); }
+
+        /* Erklär-Box: die drei Messsysteme und wie der Vergleich zu lesen ist. */
+        .explainer { background: rgba(30,41,59,0.5); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 14px 18px; margin-bottom: 20px; font-size: 12.5px; line-height: 1.5; color: #cbd5e1; }
+        .explainer h3 { font-size: 13px; color: #e2e8f0; margin-bottom: 10px; letter-spacing: .3px; }
+        .explainer .sys { display: grid; grid-template-columns: 92px 1fr; gap: 3px 12px; margin: 5px 0; }
+        .explainer .sys .nm { font-weight: 700; }
+        .explainer .sys .ims { color: #a5b4fc; }
+        .explainer .sys .sm { color: #93c5fd; }
+        .explainer .sys .pac { color: #6ee7b7; }
+        .explainer .hint { margin-top: 9px; color: #94a3b8; font-size: 11.5px; }
+        /* Quellen-/Abdeckungs-Kennzeichnung je PAC-Tag. */
+        td.q { text-align: left; white-space: nowrap; }
+        .src-ok { color: #4ade80; font-weight: 600; }
+        .src-warn { color: #fbbf24; font-weight: 600; }
+        .src-sub { color: #93c5fd; font-style: italic; }
+        .src-cov { font-size: 10.5px; color: #64748b; margin-left: 4px; }
     </style>
 </head>
 <body>
@@ -64,6 +80,13 @@
 </nav>
 
 <div class="content">
+    <div class="explainer">
+        <h3>Drei Messsysteme am selben Netzanschluss (PCC)</h3>
+        <div class="sys"><span class="nm ims">iMSys</span><span>Intelligentes Messsystem des Netzbetreibers — <b>eichrechtliche Referenz</b> („Wahrheit“), aber nur <b>unregelmäßig manuell abgelesen</b>. Vergleich daher über <b>Intervall-Deltas</b> zwischen zwei Ablesungen.</span></div>
+        <div class="sys"><span class="nm sm">SM</span><span>Fronius <b>Smart Meter</b> am PCC — kontinuierlich, speist die Produktions-Statistik. Autoritativ für die Tageswerte des PV-Systems.</span></div>
+        <div class="sys"><span class="nm pac">PAC</span><span>PAC4200 (Rolle N) — eigener, <b>batteriegepufferter</b> Zähler (revenue-grade). Zählt <b>unabhängig</b> vom PV-System korrekt; Tageswerte entstehen aus Zählerständen an den Tagesgrenzen.</span></div>
+        <div class="hint">Lesehilfe: Weicht ein <b>einzelner</b> PAC-Tag stark ab, liegt es fast immer an der <b>Abdeckung</b> (Spalte „Quelle“): Bei einem Tech-Collector-Ausfall (z. B. Reboot) fehlen Snapshots → <span class="src-warn">Teil-Tag</span>. Solche Tage werden auf den SM-Wert gesetzt (<span class="src-sub">SM-Ersatz</span>), damit Monats-/Jahressummen stimmen — der PAC-<b>Zähler</b> selbst bleibt korrekt. Systematische Abweichungen zeigen sich erst über viele <span class="src-ok">PAC ✓</span>-Tage bzw. die iMSys-Intervalle.</div>
+    </div>
     <div class="globalbar">
         <span class="gb-label">Aggregation</span>
         <button class="ctrl-btn agg-btn active" onclick="setAgg('day',this)">Tag</button>
@@ -92,6 +115,15 @@ function setDays(d, btn){ S.days=d; markActive('.days-btn', btn); load(); }
 
 function num(v,dec){ return (v===null||v===undefined)?'—':Number(v).toFixed(dec===undefined?3:dec); }
 function pct(v){ if(v===null||v===undefined) return '<td>—</td>'; const a=Math.abs(v); const cls=a>15?'bad':a>5?'warn':''; return `<td class="${cls}">${num(v,1)} %</td>`; }
+function srcBadge(src, n){
+    if(!src) return '—';
+    const cov = (n!=null) ? `<span class="src-cov">${n}/288</span>` : '';
+    if(src==='counter') return `<span class="src-ok">PAC ✓</span>${cov}`;
+    if(src==='partial') return `<span class="src-warn">Teil-Tag</span>${cov}`;
+    if(src==='sm_substitute') return `<span class="src-sub">SM-Ersatz</span>`;
+    if(src==='reset_fallback') return `<span class="src-warn">Reset</span>${cov}`;
+    return src;
+}
 function section(title, inner){ return `<div class="section"><div class="section-body">${title?`<div class="sec-title">${title}</div>`:''}<div class="table-scroll">${inner}</div></div></div>`; }
 async function fetchJson(url){ const r = await fetch(url); return r.json(); }
 
@@ -108,17 +140,21 @@ async function load(){
 function renderPeriod(d, label){
     const it = d.items || [];
     if (!it.length){ $('view').innerHTML = section(d.from||'', '<div class="loading-msg">Keine PAC-Zählertage.</div>'); return; }
+    const isDay = (label==='Tag');
     const rows = it.slice().reverse().map(i=>{
-        const cov = (label!=='Tag' && i.n_cmp!=null && i.n_days!=null) ? ` <span class="cov">${i.n_cmp}/${i.n_days} T</span>` : '';
+        const cov = (!isDay && i.n_cmp!=null && i.n_days!=null) ? ` <span class="cov">${i.n_cmp}/${i.n_days} T</span>` : '';
+        const qcell = isDay ? `<td class="q">${srcBadge(i.pac_src, i.pac_n)}</td>` : '';
         return `<tr>
             <td>${i.label}${cov}</td>
             <td>${num(i.pac_imp_kwh)}</td><td>${num(i.sm_imp_kwh)}</td><td>${num(i.d_imp_kwh)}</td>${pct(i.d_imp_pct)}
             <td>${num(i.pac_exp_kwh)}</td><td>${num(i.sm_exp_kwh)}</td><td>${num(i.d_exp_kwh)}</td>${pct(i.d_exp_pct)}
+            ${qcell}
         </tr>`;
     }).join('');
+    const qhead = isDay ? '<th>Quelle</th>' : '';
     const tbl = `<table class="cmp"><thead><tr>
         <th>${label}</th><th>PAC Imp</th><th>SM Imp</th><th>Δ Imp</th><th>Δ %</th>
-        <th>PAC Exp</th><th>SM Exp</th><th>Δ Exp</th><th>Δ %</th></tr></thead><tbody>${rows}</tbody></table>`;
+        <th>PAC Exp</th><th>SM Exp</th><th>Δ Exp</th><th>Δ %</th>${qhead}</tr></thead><tbody>${rows}</tbody></table>`;
     $('view').innerHTML = section(d.from||'', tbl);
 }
 
@@ -143,8 +179,25 @@ function renderIms(d){
     const tblI = `<table class="cmp"><thead><tr><th>Intervall</th><th>System</th><th>Δ Import</th><th>Δ Export</th>
         <th>Abw. Imp vs iMSys</th><th>Abw. Exp vs iMSys</th></tr></thead><tbody>${irows}</tbody></table>`;
 
+    // Plain-Language-Zusammenfassung: mittlere |Abweichung| von der iMSys-Referenz.
+    const smDevs=[], pacDevs=[];
+    iv.forEach(v=>{
+        [v.d_sm_imp_pct, v.d_sm_exp_pct].forEach(x=>{ if(x!=null) smDevs.push(Math.abs(x)); });
+        [v.d_pac_imp_pct, v.d_pac_exp_pct].forEach(x=>{ if(x!=null) pacDevs.push(Math.abs(x)); });
+    });
+    const avg = a => a.length ? (a.reduce((s,x)=>s+x,0)/a.length) : null;
+    const smAvg = avg(smDevs), pacAvg = avg(pacDevs);
+    let summary = '';
+    if (smAvg!=null || pacAvg!=null) {
+        summary = `<div class="explainer" style="margin:0 0 20px">Über ${iv.length} Intervall(e) weicht
+            <b style="color:#93c5fd">SM</b> im Mittel <b>${smAvg!=null?smAvg.toFixed(1):'–'} %</b> und
+            <b style="color:#6ee7b7">PAC</b> <b>${pacAvg!=null?pacAvg.toFixed(1):'–'} %</b> von der eichrechtlichen
+            <b style="color:#a5b4fc">iMSys</b>-Referenz ab (Mittel aus |Import|+|Export|, kleiner = näher an der Wahrheit).</div>`;
+    }
+
     $('view').innerHTML = section('iMSys-Ablesungen (eichrechtliche Referenz)', tblR)
-        + section('Intervall-Vergleich · Deltas zwischen Ablesungen (PAC/SM auf Tagesgrenzen genähert)', tblI);
+        + summary
+        + section('Intervall-Vergleich · alle drei Instanzen gegen iMSys (PAC/SM auf Tagesgrenzen genähert)', tblI);
 }
 
 if (window.PVNavUI) PVNavUI.initDrawer();
