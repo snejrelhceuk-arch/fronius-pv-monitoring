@@ -5,7 +5,7 @@ role: B
 applyTo: "routes/**"
 tags: [web-api, blueprints, templates, formatting, read-only]
 status: stable
-last_review: 2026-09-26
+last_review: 2026-09-27
 ---
 
 # Web Display/API
@@ -27,6 +27,8 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 - **Forecast-API + Persistierung:** `routes/forecast.py:api_forecast_tag`, `routes/helpers.py:store_forecast_daily`
 - **WP-Leistungsnachweis (Netzbetreiber):** `routes/verbraucher.py:api_verbraucher_wp_leistung` — Zeitreihe WP-Max + Netzbezug (`grid_draw_w`) je Punkt aus `logs/wp_netzbetreiber_leistung.csv`; View `templates/wp_leistung_view.html` (Tooltip belegt Eigenversorgung bei Ueberschreitung).
 - **Display-Formatter:** `templates/tag_view.html:formatValue`
+- **Clear-Sky-Infozeile (Tag-View):** `templates/tag_view.html:buildClearSkyInfoLine`/`applyClearSkyTitle` blenden die Sonnen-/Clear-Sky-Zeile als Chart-Untertitel überall dort ein, wo die Clear-Sky-Kurve gezeichnet wird (Ertrag- **und** Verbrauch-Chart, auch reine Zukunftstage via Kalender) — nicht mehr nur im Prognose-Chart.
+- **Seiten-Menü (Rollup):** `static/js/nav-ui.js:DEFAULT_PAGES`/`makeGroup` rendern die Schublade als aufklappbare Gruppen (Monitoring/Analyse/Netzqualität▸Spektralanalyse/Darstellung aller Einzelwerte). Flow hat einen eigenen Schnellzugriff-Button, **keinen** Menü-Eintrag; `Verbraucher` heißt im Menü `Lasten`.
 
 ## Inputs / Outputs
 - **Inputs:** Aggregat-/Rohdaten aus SQLite ueber `routes/helpers.py`, Forecastdaten, Query-Parameter der API-Endpunkte.

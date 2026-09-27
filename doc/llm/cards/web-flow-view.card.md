@@ -4,7 +4,7 @@ domain: web
 role: B
 applyTo: "templates/flow_view.html"
 status: stable
-last_review: 2026-09-26
+last_review: 2026-09-27
 ---
 
 # Flow-Ansicht Rendering-Mechanik
@@ -23,15 +23,16 @@ Wirkung.
 - **Live-Daten:** `routes/realtime.py:/api/flow_realtime`, `/api/flow_devices`; `routes/system/battery.py:/api/flow_status`
 - **Bubble-Kontext-Rollup (P1.0/P1.1/H1):** `static/js/flow-bubbles.js` + `static/css/flow-bubbles.css`; Bubbles tragen `data-bubble="…"` im SVG.
 - **Begrüßungs-/Statuszeile:** `templates/flow_view.html:pvGreeting` (dezent, breitenrobust, kein Umbruch)
-- **Flow-Schnellzugriff in der Nav:** `static/js/nav-ui.js:initDrawer` (`.pv-flow-quick` neben dem Burger, außer auf `/flow`)
+- **Flow-Schnellzugriff in der Nav:** `static/js/nav-ui.js:initDrawer` (`.pv-flow-quick` neben dem Burger, außer auf `/flow`; Icon = bidirektionale Fluss-Pfeile). Das Seiten-Menü selbst ist ein aufklappbares Rollup (`nav-ui.js:makeGroup`, Gruppen Monitoring/Analyse/Netzqualität▸Spektralanalyse/Darstellung aller Einzelwerte) — **kein** eigener Flow-Eintrag mehr.
 - **Tooltip-Skin (schwach transparent):** `static/js/nav-ui.js:tooltipResponsive` (+ `static/css/nav-ui.css:.pv-echarts-tip`)
 - **Tagesgüte-Icon (ClearSky-relativ):** `routes/system/battery.py:_build_flow_status_result` setzt `pv_forecast_quality/-emoji` über `solar_forecast.classify_day_relative` (Prognose/ClearSky: <40 % ☁️ schlecht, 40–70 % ⛅ mittel, ≥70 % ☀️ gut) — **nicht** die absolute kWh-Einstufung. Renderer `templates/flow_view.html:setPvForecastIcon`.
 
-## Kontext-Rollup je Bubble (Komfort/Info/Deep)
-- Hover (Desktop) bzw. Long-Press (Touch, ~520 ms) auf einer Bubble öffnet ein **HTML-Overlay-Rollup** (`.fb-rollup`, `position:fixed`, an der Bubble-Bildschirmposition). Kurzer Tap behält die bestehende Schnell-Navigation der Haupt-Bubbles.
-- Drei Gruppen: **[K] Komfort** = Deep-Link auf das Steuerbox-Cockpit (Schicht E, `#card-wp`/`#card-wattpilot`/`#card-battery`/`#card-toggles`), **[I] Info** = read-only Navigations-/Monitoring-Links, **[D] Deep** = Maschinenraum bzw. reiner Guard-Hinweis.
+## Kontext-Rollup je Bubble (Komfort/Info/Hinweis)
+- Hover (Desktop) bzw. Long-Press (Touch, ~520 ms) auf einer Bubble öffnet ein **HTML-Overlay-Rollup** (`.fb-rollup`, `position:fixed`, an der Bubble-Bildschirmposition). Kurzer Tap behält die bestehende Schnell-Navigation der Haupt-Bubbles. Der Rollup-Skin ist identisch zum ECharts-Tooltip (`rgba(15,23,42,0.60)` + `blur(3px)`, s. `.pv-echarts-tip`).
+- Gruppen: **Komfort · Cockpit** = segmentierte **Mini-Schalter** (`sw` im `MENU`, Optik wie das Cockpit-Statebar; z. B. Ladestrom 8/16/24 A), jedes Segment ein **Deep-Link** auf die passende Cockpit-Karte (Schicht E, `#card-wp`/`#card-wattpilot`/`#card-battery`/`#card-toggles`); **[I] Info** = read-only Navigations-/Monitoring-Links; **[D] Hinweis** = reiner Guard-Hinweis (kein Link).
+- **Keine Maschinenraum-Deep-Links mehr aus den Bubbles.** Der Maschinenraum ist ausschließlich über den 60-s-Button unterhalb der Netz-Bubble erreichbar; dessen Sub-Button ist **ein** `ssh://admin@<host>`-Link auf `pv-config` (kein Ausführen aus der API).
 - **Rolle B bleibt read-only:** kein direkter Aktor-/POST-Pfad aus der Bubble. Komfort läuft ausschließlich als Deep-Link ins Cockpit (mTLS/Allowlist der Steuerbox). Wattpilot-Komfort trägt einen Multi-Master-Hinweis (kein paralleler WS-Client).
-- Menü-Katalog + Interaktionslogik in `static/js/flow-bubbles.js` (`MENU`), Bubble-Zuordnung über `data-bubble` im SVG.
+- Menü-Katalog + Interaktionslogik in `static/js/flow-bubbles.js` (`MENU`, `makeSwitchRow`), Bubble-Zuordnung über `data-bubble` im SVG.
 
 ## Rendering-Mechanik (IST)
 - **Ein festes SVG** mit `viewBox="130 -40 590 460"` (Konstante `DEFAULT_VIEWBOX`). Alle Knoten

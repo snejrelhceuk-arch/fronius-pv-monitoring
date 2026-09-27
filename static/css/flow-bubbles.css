@@ -13,12 +13,14 @@
     min-width: 208px;
     max-width: min(320px, 86vw);
     padding: 9px 10px 10px;
-    background: rgba(15, 23, 42, 0.72);
-    border: 1px solid rgba(148, 163, 184, 0.28);
+    /* Einheitlicher Tooltip-Skin (identisch zu .pv-echarts-tip): schwach
+       transparent + Blur, damit die Flow-Grafik dezent durchscheint. */
+    background: rgba(15, 23, 42, 0.60);
+    border: 1px solid rgba(148, 163, 184, 0.35);
     border-radius: 12px;
-    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.45);
-    -webkit-backdrop-filter: blur(6px);
-    backdrop-filter: blur(6px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.30);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
     color: #e2e8f0;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
     opacity: 0;
@@ -93,7 +95,47 @@ a.fb-item:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
 }
 .fb-d .fb-note { color: #fcd34d; background: rgba(251, 191, 36, 0.08); font-style: normal; }
 
+/* Komfort-Mini-Schalter (Optik wie das Steuerbox-Cockpit-Statebar). Jedes
+   Segment ist ein Deep-Link ins Cockpit (Schicht E) — die Web-UI schaltet nicht. */
+.fb-switch {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 3px 0;
+}
+.fb-switch-h {
+    flex: 0 0 62px;
+    font-size: 11px;
+    color: #cbd5e1;
+}
+.fb-switch-seg {
+    display: flex;
+    flex: 1 1 auto;
+    gap: 4px;
+}
+.fb-seg {
+    flex: 1 1 0;
+    text-align: center;
+    padding: 5px 4px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    text-decoration: none;
+    color: #bae6fd;
+    background: rgba(56, 189, 248, 0.12);
+    border: 1px solid rgba(56, 189, 248, 0.30);
+    transition: background 0.13s, color 0.13s, border-color 0.13s;
+}
+a.fb-seg:hover {
+    background: rgba(56, 189, 248, 0.26);
+    color: #e0f2fe;
+    border-color: rgba(56, 189, 248, 0.5);
+}
+span.fb-seg { opacity: 0.55; cursor: default; }
+
 @media (max-width: 600px) {
     .fb-rollup { min-width: 190px; padding: 8px; }
     .fb-item { font-size: 13px; padding: 8px 9px; }   /* größere Touch-Ziele */
+    .fb-switch-h { flex-basis: 54px; }
+    .fb-seg { padding: 7px 4px; }
 }

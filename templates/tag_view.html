@@ -298,7 +298,7 @@
             if (!(mainValue > 0)) return '';
             let line = `<strong>${label}:</strong> ${formatEnergy(mainValue)}`;
             if (pacValue != null) {
-                line += ` <span style="color:#64748b">(${shortLabel} ${formatEnergy(pacValue)})</span>`;
+                line += ` <span style="color:#ffffff">(${shortLabel} ${formatEnergy(pacValue)})</span>`;
             }
             return line + '<br/>';
         }
@@ -1379,6 +1379,46 @@
                 .filter(dp => dp.total_ac > 0)
                 .map(dp => [dp.timestamp * 1000, dp.total_ac]);
         }
+
+        // Clear-Sky-/Sonnen-Infozeile. Sonnenzeiten/Temperatur nur wenn eine
+        // konkrete Prognose FÜR DENSELBEN TAG vorliegt (sonst wäre `forecastData`
+        // aus einem früheren Tag stale); sonst allein die Clear-Sky-Tagesenergie.
+        // Leere Zeichenkette, wenn keine Clear-Sky-Daten vorhanden sind.
+        function buildClearSkyInfoLine() {
+            if (!clearSkyData || !clearSkyData.total_kwh) return '';
+            const csDate = clearSkyData.date;
+            const src = (chartData && chartData.sunrise) ? chartData
+                : (forecastData && forecastData.sunrise && forecastData.date === csDate) ? forecastData
+                : null;
+            const parts = [];
+            if (src && src.sunrise) {
+                const sr = src.sunrise.substring(11, 16);
+                const ss = src.sunset ? src.sunset.substring(11, 16) : '';
+                parts.push(`☀ ${sr}–${ss}`);
+                if (src.sunshine_hours != null) parts.push(`${(src.sunshine_hours || 0).toFixed(1)}h Sonne`);
+                if (src.temp_min != null && src.temp_max != null) parts.push(`${src.temp_min}°/${src.temp_max}°C`);
+            }
+            parts.push(`☼ Clear Sky: ${clearSkyData.total_kwh.toFixed(1)} kWh`);
+            return parts.join('  |  ');
+        }
+
+        // Fügt die Clear-Sky-Infozeile als Chart-Untertitel ein — überall dort, wo
+        // die Clear-Sky-Kurve gezeichnet wird (nicht nur im Prognose-Chart). Im
+        // kompakten Embed (Flow-Overlay) bewusst ausgelassen.
+        function applyClearSkyTitle(option, mobile, compactEmbed) {
+            if (compactEmbed) return;
+            const line = buildClearSkyInfoLine();
+            if (!line) return;
+            option.title = {
+                subtext: line,
+                left: 'center',
+                top: 2,
+                subtextStyle: { fontSize: mobile ? 9 : 11, color: 'rgba(255, 87, 34, 0.95)' }
+            };
+            option.grid = option.grid || {};
+            const minTop = mobile ? 26 : 34;
+            if (typeof option.grid.top !== 'number' || option.grid.top < minTop) option.grid.top = minTop;
+        }
         
         // Dynamische Y-Achse: Minimum 10kW, auf 5kW-Stufen aufgerundet
         function calcYMax(markerPeak) {
@@ -1718,6 +1758,7 @@
             };
             
             console.log('Ertrag-Option gesetzt, yMax:', calcYMax(peakVal));
+            applyClearSkyTitle(option, mobile, compactEmbed);
             if (window.PVChart && option.tooltip) option.tooltip = PVChart.tooltipResponsive(option.tooltip);
             chart.setOption(option);
         }
@@ -1954,6 +1995,7 @@
                 series: series
             };
             
+            applyClearSkyTitle(option, mobile, compactEmbed);
             if (window.PVChart && option.tooltip) option.tooltip = PVChart.tooltipResponsive(option.tooltip);
             chart.setOption(option);
         }
@@ -2300,12 +2342,12 @@
                         // Alle Einzelwerte (nur wenn > 0)
                         if (dp.w_netzbezug > 0) {
                             result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(244,67,54,0.8);border:1px solid #000;margin-right:5px;"></span>${formatEnergy(dp.w_netzbezug)}`;
-                            if (pac && pac.wh_imp_kwh != null) result += ` <span style="color:#64748b">(PAC ${formatEnergy(pac.wh_imp_kwh)})</span>`;
+                            if (pac && pac.wh_imp_kwh != null) result += ` <span style="color:#ffffff">(PAC ${formatEnergy(pac.wh_imp_kwh)})</span>`;
                             result += '<br/>';
                         }
                         if (dp.w_einspeisung > 0) {
                             result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(158,158,158,0.8);border:1px solid #000;margin-right:5px;"></span>${formatEnergy(dp.w_einspeisung)}`;
-                            if (pac && pac.wh_exp_kwh != null) result += ` <span style="color:#64748b">(PAC ${formatEnergy(pac.wh_exp_kwh)})</span>`;
+                            if (pac && pac.wh_exp_kwh != null) result += ` <span style="color:#ffffff">(PAC ${formatEnergy(pac.wh_exp_kwh)})</span>`;
                             result += '<br/>';
                         }
                         if (dp.w_batterieladung > 0) {
@@ -2624,12 +2666,12 @@
                         
                         if (dp.w_netzbezug > 0) {
                             result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(244,67,54,0.8);border:1px solid #000;margin-right:5px;"></span>Netzbez. ${formatEnergy(dp.w_netzbezug)}`;
-                            if (pac && pac.wh_imp_kwh != null) result += ` <span style="color:#64748b">(PAC ${formatEnergy(pac.wh_imp_kwh)})</span>`;
+                            if (pac && pac.wh_imp_kwh != null) result += ` <span style="color:#ffffff">(PAC ${formatEnergy(pac.wh_imp_kwh)})</span>`;
                             result += '<br/>';
                         }
                         if (dp.w_einspeisung > 0) {
                             result += `<span style="display:inline-block;width:10px;height:10px;background:rgba(158,158,158,0.8);border:1px solid #000;margin-right:5px;"></span>Einspeis. ${formatEnergy(dp.w_einspeisung)}`;
-                            if (pac && pac.wh_exp_kwh != null) result += ` <span style="color:#64748b">(PAC ${formatEnergy(pac.wh_exp_kwh)})</span>`;
+                            if (pac && pac.wh_exp_kwh != null) result += ` <span style="color:#ffffff">(PAC ${formatEnergy(pac.wh_exp_kwh)})</span>`;
                             result += '<br/>';
                         }
                         if (dp.w_batterieladung > 0) {

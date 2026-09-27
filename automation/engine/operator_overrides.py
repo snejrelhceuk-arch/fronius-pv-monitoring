@@ -496,7 +496,7 @@ class OperatorOverrideProcessor:
 
         if action == 'wattpilot_amp':
             amp = params.get('amp')
-            if amp in (8, 24):
+            if amp in (8, 16, 24):
                 return [self._mk('wattpilot', 'set_max_current', int(amp), f'Steuerbox Override: Wattpilot {amp}A')]
             if amp == 'neutral':
                 return []

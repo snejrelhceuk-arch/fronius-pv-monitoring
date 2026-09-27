@@ -1,6 +1,6 @@
 # Zentrale TODO-Liste — PV-System
 
-**Stand:** 2026-08-04  
+**Stand:** 2026-09-27  
 **Regel:** Alle offenen Aufgaben gehoeren in DIESE Datei. Keine verteilten TODOs in Subdirectories. Ausschliesslich offene `- [ ]` ToDos — keine Audit-/Entwicklungsnotizen.
 
 ---
@@ -48,3 +48,27 @@
 - [ ] Maerz-Abgleich durchfuehren
 - [ ] 2022–2025 CSV-Import pruefen
 - [ ] Langfristig: Abweichung beobachten (Zaehlerstand-Delta = korrekt seit Feb 6)
+
+---
+
+## Code-Architektur
+
+- [ ] **`automation/engine/regeln/geraete.py` (~2300 Z.) zerlegen.** Enthaelt 4 Regel-Klassen:
+      `RegelWattpilotBattSchutz` (~110 Z.), `RegelHeizpatrone` (~1450 Z., Monster),
+      `RegelKlimaanlage(RegelHeizpatrone)` (~580 Z.), `RegelFussbodenheizungNacht` (~90 Z.)
+      plus Modul-Helfer `registriere_klima_engine_ein`/`klima_engine_ein_kuerzlich`.
+      Zielschnitt: je Geraet ein Modul (`geraete_wattpilot_schutz.py`, `geraete_heizpatrone.py`,
+      `geraete_klimaanlage.py`, `geraete_fbh_nacht.py`); `geraete.py` bleibt duenner Aggregator
+      (Re-Export aller Klassen + Helfer), damit die String-Importpfade in `registry.py`
+      (`automation.engine.regeln.geraete.RegelX`), `regeln/__init__.py` und `operator_overrides.py`
+      unveraendert bleiben.
+      RISIKO: safety-critical Rolle C (Batterie/HP/Klima/Wattpilot) — **nur isoliert +
+      test-verifiziert** umsetzen, **nicht** mit Feature-/UI-Aenderungen buendeln.
+      Vorbedingung: `tests/test_heizpatrone_characterization.py` deckt bisher nur die Heizpatrone
+      ab → vor der Zerlegung Characterization-Tests fuer Wattpilot-Schutz, Klima und FBH-Nacht
+      ergaenzen (Verhalten einfrieren), dann mechanisch verschieben, Tests gruen halten.
+- [ ] Weitere Gross-Module fuer Zerlegung pruefen (nach gleichem Muster, je nach Bedarf):
+      `routes/pac4200.py` (~1850 Z.), `pv-config.py` (~1550 Z.), `routes/verbraucher.py` (~1420 Z.),
+      `automation/engine/regeln/waermepumpe.py` (~1130 Z.), `routes/realtime.py` (~1080 Z.),
+      `automation/engine/regeln/soc_steuerung.py` (~1060 Z.). `solar_geometry.py` bleibt bewusst
+      ein Block (Teilung nicht gerechtfertigt).

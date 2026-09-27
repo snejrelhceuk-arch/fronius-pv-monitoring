@@ -148,10 +148,10 @@ def validate_action(action: str, params: dict[str, Any], respekt_s: int) -> dict
         amp = params.get('amp')
         if isinstance(amp, str) and amp.lower().strip() == 'neutral':
             normalized['amp'] = 'neutral'
-        elif amp in (8, 24):
+        elif amp in (8, 16, 24):
             normalized['amp'] = int(amp)
         else:
-            abort(422, description='amp must be 8, 24 or neutral')
+            abort(422, description='amp must be 8, 16, 24 or neutral')
 
     # Optionale Guard-Parameter fuer SOC/WP (falls in Zukunft mitgeschickt)
     if 'soc_min_pct' in params:

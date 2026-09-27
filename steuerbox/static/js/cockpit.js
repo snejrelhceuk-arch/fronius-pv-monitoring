@@ -78,6 +78,7 @@ const controls = [
     type: 'amp',
     states: [
       { label: '8A', value: 8, flavor: 'other' },
+      { label: '16A', value: 16, flavor: 'other' },
       { label: '24A', value: 24, flavor: 'other' },
     ],
     initial: null,

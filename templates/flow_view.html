@@ -905,27 +905,13 @@
                               letter-spacing="0.2">Maschinenraum</text>
                     </g>
 
-                      <!-- Sub-Buttons: Einzelwerte PV-System + PAC4200 + NQ-System (nur sichtbar nach Klick auf Maschinenraum) -->
-                    <g id="btn-echtzeit" class="mr-subbtn" transform="translate(200, 354)" style="display:none; cursor:pointer;">
-                        <rect x="-45" y="-12" width="90" height="24" rx="6"
-                              fill="rgba(34,197,94,0.18)" stroke="rgba(34,197,94,0.55)" stroke-width="1"/>
-                        <text x="0" y="4" text-anchor="middle"
-                              fill="rgba(187,247,208,0.95)" font-size="10" font-weight="600"
-                            letter-spacing="0.2">PV-System</text>
-                    </g>
-                    <g id="btn-pac" class="mr-subbtn" transform="translate(200, 381)" style="display:none; cursor:pointer;">
-                        <rect x="-45" y="-12" width="90" height="24" rx="6"
-                              fill="rgba(20,184,166,0.18)" stroke="rgba(45,212,191,0.6)" stroke-width="1"/>
-                        <text x="0" y="4" text-anchor="middle"
-                              fill="rgba(153,246,228,0.95)" font-size="10" font-weight="600"
-                              letter-spacing="0.2">PAC4200</text>
-                    </g>
-                    <g id="btn-nq" class="mr-subbtn" transform="translate(200, 408)" style="display:none; cursor:pointer;">
-                        <rect x="-45" y="-12" width="90" height="24" rx="6"
+                      <!-- Sub-Button: pv-config per SSH (nur sichtbar nach Klick auf Maschinenraum) -->
+                    <g id="btn-pvconfig" class="mr-subbtn" transform="translate(200, 356)" style="display:none; cursor:pointer;">
+                        <rect x="-58" y="-13" width="116" height="26" rx="6"
                               fill="rgba(99,102,241,0.18)" stroke="rgba(129,140,248,0.6)" stroke-width="1"/>
                         <text x="0" y="4" text-anchor="middle"
                               fill="rgba(199,210,254,0.95)" font-size="10" font-weight="600"
-                            letter-spacing="0.2">NQ-System</text>
+                            letter-spacing="0.2">⚙ pv-config (SSH)</text>
                     </g>
 
                     <!-- PV Gesamt -->
@@ -2347,7 +2333,7 @@
         if (lastFlowStatusData) renderFlowStatusDetail(lastFlowStatusData);
     });
 
-    // ── Maschinenraum-Button: Info 60s einblenden + Sub-Buttons (PV-System / PAC4200) ──
+    // ── Maschinenraum-Button: Info 60s einblenden + Sub-Button (pv-config per SSH) ──
     (function() {
         const btnEl   = document.getElementById('btn-maschinenraum');
         const btnBg   = document.getElementById('btn-mr-bg');
@@ -2356,23 +2342,16 @@
         const tickerWrap = document.getElementById('ticker-wrap');
         const tickerText = document.getElementById('ticker-text');
         const tickerSubText = document.getElementById('ticker-subtext');
-        const btnEchtzeit = document.getElementById('btn-echtzeit');
-        const btnPAC      = document.getElementById('btn-pac');
-        const btnNQ       = document.getElementById('btn-nq');
+        const btnPvConfig = document.getElementById('btn-pvconfig');
         let timerInterval = null;
 
-        // Sub-Buttons: Navigation
-        btnEchtzeit.addEventListener('click', function(ev) {
+        // Sub-Button: pv-config per SSH öffnen. Rolle B bleibt read-only — dies ist
+        // nur ein Link auf eine SSH-Sitzung zum Host, auf dem pv-config läuft; der
+        // Terminal-Handler des Betriebssystems übernimmt (kein Ausführen aus der API).
+        btnPvConfig.addEventListener('click', function(ev) {
             ev.stopPropagation();
-            window.location.href = '/maschinenraum';
-        });
-        btnPAC.addEventListener('click', function(ev) {
-            ev.stopPropagation();
-            window.location.href = '/pac4200';
-        });
-        btnNQ.addEventListener('click', function(ev) {
-            ev.stopPropagation();
-            window.location.href = '/maschinenraum?db=nq';
+            const host = location.hostname || '';
+            window.location.href = 'ssh://admin@' + host;
         });
 
                 // Ticker Fetcher
@@ -2421,9 +2400,7 @@
         function hideInfo() {
             if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
             infoWrap.classList.remove('visible');
-            btnEchtzeit.style.display = 'none';
-            btnPAC.style.display = 'none';
-            btnNQ.style.display = 'none';
+            btnPvConfig.style.display = 'none';
             resetBtn();
             if (typeof adjustSvgViewBox === 'function') adjustSvgViewBox(false);
         }
@@ -2432,9 +2409,7 @@
             // zweiter Klick: sofort ausblenden
             if (timerInterval) { hideInfo(); return; }
             infoWrap.classList.add('visible');
-            btnEchtzeit.style.display = '';
-            btnPAC.style.display = '';
-            btnNQ.style.display = '';
+            btnPvConfig.style.display = '';
             btnBg.setAttribute('fill', 'rgba(99,102,241,0.28)');
             btnBg.setAttribute('stroke', 'rgba(129,140,248,0.75)');
             if (typeof adjustSvgViewBox === 'function') adjustSvgViewBox(false);

@@ -148,6 +148,55 @@
     margin: 6px 4px;
 }
 
+/* Aufklappbare Navigations-Gruppen (Rollup-Untermenüs in der Schublade) */
+.pv-drawer .pv-pages .nav-group { display: flex; flex-direction: column; }
+.pv-drawer .pv-pages .nav-group-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    text-align: left;
+    padding: 9px 12px;
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.95);
+    background: transparent;
+    border: 1px solid transparent;
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+}
+.pv-drawer .pv-pages .nav-group-toggle:hover { background: rgba(255, 255, 255, 0.1); }
+.pv-drawer .pv-pages .nav-caret {
+    flex: 0 0 auto;
+    font-size: 10px;
+    color: #94a3b8;
+    transition: transform 0.18s ease;
+}
+.pv-drawer .pv-pages .nav-group-toggle.open .nav-caret { transform: rotate(90deg); }
+.pv-drawer .pv-pages .nav-group-items {
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+}
+.pv-drawer .pv-pages .nav-group.open > .nav-group-items { display: flex; }
+.pv-drawer .pv-pages .nav-group-items > a.nav-link {
+    padding-left: 28px;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.78);
+}
+/* Verschachtelte Untergruppe (z. B. Spektralanalyse) tiefer einrücken */
+.pv-drawer .pv-pages .nav-group-sub > .nav-group-toggle {
+    padding-left: 26px;
+    font-size: 13px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.85);
+}
+.pv-drawer .pv-pages .nav-group-sub .nav-group-items > a.nav-link {
+    padding-left: 40px;
+}
+
 /* Datum-Label als Kalender-Trigger kenntlich machen */
 .pv-cal-trigger { cursor: pointer; }
 .pv-cal-trigger:hover { text-decoration: underline dotted; }

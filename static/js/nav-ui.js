@@ -23,40 +23,46 @@
         } catch (e) { return false; }
     }
 
-    // Vollständiges Seiten-Menü (Reihenfolge = Anzeige). Zeitkontext wird via
-    // PVNavContext als Query angehängt, damit der Zeitraum erhalten bleibt.
-    // Typen: {href,label} Link · {heading} fette Überschrift · {href,label,sub}
-    // eingerückter Unterpunkt · {sep} Trennlinie.
+    // Vollständiges Seiten-Menü als aufklappbare Rollup-Gruppen. Reihenfolge =
+    // Anzeige. Zeitkontext wird via PVNavContext als Query angehängt, damit der
+    // Zeitraum über Seitenwechsel erhalten bleibt.
+    // Typen: {group,items[]} aufklappbares Untermenü (beliebig verschachtelbar)
+    //        {href,label} Link · {sep} Trennlinie.
+    // Flow liegt bewusst NICHT im Menü — es hat einen eigenen Schnellzugriff-Button.
     var DEFAULT_PAGES = [
-        { href: '/flow', label: 'Flow' },
-        { href: '/monitoring', label: 'Monitoring' },
-        { sep: true },
-        { heading: 'Analyse' },
-        { href: '/erzeuger', label: 'Erzeuger', sub: true },
-        { href: '/verbraucher', label: 'Verbraucher', sub: true },
-        { href: '/analyse/batterie', label: 'Batterie', sub: true },
-        { href: '/analyse/pv', label: 'PV-Übersicht', sub: true },
-        { href: '/analyse/haushalt', label: 'Haushalt', sub: true },
-        { href: '/analyse/amortisation', label: 'Amortisation', sub: true },
-        { href: '/analyse/speicherausbau', label: '🔋 Speicher-Ausbau', sub: true },
-        { href: '/analyse/primaerenergie', label: '🌍 Primärenergie', sub: true, stale: true },
-        { sep: true },
-        { heading: 'Netzqualität' },
-        { href: '/pac4200', label: 'PAC4200', sub: true },
-        { href: '/netzqualitaet/live', label: 'PAC-Screens', sub: true },
-        { href: '/netzqualitaet', label: 'Netzkriterien', sub: true },
-        { href: '/netzqualitaet/chart', label: 'Event-Chart', sub: true },
-        { href: '/netzqualitaet/analyse', label: 'Spektralanalyse', sub: true },
-        { href: '/netzqualitaet/analyse/harmonische', label: '· Oberschwingungen', sub: true },
-        { href: '/netzqualitaet/analyse/periodogramm', label: '· Periodogramm', sub: true },
-        { href: '/netzqualitaet/analyse/psd', label: '· Leistungsdichte', sub: true },
-        { href: '/netzqualitaet/analyse/spektrogramm', label: '· Spektrogramm', sub: true },
-        { href: '/netzqualitaet/analyse/reflexion', label: '· Reflexionen 🛰️', sub: true },
-        { href: '/netzqualitaet/energievergleich', label: 'Energievergleich', sub: true },
-        { sep: true },
-        { href: '/maschinenraum', label: 'Darstellung aller Einzelwerte' },
-        { href: '/maschinenraum', label: 'PV-System', sub: true },
-        { href: '/maschinenraum?db=nq', label: 'PAC4200', sub: true, noctx: true },
+        { group: 'Monitoring', items: [
+            { href: '/monitoring', label: 'Produktion' },
+            { href: '/monitoring?view=verbrauch', label: 'Verbrauch' },
+            { href: '/erzeuger', label: 'Erzeuger' },
+            { href: '/verbraucher', label: 'Lasten' },
+            { href: '/analyse/batterie', label: 'Batterie' },
+        ] },
+        { group: 'Analyse', items: [
+            { href: '/analyse/pv', label: 'PV-Übersicht' },
+            { href: '/analyse/haushalt', label: 'Haushalt' },
+            { href: '/analyse/amortisation', label: 'Amortisation' },
+            { href: '/analyse/speicherausbau', label: '🔋 Speicher-Ausbau' },
+            { href: '/analyse/primaerenergie', label: '🌍 Primärenergie', stale: true },
+        ] },
+        { group: 'Netzqualität', items: [
+            { href: '/pac4200', label: 'PAC4200' },
+            { href: '/netzqualitaet/live', label: 'PAC-Screens' },
+            { href: '/netzqualitaet', label: 'Netzkriterien' },
+            { href: '/netzqualitaet/chart', label: 'Event-Chart' },
+            { group: 'Spektralanalyse', items: [
+                { href: '/netzqualitaet/analyse', label: 'Einführung' },
+                { href: '/netzqualitaet/analyse/harmonische', label: 'Oberschwingungen' },
+                { href: '/netzqualitaet/analyse/periodogramm', label: 'Periodogramm' },
+                { href: '/netzqualitaet/analyse/psd', label: 'Leistungsdichte' },
+                { href: '/netzqualitaet/analyse/spektrogramm', label: 'Spektrogramm' },
+                { href: '/netzqualitaet/analyse/reflexion', label: 'Reflexionen 🛰️' },
+            ] },
+            { href: '/netzqualitaet/energievergleich', label: 'Energievergleich' },
+        ] },
+        { group: 'Darstellung aller Einzelwerte', items: [
+            { href: '/maschinenraum', label: 'PV-System' },
+            { href: '/maschinenraum?db=nq', label: 'PAC4200', noctx: true },
+        ] },
     ];
 
     function navQuery() {
@@ -69,6 +75,68 @@
         return '';
     }
 
+    function makeLink(p, here) {
+        var a = document.createElement('a');
+        var base = p.href.replace(/\/$/, '') || '/';
+        a.dataset.base = p.href;
+        if (p.noctx) a.dataset.noctx = '1';
+        a.href = p.href;
+        a.textContent = p.label;
+        a.classList.add('nav-link');
+        if (p.stale && primaerStale()) {
+            a.textContent += '  ⚠';
+            a.title = 'Datenstand veraltet – Aktualisierung fällig';
+        }
+        if (base === here) a.classList.add('active');
+        return a;
+    }
+
+    // Rendert eine aufklappbare Gruppe (Rollup-Untermenü). Gibt {el, active}
+    // zurück — active = enthält die aktuelle Seite → Gruppe initial geöffnet
+    // (inkl. übergeordneter Gruppen bei Verschachtelung).
+    function makeGroup(node, here, depth) {
+        var wrap = document.createElement('div');
+        wrap.className = 'nav-group' + (depth ? ' nav-group-sub' : '');
+
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'nav-group-toggle';
+        var caret = document.createElement('span');
+        caret.className = 'nav-caret';
+        caret.textContent = '▸';
+        var lbl = document.createElement('span');
+        lbl.className = 'nav-group-label';
+        lbl.textContent = node.group;
+        btn.appendChild(caret);
+        btn.appendChild(lbl);
+
+        var panel = document.createElement('div');
+        panel.className = 'nav-group-items';
+
+        var hasActive = false;
+        (node.items || []).forEach(function (child) {
+            if (child.group) {
+                var sub = makeGroup(child, here, depth + 1);
+                if (sub.active) hasActive = true;
+                panel.appendChild(sub.el);
+            } else {
+                var a = makeLink(child, here);
+                if (a.classList.contains('active')) hasActive = true;
+                panel.appendChild(a);
+            }
+        });
+
+        if (hasActive) { wrap.classList.add('open'); btn.classList.add('open'); }
+        btn.addEventListener('click', function () {
+            var isOpen = wrap.classList.toggle('open');
+            btn.classList.toggle('open', isOpen);
+        });
+
+        wrap.appendChild(btn);
+        wrap.appendChild(panel);
+        return { el: wrap, active: hasActive };
+    }
+
     function buildPages(pages) {
         var here = window.location.pathname.replace(/\/$/, '') || '/';
         var wrap = document.createElement('div');
@@ -78,28 +146,11 @@
                 var s = document.createElement('div');
                 s.className = 'nav-separator';
                 wrap.appendChild(s);
-                return;
+            } else if (p.group) {
+                wrap.appendChild(makeGroup(p, here, 0).el);
+            } else if (p.href) {
+                wrap.appendChild(makeLink(p, here));
             }
-            if (p.heading) {
-                var h = document.createElement('div');
-                h.className = 'nav-heading';
-                h.textContent = p.heading;
-                wrap.appendChild(h);
-                return;
-            }
-            var a = document.createElement('a');
-            var base = p.href.replace(/\/$/, '') || '/';
-            a.dataset.base = p.href;
-            if (p.noctx) a.dataset.noctx = '1';
-            a.href = p.href;
-            a.textContent = p.label;
-            if (p.sub) a.classList.add('nav-subitem');
-            if (p.stale && primaerStale()) {
-                a.textContent += '  ⚠';
-                a.title = 'Datenstand veraltet – Aktualisierung fällig';
-            }
-            if (base === here) a.classList.add('active');
-            wrap.appendChild(a);
         });
         return wrap;
     }
@@ -135,9 +186,10 @@
             flowBtn.href = '/flow';
             flowBtn.setAttribute('aria-label', 'Flow-Ansicht öffnen');
             flowBtn.title = 'Flow-Ansicht';
-            flowBtn.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">'
-                + '<circle cx="5" cy="12" r="2.4"/><circle cx="19" cy="6" r="2.4"/><circle cx="19" cy="18" r="2.4"/>'
-                + '<path d="M7 11 L17 6.5 M7 13 L17 17.5"/></svg><span>Flow</span>';
+            flowBtn.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"'
+                + ' stroke-linecap="round" stroke-linejoin="round">'
+                + '<path d="M4 9 H15 M12 6 L15 9 L12 12"/>'
+                + '<path d="M20 15 H9 M12 12 L9 15 L12 18"/></svg><span>Flow</span>';
             bar.insertBefore(flowBtn, burger.nextSibling);
         }
 
