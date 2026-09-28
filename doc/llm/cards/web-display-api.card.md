@@ -5,7 +5,7 @@ role: B
 applyTo: "routes/**"
 tags: [web-api, blueprints, templates, formatting, read-only]
 status: stable
-last_review: 2026-09-27
+last_review: 2026-09-28
 ---
 
 # Web Display/API
@@ -15,8 +15,8 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 
 ## Code-Anchor
 - **App + Blueprint-Setup:** `web_api.py` (`app.register_blueprint(...)`)
-- **NQ2-API (PAC4200/NQ):** `routes/pac4200.py` (`api_pac4200_live`, `api_nq_energy`, `api_nq_event`, `api_nq_aggregates`, `nq_chart_page`)
-- **Energievergleich (PAC4200 ↔ SM ↔ iMSys):** `routes/pac4200.py:api_nq_energy_compare` (`/api/nq/energy_compare?agg=day|month|year|ims`); Tag/Monat/Jahr summieren die Tages-Deltas (Δ nur ueber Tage mit PAC UND SM), `ims` liefert `nq_ims_reading` + Intervall-Vergleich (Näherung auf Tagesgrenzen; präzise Fixpunkte in `doc/MESSSYSTEM_FIXPUNKTE.md`). Die Tagesansicht führt eine **Quelle**-Spalte aus `_pac_days_kwh` (`src`/`n_samples`): `PAC ✓` (counter, n/288), `Teil-Tag` (partial), `SM-Ersatz` (sm_substitute). View `templates/nq_energie_vergleich_view.html` mit Erklärbox der drei Messsysteme + iMSys-Klartext-Zusammenfassung (mittlere |Abweichung| SM/PAC vs. iMSys).
+- **NQ2-API (PAC4200/NQ):** Paket `routes/pac4200/` — `pages.py` (`api_pac4200_live`, NQ-Seiten), `analyse.py` (`api_nq_dfd`/Tages-/Wochenprofil/Events), `energy.py` (`api_nq_energy`), `spectral.py` (`api_nq_pattern`, `api_nq_event`, Spektral/Reflexion), `netzkriterien.py` (`api_nq_aggregates`, `nq_chart_page`, `api_nq_netzkriterien`)
+- **Energievergleich (PAC4200 ↔ SM ↔ iMSys):** `routes/pac4200/energy.py:api_nq_energy_compare` (`/api/nq/energy_compare?agg=day|month|year|ims`); Tag/Monat/Jahr summieren die Tages-Deltas (Δ nur ueber Tage mit PAC UND SM), `ims` liefert `nq_ims_reading` + Intervall-Vergleich (Näherung auf Tagesgrenzen; präzise Fixpunkte in `doc/MESSSYSTEM_FIXPUNKTE.md`). Die Tagesansicht führt eine **Quelle**-Spalte aus `_pac_days_kwh` (`src`/`n_samples`): `PAC ✓` (counter, n/288), `Teil-Tag` (partial), `SM-Ersatz` (sm_substitute). View `templates/nq_energie_vergleich_view.html` mit Erklärbox der drei Messsysteme + iMSys-Klartext-Zusammenfassung (mittlere |Abweichung| SM/PAC vs. iMSys).
 - **Tooltip-Skin (schwach transparent):** `static/js/nav-ui.js:PVChart.tooltipResponsive` vereinheitlicht alle ECharts-Tooltips (halbtransparenter Hintergrund + Blur, `.pv-echarts-tip`), damit die Kurve unter dem Tooltip lesbar bleibt. Charts reichen ihre `tooltip`-Option hier durch.
 - **Perioden-Extremwerte (Tooltips):** `routes/visualization.py:api_period_extremes` liefert Peak-Leistung, Spannung L-L, Frequenz (Datum/Uhrzeit) — **ohne** cos φ. Geteilter Formatter `static/js/extremes.js` (Monitoring/Analyse-Tooltips).
 - **Chart-Peak-Marker:** `static/js/nav-ui.js:PVChart.peakHeadroomMax(dataMax, peakVal, {floor,cap,round})` — Y-Achsen-Obergrenze mit Luft, damit der Peak-Pin (Wert-Label) nie den oberen Rahmen touchiert (verbraucher/erzeuger/tag_view).
@@ -26,6 +26,7 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 - **Page-Routen:** `routes/pages.py` (z. B. `maschinenraum`, `netzqualitaet`)
 - **Forecast-API + Persistierung:** `routes/forecast.py:api_forecast_tag`, `routes/helpers.py:store_forecast_daily`
 - **WP-Leistungsnachweis (Netzbetreiber):** `routes/verbraucher.py:api_verbraucher_wp_leistung` — Zeitreihe WP-Max + Netzbezug (`grid_draw_w`) je Punkt aus `logs/wp_netzbetreiber_leistung.csv`; View `templates/wp_leistung_view.html` (Tooltip belegt Eigenversorgung bei Ueberschreitung).
+- **Verbraucher-Read-Helfer:** `routes/verbraucher_helpers.py` (WP-Protokoll/Downsampling, SOC-Zeitreihe + Akku-Stress, Batterie-Wirkungsgrad/Vollzyklen, Fritz!DECT-/Heizpatrone-Tagesenergie) — read-only, re-exportiert über `routes/verbraucher.py` (Importpfade für Routen/Tests stabil).
 - **Display-Formatter:** `templates/tag_view.html:formatValue`
 - **Clear-Sky-Infozeile (Tag-View):** `templates/tag_view.html:buildClearSkyInfoLine`/`applyClearSkyTitle` blenden die Sonnen-/Clear-Sky-Zeile als Chart-Untertitel überall dort ein, wo die Clear-Sky-Kurve gezeichnet wird (Ertrag- **und** Verbrauch-Chart, auch reine Zukunftstage via Kalender) — nicht mehr nur im Prognose-Chart.
 - **Seiten-Menü (Rollup):** `static/js/nav-ui.js:DEFAULT_PAGES`/`makeGroup` rendern die Schublade als aufklappbare Gruppen (Monitoring/Analyse/Netzqualität▸Spektralanalyse/Darstellung aller Einzelwerte). Flow hat einen eigenen Schnellzugriff-Button, **keinen** Menü-Eintrag; `Verbraucher` heißt im Menü `Lasten`.
