@@ -36,21 +36,6 @@
 
 ---
 
-## Netzqualität (Rolle N)
-
-- [ ] **Tech-Code-Sync automatisieren:** Tech (`.181`) hat KEINEN automatischen Code-Abgleich und driftete ~1 Tag (Poller lief ohne Harmonik-Thread). Sync-Mechanismus Primary→Tech (analog `sync_code_to_peer.sh`, nur git-tracked, ohne Daten) + Poller-Restart-Hook etablieren.
-- [ ] **tmpfs-Schema-Migration robuster:** `open_db` nutzt `CREATE TABLE IF NOT EXISTS` → geaenderte tmpfs-Tabellen (z. B. `nq_raw_medium` `ts`→`ts_ms`) werden bei Poller-Neustart NICHT migriert (Insert-Fehler bis manuellem Drop). Versions-/Migrations-Check beim Poller-Start ergaenzen.
-- [ ] **NQ-Units in Standard-Deployment aufnehmen:** `install_nq_services.sh` in `install_services.sh` bzw. Provisionierung referenzieren, damit NQ nach Reinstall/Reboot nicht manuell vergessen wird.
-
-
-## Solarweb-Abgleich
-
-- [ ] Maerz-Abgleich durchfuehren
-- [ ] 2022–2025 CSV-Import pruefen
-- [ ] Langfristig: Abweichung beobachten (Zaehlerstand-Delta = korrekt seit Feb 6)
-
----
-
 ## Code-Architektur
 
 - [ ] **`automation/engine/regeln/geraete.py` (~2300 Z.) zerlegen.** Enthaelt 4 Regel-Klassen:

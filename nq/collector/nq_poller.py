@@ -41,7 +41,7 @@ import signal
 import threading
 import time
 
-from nq.nq_common import open_db, load_config, TECH_SCHEMA
+from nq.nq_common import open_db, load_config, TECH_SCHEMA, migrate_tech_schema
 from nq.pac_live import read_fast_snapshot, read_harm_snapshot, read_max_snapshot
 from nq.collector.nq_capping import enforce_retention
 # ---------------------------------------------------------------------------
@@ -480,6 +480,10 @@ def poller_loop(db_path: str, cfg: dict) -> None:
     signal.signal(signal.SIGTERM, _handle_stop)
 
     conn = open_db(db_path, TECH_SCHEMA)
+    healed = migrate_tech_schema(conn, TECH_SCHEMA)
+    if healed:
+        print(f"[nq_poller] Schema-Drift geheilt (Volatile-Tabellen neu erstellt): "
+              f"{', '.join(healed)}")
 
     poll_s = cfg.get("polling", {}).get("fast_ms", 200) / 1000.0
     grid_s = cfg.get("aggregate", {}).get("grid_s", 300)

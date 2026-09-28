@@ -187,6 +187,13 @@ sudo systemctl start pv-web.service
 sudo systemctl start pv-steuerbox.service
 sudo systemctl start pv-wattpilot.service
 
+# 8. NQ-Modul (Rolle N) — rollen-bewusste Units (Tech: poller/energy; Primary: Timer)
+#    Verhindert, dass NQ nach Reinstall/Reboot manuell vergessen wird.
+if [ -f "${BASE}/scripts/install_nq_services.sh" ]; then
+    echo "→ NQ-Services (Rolle N) installieren..."
+    bash "${BASE}/scripts/install_nq_services.sh" || echo "  ⚠ NQ-Installer meldete Fehler (übersprungen)"
+fi
+
 echo ""
 echo "=== Status ==="
 for svc in pv-collector pv-web pv-steuerbox pv-wattpilot; do

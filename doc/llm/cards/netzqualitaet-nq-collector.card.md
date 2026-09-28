@@ -5,7 +5,7 @@ role: N
 applyTo: "nq/collector/**"
 tags: [netzqualitaet, nq, pac4200, collector, tmpfs, tech, rolle-n]
 status: stable
-last_review: 2026-08-10
+last_review: 2026-09-28
 ---
 
 # NQ Tech-Collector
@@ -25,7 +25,7 @@ Abgrenzung: `nq/` (PAC4200, Rolle N) ≠ Legacy `netzqualitaet/` (Smart-Meter, R
 - **Read-only Web-Anzeige (Rolle B):** `routes/pac4200.py:api_pac4200_live`, `templates/pac4200_view.html`
 - **Block-Poller/Orchestrator:** `nq/collector/nq_poller.py:poller_loop`
 - **Kappung/Ring-Buffer:** `nq/collector/nq_capping.py:enforce_retention`
-- **Gemeinsame Helfer:** `nq/nq_common.py` (`load_config`, `open_db`, `db_size_mb`, `tmpfs_free_mb`)
+- **Gemeinsame Helfer:** `nq/nq_common.py` (`load_config`, `open_db`, `migrate_tech_schema`, `db_size_mb`, `tmpfs_free_mb`)
 - **Schema (tmpfs):** `nq/schema/nq_tech_schema.sql`
 - **Konfig:** `config/nq_config.json`
 - **Muster/Vorbild:** `collector/poller.py`, `collector/buffer.py`, `collector/modbus_client.py`, `collector/pid_lock.py`
@@ -56,6 +56,12 @@ Abgrenzung: `nq/` (PAC4200, Rolle N) ≠ Legacy `netzqualitaet/` (Smart-Meter, R
 - Zu dichtes Polling liest nur intern noch nicht erneuerte Werte mehrfach (Feldtest entscheidet).
 - tmpfs-Belegung inkl. WAL messen (`db_size_mb` + `tmpfs_free_mb`), sonst Überlaufrisiko.
 - Datumsgrenzen laufen über `localtime` (Konsistenz mit Produktion).
+- **Schema-Drift im tmpfs:** `CREATE TABLE IF NOT EXISTS` migriert Spaltenänderungen nicht
+  (z. B. `nq_raw_medium` `ts`→`ts_ms`). `poller_loop` ruft daher beim Start `migrate_tech_schema`:
+  flüchtige RAW-Tabellen (`nq_raw_fast/medium/slow/max`, `nq_5min`, `nq_transient_5min`) mit
+  abweichenden Spalten werden gedroppt + neu erzeugt; **persistente** Tabellen (`nq_energy_raw`,
+  `nq_transfer_log`, `nq_limit_alerts`, `nq_capping_log`) bleiben unberührt. Schemaänderungen daher
+  nur an den RAW-Tabellen „gefahrlos“ — an persistenten Tabellen manuell migrieren.
 
 ## Verwandte Cards
 - [`netzqualitaet-nq-aggregation.card.md`](./netzqualitaet-nq-aggregation.card.md)
