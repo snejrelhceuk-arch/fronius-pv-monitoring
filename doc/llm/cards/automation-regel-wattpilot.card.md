@@ -25,8 +25,9 @@ Schützt die Hausbatterie vor EV-Ladung via Wattpilot (Fronius/go-e Wallbox). He
 - **Outputs:** WS-Kommandos `set_max_current` (6–32 A), `pause`, `resume`, `reduce_current`. Ggf. SOC-Min-Anhebung über `aktor_batterie`.
 
 ## Invarianten
+- **Trigger sind Single-Source:** `bewerte()` (Score) und `erzeuge_aktionen()` (Aktion) leiten beide Trigger aus `_trigger_pruefen()` ab — dieselbe `soc_min_netz_pct`-Schwelle für den Sunset-Trigger in beiden Pfaden (kein hartcodierter Zweitwert).
 - Trigger 1: `SOC ≤ SOC_MIN + puffer` während Ladung → `soc_min` auf 20 % (`soc_min_netz`; Netzbezug erzwungen, Batterie wird nicht weiter entladen).
-- Trigger 2: Letzte 2 h vor Sunset + `SOC < 20 %` → `soc_min = 20 %`.
+- Trigger 2: Letzte 2 h vor Sunset + `SOC < soc_min_netz_pct` (20 %) → `soc_min = 20 %`.
 - `verifiziere()` erkennt beim Read-Back eine *externe* Pause (`frc=1` ohne Engine-Pause-Kommando, z. B. HA/App/Taster) und meldet sie als `extern_pausiert` — nutzt den ohnehin nötigen Status-Read, kein Zusatz-Polling.
 - Auth-Hash wird pro Session aus `authRequired.hash` abgeleitet (`bcrypt` für Flex, sonst `pbkdf2`) und gilt für Read + `setValue`.
 - SLS-Schutz (Hauptsicherung 35 A) hat Vorrang: `RegelSlsSchutz` ruft `reduce_current` ohne Matrix-Pfad.

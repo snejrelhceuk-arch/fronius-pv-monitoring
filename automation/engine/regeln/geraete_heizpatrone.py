@@ -11,7 +11,7 @@ import json
 import logging
 import sqlite3
 import time
-from collections import deque
+from collections import deque, namedtuple
 from datetime import datetime
 from typing import Optional
 
@@ -33,6 +33,16 @@ LOG = logging.getLogger('engine')
 # existiert seit 2026-03-07 nicht mehr in der Matrix; SOC<5 % wird durch
 # Tier-1-Alarm abgefangen. Konstante ersetzt die Phantom-Matrix-Referenz.
 SOC_SCHUTZ_ABS_PCT = 5
+
+
+# Ergebnis der gemeinsamen EIN-Phasen-Entscheidung (Single-Source für den
+# bewerte()-Score UND die erzeuge_aktionen()-Aktion). `score` trägt bereits die
+# phasenspezifische Gewichtung (Phase 0: Skalierung nach Drain-Tiefe); die
+# übrigen Phasen liefern das volle Score-Gewicht.
+EinEntscheidung = namedtuple(
+    'EinEntscheidung',
+    ['phase', 'burst_dauer', 'score', 'is_probe', 'is_drain'],
+)
 
 
 class RegelHeizpatrone(Regel):
@@ -581,6 +591,155 @@ class RegelHeizpatrone(Regel):
             return 'netzbezug', netz_grund
         return '', ''
 
+    def _ein_entscheidung(self, obs: ObsState, matrix: dict) -> Optional[EinEntscheidung]:
+        """Gemeinsame EIN-Phasen-Entscheidung (Single-Source Score + Aktion).
+
+        Repliziert die Phasen-Gate-Logik (Phase 0/1/1b/2/4), die früher in
+        `bewerte()` (Score) und `erzeuge_aktionen()` (Aktion/Burst) doppelt lag.
+        Reine Entscheidung ohne Seiteneffekte: `bewerte()` nimmt `score`,
+        `erzeuge_aktionen()` nimmt `phase`/`burst_dauer`/`is_probe`/`is_drain` und
+        leitet daraus Burst-/Probe-/Drain-Zustand ab.
+
+        Frühere stille Divergenzen sind auf den `bewerte()`-Gate vereinheitlicht
+        (der im Engine-Betrieb ohnehin entscheidet, ob `erzeuge_aktionen()`
+        überhaupt läuft — die Aktion ist die Schnittmenge beider Pfade):
+          - Phase 2 nutzt nur `rest_kwh > batt_rest + reserve`; die frühere
+            Zusatzbedingung `rest_kwh > min_rest_kwh` (12) war bei SOC≈MAX
+            (batt_rest ≤ 5 %·20,48 kWh ≈ 1 kWh, +reserve ≤ 3 kWh) nie zusätzlich
+            erreichbar → entfällt.
+          - `reserve` nutzt den Nachmittagswert (`batt_reserve_nachmittag_kwh`,
+            rest_h < 3 h) auch in Phase 1b/2 (erzeuge_aktionen nutzte dort fix 2,0).
+          - Die frühere Phase 3 (Nachmittag) geht in Phase 2 auf (sie war stets
+            von Phase 2 verdrängt bzw. vom bewerte-Gate ausgeschlossen).
+
+        Returns EinEntscheidung oder None (kein EIN).
+        """
+        now_h = datetime.now().hour + datetime.now().minute / 60
+        sunset = obs.sunset or 17.0
+        rest_h = max(0, sunset - now_h)
+        p_batt = obs.batt_power_w
+        rest_kwh = obs.forecast_rest_kwh
+        soc = obs.batt_soc_pct
+        soc_max_eff = obs.soc_max or 75
+
+        if p_batt is None or rest_kwh is None or soc is None:
+            return None
+
+        score = get_score_gewicht(matrix, self.regelkreis)
+        min_rest_h = get_param(matrix, self.regelkreis, 'min_rest_h', 2.0)
+        burst_lang = get_param(matrix, self.regelkreis, 'burst_dauer_lang_s', 1800)
+        burst_kurz = get_param(matrix, self.regelkreis, 'burst_dauer_kurz_s', 900)
+
+        batt_rest_kwh = max(0, (soc_max_eff - soc) * config.PV_BATTERY_KWH / 100)
+        potenzial = self._potenzial(obs, matrix)
+        wp_aktiv, ev_aktiv = self._verbraucher_aktiv(obs, matrix)
+
+        # ── Phase 0: Morgen-Drain (prognosegetrieben, vor PV-Start) ──
+        sunrise_h = obs.sunrise or 6.0
+        drain_fruehstart_h = get_param(matrix, self.regelkreis, 'drain_fruehstart_vor_sunrise_h', 1.0)
+        drain_fenster = get_param(matrix, self.regelkreis, 'drain_fenster_ende_h', 10.0)
+        drain_start_soc = get_param(matrix, self.regelkreis, 'drain_start_soc_pct', 20)
+        drain_min_sunshine_h = get_param(matrix, self.regelkreis, 'drain_min_sunshine_h', 5.0)
+        sunshine_h = obs.sunshine_hours or 0
+        if (now_h >= (sunrise_h - drain_fruehstart_h) and now_h < drain_fenster
+                and self._drain_soc_freigegeben(obs, matrix)
+                and sunshine_h >= drain_min_sunshine_h):
+            d_haus = get_param(matrix, self.regelkreis, 'drain_max_haushalt_w', 700)
+            d_wp = get_param(matrix, self.regelkreis, 'drain_max_wp_w', 500)
+            d_ev = get_param(matrix, self.regelkreis, 'drain_max_ev_w', 1000)
+            d_prognose_kw = get_param(matrix, self.regelkreis, 'drain_min_prognose_kw', 4.0)
+            haushalt_ok = self._phase0_haushalt_netto(obs) < d_haus
+            wp_ok = (obs.wp_power_w or 0) < d_wp
+            ev_ok = (obs.ev_power_w or 0) < d_ev
+            soc_ok = soc > drain_start_soc
+            forecast_ok = get_forecast_tier(obs, matrix) >= FC_TIER_MITTEL
+
+            prognose_stark = False
+            d_horizont_h = get_param(matrix, self.regelkreis, 'drain_prognose_horizont_h', 3.0)
+            horizont_bis_h = int(sunrise_h + d_horizont_h)
+            if obs.forecast_power_profile:
+                now_h_int = int(now_h)
+                for entry in obs.forecast_power_profile:
+                    h = entry.get('hour', 0)
+                    if h > now_h_int and h <= horizont_bis_h and entry.get('total_ac_w', 0) >= d_prognose_kw * 1000:
+                        prognose_stark = True
+                        break
+
+            drain_skip_w = get_param(matrix, self.regelkreis, 'drain_skip_bei_ladung_w', 2000)
+            pv_laedt_bereits = p_batt > drain_skip_w
+            if not pv_laedt_bereits and all(
+                    [haushalt_ok, wp_ok, ev_ok, soc_ok, forecast_ok, prognose_stark]):
+                komfort_min = int(get_param(matrix, 'komfort_reset', 'komfort_min_pct', 25))
+                stress_min = int(get_param(matrix, 'morgen_soc_min', 'stress_min_pct', 5))
+                drain_spanne = max(1, komfort_min - stress_min)
+                drain_tiefe = max(0, komfort_min - (obs.soc_min or komfort_min))
+                drain_frac = min(1.0, drain_tiefe / drain_spanne)
+                phase0_score = max(int(score * 0.25), int(score * drain_frac))
+                drain_burst = get_param(matrix, self.regelkreis, 'drain_burst_dauer_s', 2700)
+                return EinEntscheidung('phase0', drain_burst, phase0_score, False, True)
+
+        # ── Phase 1: Vormittags (SOC≈MAX, Überlaufventil) ──
+        min_lade_morgens = get_param(matrix, self.regelkreis, 'min_ladeleistung_morgens_w', 3000)
+        min_rest_kwh_morgens = get_param(matrix, self.regelkreis, 'min_rest_kwh_morgens', 20.0)
+        min_rest_h_morgens = get_param(matrix, self.regelkreis, 'min_rest_h_morgens', 5.0)
+        soc_nah_max_phase1 = soc >= (soc_max_eff - 5)
+        if rest_h > min_rest_h_morgens and rest_kwh > min_rest_kwh_morgens and soc_nah_max_phase1:
+            schwelle = min_lade_morgens
+            if (self._letzte_phase == 'phase1' and self._letzte_aus > 0
+                    and (time.time() - self._letzte_aus) < 600):
+                schwelle = max(1000, min_lade_morgens - self.HP_NENN_W)
+            if p_batt > schwelle:
+                return EinEntscheidung('phase1', burst_lang, score, False, False)
+
+        # ── Phase 2/3 Vorbereitungen (auch von Phase 1b genutzt) ──
+        min_lade = self._min_lade_nach_potenzial(potenzial, matrix)
+        reserve = get_param(matrix, self.regelkreis, 'batt_reserve_kwh', 2.0)
+        if rest_h < 3.0:
+            reserve = get_param(matrix, self.regelkreis, 'batt_reserve_nachmittag_kwh', 3.0)
+        parallel_ok = self._hp_parallel_erlaubt(potenzial, wp_aktiv, ev_aktiv)
+
+        # ── Phase 1b: Nulleinspeiser-Überschuss (Probe-Puls) ──
+        hp_last = self.HP_NENN_W
+        soc_nah_max = soc >= (soc_max_eff - 2)
+        batt_idle_tol = get_param(matrix, self.regelkreis, 'batt_idle_toleranz_w', 800)
+        batt_idle = abs(p_batt) < batt_idle_tol
+        grid_ok_tol = get_param(matrix, self.regelkreis, 'grid_ok_toleranz_w', 500)
+        grid_ok = abs(obs.grid_power_w or 0) < grid_ok_tol
+        forecast_jetzt_w = 0
+        if obs.forecast_power_profile:
+            now_h_int = int(now_h)
+            for entry in obs.forecast_power_profile:
+                if entry.get('hour', 0) == now_h_int:
+                    forecast_jetzt_w = entry.get('total_ac_w', 0)
+                    break
+        pv_kann_hp = forecast_jetzt_w >= hp_last
+        if rest_h >= min_rest_h and soc_nah_max and batt_idle and pv_kann_hp and grid_ok and parallel_ok:
+            probe_cooldown_ok = (self._probe_cooldown_bis == 0
+                                 or time.time() >= self._probe_cooldown_bis)
+            if rest_kwh > reserve and probe_cooldown_ok:
+                probe_dauer = get_param(matrix, self.regelkreis, 'probe_dauer_s', 120)
+                return EinEntscheidung('phase1b', probe_dauer, score, True, False)
+
+        # ── Phase 2 (Mittag) inkl. Nachmittag (früher separate Phase 3) ──
+        soc_nah_max_phase2 = soc >= (soc_max_eff - 5)
+        if (rest_h >= min_rest_h and soc_nah_max_phase2 and p_batt > min_lade
+                and parallel_ok and rest_kwh > batt_rest_kwh + reserve):
+            burst_dauer = burst_lang if rest_kwh > min_rest_kwh_morgens else burst_kurz
+            return EinEntscheidung('phase2', burst_dauer, score, False, False)
+
+        # ── Phase 4: Abend-Nachladezyklus (rest_h < min_rest_h) ──
+        if rest_h < min_rest_h and rest_h > 0:
+            abend_ein = get_param(matrix, self.regelkreis, 'abend_soc_ein_unter_max_pct', 2)
+            abend_min_pv = get_param(matrix, self.regelkreis, 'abend_min_pv_w', 1500)
+            soc_nah_voll = soc >= (soc_max_eff - abend_ein)
+            pv_w = obs.pv_total_w or 0
+            pv_ok = pv_w >= abend_min_pv or forecast_jetzt_w >= abend_min_pv
+            batt_ok = p_batt >= 0
+            if soc_nah_voll and pv_ok and batt_ok:
+                return EinEntscheidung('phase4', burst_kurz, score, False, False)
+
+        return None
+
     def bewerte(self, obs: ObsState, matrix: dict) -> int:
         """Score für HP-Steuerung.
 
@@ -810,13 +969,9 @@ class RegelHeizpatrone(Regel):
 
         rest_kwh = obs.forecast_rest_kwh
         soc = obs.batt_soc_pct
-        soc_max_eff = obs.soc_max or 75
 
         if p_batt is None or rest_kwh is None or soc is None:
             return 0
-
-        min_rest_h = get_param(matrix, self.regelkreis, 'min_rest_h', 2.0)
-        # rest_h < min_rest_h ist KEIN early return mehr → Phase 4 am Ende
 
         temp_max, temp_max_grund = self._dynamic_temp_max_c(obs, matrix, now_h)
         if obs.ww_temp_c is not None and obs.ww_temp_c >= temp_max:
@@ -846,172 +1001,9 @@ class RegelHeizpatrone(Regel):
             LOG.debug(f'{self._geraet_label()} Kurz-Burst-Sperre → EIN-Pause noch {verbleibend}s')
             return 0
 
-        batt_rest_kwh = max(0, (soc_max_eff - soc) * config.PV_BATTERY_KWH / 100)
-
-        potenzial = self._potenzial(obs, matrix)
-        wp_aktiv, ev_aktiv = self._verbraucher_aktiv(obs, matrix)
-
-        # Phase 0: Morgen-Drain — HP um Batterie schneller zu leeren
-        #   Frühestens sunrise - 1h (prognosegetrieben, NICHT p_batt-abhängig).
-        #   SOC > drain_start_soc (20%), Stop bei drain_stop_soc (15%).
-        #   Bedingung: Prognose erwartet bald hohe PV-Leistung.
-        #   Guard: Mindestens 5h Sonnenschein prognostiziert — bei Regentagen
-        #   mit hohem Forecast aber wenig Sonne kein Drain (Batterie braucht
-        #   die Energie für den Haushalt).
-        sunrise_h = obs.sunrise or 6.0
-        drain_fruehstart_h = get_param(matrix, self.regelkreis, 'drain_fruehstart_vor_sunrise_h', 1.0)
-        drain_fenster = get_param(matrix, self.regelkreis, 'drain_fenster_ende_h', 10.0)
-        drain_start_soc = get_param(matrix, self.regelkreis, 'drain_start_soc_pct', 20)
-        drain_min_sunshine_h = get_param(matrix, self.regelkreis, 'drain_min_sunshine_h', 5.0)
-        sunshine_h = obs.sunshine_hours or 0
-        if now_h >= (sunrise_h - drain_fruehstart_h) and now_h < drain_fenster:
-            if not self._drain_soc_freigegeben(obs, matrix):
-                LOG.debug('Phase 0 blockiert: SOC_MIN=%s%% (Morgen-Öffnung nicht aktiv)', obs.soc_min)
-            elif sunshine_h < drain_min_sunshine_h:
-                LOG.debug(f'Phase 0 blockiert: Sonnenstunden {sunshine_h:.1f}h '
-                          f'< {drain_min_sunshine_h:.1f}h Minimum')
-            else:
-                d_haus = get_param(matrix, self.regelkreis, 'drain_max_haushalt_w', 700)
-                d_wp = get_param(matrix, self.regelkreis, 'drain_max_wp_w', 500)
-                d_ev = get_param(matrix, self.regelkreis, 'drain_max_ev_w', 1000)
-                d_prognose_kw = get_param(matrix, self.regelkreis, 'drain_min_prognose_kw', 4.0)
-
-                haushalt_ok = self._phase0_haushalt_netto(obs) < d_haus
-                wp_ok = (obs.wp_power_w or 0) < d_wp
-                ev_ok = (obs.ev_power_w or 0) < d_ev
-                soc_ok = soc > drain_start_soc
-                forecast_ok = get_forecast_tier(obs, matrix) >= FC_TIER_MITTEL
-
-                # Prognose zeigt ≥ drain_min_prognose_kw zeitnah (sunrise + Horizont)
-                # Nicht den ganzen Tag prüfen — Nachmittagssonne rechtfertigt
-                # keinen Morgen-Drain bei bewölktem Vormittag.
-                prognose_stark = False
-                d_horizont_h = get_param(matrix, self.regelkreis, 'drain_prognose_horizont_h', 3.0)
-                horizont_bis_h = int(sunrise_h + d_horizont_h)
-                if obs.forecast_power_profile:
-                    now_h_int = int(now_h)
-                    for entry in obs.forecast_power_profile:
-                        h = entry.get('hour', 0)
-                        if h > now_h_int and h <= horizont_bis_h and entry.get('total_ac_w', 0) >= d_prognose_kw * 1000:
-                            prognose_stark = True
-                            break
-                if not prognose_stark:
-                    LOG.debug(f'Phase 0 blockiert: keine Stunde mit ≥{d_prognose_kw:.0f}kW '
-                              f'bis {horizont_bis_h}:00 (sunrise + {d_horizont_h:.0f}h)')
-
-                # Phase 0 ist Vor-PV-Drain. Wenn Batterie bereits stark
-                # von PV lädt, ist PV dominant → Drain kontraproduktiv.
-                # Phase 1/1b übernimmt dann den Überschuss.
-                drain_skip_w = get_param(matrix, self.regelkreis, 'drain_skip_bei_ladung_w', 2000)
-                pv_laedt_bereits = p_batt > drain_skip_w
-                if pv_laedt_bereits:
-                    LOG.debug(f'Phase 0 übersprungen: P_Batt={p_batt:.0f}W > '
-                              f'{drain_skip_w}W → PV lädt bereits')
-                elif all([haushalt_ok, wp_ok, ev_ok, soc_ok, forecast_ok, prognose_stark]):
-                    # Score-Abstufung nach Drain-Tiefe:
-                    #   SOC_MIN=5% (voller Drain)  → 100% Score
-                    #   SOC_MIN=20% (knapp offen)  →  25% Score
-                    # Je weniger Drain nötig, desto weniger lohnt HP-Einsatz
-                    # (Batterie-Lebensdauer an SOC-Grenzen > Eigenverbrauch).
-                    komfort_min = int(get_param(matrix, 'komfort_reset', 'komfort_min_pct', 25))
-                    stress_min = int(get_param(matrix, 'morgen_soc_min', 'stress_min_pct', 5))
-                    drain_spanne = max(1, komfort_min - stress_min)  # 20
-                    drain_tiefe = max(0, komfort_min - (obs.soc_min or komfort_min))
-                    drain_frac = min(1.0, drain_tiefe / drain_spanne)
-                    # Mindestens 25% Score wenn Phase 0 überhaupt greift
-                    phase0_score = max(int(score * 0.25), int(score * drain_frac))
-                    LOG.debug(f'Phase 0: SOC_MIN={obs.soc_min}%% '
-                              f'→ drain_frac={drain_frac:.2f} '
-                              f'→ Score {phase0_score}/{score}')
-                    return phase0_score
-
-        # Phase 1: Vormittags
-        #   p_batt > min_lade_morgens + SOC nahe SOC_MAX (Überlaufventil-Prinzip).
-        #   HP soll NUR laufen wenn Batterie am Deckel anschlägt und PV
-        #   abgeregelt wird. Ohne SOC≈MAX lieber Batterie zuerst füllen.
-        min_lade_morgens = get_param(matrix, self.regelkreis, 'min_ladeleistung_morgens_w', 3000)
-        min_rest_kwh_morgens = get_param(matrix, self.regelkreis, 'min_rest_kwh_morgens', 20.0)
-        min_rest_h_morgens = get_param(matrix, self.regelkreis, 'min_rest_h_morgens', 5.0)
-        soc_nah_max_phase1 = soc >= (soc_max_eff - 5)  # z.B. ≥70% bei MAX=75
-
-        if rest_h > min_rest_h_morgens and rest_kwh > min_rest_kwh_morgens and soc_nah_max_phase1:
-            # Wiedereintritt nach Phase-1-Burst: reduzierte Schwelle
-            schwelle = min_lade_morgens
-            if (self._letzte_phase == 'phase1'
-                    and self._letzte_aus > 0
-                    and (time.time() - self._letzte_aus) < 600):  # < 10 Min seit letztem AUS
-                schwelle = max(1000, min_lade_morgens - self.HP_NENN_W)
-            if p_batt > schwelle:
-                return score
-
-        # Phase 2+3 Vorbereitungen (hier berechnet, damit Phase 1b sie nutzen kann)
-        min_lade = self._min_lade_nach_potenzial(potenzial, matrix)
-        min_rest = get_param(matrix, self.regelkreis, 'min_rest_kwh', 12.0)
-        reserve = get_param(matrix, self.regelkreis, 'batt_reserve_kwh', 2.0)
-
-        if rest_h < 3.0:
-            reserve = get_param(matrix, self.regelkreis, 'batt_reserve_nachmittag_kwh', 3.0)
-
-        parallel_ok = self._hp_parallel_erlaubt(potenzial, wp_aktiv, ev_aktiv)
-
-        # Phase 1b: Nulleinspeiser-Überschuss — PV wird gedrosselt
-        #   SOC ≈ SOC_MAX, Batterie idle, Grid ≈ 0 → Nulleinspeiser drosselt PV.
-        #   pv_total_w zeigt nur gedrosselte AC-Leistung (≈ Haushalt), NICHT
-        #   was die Module könnten. Daher Forecast-Profil als Proxy nutzen.
-        #   HP einschalten erzeugt Nachfrage → WR lässt PV hochfahren.
-        hp_last = self.HP_NENN_W
-        soc_nah_max = soc >= (soc_max_eff - 2)
-        batt_idle_tol = get_param(matrix, self.regelkreis, 'batt_idle_toleranz_w', 800)
-        batt_idle = abs(p_batt) < batt_idle_tol
-        grid_ok_tol = get_param(matrix, self.regelkreis, 'grid_ok_toleranz_w', 500)
-        grid_ok = abs(obs.grid_power_w or 0) < grid_ok_tol
-
-        # Forecast für aktuelle Stunde: zeigt was PV KANN (nicht was WR liefert)
-        forecast_jetzt_w = 0
-        if obs.forecast_power_profile:
-            now_h_int = int(now_h)
-            for entry in obs.forecast_power_profile:
-                if entry.get('hour', 0) == now_h_int:
-                    forecast_jetzt_w = entry.get('total_ac_w', 0)
-                    break
-        pv_kann_hp = forecast_jetzt_w >= hp_last  # Forecast sagt: PV reicht für HP
-
-        if rest_h >= min_rest_h and soc_nah_max and batt_idle and pv_kann_hp and grid_ok and parallel_ok:
-            probe_cooldown_ok = (self._probe_cooldown_bis == 0
-                                 or time.time() >= self._probe_cooldown_bis)
-            if rest_kwh > reserve and probe_cooldown_ok:
-                return score
-
-        # Phase 2+3: Mittags/Nachmittags (nur bei rest_h ≥ min_rest_h)
-        #   Batterie muss nahe SOC_MAX sein (Überlaufventil-Prinzip).
-        #   HP soll PV nutzen die sonst abgeregelt wird, nicht Batterie-
-        #   Reserven auf Kosten des Abend-Eigenverbrauchs verbrennen.
-        soc_nah_max_phase2 = soc >= (soc_max_eff - 5)  # z.B. ≥70% bei MAX=75
-
-        if rest_h >= min_rest_h and soc_nah_max_phase2 and p_batt > min_lade and parallel_ok:
-            if rest_kwh > batt_rest_kwh + reserve:
-                return score
-
-        if rest_h >= min_rest_h and soc_nah_max_phase2 and rest_kwh > min_rest and p_batt > min_lade and parallel_ok:
-            return score
-
-        # Phase 4: Abend-Nachladezyklus (rest_h < min_rest_h)
-        #   HP darf kurze Bursts fahren wenn SOC nahe SOC_MAX und PV genug liefert.
-        #   Zyklus: HP ein → SOC sinkt → HP aus (SOC < Max-Schwelle) →
-        #   Batterie lädt → SOC ≈ Max → HP ein.
-        #   Primärziel: Batterie-Vollladung, Restkapazität für HP nutzen.
-        #   Adaptiv zu SOC_MAX (Sommer 75%, Winter flexibel).
-        if rest_h < min_rest_h and rest_h > 0:
-            abend_ein = get_param(matrix, self.regelkreis, 'abend_soc_ein_unter_max_pct', 2)
-            abend_min_pv = get_param(matrix, self.regelkreis, 'abend_min_pv_w', 1500)
-            soc_nah_voll = soc >= (soc_max_eff - abend_ein)
-            pv_w = obs.pv_total_w or 0
-            pv_ok = pv_w >= abend_min_pv or forecast_jetzt_w >= abend_min_pv
-            batt_ok = p_batt >= 0  # Batterie lädt oder idle beim Start
-            if soc_nah_voll and pv_ok and batt_ok:
-                return score
-
-        return 0
+        # Gemeinsame Phasen-Entscheidung (Single-Source mit erzeuge_aktionen)
+        dec = self._ein_entscheidung(obs, matrix)
+        return dec.score if dec is not None else 0
 
     def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
         """HP ein-/ausschalten: AUS + Burst-Strategie."""
@@ -1311,206 +1303,49 @@ class RegelHeizpatrone(Regel):
             LOG.debug(f'{self._geraet_label()} Kurz-Burst-Sperre aktiv → kein EIN noch {verbleibend}s')
             return []
 
-        batt_rest_kwh = max(0, (soc_max_eff - soc) * config.PV_BATTERY_KWH / 100)
-        min_rest_h_morgens = get_param(matrix, self.regelkreis, 'min_rest_h_morgens', 5.0)
-        min_rest_kwh_morgens = get_param(matrix, self.regelkreis, 'min_rest_kwh_morgens', 20.0)
-        min_lade_morgens = get_param(matrix, self.regelkreis, 'min_ladeleistung_morgens_w', 3000)
-        burst_lang = get_param(matrix, self.regelkreis, 'burst_dauer_lang_s', 1800)
-        burst_kurz = get_param(matrix, self.regelkreis, 'burst_dauer_kurz_s', 900)
+        # Gemeinsame Phasen-Entscheidung (Single-Source mit bewerte).
+        dec = self._ein_entscheidung(obs, matrix)
+        if dec is None:
+            return []
 
-        burst_dauer = 0
-        grund = ''
+        self._burst_start = time.time()
+        self._burst_ende = time.time() + dec.burst_dauer
+        self._grid_history.clear()   # Stale-History-Fix: Deque frisch starten
+        self._drain_modus = dec.is_drain
+        if dec.is_probe:
+            self._probe_modus = True
+            self._probe_start_pv_w = obs.pv_total_w or 0
+        self._letzte_phase = dec.phase
+        # Erwarteten Zustand vormerken: Observer hat HP=AUS gesehen (vor Actuator-
+        # Aktion), daher manuell auf True setzen, damit der nächste Zyklus eine
+        # manuelle User-Abschaltung als Extern-AUS erkennt.
+        self._letzter_hp_zustand = True
 
-        # Phase 0: Morgen-Drain — Batterie mit HP leeren
-        #   Frühestens sunrise-1h (prognosegetrieben, NICHT p_batt-abhängig).
-        #   SOC > 20%, Stop bei SOC < 15%.
-        #   Bedingung: Prognose erwartet bald hohe PV-Leistung.
-        #   Guard: Mindestens 5h Sonnenschein — kein Drain bei Regentagen.
-        sunrise_h = obs.sunrise or 6.0
-        drain_fruehstart_h = get_param(matrix, self.regelkreis, 'drain_fruehstart_vor_sunrise_h', 1.0)
-        drain_fenster = get_param(matrix, self.regelkreis, 'drain_fenster_ende_h', 10.0)
-        drain_start_soc = get_param(matrix, self.regelkreis, 'drain_start_soc_pct', 20)
-        drain_min_sunshine_h = get_param(matrix, self.regelkreis, 'drain_min_sunshine_h', 5.0)
-        sunshine_h = obs.sunshine_hours or 0
-        if now_h >= (sunrise_h - drain_fruehstart_h) and now_h < drain_fenster:
-            if not self._drain_soc_freigegeben(obs, matrix):
-                LOG.debug('Phase 0 Schalt-Log blockiert: SOC_MIN=%s%% (Morgen-Öffnung nicht aktiv)', obs.soc_min)
-            elif sunshine_h < drain_min_sunshine_h:
-                LOG.debug(f'Phase 0 Schalt-Log blockiert: Sonnenstunden {sunshine_h:.1f}h '
-                          f'< {drain_min_sunshine_h:.1f}h')
-            else:
-                d_haus = get_param(matrix, self.regelkreis, 'drain_max_haushalt_w', 700)
-                d_wp = get_param(matrix, self.regelkreis, 'drain_max_wp_w', 500)
-                d_ev = get_param(matrix, self.regelkreis, 'drain_max_ev_w', 1000)
-                d_prognose_kw = get_param(matrix, self.regelkreis, 'drain_min_prognose_kw', 4.0)
-                drain_burst = get_param(matrix, self.regelkreis, 'drain_burst_dauer_s', 2700)
+        if dec.phase == 'phase0':
+            grund = (f'Phase 0 (Morgen-Drain) SOC={soc:.0f}%, '
+                     f'Sonne={obs.sunshine_hours or 0:.1f}h, P_Batt={p_batt:.0f}W, '
+                     f'Haus={obs.house_load_w or 0:.0f}W, '
+                     f'Prognose={get_effective_forecast_quality(obs, matrix) or "?"}')
+        elif dec.phase == 'phase1':
+            grund = (f'Phase 1 (Vormittag): P_Batt={p_batt:.0f}W, '
+                     f'SOC={soc:.0f}%≈MAX({soc_max_eff}%), '
+                     f'rest_kwh={rest_kwh:.1f}, rest_h={rest_h:.1f}')
+        elif dec.phase == 'phase1b':
+            grund = (f'Phase 1b (Probe {dec.burst_dauer}s): '
+                     f'SOC={soc:.0f}%≈MAX({soc_max_eff}%), '
+                     f'PV_start={self._probe_start_pv_w:.0f}W')
+        elif dec.phase == 'phase2':
+            grund = (f'Phase 2 (Mittag): P_Batt={p_batt:.0f}W, '
+                     f'SOC={soc:.0f}%≈MAX({soc_max_eff}%), rest_kwh={rest_kwh:.1f}')
+        elif dec.phase == 'phase4':
+            grund = (f'Phase 4 (Abend): SOC={soc:.0f}%≈MAX({soc_max_eff}%), '
+                     f'PV={obs.pv_total_w or 0:.0f}W, P_Batt={p_batt:.0f}W, rest_h={rest_h:.1f}')
+        else:
+            grund = dec.phase
 
-                haushalt_ok = self._phase0_haushalt_netto(obs) < d_haus
-                wp_ok = (obs.wp_power_w or 0) < d_wp
-                ev_ok = (obs.ev_power_w or 0) < d_ev
-                soc_ok = soc > drain_start_soc
-                forecast_ok = get_forecast_tier(obs, matrix) >= FC_TIER_MITTEL
-
-                # Prognose zeitnah: nur Stunden bis sunrise + Horizont
-                prognose_stark = False
-                d_horizont_h = get_param(matrix, self.regelkreis, 'drain_prognose_horizont_h', 3.0)
-                horizont_bis_h = int(sunrise_h + d_horizont_h)
-                if obs.forecast_power_profile:
-                    now_h_int = int(now_h)
-                    for entry in obs.forecast_power_profile:
-                        h = entry.get('hour', 0)
-                        if h > now_h_int and h <= horizont_bis_h and entry.get('total_ac_w', 0) >= d_prognose_kw * 1000:
-                            prognose_stark = True
-                            break
-
-                # Phase 0 ist Vor-PV-Drain: Batterie bereits stark von
-                # PV geladen → Drain kontraproduktiv, Phase 1/1b übernimmt.
-                drain_skip_w = get_param(matrix, self.regelkreis, 'drain_skip_bei_ladung_w', 2000)
-                pv_laedt_bereits = p_batt > drain_skip_w
-                if pv_laedt_bereits:
-                    LOG.info(f'Phase 0 übersprungen: P_Batt={p_batt:.0f}W > '
-                             f'{drain_skip_w}W → PV lädt bereits, kein Drain')
-                elif all([haushalt_ok, wp_ok, ev_ok, soc_ok, forecast_ok, prognose_stark]):
-                    self._burst_start = time.time()
-                    self._burst_ende = time.time() + drain_burst
-                    self._grid_history.clear()  # Stale-History-Fix: Deque frisch starten
-                    self._drain_modus = True
-                    self._letzte_phase = 'phase0'
-                    # Erwarteten Zustand vormerken: Observer hat HP=AUS gesehen
-                    # (vor Actuator-Aktion), daher manuell auf True setzen,
-                    # damit nächster Zyklus Extern-AUS erkennt wenn User abschaltet.
-                    self._letzter_hp_zustand = True
-                    return [{
-                        'tier': 2, 'aktor': 'fritzdect',
-                        'kommando': 'hp_ein',
-                        'grund': (f'HP EIN (Drain {drain_burst // 60:.0f} Min): '
-                                  f'Phase 0 (Morgen-Drain) SOC={soc:.0f}%, '
-                                  f'Sonne={sunshine_h:.1f}h, '
-                                  f'P_Batt={p_batt:.0f}W, '
-                                  f'Haus={obs.house_load_w or 0:.0f}W, '
-                                  f'Prognose={get_effective_forecast_quality(obs, matrix) or "?"}'),
-                    }]
-
-        # Phase 1: Vormittags (SOC≈MAX erforderlich)
-        soc_nah_max_phase1 = soc >= (soc_max_eff - 5)
-        if rest_h > min_rest_h_morgens and rest_kwh > min_rest_kwh_morgens and soc_nah_max_phase1:
-            schwelle = min_lade_morgens
-            if (self._letzte_phase == 'phase1'
-                    and self._letzte_aus > 0
-                    and (time.time() - self._letzte_aus) < 600):
-                schwelle = max(1000, min_lade_morgens - self.HP_NENN_W)
-            if p_batt > schwelle:
-                burst_dauer = burst_lang
-                grund = (f'Phase 1 (Vormittag): P_Batt={p_batt:.0f}W (Schwelle={schwelle:.0f}W), '
-                         f'SOC={soc:.0f}%≈MAX({soc_max_eff}%), '
-                         f'rest_kwh={rest_kwh:.1f}, rest_h={rest_h:.1f}')
-
-        # Phase 1b: Nulleinspeiser-Überschuss — PV wird gedrosselt
-        potenzial = self._potenzial(obs, matrix)
-        min_lade = self._min_lade_nach_potenzial(potenzial, matrix)
-        wp_aktiv, ev_aktiv = self._verbraucher_aktiv(obs, matrix)
-        parallel_ok = self._hp_parallel_erlaubt(potenzial, wp_aktiv, ev_aktiv)
-
-        # Forecast für aktuelle Stunde (Proxy für verfügbare PV-Kapazität)
-        # Wird von Phase 1b und Phase 4 genutzt.
-        forecast_jetzt_w = 0
-        if obs.forecast_power_profile:
-            now_h_int = int(now_h)
-            for entry in obs.forecast_power_profile:
-                if entry.get('hour', 0) == now_h_int:
-                    forecast_jetzt_w = entry.get('total_ac_w', 0)
-                    break
-
-        min_rest_h = get_param(matrix, self.regelkreis, 'min_rest_h', 2.0)
-
-        if not burst_dauer:
-            hp_last = self.HP_NENN_W
-            soc_nah_max = soc >= (soc_max_eff - 2)
-            batt_idle_tol = get_param(matrix, self.regelkreis, 'batt_idle_toleranz_w', 800)
-            batt_idle = abs(p_batt) < batt_idle_tol
-            grid_ok_tol = get_param(matrix, self.regelkreis, 'grid_ok_toleranz_w', 500)
-            grid_ok = abs(obs.grid_power_w or 0) < grid_ok_tol
-            reserve = get_param(matrix, self.regelkreis, 'batt_reserve_kwh', 2.0)
-            pv_kann_hp = forecast_jetzt_w >= hp_last
-            probe_cooldown_ok = (self._probe_cooldown_bis == 0
-                                 or time.time() >= self._probe_cooldown_bis)
-
-            if rest_h >= min_rest_h and soc_nah_max and batt_idle and pv_kann_hp and grid_ok and parallel_ok:
-                if rest_kwh > reserve and probe_cooldown_ok:
-                    # Probe-Burst: kurzer Testpuls statt vollem Burst.
-                    # Nach probe_dauer_s wird ausgewertet ob PV hochgefahren ist.
-                    probe_dauer = get_param(matrix, self.regelkreis, 'probe_dauer_s', 120)
-                    burst_dauer = probe_dauer
-                    self._probe_modus = True
-                    self._probe_start_pv_w = obs.pv_total_w or 0
-                    grund = (f'Phase 1b (Probe {probe_dauer}s): '
-                             f'SOC={soc:.0f}%≈MAX({soc_max_eff}%), '
-                             f'Forecast={forecast_jetzt_w:.0f}W, '
-                             f'PV_start={self._probe_start_pv_w:.0f}W, '
-                             f'Potenzial={potenzial}')
-
-        # Phase 2 (nur bei rest_h ≥ min_rest_h, SOC≈MAX)
-        soc_nah_max_phase2 = soc >= (soc_max_eff - 5)
-        if not burst_dauer and rest_h >= min_rest_h and soc_nah_max_phase2 and p_batt > min_lade:
-            reserve = get_param(matrix, self.regelkreis, 'batt_reserve_kwh', 2.0)
-
-            if rest_kwh > batt_rest_kwh + reserve and parallel_ok:
-                burst_dauer = burst_lang if rest_kwh > min_rest_kwh_morgens else burst_kurz
-                grund = (f'Phase 2 (Mittag): P_Batt={p_batt:.0f}W, '
-                         f'SOC={soc:.0f}%≈MAX({soc_max_eff}%), '
-                         f'rest_kwh={rest_kwh:.1f}, batt_rest={batt_rest_kwh:.1f}, '
-                         f'Potenzial={potenzial}, min_lade={min_lade:.0f}W')
-
-        # Phase 3 (SOC≈MAX)
-        if not burst_dauer and rest_h < 3.0 and rest_h >= min_rest_h and soc_nah_max_phase2:
-            reserve_nm = get_param(matrix, self.regelkreis, 'batt_reserve_nachmittag_kwh', 3.0)
-            if p_batt > min_lade and rest_kwh > batt_rest_kwh + reserve_nm:
-                burst_dauer = burst_kurz
-                grund = (f'Phase 3 (Nachmittag): P_Batt={p_batt:.0f}W, '
-                         f'SOC={soc:.0f}%≈MAX({soc_max_eff}%), '
-                         f'rest_kwh={rest_kwh:.1f}, reserve={reserve_nm:.1f}')
-
-        # Phase 4: Abend-Nachladezyklus (rest_h < min_rest_h)
-        #   SOC nahe SOC_MAX + PV produziert noch → kurzer Burst.
-        #   Zyklus: HP ein → SOC sinkt → HP aus → Batt lädt → SOC ≈ Max → HP ein.
-        #   Primärziel: Batterie-Vollladung, Restkapazität für HP nutzen.
-        #   Adaptiv zu SOC_MAX (Sommer 75%, Winter flexibel).
-        if not burst_dauer and rest_h < min_rest_h and rest_h > 0:
-            abend_ein = get_param(matrix, self.regelkreis, 'abend_soc_ein_unter_max_pct', 2)
-            abend_min_pv = get_param(matrix, self.regelkreis, 'abend_min_pv_w', 1500)
-            soc_nah_voll = soc >= (soc_max_eff - abend_ein)
-            pv_w = obs.pv_total_w or 0
-            pv_ok = pv_w >= abend_min_pv or forecast_jetzt_w >= abend_min_pv
-            batt_ok = p_batt >= 0  # Batterie lädt oder idle beim Start
-            if soc_nah_voll and pv_ok and batt_ok:
-                burst_dauer = burst_kurz
-                grund = (f'Phase 4 (Abend): SOC={soc:.0f}%≈MAX({soc_max_eff}%), '
-                         f'PV={pv_w:.0f}W, P_Batt={p_batt:.0f}W, rest_h={rest_h:.1f}')
-
-        if burst_dauer > 0:
-            self._burst_start = time.time()
-            self._burst_ende = time.time() + burst_dauer
-            self._grid_history.clear()  # Stale-History-Fix: Deque frisch starten
-            self._drain_modus = False  # Normal-Burst, kein Drain
-            # Phase merken für Wiedereintritt-Logik
-            if 'Phase 1 ' in grund:
-                self._letzte_phase = 'phase1'
-            elif 'Phase 1b' in grund:
-                self._letzte_phase = 'phase1b'
-            elif 'Phase 2' in grund:
-                self._letzte_phase = 'phase2'
-            elif 'Phase 3' in grund:
-                self._letzte_phase = 'phase3'
-            elif 'Phase 4' in grund:
-                self._letzte_phase = 'phase4'
-            else:
-                self._letzte_phase = ''
-            # Erwarteten Zustand vormerken (wie Phase 0 oben)
-            self._letzter_hp_zustand = True
-            return [{
-                'tier': 2, 'aktor': 'fritzdect',
-                'kommando': 'hp_ein',
-                'grund': f'HP EIN (Burst {burst_dauer // 60:.0f} Min): {grund}',
-            }]
-
-        return []
+        art = 'Drain' if dec.is_drain else 'Burst'
+        return [{
+            'tier': 2, 'aktor': 'fritzdect',
+            'kommando': 'hp_ein',
+            'grund': f'HP EIN ({art} {dec.burst_dauer // 60:.0f} Min): {grund}',
+        }]

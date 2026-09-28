@@ -11,7 +11,7 @@ last_review: 2026-09-28
 # Regel Heizpatrone
 
 ## Zweck
-Schaltet die Heizpatrone (im WW-Speicher, FritzDECT-Steckdose) abhängig von PV-Prognose, SOC, WW-Temperatur und Tageszeit. 6 Phasen (0, 1, 1b, 2, 3, 4) decken Tagesverlauf ab.
+Schaltet die Heizpatrone (im WW-Speicher, FritzDECT-Steckdose) abhängig von PV-Prognose, SOC, WW-Temperatur und Tageszeit. Phasen 0, 1, 1b, 2, 4 decken den Tagesverlauf ab (Phase 2 umfasst Mittag und Nachmittag).
 
 Zusätzlich pausiert die Regel bei aktivem `afternoon_charge_request` den HP-Betrieb bis das Ziel-SOC erreicht ist (oder Hold endet), damit die Batterie priorisiert aufgeladen werden kann.
 
@@ -20,6 +20,7 @@ Zusätzlich pausiert die Regel bei aktivem `afternoon_charge_request` den HP-Bet
 - **Override-Annullation:** `automation/engine/regeln/geraete_heizpatrone.py:RegelHeizpatrone._cancel_conflicting_overrides`
 - **WP-Koordinations-Cap:** `automation/engine/regeln/geraete_heizpatrone.py:RegelHeizpatrone._dynamic_temp_max_c`
 - **Gemeinsame AUS-Entscheidung (Single-Source für Score + Aktion):** `automation/engine/regeln/geraete_heizpatrone.py:RegelHeizpatrone._aus_kontext_pruefen` — zusammen mit `_ww_temp_aus_pruefen` (dyn. Cap), `_phase4_aus_pruefen`, `_phase0_haushalt_netto`; von `bewerte()` (Score) UND `erzeuge_aktionen()` (Aktion) genutzt.
+- **Gemeinsame EIN-Entscheidung (Single-Source für Score + Aktion):** `automation/engine/regeln/geraete_heizpatrone.py:RegelHeizpatrone._ein_entscheidung` — liefert Phase (0/1/1b/2/4), Burst-Dauer, Score-Gewicht sowie Probe-/Drain-Flag; von `bewerte()` (Score) UND `erzeuge_aktionen()` (Aktion/Zustand) genutzt.
 - **Aktor:** `automation/engine/aktoren/aktor_fritzdect.py:AktorFritzDECT.ausfuehren` (Kommando `hp_ein`/`hp_aus`)
 - **Matrix:** `config/soc_param_matrix.json` Regelkreis `heizpatrone`
 - **AIN-Mapping:** `config/fritz_config.json`
@@ -32,6 +33,7 @@ Zusätzlich pausiert die Regel bei aktivem `afternoon_charge_request` den HP-Bet
 ## Invarianten
 - **Grundprinzip:** Die Heizpatrone ist ein Verbraucher für PV-Überschuss. Sie darf grundsätzlich **keinen Netzbezug verursachen**. Toleriert sind ausschließlich kurze Schaltverluste durch Lastwechsel/Erzeugungsschwankungen (Wattpilot-Start, Wolkenfront, Backofen), bis die Wechselrichter sich angepasst haben.
 - **AUS-Entscheidung ist Single-Source:** `bewerte()` (Score) und `erzeuge_aktionen()` (Aktion) leiten die AUS-Kriterien aus **denselben** Helfern ab (`_ww_temp_aus_pruefen` mit dyn. WP-Koordinations-Cap in BEIDEN Pfaden, `_phase4_aus_pruefen`, `_aus_kontext_pruefen` für Entladung/Konkurrenz/Netzbezug, `_phase0_haushalt_netto` mit HP+WP-Herausrechnung). Kein getrennter Zweitpfad → Score und Aktion können nicht mehr auseinanderlaufen.
+- **EIN-Entscheidung ist Single-Source:** Die Phasen-EIN-Entscheidung liegt allein in `_ein_entscheidung()` (Phase 0/1/1b/2/4 inkl. Burst-Dauer, Probe- und Drain-Flag). `bewerte()` nimmt daraus das Score-Gewicht, `erzeuge_aktionen()` Phase/Burst/Zustand — kein zweiter Entscheidungspfad. Die tatsächliche Schaltung ist die Schnittmenge beider Methoden: der `bewerte()`-Score entscheidet im Engine-Lauf, ob `erzeuge_aktionen()` überhaupt aufgerufen wird. Phase 2 gilt für Mittag **und** Nachmittag (rest_h < 3 h → höhere `batt_reserve_nachmittag_kwh`; die frühere separate Phase 3 ist darin aufgegangen). Phase-2-Freigabe nur über `rest_kwh > batt_rest + reserve` (bei SOC≈MAX ist `batt_rest` ≤ ~1 kWh, daher war die frühere Zusatzbedingung `rest_kwh > min_rest_kwh` nie separat erreichbar).
 - Prognose-Klassifikation (**absolut**, aus Tages-Rest-kWh): `<40 kWh = schlecht`, `40–100 = mittel`, `≥100 kWh = gut` → bestimmt Freigabegrad pro Phase. Die Bedingungen (`_potenzial`/`_hp_parallel_erlaubt`/`_min_lade_nach_potenzial`/`_batt_entladung_toleriert`) vergleichen die numerische Stufe (`FC_TIER_*` via `forecast_tier_of`), nicht Synonym-Strings; ClearSky-relative Anzeige bleibt getrennt.
 - AUS-Schwellen (immer aktiv): `WW_Temp ≥ 78 °C` (Hart), `SOC ≤ stop_entladung_unter` (5 %), `SOC ≤ extern_aus_soc_pct` (15 %, nur bei Extern-EIN), Netzbezug-Energie-Integral, `PV<1500 W` in PV-only-Phasen.
 - **WP-Koordinations-Cap (`_dynamic_temp_max_c`, seit 2026-05-28):** kontextabhängige Verschaerfung der WW-Temp-Schwelle, damit der Dimplex-WP-Lauf möglich bleibt und der mechanische Thermostat (~72 °C) nicht hart abwirft.
