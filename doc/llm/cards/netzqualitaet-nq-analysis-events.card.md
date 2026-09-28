@@ -5,7 +5,7 @@ role: N
 applyTo: "nq/analysis/**"
 tags: [netzqualitaet, nq, analyse, events, harmonische, frequenz, rolle-n]
 status: stable
-last_review: 2026-08-29
+last_review: 2026-09-28
 ---
 
 # NQ Analysetools Netzereignisse
@@ -26,10 +26,10 @@ global-niederfrequent (`NF_global`), sehr niederfrequent (`VLF`).
 - **Ereignis-Katalog + Datenquellen:** `nq/schema/nq_primary_schema.sql` (`nq_events`, `nq_5min`, `nq_hourly`, `nq_daily`, `nq_event_*`)
 - **Konfiguration:** `config/nq_config.json` → `analysis`-Block
 - **Impedanz:** `config/nq_impedance.json` (R=163 mΩ, X=251 mΩ, Z=299 mΩ)
-- **Musteranalyse-Datensatz (residual-bereinigt):** `nq/analysis/nq_pattern.py:build_range` → `nq_pattern_5min` (netzseitige U/f/PF/φ, `origin`); Serve: `routes/pac4200.py:api_nq_pattern` (`/api/nq/pattern`)
-- **Spektralanalyse-Pipeline (pure numpy):** `nq/analysis/nq_spectral.py` — `welch_psd`, `lombscargle`, `decimate`/`fir_lowpass`, `log_bin`, `stft`, `morlet_cwt`, `thd_from_harmonics`; Loader `load_clean_freq`/`load_harmonics`/`load_thd_series`. Serve: `routes/pac4200.py:/api/nq/spectral/{harmonics,periodogram,psd,spectrogram}`
-- **Reflexions-/Laufwellenanalyse (pure numpy, Versuch):** `nq/analysis/nq_reflection.py` — `geometry` (CESA-Randpolygon + Grenzdistanzen/Peilungen ab `config.LATITUDE`/`LONGITUDE`), `detect_packets`, `autocorr_echo`, `match_boundary` (d = v·Δt/2), `analyze`. Konfig `config/nq_config.json` → `reflection`-Block. Serve: `routes/pac4200.py:api_nq_reflection` (`/api/nq/reflection` + `/geometry`).
-- **Web-Einzelseiten (Rolle B):** Hub `routes/pac4200.py:nq_analyse_page` + `nq_analyse_harmonische_page`/`nq_analyse_periodogramm_page`/`nq_analyse_psd_page`/`nq_analyse_spektrogramm_page`/`nq_analyse_reflexion_page`. Templates `templates/nq_analyse_view.html` + `nq_spec_*.html` + `nq_reflexion.html` + Partial `nq_analyse_nav.html`; Assets `static/css/nq-analyse.css`, `static/js/nq-analyse.js`.
+- **Musteranalyse-Datensatz (residual-bereinigt):** `nq/analysis/nq_pattern.py:build_range` → `nq_pattern_5min` (netzseitige U/f/PF/φ, `origin`); Serve: `routes/pac4200/spectral.py:api_nq_pattern` (`/api/nq/pattern`)
+- **Spektralanalyse-Pipeline (pure numpy):** `nq/analysis/nq_spectral.py` — `welch_psd`, `lombscargle`, `decimate`/`fir_lowpass`, `log_bin`, `stft`, `morlet_cwt`, `thd_from_harmonics`; Loader `load_clean_freq`/`load_harmonics`/`load_thd_series`. Serve: `routes/pac4200/spectral.py` (`/api/nq/spectral/{harmonics,periodogram,psd,spectrogram}`)
+- **Reflexions-/Laufwellenanalyse (pure numpy, Versuch):** `nq/analysis/nq_reflection.py` — `geometry` (CESA-Randpolygon + Grenzdistanzen/Peilungen ab `config.LATITUDE`/`LONGITUDE`), `detect_packets`, `autocorr_echo`, `match_boundary` (d = v·Δt/2), `analyze`. Konfig `config/nq_config.json` → `reflection`-Block. Serve: `routes/pac4200/spectral.py:api_nq_reflection` (`/api/nq/reflection` + `/geometry`).
+- **Web-Einzelseiten (Rolle B):** Hub `routes/pac4200/pages.py:nq_analyse_page` + `nq_analyse_harmonische_page`/`nq_analyse_periodogramm_page`/`nq_analyse_psd_page`/`nq_analyse_spektrogramm_page`/`nq_analyse_reflexion_page`. Templates `templates/nq_analyse_view.html` + `nq_spec_*.html` + `nq_reflexion.html` + Partial `nq_analyse_nav.html`; Assets `static/css/nq-analyse.css`, `static/js/nq-analyse.js`.
 - **Gemeinsame Helfer:** `nq/nq_common.py`
 - **Methodik-Vorbild:** Legacy `nq/legacy/nq_analysis.py` (DFD, Boundary-Events)
 

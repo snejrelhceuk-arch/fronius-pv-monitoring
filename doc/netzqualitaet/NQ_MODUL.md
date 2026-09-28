@@ -192,7 +192,7 @@ Gegen das reale Gerät (`192.0.2.111`) bereits bestätigt (Details in
 - **Harmonische 2..64:** Modbus-Adressen noch offen (Voll-Feldtest).
 
 Eine **read-only Live-Anzeige** der verifizierten Werte existiert bereits unter
-`/pac4200` (Flow → Maschinenraum → PAC4200), Code [`../../routes/pac4200.py`](../../routes/pac4200.py)
+`/pac4200` (Flow → Maschinenraum → PAC4200), Code [`../../routes/pac4200/`](../../routes/pac4200/)
 + [`../../nq/pac_live.py`](../../nq/pac_live.py) (Rolle-B-Anzeige über read-only
 Modbus, analog `FroniusReadOnly`).
 

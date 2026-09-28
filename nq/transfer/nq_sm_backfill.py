@@ -9,7 +9,7 @@ der Live-DB und schreibt sie **permanent** in ``nq/db/nq_YYYY-MM.db`` →
 ``nq_sm_15min`` (retention-frei, nicht Teil der PAC-Kaskade).
 
 Spannungen werden Leiter-Neutral → Leiter-Leiter umgerechnet (x sqrt(3), wie der
-Netzkriterien-Fallback ``routes/pac4200.py:_core_fallback_rows``).
+Netzkriterien-Fallback ``routes/pac4200/netzkriterien.py:_core_fallback_rows``).
 
 Eigenschaften:
 - **Read-only** auf alle Quell-DBs; schreibt nur in ``nq/db/nq_YYYY-MM.db``.

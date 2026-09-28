@@ -22,7 +22,7 @@ Abgrenzung: `nq/` (PAC4200, Rolle N) ≠ Legacy `netzqualitaet/` (Smart-Meter, R
 - **Grenzwert-Alarm-Mail (best-effort):** `nq/collector/nq_limit_mail.py:send_limit_mail`
 - **Energie-Differenzmethode:** `nq/collector/nq_energy.py:compute_daily` (within-day, Legacy) / **`compute_daily_boundary`** (randscharf auf Mitternacht, energieerhaltend) / `append_snapshot`
 - **Feldtest Phase 0 (Refresh-Raten):** `nq/fieldtest/pac_refresh_probe.py:probe`
-- **Read-only Web-Anzeige (Rolle B):** `routes/pac4200.py:api_pac4200_live`, `templates/pac4200_view.html`
+- **Read-only Web-Anzeige (Rolle B):** `routes/pac4200/pages.py:api_pac4200_live`, `templates/pac4200_view.html`
 - **Block-Poller/Orchestrator:** `nq/collector/nq_poller.py:poller_loop`
 - **Kappung/Ring-Buffer:** `nq/collector/nq_capping.py:enforce_retention`
 - **Gemeinsame Helfer:** `nq/nq_common.py` (`load_config`, `open_db`, `migrate_tech_schema`, `db_size_mb`, `tmpfs_free_mb`)

@@ -33,7 +33,7 @@ Tech-tmpfs und niemals in `data.db` oder Aktoren.
 |---|---|---|---|
 | Tech | Pi4-Tech | PAC4200 lesen, Fast/Medium/Slow-RAW, LimitMonitor, Event-Schnipsel | tmpfs `/dev/shm/nq_cache.db` |
 | Primary | Pi5-Primary | Transfer, 5min/hourly/daily, Energie-Fixpunkte, Spektralanalyse | `nq/db/nq_YYYY-MM.db` |
-| Web | Pi5-Primary | Read-only Anzeige/API, PAC-Clone, Charts, Spektralanalyse | `routes/pac4200.py`, Templates |
+| Web | Pi5-Primary | Read-only Anzeige/API, PAC-Clone, Charts, Spektralanalyse | `routes/pac4200/`, Templates |
 
 Wichtig: Web/API (Rolle B) liest nur. Hardwarezugriff auf den PAC4200 passiert
 im NQ-Collector; Produktionsdaten bleiben read-only.
