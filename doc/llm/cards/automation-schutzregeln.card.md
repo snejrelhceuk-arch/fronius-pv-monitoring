@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/collectors/tier1_checker.py"
 tags: [schutz, tier1, sls, no-op, watchdog]
 status: stable
-last_review: 2026-06-06
+last_review: 2026-09-28
 ---
 
 # Schutzregeln
@@ -16,7 +16,7 @@ Hartstop-Schutzschicht oberhalb der normalen Regel-Engine. Tier-1-Alarme bypasse
 ## Code-Anchor
 - **Tier-1:** `automation/engine/collectors/tier1_checker.py:Tier1Checker`
 - **SLS:** `automation/engine/regeln/schutz.py:RegelSlsSchutz`
-- **Wattpilot-Batt-Schutz:** `automation/engine/regeln/geraete.py:RegelWattpilotBattSchutz`
+- **Wattpilot-Batt-Schutz:** `automation/engine/regeln/geraete_wattpilot_schutz.py:RegelWattpilotBattSchutz`
 - **HP-Startup-Check:** `automation/engine/automation_daemon.py:_hp_startup_check`
 - **No-Op-Sentinel:** `fronius_api.py:_NoOpResult`
 - **Aktor-Retry:** `automation/engine/aktoren/aktor_batterie.py:_retry`

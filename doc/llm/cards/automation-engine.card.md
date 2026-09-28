@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/**"
 tags: [engine, tick-loop, regeln, registry]
 status: stable
-last_review: 2026-06-29
+last_review: 2026-09-28
 ---
 
 # Automation-Engine
@@ -53,7 +53,7 @@ Zentrale Steuerschleife (Rolle C). Sammelt Beobachtungen, ruft Schutz-Checks, da
 ## Bekannte Fallstricke
 - 17 Regeln registriert (Stand 2026-06). Reihenfolge in `config/engine_registry.json` = Auswertungsreihenfolge bei Score-Gleichstand. Fehlt/defekt die Registry-JSON, fällt `registry.py` sicher auf `DEFAULT_REGELN_SPEC`/`DEFAULT_AKTOREN_SPEC` zurück (Produktion läuft unverändert) — eine kaputte JSON darf nie Schutz-Regeln still verschlucken.
 - `engine_vorausschau()` (Web-API, ohne Daemon) nutzt **dieselbe** `lade_regeln()`-Registry wie die Live-Engine (Single-Source, kein Drift mehr).
-- **FBH-Nachtschaltung** (`RegelFussbodenheizungNacht`, `geraete.py`): rein zeitbasierte, flankengetriggerte Schaltung der Fußbodenheizungs-Steckdose (Fritz!DECT) — genau 1× `fbh_ein` zu `fenster_start_h` und 1× `fbh_aus` im Nachlauf nach `fenster_ende_h`, je Kalendertag. Once-pro-Tag-Sperre über `_absenkung_done['fbh_ein'/'fbh_aus']` (erst nach Aktor-Erfolg via `meta_absenkung_tag`). Läuft im Schutz-Pass (Whitelist in `_ist_schutz`), kein Nachstellen → oszillationssicher und konfliktarm zur HomeAssistant-Heizung. Matrix: `regelkreise.fussbodenheizung`. Gedacht als Sommer-Regelmäßigkeit (HA-Automation dann aus); im Winter `aktiv:false` setzen, da HA die FBH verwaltet.
+- **FBH-Nachtschaltung** (`RegelFussbodenheizungNacht`, `geraete_fbh_nacht.py`): rein zeitbasierte, flankengetriggerte Schaltung der Fußbodenheizungs-Steckdose (Fritz!DECT) — genau 1× `fbh_ein` zu `fenster_start_h` und 1× `fbh_aus` im Nachlauf nach `fenster_ende_h`, je Kalendertag. Once-pro-Tag-Sperre über `_absenkung_done['fbh_ein'/'fbh_aus']` (erst nach Aktor-Erfolg via `meta_absenkung_tag`). Läuft im Schutz-Pass (Whitelist in `_ist_schutz`), kein Nachstellen → oszillationssicher und konfliktarm zur HomeAssistant-Heizung. Matrix: `regelkreise.fussbodenheizung`. Gedacht als Sommer-Regelmäßigkeit (HA-Automation dann aus); im Winter `aktiv:false` setzen, da HA die FBH verwaltet.
 - ExternalRespect-Hold (HP/WP, 30 min) wird per `extern_respekt_s` in der Matrix gesteuert — siehe `automation-regel-heizpatrone.card.md` und `automation-regel-wattpilot.card.md`.
 - `automation_log` ist die einzige aktive Persistenz-Tabelle für Aktor-Resultate. **`battery_control_log` wird nicht mehr geschrieben**; der frühere Lese-Fallback in `pv-config.py`/`routes/system/` wurde 2026-05-29 entfernt.
 - Tier-1-Bypass: Schutz-Aktoren laufen weiter, auch wenn Engine pausiert. Wer einen neuen Schutz-Pfad einbaut, muss Tier-1-kompatibel sein.

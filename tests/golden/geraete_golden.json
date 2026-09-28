@@ -1,0 +1,182 @@
+{
+  "fbh:fbh_aus_nachlauf|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "fbh:fbh_aus_nachlauf|aktiv=True": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "fbh_aus",
+        "wert": null
+      }
+    ],
+    "score": 50
+  },
+  "fbh:fbh_ausserhalb|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "fbh:fbh_ausserhalb|aktiv=True": {
+    "aktionen": [],
+    "score": 0
+  },
+  "fbh:fbh_ein_done|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "fbh:fbh_ein_done|aktiv=True": {
+    "aktionen": [],
+    "score": 0
+  },
+  "fbh:fbh_ein_fenster|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "fbh:fbh_ein_fenster|aktiv=True": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "fbh_ein",
+        "wert": null
+      }
+    ],
+    "score": 50
+  },
+  "klima:klima_aus_noetig|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "klima:klima_aus_noetig|aktiv=True": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "klima_aus",
+        "wert": null
+      }
+    ],
+    "score": 52
+  },
+  "klima:klima_ein_noetig|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "klima:klima_ein_noetig|aktiv=True": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "klima_ein",
+        "wert": null
+      }
+    ],
+    "score": 52
+  },
+  "klima:klima_idle_off|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "klima:klima_idle_off|aktiv=True": {
+    "aktionen": [],
+    "score": 0
+  },
+  "klima:klima_sunset_stop|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "klima:klima_sunset_stop|aktiv=True": {
+    "aktionen": [],
+    "score": 0
+  },
+  "klima:klima_vor_fenster|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "klima:klima_vor_fenster|aktiv=True": {
+    "aktionen": [],
+    "score": 0
+  },
+  "wp:ev_batt_laedt|aktiv=False": {
+    "aktionen": [
+      {
+        "aktor": "batterie",
+        "kommando": "set_soc_mode",
+        "wert": "manual"
+      },
+      {
+        "aktor": "batterie",
+        "kommando": "set_soc_min",
+        "wert": 20
+      }
+    ],
+    "score": 0
+  },
+  "wp:ev_batt_laedt|aktiv=True": {
+    "aktionen": [
+      {
+        "aktor": "batterie",
+        "kommando": "set_soc_mode",
+        "wert": "manual"
+      },
+      {
+        "aktor": "batterie",
+        "kommando": "set_soc_min",
+        "wert": 20
+      }
+    ],
+    "score": 0
+  },
+  "wp:ev_soc_niedrig|aktiv=False": {
+    "aktionen": [
+      {
+        "aktor": "batterie",
+        "kommando": "set_soc_mode",
+        "wert": "manual"
+      },
+      {
+        "aktor": "batterie",
+        "kommando": "set_soc_min",
+        "wert": 20
+      }
+    ],
+    "score": 0
+  },
+  "wp:ev_soc_niedrig|aktiv=True": {
+    "aktionen": [
+      {
+        "aktor": "batterie",
+        "kommando": "set_soc_mode",
+        "wert": "manual"
+      },
+      {
+        "aktor": "batterie",
+        "kommando": "set_soc_min",
+        "wert": 20
+      }
+    ],
+    "score": 78
+  },
+  "wp:ev_soc_ok|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "wp:ev_soc_ok|aktiv=True": {
+    "aktionen": [],
+    "score": 0
+  },
+  "wp:ev_sunset_soc25|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "wp:ev_sunset_soc25|aktiv=True": {
+    "aktionen": [],
+    "score": 72
+  },
+  "wp:kein_ev|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "wp:kein_ev|aktiv=True": {
+    "aktionen": [],
+    "score": 0
+  }
+}

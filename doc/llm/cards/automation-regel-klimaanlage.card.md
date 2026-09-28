@@ -2,9 +2,9 @@
 title: "Automation: RegelKlimaanlage (Klima-Thermoschutz)"
 domain: automation
 role: C
-last_review: 2026-09-23
+last_review: 2026-09-28
 status: stable
-code_anchor: automation/engine/regeln/geraete.py#L1577
+code_anchor: automation/engine/regeln/geraete_klimaanlage.py
 invariants:
   - "Tier-2 Aktor: Fritz!DECT-Steckdose (nur Klima-SD via AHA-API)"
   - "Schaltfrequenz-Cooldown: Bei 2×AUS im 30-Min-Fenster → 60 Min EIN-Sperre + sofortiges AUS"
@@ -76,7 +76,7 @@ Während Respekt-Phase: Tempatur-Abschaltlogik unterdrückt, nur Sunset+SOC akti
 
 ## Pre-Commit-Guard
 
-Code in `automation/engine/regeln/geraete.py` erfordert **diese Card-Aktualisierung** (last_review).
+Code in `automation/engine/regeln/geraete_klimaanlage.py` erfordert **diese Card-Aktualisierung** (last_review).
 
 ## Häufige Aufgaben
 

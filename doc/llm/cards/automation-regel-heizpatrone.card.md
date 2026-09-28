@@ -2,10 +2,10 @@
 title: Regel Heizpatrone (Phasen, Hysterese, ExternalRespect)
 domain: automation
 role: C
-applyTo: "automation/engine/regeln/geraete.py"
+applyTo: "automation/engine/regeln/geraete_heizpatrone.py"
 tags: [heizpatrone, fritzdect, ww-speicher, prognose]
 status: stable
-last_review: 2026-09-23
+last_review: 2026-09-28
 ---
 
 # Regel Heizpatrone
@@ -16,9 +16,9 @@ Schaltet die Heizpatrone (im WW-Speicher, FritzDECT-Steckdose) abhängig von PV-
 Zusätzlich pausiert die Regel bei aktivem `afternoon_charge_request` den HP-Betrieb bis das Ziel-SOC erreicht ist (oder Hold endet), damit die Batterie priorisiert aufgeladen werden kann.
 
 ## Code-Anchor
-- **Regel:** `automation/engine/regeln/geraete.py:RegelHeizpatrone.bewerte` (~L280)
-- **Override-Annullation:** `automation/engine/regeln/geraete.py:RegelHeizpatrone._cancel_conflicting_overrides`
-- **WP-Koordinations-Cap:** `automation/engine/regeln/geraete.py:RegelHeizpatrone._dynamic_temp_max_c`
+- **Regel:** `automation/engine/regeln/geraete_heizpatrone.py:RegelHeizpatrone.bewerte`
+- **Override-Annullation:** `automation/engine/regeln/geraete_heizpatrone.py:RegelHeizpatrone._cancel_conflicting_overrides`
+- **WP-Koordinations-Cap:** `automation/engine/regeln/geraete_heizpatrone.py:RegelHeizpatrone._dynamic_temp_max_c`
 - **Aktor:** `automation/engine/aktoren/aktor_fritzdect.py:AktorFritzDECT.ausfuehren` (Kommando `hp_ein`/`hp_aus`)
 - **Matrix:** `config/soc_param_matrix.json` Regelkreis `heizpatrone`
 - **AIN-Mapping:** `config/fritz_config.json`

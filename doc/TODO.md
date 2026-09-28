@@ -1,6 +1,6 @@
 # Zentrale TODO-Liste — PV-System
 
-**Stand:** 2026-09-27  
+**Stand:** 2026-09-28  
 **Regel:** Alle offenen Aufgaben gehoeren in DIESE Datei. Keine verteilten TODOs in Subdirectories. Ausschliesslich offene `- [ ]` ToDos — keine Audit-/Entwicklungsnotizen.
 
 ---
@@ -38,20 +38,20 @@
 
 ## Code-Architektur
 
-- [ ] **`automation/engine/regeln/geraete.py` (~2300 Z.) zerlegen.** Enthaelt 4 Regel-Klassen:
-      `RegelWattpilotBattSchutz` (~110 Z.), `RegelHeizpatrone` (~1450 Z., Monster),
-      `RegelKlimaanlage(RegelHeizpatrone)` (~580 Z.), `RegelFussbodenheizungNacht` (~90 Z.)
-      plus Modul-Helfer `registriere_klima_engine_ein`/`klima_engine_ein_kuerzlich`.
-      Zielschnitt: je Geraet ein Modul (`geraete_wattpilot_schutz.py`, `geraete_heizpatrone.py`,
-      `geraete_klimaanlage.py`, `geraete_fbh_nacht.py`); `geraete.py` bleibt duenner Aggregator
-      (Re-Export aller Klassen + Helfer), damit die String-Importpfade in `registry.py`
-      (`automation.engine.regeln.geraete.RegelX`), `regeln/__init__.py` und `operator_overrides.py`
-      unveraendert bleiben.
-      RISIKO: safety-critical Rolle C (Batterie/HP/Klima/Wattpilot) — **nur isoliert +
-      test-verifiziert** umsetzen, **nicht** mit Feature-/UI-Aenderungen buendeln.
-      Vorbedingung: `tests/test_heizpatrone_characterization.py` deckt bisher nur die Heizpatrone
-      ab → vor der Zerlegung Characterization-Tests fuer Wattpilot-Schutz, Klima und FBH-Nacht
-      ergaenzen (Verhalten einfrieren), dann mechanisch verschieben, Tests gruen halten.
+- [ ] **`automation/engine/regeln/geraete_heizpatrone.py`: `bewerte()`/`erzeuge_aktionen()` entduplizieren.**
+      Beide Methoden leiten die Phasen-Entscheidung (AUS-Pfad, Drain P0, Burst P1/1b/2/3/4)
+      unabhaengig voneinander ab (~1000 Z. Duplikat). Dadurch bereits stille Drift:
+      WW-Temp-AUS nutzt in `bewerte()` `_dynamic_temp_max_c`, im AUS-Pfad von
+      `erzeuge_aktionen()` aber den Roh-Cap `speicher_temp_max_c` (78 C); der Phase-0-
+      Haushaltscheck rechnet in `bewerte()` HP+WP heraus, in `erzeuge_aktionen()` nicht;
+      analog `RegelWattpilotBattSchutz` (bewerte hardcodet `soc<25`, erzeuge nutzt
+      `soc_min_netz_pct`). Ziel: gemeinsame Kern-Entscheidung, aus der Score UND Aktion
+      abgeleitet werden (Schnitt nach Schaltgrund statt Duplikat).
+      RISIKO: safety-critical Rolle C, **zustandsbehaftet** (Burst-Timer/Probe/Kurz-Burst-
+      Sperre) — **isoliert** umsetzen, gegen `tests/test_heizpatrone_characterization.py`
+      und `tests/test_geraete_characterization.py` (Golden) verifizieren; vorher um
+      Zustandssequenz-Szenarien (mehrere Ticks) erweitern, da die Golden je Szenario aktuell
+      eine frische Regel nutzen.
 - [ ] Weitere Gross-Module fuer Zerlegung pruefen (nach gleichem Muster, je nach Bedarf):
       `routes/pac4200.py` (~1850 Z.), `pv-config.py` (~1550 Z.), `routes/verbraucher.py` (~1420 Z.),
       `automation/engine/regeln/waermepumpe.py` (~1130 Z.), `routes/realtime.py` (~1080 Z.),

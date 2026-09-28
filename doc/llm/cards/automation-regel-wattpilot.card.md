@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/aktoren/aktor_wattpilot.py"
 tags: [wattpilot, ev-lader, websocket, soc-schutz]
 status: stable
-last_review: 2026-09-26
+last_review: 2026-09-28
 ---
 
 # Regel Wattpilot
@@ -14,7 +14,7 @@ last_review: 2026-09-26
 Schützt die Hausbatterie vor EV-Ladung via Wattpilot (Fronius/go-e Wallbox). Hebt `soc_min` an, wenn EV-Last die Batterie unter den Sollwert ziehen würde. Kommandos via WebSocket (`wattpilot_api.py`).
 
 ## Code-Anchor
-- **Schutzregel:** `automation/engine/regeln/geraete.py:RegelWattpilotBattSchutz.bewerte` (~L75) und `.erzeuge_aktionen` (~L160)
+- **Schutzregel:** `automation/engine/regeln/geraete_wattpilot_schutz.py:RegelWattpilotBattSchutz.bewerte` und `.erzeuge_aktionen`
 - **Aktor:** `automation/engine/aktoren/aktor_wattpilot.py:AktorWattpilot.ausfuehren` (Schreibpfad) + `AktorWattpilot.verifiziere` (Read-Back inkl. externer Pause-Erkennung)
 - **API-Client:** `wattpilot_api.py:WattpilotClient` (WebSocket `setValue`)
 - **Collector (lesend, nicht steuernd):** `collector/wattpilot.py`

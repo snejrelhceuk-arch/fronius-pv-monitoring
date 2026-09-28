@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/engine.py"
 tags: [philosophie, prioritaet, matrix, external-respect]
 status: stable
-last_review: 2026-09-26
+last_review: 2026-09-28
 ---
 
 # Steuerungsphilosophie
@@ -19,7 +19,7 @@ last_review: 2026-09-26
 - **Parameter-Matrix:** `automation/engine/param_matrix.py:lade_matrix`
 - **Prognose-Stufe (Automation):** `automation/engine/param_matrix.py:get_forecast_tier` / `classify_forecast_kwh`
 - **Matrix-Quelle:** `config/soc_param_matrix.json` (Single Source of Truth)
-- **ExternalRespect (HP):** `automation/engine/regeln/geraete.py:RegelHeizpatrone._cancel_conflicting_overrides`
+- **ExternalRespect (HP):** `automation/engine/regeln/geraete_heizpatrone.py:RegelHeizpatrone._cancel_conflicting_overrides`
 - **ExternalRespect (SOC/Batterie):** `automation/engine/regeln/soc_extern.py:SocExternTracker.aktualisiere` (erkennt extern geänderte SOC-Grenzen). `_log_extern_dedup` protokolliert identische Transitionen max. alle 15 Min — verhindert Schaltlog-Spam, wenn der SOC-Readback während manual/auto-Übergängen oszilliert (reine Logging-Ebene, Toleranzsteuerung unverändert).
 - **ExternalRespect (WP):** Engine schreibt Sollwerte über `waermepumpe.py:_registriere_engine_wert`; der frühere Lese-Pfad `_prüfe_extern_respekt` wurde 2026-05-29 als Dead Code entfernt.
 

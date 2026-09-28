@@ -32,7 +32,9 @@ if _ROOT not in sys.path:
 
 from automation.engine.obs_state import ObsState  # noqa: E402
 from automation.engine.param_matrix import lade_matrix  # noqa: E402
-import automation.engine.regeln.geraete as geraete  # noqa: E402
+# RegelHeizpatrone lebt seit dem Geraete-Split in geraete_heizpatrone; die
+# Zeit-Patches muessen dieses Modul treffen (nicht den geraete-Aggregator).
+import automation.engine.regeln.geraete_heizpatrone as geraete  # noqa: E402
 
 GOLDEN = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'golden',
                       'heizpatrone_golden.json')
