@@ -38,20 +38,23 @@
 
 ## Code-Architektur
 
-- [ ] **`automation/engine/regeln/geraete_heizpatrone.py`: `bewerte()`/`erzeuge_aktionen()` entduplizieren.**
-      Beide Methoden leiten die Phasen-Entscheidung (AUS-Pfad, Drain P0, Burst P1/1b/2/3/4)
-      unabhaengig voneinander ab (~1000 Z. Duplikat). Dadurch bereits stille Drift:
-      WW-Temp-AUS nutzt in `bewerte()` `_dynamic_temp_max_c`, im AUS-Pfad von
-      `erzeuge_aktionen()` aber den Roh-Cap `speicher_temp_max_c` (78 C); der Phase-0-
-      Haushaltscheck rechnet in `bewerte()` HP+WP heraus, in `erzeuge_aktionen()` nicht;
-      analog `RegelWattpilotBattSchutz` (bewerte hardcodet `soc<25`, erzeuge nutzt
-      `soc_min_netz_pct`). Ziel: gemeinsame Kern-Entscheidung, aus der Score UND Aktion
-      abgeleitet werden (Schnitt nach Schaltgrund statt Duplikat).
-      RISIKO: safety-critical Rolle C, **zustandsbehaftet** (Burst-Timer/Probe/Kurz-Burst-
-      Sperre) — **isoliert** umsetzen, gegen `tests/test_heizpatrone_characterization.py`
-      und `tests/test_geraete_characterization.py` (Golden) verifizieren; vorher um
-      Zustandssequenz-Szenarien (mehrere Ticks) erweitern, da die Golden je Szenario aktuell
-      eine frische Regel nutzen.
+- [ ] **`automation/engine/regeln/geraete_heizpatrone.py`: EIN-Phasen-Entscheidung (Phase 0/1/1b/2/3/4) entduplizieren.**
+      Der **AUS-Pfad ist bereits Single-Source** (`_ww_temp_aus_pruefen`, `_phase4_aus_pruefen`,
+      `_aus_kontext_pruefen`, `_phase0_haushalt_netto` — von `bewerte()` UND `erzeuge_aktionen()`
+      genutzt); damit sind die WW-Temp-Drift (dyn. Cap jetzt in beiden Pfaden) und die
+      Phase-0-Haushalt-Drift (HP+WP-Herausrechnung in beiden) behoben. **Offen:** die
+      Burst-EIN-Phasen sind weiterhin doppelt abgeleitet (Score in `bewerte()`, Burst/Aktion in
+      `erzeuge_aktionen()`). Vor dem Teilen zu KLAEREN — dabei aufgefallene latente Divergenz:
+      `bewerte()` Phase 2 feuert zusaetzlich bei `rest_kwh > min_rest_kwh` (12), `erzeuge_aktionen()`
+      NICHT → Score will EIN ohne dass eine Aktion folgt. Ziel: gemeinsame Phasen-Kern-Entscheidung
+      (Schnitt nach Phase/Burst statt Duplikat).
+      RISIKO: safety-critical Rolle C, **zustandsbehaftet** (Burst-Timer/Probe/Kurz-Burst-Sperre,
+      Phase-1b-Probe) — **isoliert** umsetzen, gegen die (um Multi-Tick-Zustandssequenzen
+      erweiterten) Golden `tests/test_heizpatrone_characterization.py` und
+      `tests/test_geraete_characterization.py` verifizieren.
+- [ ] **`RegelWattpilotBattSchutz` (`automation/engine/regeln/geraete_wattpilot_schutz.py`): `bewerte()`/`erzeuge_aktionen()` entduplizieren** (analog HP-AUS-Pfad).
+      `bewerte()` hardcodet `soc<25`, `erzeuge_aktionen()` nutzt `soc_min_netz_pct` — stille Drift.
+      Gemeinsamer SOC-Schwellen-Helfer; gegen `tests/test_geraete_characterization.py` (Golden) verifizieren.
 - [ ] Weitere Gross-Module fuer Zerlegung pruefen (nach gleichem Muster, je nach Bedarf):
       `routes/pac4200.py` (~1850 Z.), `pv-config.py` (~1550 Z.), `routes/verbraucher.py` (~1420 Z.),
       `automation/engine/regeln/waermepumpe.py` (~1130 Z.), `routes/realtime.py` (~1080 Z.),

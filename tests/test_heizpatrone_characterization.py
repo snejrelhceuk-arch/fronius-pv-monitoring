@@ -104,6 +104,11 @@ SZENARIEN = [
     ('aus_entladung',         16.5, {'batt_soc_pct': 80, 'batt_power_w': -1500}),
     ('ww_zu_heiss',           12.0, {'batt_soc_pct': 96, 'soc_max': 100, 'ww_temp_c': 79, 'batt_power_w': 4000}),
     ('ev_laedt_parallel',     12.0, {'batt_soc_pct': 73, 'soc_max': 75, 'ev_charging': True, 'ev_power_w': 7000, 'batt_power_w': 3800}),
+    # Regressions-Anker: WW-Temp-AUS nutzt in BEIDEN Pfaden den dynamischen
+    # WP-Koordinations-Cap. Drain-Fenster (8 h) → Cap 55 °C, ww 60 °C liegt
+    # zwischen Drain-Cap und Roh-Cap (78 °C). Score UND Aktion muessen AUS sein
+    # (frueher lieferte erzeuge_aktionen kein hp_aus → stille Drift).
+    ('ww_drain_cap_konsistent', 8.0, {'heizpatrone_aktiv': True, 'batt_soc_pct': 60, 'ww_temp_c': 60}),
 ]
 
 
@@ -111,8 +116,12 @@ def _run_one(name, hour, overrides, matrix_aktiv):
     """Frische Regel, fixe Zeit, ObsState bauen, bewerte()+erzeuge_aktionen()."""
     _FixedDateTime._fixed = _dt.datetime(2026, 6, 29, int(hour), int(round((hour % 1) * 60)))
     orig_dt, orig_time = geraete.datetime, geraete.time
+    orig_cancel = geraete.RegelHeizpatrone._cancel_conflicting_overrides
     geraete.datetime = _FixedDateTime
     geraete.time = _FakeTime()
+    # DB-abhaengige Override-Annullation neutralisieren (host-/laufzeitunabh.)
+    geraete.RegelHeizpatrone._cancel_conflicting_overrides = (
+        lambda self, desired_state, geraet='hp': None)
     try:
         matrix = copy.deepcopy(lade_matrix())
         matrix['regelkreise']['heizpatrone']['aktiv'] = matrix_aktiv
@@ -128,6 +137,167 @@ def _run_one(name, hour, overrides, matrix_aktiv):
     finally:
         geraete.datetime = orig_dt
         geraete.time = orig_time
+        geraete.RegelHeizpatrone._cancel_conflicting_overrides = orig_cancel
+
+
+# ── Multi-Tick State-Sequenz-Szenarien ───────────────────────
+# Die Einzel-Tick-Szenarien oben nutzen je eine FRISCHE Regel und treffen damit
+# stets den Erst-Zyklus-Schutz (min_pause): Score bleibt 0 und die zustands-
+# behafteten Pfade (Burst-Timer-Ablauf/Auto-Verlaengerung, Probe-Auswertung,
+# Kurz-Burst-Sperre, Drain-Verzoegerungstimer) werden nie durchlaufen. Die
+# folgenden Sequenzen fahren EINE Regelinstanz ueber mehrere Ticks (fort-
+# schreitende Uhr) und frieren dieses Verhalten als Golden ein — Sicherheitsnetz
+# fuer den bewerte()/erzeuge_aktionen()-Dedup-Refactor.
+
+
+class _SeqClock:
+    """Fortschreitende Uhr fuer Multi-Tick-Sequenzen (deterministisch)."""
+
+    def __init__(self):
+        self.epoch = FIXED_EPOCH
+        self.dt = _dt.datetime(2026, 6, 29, 12, 0)
+
+    def set_hour(self, hour):
+        self.dt = _dt.datetime(2026, 6, 29, int(hour), int(round((hour % 1) * 60)))
+
+    def advance(self, seconds):
+        self.epoch += seconds
+        self.dt = self.dt + _dt.timedelta(seconds=seconds)
+
+
+_SEQ_CLOCK = _SeqClock()
+
+
+class _SeqDateTime(_dt.datetime):
+    """datetime-Subklasse, die now()/utcnow() aus _SEQ_CLOCK liest."""
+
+    @classmethod
+    def now(cls, tz=None):  # noqa: A003
+        return _SEQ_CLOCK.dt
+
+    @classmethod
+    def utcnow(cls):
+        return _SEQ_CLOCK.dt
+
+
+class _SeqTime:
+    """time-Modul-Proxy, dessen time() aus _SEQ_CLOCK liest."""
+
+    def time(self):
+        return _SEQ_CLOCK.epoch
+
+    def __getattr__(self, name):
+        return getattr(_real_time, name)
+
+
+def _seq_actions(aktionen) -> list:
+    return [{'kommando': a.get('kommando'), 'aktor': a.get('aktor'), 'wert': a.get('wert')}
+            for a in (aktionen or [])]
+
+
+# (name, hour_start, [ (advance_s, overrides), … ])
+# Tick 0 hat advance_s=0. overrides mutieren den fortlaufenden ObsState.
+# Zwischen den Ticks wird heizpatrone_aktiv aus der letzten Aktion zurueck-
+# gespiegelt (hp_ein→True, hp_aus→False) — Nachbildung der Aktor/Observer-
+# Rueckkopplung; ein override kann heizpatrone_aktiv explizit ueberschreiben.
+SEQ_SZENARIEN = [
+    # Phase-1-Burst-Lebenszyklus: Start → Halten → Timer-Ablauf-AUS → min_pause
+    ('phase1_burst_lifecycle', 11.75, [
+        (0,    {'batt_soc_pct': 71, 'batt_power_w': 3800, 'forecast_rest_kwh': 38}),
+        (120,  {}),
+        (1800, {}),
+        (60,   {}),
+    ]),
+    # Phase-1b-Probe erfolgreich: Probe-Puls → PV reagiert → Burst verlaengert
+    ('phase1b_probe_success', 12.0, [
+        (0,    {}),
+        (600,  {'batt_soc_pct': 73, 'soc_max': 75, 'batt_power_w': 0,
+                'pv_total_w': 1000, 'grid_power_w': 0,
+                'forecast_power_profile': [{'hour': 12, 'total_ac_w': 4000},
+                                           {'hour': 13, 'total_ac_w': 4000}]}),
+        (120,  {'pv_total_w': 1600}),
+        (1800, {}),
+    ]),
+    # Phase-1b-Probe gescheitert: PV reagiert nicht → AUS + Cooldown
+    ('phase1b_probe_fail', 12.0, [
+        (0,   {}),
+        (600, {'batt_soc_pct': 73, 'soc_max': 75, 'batt_power_w': 0,
+               'pv_total_w': 1000, 'grid_power_w': 0,
+               'forecast_power_profile': [{'hour': 12, 'total_ac_w': 4000},
+                                          {'hour': 13, 'total_ac_w': 4000}]}),
+        (120, {'pv_total_w': 1050}),
+    ]),
+    # Kurz-Burst-Sperre: 2× kurzer Burst (<7 Min) → EIN-Sperre blockt Folge-Burst
+    ('kurz_burst_sperre', 11.75, [
+        (0,   {'batt_soc_pct': 71, 'batt_power_w': 3800, 'forecast_rest_kwh': 38}),
+        (60,  {'batt_power_w': -1500}),
+        (360, {'batt_power_w': 3800}),
+        (60,  {'batt_power_w': -1500}),
+        (360, {'batt_power_w': 3800}),
+    ]),
+    # Phase-0-Drain: Start → kontinuierliche Auto-Verlaengerung → AUS nach Fenster
+    # (ww_temp bewusst < Drain-Cap 55 °C, damit die Sequenz die Drain-/Timer-Logik
+    #  isoliert testet und nicht an der WW-Temp-Schwelle haengt)
+    ('drain_lifecycle', 8.0, [
+        (0,    {'ww_temp_c': 45, 'forecast_rest_kwh': 50, 'batt_power_w': 500,
+                'forecast_power_profile': [{'hour': 9, 'total_ac_w': 5000},
+                                           {'hour': 10, 'total_ac_w': 5000}]}),
+        (300,  {}),
+        (2700, {}),
+        (4800, {}),
+    ]),
+    # Drain-Verzoegerungstimer: Soft-Verbraucher (WP) → verzoegertes AUS (Timer
+    # quer zwischen bewerte()/erzeuge_aktionen())
+    ('drain_delay_soft', 8.0, [
+        (0,   {'ww_temp_c': 45, 'forecast_rest_kwh': 50, 'batt_power_w': 500,
+               'wp_power_w': 0,
+               'forecast_power_profile': [{'hour': 9, 'total_ac_w': 5000},
+                                          {'hour': 10, 'total_ac_w': 5000}]}),
+        (300, {'wp_power_w': 800}),
+        (360, {'wp_power_w': 800}),
+    ]),
+]
+
+
+def _run_sequence(name, hour_start, ticks):
+    """Fahre EINE Regelinstanz ueber mehrere Ticks; Ergebnis je Tick."""
+    _SEQ_CLOCK.epoch = FIXED_EPOCH
+    _SEQ_CLOCK.set_hour(hour_start)
+    orig_dt, orig_time = geraete.datetime, geraete.time
+    orig_cancel = geraete.RegelHeizpatrone._cancel_conflicting_overrides
+    geraete.datetime = _SeqDateTime
+    geraete.time = _SeqTime()
+    # DB-abhaengige Override-Annullation neutralisieren (host-/laufzeitunabh.)
+    geraete.RegelHeizpatrone._cancel_conflicting_overrides = (
+        lambda self, desired_state, geraet='hp': None)
+    ergebnisse = []
+    try:
+        matrix = copy.deepcopy(lade_matrix())
+        matrix['regelkreise']['heizpatrone']['aktiv'] = True
+        regel = geraete.RegelHeizpatrone()
+        obs = _base_obs()
+        letzte_aktion = None
+        for advance_s, overrides in ticks:
+            if advance_s:
+                _SEQ_CLOCK.advance(advance_s)
+            if letzte_aktion == 'hp_ein':
+                obs.heizpatrone_aktiv = True
+            elif letzte_aktion == 'hp_aus':
+                obs.heizpatrone_aktiv = False
+            for k, v in overrides.items():
+                setattr(obs, k, v)
+            score = regel.bewerte(obs, matrix)
+            aktionen = regel.erzeuge_aktionen(obs, matrix)
+            ergebnisse.append({'score': int(score), 'aktionen': _seq_actions(aktionen)})
+            letzte_aktion = None
+            for a in (aktionen or []):
+                if a.get('kommando') in ('hp_ein', 'hp_aus'):
+                    letzte_aktion = a.get('kommando')
+        return ergebnisse
+    finally:
+        geraete.datetime = orig_dt
+        geraete.time = orig_time
+        geraete.RegelHeizpatrone._cancel_conflicting_overrides = orig_cancel
 
 
 def erzeuge_snapshot() -> dict:
@@ -136,6 +306,9 @@ def erzeuge_snapshot() -> dict:
         for name, hour, ov in SZENARIEN:
             key = f"{name}|aktiv={aktiv}"
             snap[key] = _run_one(name, hour, ov, aktiv)
+    for name, hour_start, ticks in SEQ_SZENARIEN:
+        for i, res in enumerate(_run_sequence(name, hour_start, ticks)):
+            snap[f"seq:{name}|t{i}"] = res
     return snap
 
 

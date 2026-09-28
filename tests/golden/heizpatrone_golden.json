@@ -127,6 +127,196 @@
     "aktionen": [],
     "score": 0
   },
+  "seq:drain_delay_soft|t0": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_ein",
+        "wert": null
+      }
+    ],
+    "score": 0
+  },
+  "seq:drain_delay_soft|t1": {
+    "aktionen": [],
+    "score": 40
+  },
+  "seq:drain_delay_soft|t2": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_aus",
+        "wert": null
+      }
+    ],
+    "score": 60
+  },
+  "seq:drain_lifecycle|t0": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_ein",
+        "wert": null
+      }
+    ],
+    "score": 0
+  },
+  "seq:drain_lifecycle|t1": {
+    "aktionen": [],
+    "score": 40
+  },
+  "seq:drain_lifecycle|t2": {
+    "aktionen": [],
+    "score": 40
+  },
+  "seq:drain_lifecycle|t3": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_aus",
+        "wert": null
+      }
+    ],
+    "score": 48
+  },
+  "seq:kurz_burst_sperre|t0": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_ein",
+        "wert": null
+      }
+    ],
+    "score": 0
+  },
+  "seq:kurz_burst_sperre|t1": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_aus",
+        "wert": null
+      }
+    ],
+    "score": 60
+  },
+  "seq:kurz_burst_sperre|t2": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_ein",
+        "wert": null
+      }
+    ],
+    "score": 0
+  },
+  "seq:kurz_burst_sperre|t3": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_aus",
+        "wert": null
+      }
+    ],
+    "score": 60
+  },
+  "seq:kurz_burst_sperre|t4": {
+    "aktionen": [],
+    "score": 0
+  },
+  "seq:phase1_burst_lifecycle|t0": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_ein",
+        "wert": null
+      }
+    ],
+    "score": 0
+  },
+  "seq:phase1_burst_lifecycle|t1": {
+    "aktionen": [],
+    "score": 40
+  },
+  "seq:phase1_burst_lifecycle|t2": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_aus",
+        "wert": null
+      }
+    ],
+    "score": 48
+  },
+  "seq:phase1_burst_lifecycle|t3": {
+    "aktionen": [],
+    "score": 0
+  },
+  "seq:phase1b_probe_fail|t0": {
+    "aktionen": [],
+    "score": 0
+  },
+  "seq:phase1b_probe_fail|t1": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_ein",
+        "wert": null
+      }
+    ],
+    "score": 40
+  },
+  "seq:phase1b_probe_fail|t2": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_aus",
+        "wert": null
+      }
+    ],
+    "score": 48
+  },
+  "seq:phase1b_probe_success|t0": {
+    "aktionen": [],
+    "score": 0
+  },
+  "seq:phase1b_probe_success|t1": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_ein",
+        "wert": null
+      }
+    ],
+    "score": 40
+  },
+  "seq:phase1b_probe_success|t2": {
+    "aktionen": [],
+    "score": 48
+  },
+  "seq:phase1b_probe_success|t3": {
+    "aktionen": [],
+    "score": 48
+  },
+  "ww_drain_cap_konsistent|aktiv=False": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_aus",
+        "wert": null
+      }
+    ],
+    "score": 60
+  },
+  "ww_drain_cap_konsistent|aktiv=True": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_aus",
+        "wert": null
+      }
+    ],
+    "score": 60
+  },
   "ww_zu_heiss|aktiv=False": {
     "aktionen": [],
     "score": 0
