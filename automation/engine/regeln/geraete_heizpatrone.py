@@ -18,7 +18,10 @@ from typing import Optional
 import config
 
 from automation.engine.obs_state import ObsState
-from automation.engine.operator_intents import read_active_afternoon_charge_intent
+from automation.engine.operator_intents import (
+    read_active_afternoon_charge_intent,
+    read_active_hp_dauerbetrieb_intent,
+)
 from automation.engine.regeln.basis import Regel
 from automation.engine.param_matrix import (
     ist_aktiv, get_param, get_score_gewicht,
@@ -115,6 +118,9 @@ class RegelHeizpatrone(Regel):
         # drain_abschalt_verzoegerung_min anhalten bevor HP abgeschaltet wird.
         # SOC, Temperatur und Netzbezug sind ausgenommen (immer sofort).
         self._drain_lastbedingung_ts: float = 0   # Epoch: erste Erkennung der Soft-Bedingung
+        # Dauerbetrieb (Steuerbox-Ersatzheizung): WW-Cap-Hysterese-Sperre, damit die
+        # HP am 78-C-Cap nicht im Sekundentakt pendelt.
+        self._dauerbetrieb_ww_block: bool = False
 
     def _geraet_label(self) -> str:
         """Kurzlabel für menschenlesbare Extern-Logs."""
@@ -427,6 +433,38 @@ class RegelHeizpatrone(Regel):
             return False, ''
         return True, (f'Ueberschuss traegt HP: Netz {grid:.0f}W<{grid_max:.0f}W, '
                       f'P_Batt {p_batt:.0f}W, SOC {soc:.0f}%>={soc_hoch:.0f}%')
+
+    def _wp_laeuft(self, obs: ObsState, matrix: dict) -> bool:
+        """WP (Dimplex) heizt gerade → im Dauerbetrieb besteht kein HP-Zwang."""
+        wp_aktiv, _ = self._verbraucher_aktiv(obs, matrix)
+        return wp_aktiv
+
+    def _dauerbetrieb_hard_stop(self, obs: ObsState,
+                                matrix: dict) -> tuple[bool, str]:
+        """Einzige HP-AUS-Bedingung im Dauerbetrieb: WW-Uebertemperatur (78 C).
+
+        Mit Hysterese (`dauerbetrieb_ww_hysterese_k`), damit die HP am Cap nicht im
+        Sekundentakt pendelt. Idempotent pro Tick (Aufruf in bewerte + erzeuge).
+        SOC-Floor, Netzbezug-Integral und weiche WP-Koordinations-Caps gelten im
+        Dauerbetrieb NICHT — die HP laeuft bewusst als Ersatzheizung auch aus dem
+        Netz (die physische 35-A-Netzanschluss-Sicherung bleibt der Schutz).
+        """
+        hart = float(get_param(matrix, self.regelkreis, 'speicher_temp_max_c', 78))
+        hyst = float(get_param(
+            matrix, self.regelkreis, 'dauerbetrieb_ww_hysterese_k', 5))
+        ww = obs.ww_temp_c
+        if ww is None:
+            return False, ''
+        if self._dauerbetrieb_ww_block:
+            if ww < (hart - hyst):
+                self._dauerbetrieb_ww_block = False
+            else:
+                return True, (f'Dauerbetrieb-Pause: WW {ww:.0f}°C ≥ Cap-{hyst:.0f}K '
+                              f'(Cap {hart:.0f}°C)')
+        if ww >= hart:
+            self._dauerbetrieb_ww_block = True
+            return True, f'HART: Übertemperatur ({ww:.0f}°C ≥ {hart:.0f}°C)'
+        return False, ''
 
     def _batt_entladung_toleriert(self, potenzial: str, soc_max_eff: int,
                                    obs: ObsState) -> bool:
@@ -871,6 +909,17 @@ class RegelHeizpatrone(Regel):
         ist_extern = (self._extern_ein_ts > 0
                       and (time.time() - self._extern_ein_ts) < extern_respekt)
 
+        # ── Dauerbetrieb (Steuerbox: HP als Ersatzheizung bei WP-Defekt) ──
+        # Zwingt HP EIN/halten und ueberstimmt weiche Caps, Konkurrenz, Ladewunsch,
+        # SOC-Floor und Netzbezug. Nur WW≥78 C stoppt; ein laufender WP hebt den
+        # Zwang auf (dann uebernimmt die normale Logik).
+        if read_active_hp_dauerbetrieb_intent() is not None:
+            hard_stop, _db_grund = self._dauerbetrieb_hard_stop(obs, matrix)
+            if hard_stop:
+                return int(score * 1.5)
+            if not self._wp_laeuft(obs, matrix):
+                return int(score * 1.6)
+
         intent = read_active_afternoon_charge_intent()
         if intent and bool(intent.get('pause_hp_until_target', False)):
             target_soc = int(intent.get('target_soc_pct', 100))
@@ -1084,6 +1133,41 @@ class RegelHeizpatrone(Regel):
         p_batt = obs.batt_power_w or 0
         soc = obs.batt_soc_pct if obs.batt_soc_pct is not None else 50
         soc_max_eff = obs.soc_max if obs.soc_max is not None else 75
+
+        # ── Dauerbetrieb (Steuerbox: HP als Ersatzheizung bei WP-Defekt) ──
+        # Hoechste HP-Prioritaet ausser WW-Uebertemperatur; ueberstimmt Ladewunsch,
+        # weiche Caps, Konkurrenz, SOC-Floor und Netzbezug (laeuft bewusst aus dem
+        # Netz). Ein laufender WP hebt den Zwang auf (kein Ersatz noetig).
+        if read_active_hp_dauerbetrieb_intent() is not None:
+            hard_stop, hs_grund = self._dauerbetrieb_hard_stop(obs, matrix)
+            if hard_stop:
+                if obs.heizpatrone_aktiv:
+                    self._letzte_aus = time.time()
+                    self._warte_auf_engine_aus = True
+                    self._warte_auf_engine_aus_ts = self._letzte_aus
+                    self._burst_start = 0
+                    self._burst_ende = 0
+                    self._drain_modus = False
+                    self._probe_modus = False
+                    return [{
+                        'tier': 2, 'aktor': 'fritzdect', 'kommando': 'hp_aus',
+                        'grund': f'HP AUS (Dauerbetrieb): {hs_grund}',
+                    }]
+                return []
+            if not self._wp_laeuft(obs, matrix):
+                if not obs.heizpatrone_aktiv:
+                    self._burst_start = time.time()
+                    self._burst_ende = 0
+                    self._drain_modus = False
+                    self._probe_modus = False
+                    self._letzte_phase = 'dauerbetrieb'
+                    self._letzter_hp_zustand = True
+                    return [{
+                        'tier': 2, 'aktor': 'fritzdect', 'kommando': 'hp_ein',
+                        'grund': 'HP EIN (Dauerbetrieb: Ersatzheizung bei WP-Defekt)',
+                    }]
+                return []
+            # WP laeuft → kein Zwang, normale Logik uebernimmt.
 
         intent = read_active_afternoon_charge_intent()
         if intent and bool(intent.get('pause_hp_until_target', False)):

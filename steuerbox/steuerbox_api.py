@@ -182,6 +182,7 @@ def index():
         default_respekt_s=config.STEUERBOX_DEFAULT_RESPEKT_S,
         min_respekt_s=config.STEUERBOX_MIN_RESPEKT_S,
         max_respekt_s=config.STEUERBOX_MAX_RESPEKT_S,
+        hp_dauerbetrieb_default_s=config.STEUERBOX_HP_DAUERBETRIEB_DEFAULT_S,
         css_version=_asset_version('css/cockpit.css'),
         js_version=_asset_version('js/cockpit.js'),
         favicon_version=_asset_version('img/favicon-steuerbox.svg'),

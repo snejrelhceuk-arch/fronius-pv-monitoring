@@ -106,6 +106,10 @@ def _resolve_effective_respekt_s(
     conn: sqlite3.Connection,
 ) -> int:
     """Berechnet die effektive Respektzeit, inkl. Tages-Intent bis Sunset."""
+    if action == 'hp_dauerbetrieb':
+        base = int(respekt_s) if respekt_s is not None else int(config.STEUERBOX_HP_DAUERBETRIEB_DEFAULT_S)
+        return int(min(config.STEUERBOX_HP_DAUERBETRIEB_MAX_S,
+                       max(config.STEUERBOX_MIN_RESPEKT_S, base)))
     if action != 'afternoon_charge_request':
         return int(respekt_s or config.STEUERBOX_DEFAULT_RESPEKT_S)
 
@@ -152,6 +156,9 @@ def _is_neutral_action(action: str, params: dict[str, Any]) -> bool:
         return params.get('mode') == 'neutral'
     if action in {'hp_toggle', 'klima_toggle', 'lueftung_toggle'}:
         return params.get('state') == 'neutral'
+    if action == 'hp_dauerbetrieb':
+        # Nur 'on' haelt als Policy; 'off'/'neutral' geben die Regel sofort frei.
+        return params.get('state') != 'on'
     if action == 'wattpilot_mode':
         return params.get('mode') == 'neutral'
     if action == 'wattpilot_start_stop':

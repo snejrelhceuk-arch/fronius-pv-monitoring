@@ -66,6 +66,8 @@ def validate_action(action: str, params: dict[str, Any], respekt_s: int) -> dict
     max_respekt_s = config.STEUERBOX_MAX_RESPEKT_S
     if action == 'afternoon_charge_request':
         max_respekt_s = config.STEUERBOX_AFTERNOON_MAX_RESPEKT_S
+    elif action == 'hp_dauerbetrieb':
+        max_respekt_s = config.STEUERBOX_HP_DAUERBETRIEB_MAX_S
 
     if respekt_s < config.STEUERBOX_MIN_RESPEKT_S or respekt_s > max_respekt_s:
         abort(422, description='respekt_s out of range')
@@ -125,7 +127,7 @@ def validate_action(action: str, params: dict[str, Any], respekt_s: int) -> dict
                 abort(422, description='until_hour out of range')
             normalized['until_hour'] = round(until_hour_f, 2)
 
-    elif action in {'hp_toggle', 'klima_toggle', 'lueftung_toggle'}:
+    elif action in {'hp_toggle', 'klima_toggle', 'lueftung_toggle', 'hp_dauerbetrieb'}:
         state = _expect_in(params.get('state'), 'state', {'on', 'off', 'neutral'})
         normalized['state'] = state
 
@@ -135,6 +137,13 @@ def validate_action(action: str, params: dict[str, Any], respekt_s: int) -> dict
             uebertemp_c = params.get('uebertemp_c')
             if isinstance(soc_pct, (int, float)) and soc_pct <= config.STEUERBOX_HP_AUS_SOC_PCT:
                 abort(422, description='hp blocked: soc too low')
+            if isinstance(uebertemp_c, (int, float)) and uebertemp_c >= config.STEUERBOX_HP_UEBERTEMP_C:
+                abort(422, description='hp blocked: overtemperature')
+
+        # HP-Dauerbetrieb (Ersatzheizung bei WP-Defekt): laeuft bewusst auch bei
+        # niedrigem SOC aus dem Netz -> KEIN SOC-Guard. Nur Uebertemperatur bleibt hart.
+        if action == 'hp_dauerbetrieb' and state == 'on':
+            uebertemp_c = params.get('uebertemp_c')
             if isinstance(uebertemp_c, (int, float)) and uebertemp_c >= config.STEUERBOX_HP_UEBERTEMP_C:
                 abort(422, description='hp blocked: overtemperature')
 

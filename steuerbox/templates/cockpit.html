@@ -66,6 +66,10 @@
             <div class="statebar" id="hp-toggle"></div>
           </div>
           <div class="toggle-row">
+            <span class="toggle-label">HP-Dauerbetrieb</span>
+            <div class="statebar" id="hp-dauerbetrieb"></div>
+          </div>
+          <div class="toggle-row">
             <span class="toggle-label">Klimagerät</span>
             <div class="statebar" id="klima-toggle"></div>
           </div>
@@ -99,7 +103,8 @@
   <script>
     window.STEUERBOX_CFG = {
       minRespekt: {{ min_respekt_s }},
-      maxRespekt: {{ max_respekt_s }}
+      maxRespekt: {{ max_respekt_s }},
+      hpDauerDefaultS: {{ hp_dauerbetrieb_default_s }}
     };
   </script>
   <script src="{{ url_for('static', filename='js/cockpit.js', v=js_version) }}"></script>

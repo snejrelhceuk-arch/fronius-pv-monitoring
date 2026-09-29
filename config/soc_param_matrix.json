@@ -937,6 +937,17 @@
           "obs_feld": "batt_soc_pct",
           "beschreibung": "Überschuss-Override nur bei SOC über diesem Wert (Batterie nahe voll → Überschuss würde sonst abgeregelt; bei niedrigem SOC hat Batterieladung Vorrang)."
         },
+        "_dauerbetrieb_doc": "HP-Dauerbetrieb (Steuerbox-Ersatzheizung bei WP-Defekt): HP läuft dauerhaft (Steuerbox-Schalter, Default 8h / max 24h) und überstimmt weiche Caps, Verbraucher-Konkurrenz, Ladewunsch, SOC-Floor und Netzbezug (läuft bewusst aus dem Netz). Einzige Software-AUS: WW ≥ speicher_temp_max_c (78°C); ein laufender WP (≥ drain_max_wp_w) hebt den Zwang auf. Physischer Schutz bleibt die 35A-Netzanschluss-Sicherung.",
+        "dauerbetrieb_ww_hysterese_k": {
+          "wert": 5,
+          "bereich": [
+            0,
+            15
+          ],
+          "einheit": "K",
+          "obs_feld": "ww_temp_c",
+          "beschreibung": "Dauerbetrieb: Hysterese unter dem 78°C-Cap, ab der die HP wieder einschaltet (verhindert Sekundentakt-Pendeln am Cap)."
+        },
         "speicher_temp_max_c": {
           "wert": 78,
           "bereich": [

@@ -122,3 +122,65 @@ def read_active_afternoon_charge_intent(
     _CACHE['ts'] = now
     _CACHE['value'] = value
     return value
+
+
+_CACHE_DAUER: dict[str, Any] = {
+    'ts': 0.0,
+    'value': None,
+}
+
+
+def _read_hp_dauerbetrieb_intent(db_path: str) -> dict[str, Any] | None:
+    try:
+        conn = sqlite3.connect(db_path, timeout=2.0)
+        conn.execute('PRAGMA journal_mode=WAL')
+        row = conn.execute(
+            "SELECT id, params_json, created_at, respekt_s, status "
+            "FROM operator_overrides "
+            "WHERE action='hp_dauerbetrieb' "
+            "AND status IN ('open','active') "
+            "ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        conn.close()
+    except Exception:
+        return None
+
+    if not row:
+        return None
+
+    try:
+        params = json.loads(row[1] or '{}')
+    except Exception:
+        params = {}
+
+    # Nur der EIN-Zustand haelt die Ersatzheizung; off/neutral = kein Dauerbetrieb.
+    if str(params.get('state')) != 'on':
+        return None
+
+    remaining_s = _remaining_respekt_s(str(row[2]), int(row[3] or 0))
+    if remaining_s <= 0:
+        return None
+
+    return {
+        'override_id': int(row[0]),
+        'status': str(row[4]),
+        'respekt_remaining_s': remaining_s,
+    }
+
+
+def read_active_hp_dauerbetrieb_intent(
+    db_path: str = RAM_DB_PATH,
+    force_refresh: bool = False,
+) -> dict[str, Any] | None:
+    """Liefert aktiven HP-Dauerbetrieb-Intent (Ersatzheizung bei WP-Defekt).
+
+    ``None`` wenn kein aktiver ``hp_dauerbetrieb``-Override mit ``state=on`` und
+    verbleibender Respektzeit vorliegt.
+    """
+    now = time.time()
+    if not force_refresh and (now - float(_CACHE_DAUER['ts'])) <= _CACHE_TTL_S:
+        return _CACHE_DAUER['value']
+    value = _read_hp_dauerbetrieb_intent(db_path)
+    _CACHE_DAUER['ts'] = now
+    _CACHE_DAUER['value'] = value
+    return value

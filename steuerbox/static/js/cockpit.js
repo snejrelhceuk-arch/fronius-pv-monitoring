@@ -33,6 +33,18 @@ const controls = [
     initial: null,
   },
   {
+    elementId: 'hp-dauerbetrieb',
+    action: 'hp_dauerbetrieb',
+    type: 'state',
+    states: [
+      { label: 'AUS', value: 'off', flavor: 'off' },
+      { label: 'DAUER', value: 'on', flavor: 'on' },
+    ],
+    initial: null,
+    omitRespekt: true,   // Dauer kommt aus der Backend-Config (8 h / max 24 h)
+    confirmValue: 'on',
+  },
+  {
     elementId: 'klima-toggle',
     action: 'klima_toggle',
     type: 'state',
@@ -160,6 +172,20 @@ function toParams(control, selectedValue) {
   return { amp: selectedValue };
 }
 
+function confirmDauerbetrieb(control) {
+  if (control.action !== 'hp_dauerbetrieb') {
+    return window.confirm('Aktion bestätigen?');
+  }
+  const stunden = Math.round((cfg.hpDauerDefaultS || 28800) / 3600);
+  return window.confirm(
+    'HP-Dauerbetrieb (Ersatzheizung bei WP-Defekt) aktivieren?\n\n'
+    + 'Die Heizpatrone läuft dann dauerhaft (max. ' + stunden + ' h) — auch aus '
+    + 'dem Netz und bei niedrigem Akku. Nur Übertemperatur (78 °C) und ein '
+    + 'WP-Lauf stoppen sie. Physischer Schutz bleibt die 35-A-Netzsicherung.'
+    + '\n\nFortfahren?'
+  );
+}
+
 async function sendIntent(control, selectedValue) {
   const headers = {
     'Content-Type': 'application/json',
@@ -168,8 +194,10 @@ async function sendIntent(control, selectedValue) {
   const payload = {
     action: control.action,
     params: toParams(control, selectedValue),
-    respekt_s: getRespekt(),
   };
+  if (!control.omitRespekt) {
+    payload.respekt_s = getRespekt();
+  }
 
   const response = await fetch('/api/ops/intent', {
     method: 'POST',
@@ -235,6 +263,11 @@ function buildControl(control) {
     }
 
     button.addEventListener('click', async () => {
+      if (control.confirmValue !== undefined
+          && String(entry.value) === String(control.confirmValue)
+          && !confirmDauerbetrieb(control)) {
+        return;
+      }
       const previous = state[control.elementId];
       state[control.elementId] = entry.value;
       updateButtons(container, state[control.elementId]);

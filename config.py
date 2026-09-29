@@ -131,6 +131,7 @@ STEUERBOX_ALLOWED_ACTIONS = {
     'battery_mode',
     'afternoon_charge_request',
     'hp_toggle',
+    'hp_dauerbetrieb',
     'klima_toggle',
     'lueftung_toggle',
     'wattpilot_mode',
@@ -146,6 +147,15 @@ STEUERBOX_AFTERNOON_MAX_RESPEKT_S = 43200
 STEUERBOX_WP_OFFSET_MIN_K = -15
 STEUERBOX_HP_AUS_SOC_PCT = 15
 STEUERBOX_HP_UEBERTEMP_C = 78
+# HP-Dauerbetrieb (Ersatzheizung bei WP-Defekt): zeitlich begrenzt, in .infra.local
+# editierbar. Default 8 h, Hard-Cap 24 h. Laeuft bewusst auch aus dem Netz und bei
+# niedrigem SOC; nur Uebertemperatur (78 C), ein WP-Lauf und die physische
+# 35-A-Netzanschluss-Sicherung begrenzen ihn.
+STEUERBOX_HP_DAUERBETRIEB_MAX_S = int(load_local_setting('PV_STEUERBOX_HP_DAUERBETRIEB_MAX_S', '86400'))
+STEUERBOX_HP_DAUERBETRIEB_DEFAULT_S = min(
+    int(load_local_setting('PV_STEUERBOX_HP_DAUERBETRIEB_DEFAULT_S', '28800')),
+    STEUERBOX_HP_DAUERBETRIEB_MAX_S,
+)
 
 # --- Optionale HA MQTT Bridge (Adapter zwischen B und E) ---
 HA_BRIDGE_ENABLED = _as_bool(load_local_setting('PV_HA_BRIDGE_ENABLED', '0'))
