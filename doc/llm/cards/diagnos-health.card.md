@@ -20,6 +20,7 @@ Read-only Zustandspruefung fuer Host, Services und Datenfrische. Liefert eine sc
 - **Systemd-Pfade:** `diagnos/health.py:check_pv_unit_working_directories` (installierte `pv-*.service` Units mit fehlendem `WorkingDirectory` melden)
 - **Freshness:** `diagnos/health.py:check_freshness`
 - **Mirror/Backup:** `diagnos/health.py:check_mirror_sync_age`, `check_local_gfs_backup_age`
+- **Auxiliary-Hosts:** `diagnos/health.py:check_auxiliary_hosts` (nur Primary; Kueche/Tech per TCP-Connect auf SSH-Port erreichbar? → CRIT bei down)
 - **Mail-Bereitschaft:** `diagnos/health.py:check_notification_ready` (SMTP-Credential vorhanden?)
 - **Fritz!DECT-Frische:** `diagnos/health.py:check_fritzdect_freshness` (Stale-Steckdose → Sunset-Hinweis)
 - **Log-Überlauf:** `diagnos/log_health.py:check_log_health` (persistente Wartungs-Logs; endlose Nachweis-CSV ausgenommen)
@@ -35,6 +36,7 @@ Read-only Zustandspruefung fuer Host, Services und Datenfrische. Liefert eine sc
 - Freshness-Schwellen werden zentral ueber `diagnos/config.py` gesteuert.
 - `mirror_sync_age` gilt nur fuer Rolle `failover`; auf `primary` wird bewusst `skipped` geliefert.
 - `notification_ready` prueft nur auf `primary` und meldet CRIT, wenn SMTP-User+Events konfiguriert sind, aber `/etc/pv-system/smtp_pass.key` fehlt.
+- `auxiliary_hosts` prueft nur auf `primary` die Erreichbarkeit der Auxiliary-Hosts (Kueche=Kiosk/Longterm, Tech=WP/NQ) via TCP-Connect (SSH-Port); ein down-Host ist CRIT und loest ueber den Health-Sofortpfad eine Alarm-Mail aus. Ohne Konfiguration `skipped`.
 - Installierte `pv-*.service` Units duerfen kein fehlendes `WorkingDirectory` referenzieren; Pfaddrift wird als CRIT sichtbar.
 
 ## No-Gos

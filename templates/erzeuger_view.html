@@ -510,8 +510,9 @@
                         const totalPower = Number.isFinite(d.p_gesamt) ? d.p_gesamt : ((d.p_f1 || 0) + (d.p_f2 || 0) + (d.p_f3 || 0));
                         html += `<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>`;
                         html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.gesamt};border-radius:2px;margin-right:5px;"></span><strong>Gesamt: ${formatPowerKw(totalPower)}</strong>`;
-                        if (tagExtremes && window.PVExtremes) {
-                            const tl = PVExtremes.tagLines(tagExtremes);
+                        if (window.PVExtremes) {
+                            const peakOv = (peakIdx >= 0 && peakVal > 0) ? { kw: peakVal / 1000, label: allTimes[peakIdx] } : undefined;
+                            const tl = PVExtremes.tagLines(tagExtremes, { powerOverride: peakOv, powerName: 'Peak-Leistung' });
                             if (tl) html += `<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>` + tl;
                         }
                         return html;

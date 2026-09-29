@@ -1497,8 +1497,9 @@
             };
         }
         
-        // Shared tooltip for time-axis charts
-        function getTimeTooltip() {
+        // Shared tooltip for time-axis charts. peakOpts {powerOverride,powerName}
+        // ersetzt die Peak-Zeile durch den gezeichneten Marker-Wert (Anzeige==Marker).
+        function getTimeTooltip(peakOpts) {
             return {
                 trigger: 'axis',
                 axisPointer: { type: 'cross' },
@@ -1515,8 +1516,8 @@
                         else if (item.seriesName === 'Bewölkung') unit = ' %';
                         result += item.marker + ' ' + item.seriesName + ': ' + (item.value[1] || 0).toFixed(0) + unit + '<br/>';
                     });
-                    if (tagExtremes && window.PVExtremes) {
-                        const tl = PVExtremes.tagLines(tagExtremes);
+                    if (window.PVExtremes) {
+                        const tl = PVExtremes.tagLines(tagExtremes, peakOpts || undefined);
                         if (tl) result += '<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>' + tl;
                     }
                     return result;
@@ -1717,7 +1718,9 @@
             const mobile = isMobile();
             const compactEmbed = isCompactEmbed();
             const option = {
-                tooltip: getTimeTooltip(),
+                tooltip: getTimeTooltip((peakTsMs != null && peakVal > 0)
+                    ? { powerOverride: { kw: peakVal / 1000, label: new Date(peakTsMs).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) }, powerName: 'Peak-Leistung' }
+                    : undefined),
                 legend: {
                     type: compactEmbed ? 'scroll' : 'plain',
                     bottom: 0,
@@ -1955,7 +1958,9 @@
             const mobile = isMobile();
             const compactEmbed = isCompactEmbed();
             const option = {
-                tooltip: getTimeTooltip(),
+                tooltip: getTimeTooltip((vPeakTsMs != null && vPeakVal > 0)
+                    ? { powerOverride: { kw: vPeakVal / 1000, label: new Date(vPeakTsMs).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) }, powerName: 'Peak-Verbrauch' }
+                    : undefined),
                 legend: {
                     type: compactEmbed ? 'scroll' : 'plain',
                     bottom: 0,

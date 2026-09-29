@@ -546,6 +546,7 @@ class EventNotifier:
           - throttle           (CRIT — Unterspannung aktiv)
           - disk_root          (CRIT — kein Platz)
           - service:*          (CRIT/FAIL — wichtige Dienste tot)
+          - auxiliary_hosts    (CRIT — Kueche/Tech nicht erreichbar)
 
         WARN-Stufen kommen weiter via Sunset-Mail mit Diff-Filter — die
         sind nicht zeitkritisch genug für einen Sofortalarm.
@@ -577,7 +578,7 @@ class EventNotifier:
             # Whitelist: nur die Checks, deren Sofortpfad fachlich
             # gerechtfertigt ist (Hardware-/Hostprobleme, tote Services).
             if not (
-                name in ('cpu_temp', 'throttle', 'disk_root')
+                name in ('cpu_temp', 'throttle', 'disk_root', 'auxiliary_hosts')
                 or name.startswith('service:')
             ):
                 continue
@@ -604,6 +605,8 @@ class EventNotifier:
             unit = name.split(':', 1)[1]
             state = check.get('active_state') or check.get('error') or '?'
             text = f"Service {unit} {sev_label}: {state}"
+        elif name == 'auxiliary_hosts':
+            text = check.get('error') or f"Auxiliary-Host {sev_label}"
         else:
             text = f"{name} {sev_label}"
 

@@ -420,6 +420,74 @@ def check_local_gfs_backup_age() -> dict:
         return {'check': 'backup_local_gfs_daily', 'severity': FAIL, 'error': str(exc)}
 
 
+# ═══════════════════════════════════════════════════════════
+# Auxiliary-Hosts (Kiosk/Longterm = Kueche, WP-Bridge/NQ = Tech)
+# ═══════════════════════════════════════════════════════════
+# Nur der Primary prueft aktiv: dort laeuft der Sofort-Alarm (event_notifier).
+# Ein heruntergefahrener Kueche-/Tech-Host bliebe sonst unbemerkt — der
+# Longterm-Offload ueberspringt sich still, und Diagnos laeuft je Host lokal.
+AUX_HOST_SSH_PORT = 22
+AUX_HOST_PROBE_TIMEOUT_S = 3
+
+
+def _aux_hosts_from_config() -> List[tuple]:
+    """(name, host) der konfigurierten Auxiliary-Hosts; [] wenn nichts gesetzt."""
+    hosts: List[tuple] = []
+    try:
+        import config as app_config
+    except Exception:
+        return hosts
+    # Kueche: PV_KUECHE_HOST ist 'user@ip' -> nur den Host-Teil proben.
+    kueche = (getattr(app_config, 'KUECHE_HOST', '') or '').strip()
+    if kueche:
+        hosts.append(('kueche', kueche.split('@')[-1]))
+    # Tech: eigene IP (NQ-Collector/WP-Bridge).
+    tech = (getattr(app_config, 'NQ_TECH_IP', '') or '').strip()
+    if tech:
+        hosts.append(('tech', tech))
+    return hosts
+
+
+def _tcp_reachable(host: str, port: int, timeout: float) -> bool:
+    """True, wenn ein TCP-Connect gelingt (SSH-Port; UFW laesst SSH zu, ICMP evtl. nicht)."""
+    import socket
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def check_auxiliary_hosts() -> dict:
+    """Erreichbarkeit der Auxiliary-Hosts (Kueche/Tech) — nur auf Primary.
+
+    Schliesst die Luecke, dass ein heruntergefahrener Kiosk-/Longterm-Host
+    (Kueche) oder die WP-Bridge/NQ (Tech) unbemerkt bleibt: der
+    Longterm-Offload ueberspringt sich still, Diagnos laeuft je Host lokal.
+    Erreichbarkeit via TCP-Connect auf den SSH-Port; ein nicht erreichbarer
+    Host ist CRIT und loest ueber den Health-Sofortpfad eine Alarm-Mail aus.
+    """
+    role = _read_role()
+    if role != 'primary':
+        return {'check': 'auxiliary_hosts', 'role': role, 'severity': OK,
+                'skipped': True, 'detail': 'nur auf primary relevant'}
+    hosts = _aux_hosts_from_config()
+    if not hosts:
+        return {'check': 'auxiliary_hosts', 'severity': OK, 'skipped': True,
+                'detail': 'keine Auxiliary-Hosts konfiguriert'}
+    states = {}
+    unreachable = []
+    for name, host in hosts:
+        ok = _tcp_reachable(host, AUX_HOST_SSH_PORT, AUX_HOST_PROBE_TIMEOUT_S)
+        states[name] = 'up' if ok else 'down'
+        if not ok:
+            unreachable.append(name)
+    if unreachable:
+        return {'check': 'auxiliary_hosts', 'severity': CRIT, 'states': states,
+                'error': 'Auxiliary-Host nicht erreichbar: ' + ', '.join(sorted(unreachable))}
+    return {'check': 'auxiliary_hosts', 'severity': OK, 'states': states}
+
+
 # Machine-ID-gebundenes SMTP-Credential (Quelle: credential_store.STORE_DIR).
 # Pfad hier bewusst hartkodiert, damit Schicht D unabhängig von Schicht C bleibt.
 _SMTP_CRED_PATH = '/etc/pv-system/smtp_pass.key'
@@ -548,6 +616,9 @@ def run_all() -> dict:
     # Backup / Failover-Mirror
     checks.append(check_mirror_sync_age())
     checks.append(check_local_gfs_backup_age())
+
+    # Auxiliary-Hosts erreichbar (nur Primary): Kueche (Kiosk/Longterm), Tech (WP/NQ)
+    checks.append(check_auxiliary_hosts())
 
     # Benachrichtigung sende-bereit (Credential vorhanden?)
     checks.append(check_notification_ready())

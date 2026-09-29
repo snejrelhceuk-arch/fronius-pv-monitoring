@@ -182,6 +182,11 @@ FAILOVER_IP = load_local_setting('PV_FAILOVER_IP', '192.0.2.195')
 FAILOVER_USER = load_local_setting('PV_FAILOVER_USER', 'failover-user')
 FAILOVER_PV_BASE = load_local_setting('PV_FAILOVER_PV_BASE', '/srv/pv-system')
 
+# --- Auxiliary-Hosts (kein Kern-Dienst, aber Teil des PV-Systems) ---
+# Kueche: Kiosk-Display + Longterm-GFS-Archiv (Offload von Pi5-FB). Format 'user@ip'.
+# Von Diagnos (Primary) auf Erreichbarkeit geprueft; Tech nutzt NQ_TECH_IP.
+KUECHE_HOST = load_local_setting('PV_KUECHE_HOST', '')
+
 # --- Wärmepumpe (WP) Modbus-Transport ---
 # Rolle C spricht die WP (Dimplex) an. Backend 'local' = direktes RS485/tty auf
 # diesem Host (Bridge-Host Pi4-Tech). Backend 'remote' = HTTP an die Pi4-Tech

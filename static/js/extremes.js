@@ -60,15 +60,20 @@
     }
 
     // Tages-Extremwerte (Peak + Spannung/Frequenz mit Uhrzeit).
+    // opts.powerOverride {kw,label} + opts.powerName ersetzen die Peak-Zeile durch
+    // den im Chart gezeichneten Marker-Wert (Anzeige == Marker); V/f bleiben Server.
     function tagLines(overall, opts) {
         opts = opts || {};
         var mobile = opts.mobile != null ? opts.mobile : isMobile();
-        if (!overall) return '';
+        var power = opts.powerOverride || (overall && overall.power);
+        var powerName = opts.powerName || 'Peak-Leistung';
         var out = [];
-        if (overall.power) out.push('Peak-Leistung: ' + de(overall.power.kw, 2) + ' kW' + lbl(overall.power.label));
-        var v = rangeLine('Spannung', overall.voltage, 'V', mobile ? 0 : 1, mobile);
-        var f = rangeLine('Frequenz', overall.frequency, 'Hz', mobile ? 2 : 3, mobile);
-        [v, f].forEach(function (x) { if (x) out.push(x); });
+        if (power) out.push(powerName + ': ' + de(power.kw, 2) + ' kW' + lbl(power.label));
+        if (overall) {
+            var v = rangeLine('Spannung', overall.voltage, 'V', mobile ? 0 : 1, mobile);
+            var f = rangeLine('Frequenz', overall.frequency, 'Hz', mobile ? 2 : 3, mobile);
+            [v, f].forEach(function (x) { if (x) out.push(x); });
+        }
         if (!out.length) return '';
         return out.join('<br/>');
     }

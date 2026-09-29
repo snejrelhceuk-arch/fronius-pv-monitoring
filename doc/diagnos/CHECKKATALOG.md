@@ -18,6 +18,7 @@ Gesamtseverity je Lauf ist stets die schlechteste Einzelseverity.
 | `freshness:<tabelle>` | Alter des letzten Eintrags (raw_data/data_1min/data_15min/daily_data) | `FRESHNESS_TABLES` | — |
 | `mirror_sync_age` | Alter des Failover-Mirror-Markers | 15 / 30 min (**nur failover**) | — |
 | `backup_local_gfs_daily` | Alter des jüngsten lokalen GFS-Daily | 30 / 48 h | — |
+| `auxiliary_hosts` | Kueche/Tech erreichbar (nur primary) | down → crit | ja (crit) |
 | `notification_ready` | SMTP-Credential vorhanden (nur primary) | fehlt → crit | — |
 | `fritzdect_freshness` | Messsteckdosen liefern frisch (nur primary) | Stale > 1 h → warn | — |
 | `log_health` | Überlauf persistenter Logs | 50 / 200 MB (endlose CSV ausgenommen) | — |

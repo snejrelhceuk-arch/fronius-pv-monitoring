@@ -41,6 +41,3 @@
 - [ ] P3: Hotspot-Dateien nur risikogetrieben zerlegen; vor Aenderungen an grossen Regel-/Routenmodulen passende Charakterisierungstests ergaenzen.
 
 ### User
-- [ ] Peak-Leistung: Anzeige in Monitoring/Verbraucher stimmt nicht mit dem Marker überein (29.09.2026)
-- [ ] "P-Max WP" Button und Grafik im Button überarbeiten: "§14a-WP"? Grafik entfernen! oder "WP§14a"? Oder "WP §14a"? Was ist professioneller?
-- [ ] Pi4 Küche war 29.09.26 down (ich hatte ihn am 28. mal heruntergefahren.) Warum habe ich keine Fehlermeldung erhalten? Der gehört zum pv-system und hat eine Backup-Funktion, die ggf. nicht auffiel, weil dort nur Langfrist-Backups abgelegt werden. Diagnos hätte aber reagieren müssen.
