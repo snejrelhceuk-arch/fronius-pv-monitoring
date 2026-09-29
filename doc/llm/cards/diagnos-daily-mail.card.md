@@ -5,7 +5,7 @@ role: D
 applyTo: "automation/engine/event_notifier.py,automation/engine/notify/report_format.py"
 tags: [mail, tagesbericht, energie, smtp, credential, alarm]
 status: stable
-last_review: 2026-09-03
+last_review: 2026-09-29
 ---
 
 # Diagnos Daily-Mail
@@ -14,15 +14,18 @@ last_review: 2026-09-03
 Die „tägliche Mail" ist der **Tagesbericht**: ein reiner Energie-Auszug, ausgelöst
 um **00:00** (Tageswechsel) vom Automation-Daemon, für den **abgelaufenen
 Kalendertag** (00:00→00:00). Vier Abschnitte — **Tag / Monat / Jahr / Gesamt** —
-mit je 5 Kernwerten (Erzeugung, Verbrauch, Netzbezug, Einspeisung, Batterie);
-im Tag zusätzlich **Stresszeit-%** (SOC außerhalb Komfortband) und **Verbraucher**
+mit je Energiebilanz (Erzeugung/Verbrauch, Netzbezug/Einspeisung, Batterie
+Ladung/Entladung — paarweise nebeneinander, Schrägstrich-getrennt) plus den
+Kennzahlen **Autarkie** (= (Verbrauch − Netzbezug)/Verbrauch) und
+**Eigenverbrauch** (= (Erzeugung − Einspeisung)/Erzeugung); im Tag zusätzlich
+**Stresszeit-%** (SOC außerhalb Komfortband) und **Verbraucher**
 (WP/HP/Wattpilot/Haushalt). **Keine** Health-/Integrity-/NQ-/Warn-Inhalte —
 Systemfehler laufen über die separaten Sofort-Alarme (dieselbe SMTP-Infrastruktur).
 
 ## Code-Anchor
 - **Bericht + Versand:** `automation/engine/event_notifier.py:sende_tagesbericht`, `_sende_tagesbericht_mail`
 - **Datensammlung:** `automation/engine/event_notifier.py:_sammle_tagesdaten` (daily_data + yearly_statistics; hourly_data-Fallback; Stresszeit aus data_1min; Verbraucher aus heizpatrone_daily/wattpilot_daily)
-- **Textformatierung:** `automation/engine/notify/report_format.py:tagesbericht` (4 Abschnitte, 5 Kernwerte)
+- **Textformatierung:** `automation/engine/notify/report_format.py:tagesbericht` (4 Abschnitte; kompakte Bilanz paarweise nebeneinander plus Autarkie/Eigenverbrauch via `report_format.py:_bilanz_zeilen` + `report_format.py:_quote`)
 - **Trigger (00:00):** `automation/engine/automation_daemon.py` (Aufruf alle 5 min gedrosselt; Dedup + Reife-Gate steuern Fälligkeit; SMTP-Fehler löst keinen Wiederhol-Sturm aus)
 - **Sofort-Alarme (getrennt):** `automation/engine/event_notifier.py:pruefe_health_alarme`, `pruefe_integrity_alarme`, `_sende_diagnos_alarm`
 - **Statusdateien (entkoppelt):** `automation/engine/event_notifier.py:_aktualisiere_statusdateien` → `diagnos/status_report.py:write_status_reports`

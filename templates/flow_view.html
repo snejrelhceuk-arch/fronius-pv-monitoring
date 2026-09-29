@@ -60,9 +60,9 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            font-size: 12.5px;
+            font-size: 13.5px;
             font-style: italic;
-            color: rgba(226, 232, 240, 0.60);
+            color: rgba(226, 232, 240, 0.85);
             letter-spacing: 0.2px;
             padding-left: 2px;
         }
@@ -2097,12 +2097,18 @@
         var h = new Date().getHours();
         var greet = h < 5 ? 'Gute Nacht' : h < 11 ? 'Guten Morgen'
             : h < 17 ? 'Guten Tag' : h < 22 ? 'Guten Abend' : 'Gute Nacht';
-        var q = d && d.pv_forecast_quality;
         var emoji = (d && d.pv_forecast_emoji) || '';
-        var phrase = '', shortPhrase = '';
-        if (q === 'gut') { phrase = 'viel Sonne erwartet'; shortPhrase = 'sonnig'; }
-        else if (q === 'mittel') { phrase = 'wechselhafter Tag'; shortPhrase = 'wechselhaft'; }
-        else if (q === 'schlecht') { phrase = 'wenig Sonne — bewusst verbrauchen'; shortPhrase = 'sparsam'; }
+        // Kontext-Phrase kommt aus dem Backend (routes/flow_greetings.py, editierbar).
+        // Fallback auf eine schlichte prognosebasierte Phrase, solange sie fehlt.
+        var q = d && d.pv_forecast_quality;
+        var phrase = (d && d.greeting) || '';
+        var shortPhrase = (d && d.greeting_short) || '';
+        if (!phrase) {
+            if (q === 'gut') { phrase = 'viel Sonne erwartet'; shortPhrase = shortPhrase || 'sonnig'; }
+            else if (q === 'mittel') { phrase = 'wechselhafter Tag'; shortPhrase = shortPhrase || 'wechselhaft'; }
+            else if (q === 'schlecht') { phrase = 'wenig Sonne — bewusst verbrauchen'; shortPhrase = shortPhrase || 'sparsam'; }
+        }
+        if (!shortPhrase) shortPhrase = phrase;
         var w = window.innerWidth, txt;
         if (w >= 900) txt = greet + ' Beerwalde' + (phrase ? ' · ' + phrase : '') + (emoji ? ' ' + emoji : '');
         else if (w >= 600) txt = greet + (shortPhrase ? ' · ' + shortPhrase : '') + (emoji ? ' ' + emoji : '');

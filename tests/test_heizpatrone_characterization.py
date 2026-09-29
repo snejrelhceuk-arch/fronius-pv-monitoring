@@ -109,6 +109,13 @@ SZENARIEN = [
     # zwischen Drain-Cap und Roh-Cap (78 °C). Score UND Aktion muessen AUS sein
     # (frueher lieferte erzeuge_aktionen kein hp_aus → stille Drift).
     ('ww_drain_cap_konsistent', 8.0, {'heizpatrone_aktiv': True, 'batt_soc_pct': 60, 'ww_temp_c': 60}),
+    # Ueberschuss-Override: HP EIN + EV-Konkurrenz + niedriger Forecast-Rest, aber
+    # Batterie nahe voll (SOC 90 / MAX 100) und kein Netzbezug → Ueberschuss
+    # traegt die HP → KEIN konkurrenz-AUS (Energie sonst abgeregelt).
+    ('konkurrenz_ev_ueberschuss_haelt', 12.0, {'heizpatrone_aktiv': True, 'batt_soc_pct': 90, 'soc_max': 100, 'ev_charging': True, 'ev_power_w': 7000, 'batt_power_w': 500, 'grid_power_w': 0, 'pv_total_w': 9000, 'forecast_rest_kwh': 20}),
+    # Gegenprobe: gleiche Konkurrenz, aber SOC 70 < ueberschuss_soc_hoch (85) →
+    # kein Ueberschuss-Override → konkurrenz-AUS bleibt (Batterieladung Vorrang).
+    ('konkurrenz_ev_ohne_ueberschuss_aus', 12.0, {'heizpatrone_aktiv': True, 'batt_soc_pct': 70, 'soc_max': 75, 'ev_charging': True, 'ev_power_w': 7000, 'batt_power_w': 500, 'grid_power_w': 0, 'forecast_rest_kwh': 20}),
 ]
 
 
@@ -117,11 +124,14 @@ def _run_one(name, hour, overrides, matrix_aktiv):
     _FixedDateTime._fixed = _dt.datetime(2026, 6, 29, int(hour), int(round((hour % 1) * 60)))
     orig_dt, orig_time = geraete.datetime, geraete.time
     orig_cancel = geraete.RegelHeizpatrone._cancel_conflicting_overrides
+    orig_logge = geraete.logge_extern
     geraete.datetime = _FixedDateTime
     geraete.time = _FakeTime()
     # DB-abhaengige Override-Annullation neutralisieren (host-/laufzeitunabh.)
     geraete.RegelHeizpatrone._cancel_conflicting_overrides = (
         lambda self, desired_state, geraet='hp': None)
+    # Schaltlog-Datei-Seiteneffekt der Extern-Erkennung neutralisieren.
+    geraete.logge_extern = lambda *a, **k: None
     try:
         matrix = copy.deepcopy(lade_matrix())
         matrix['regelkreise']['heizpatrone']['aktiv'] = matrix_aktiv
@@ -138,6 +148,7 @@ def _run_one(name, hour, overrides, matrix_aktiv):
         geraete.datetime = orig_dt
         geraete.time = orig_time
         geraete.RegelHeizpatrone._cancel_conflicting_overrides = orig_cancel
+        geraete.logge_extern = orig_logge
 
 
 # ── Multi-Tick State-Sequenz-Szenarien ───────────────────────
@@ -256,6 +267,18 @@ SEQ_SZENARIEN = [
         (300, {'wp_power_w': 800}),
         (360, {'wp_power_w': 800}),
     ]),
+    # Extern-Autoritaet vs. weiche WP-Koordinations-Caps: Bediener schaltet HP
+    # am Abend EIN (als Extern-EIN erkannt). WW 66 C liegt ueber dem Abend-Cap
+    # (65 C, WP-Koordination), aber unter der harten 78-C-Schwelle → HP bleibt
+    # EIN (weicher Cap ueberstimmt den Bediener NICHT). Erst WW 79 C (hart)
+    # schaltet doch ab — Sicherheitsschwelle bleibt zwingend.
+    ('extern_abend_ww_cap_haelt', 15.5, [
+        (0,  {'heizpatrone_aktiv': False, 'batt_soc_pct': 90, 'soc_max': 100,
+              'ww_temp_c': 66, 'pv_total_w': 1800, 'batt_power_w': 200}),
+        (60, {'heizpatrone_aktiv': True}),
+        (60, {}),
+        (60, {'ww_temp_c': 79}),
+    ]),
 ]
 
 
@@ -265,11 +288,14 @@ def _run_sequence(name, hour_start, ticks):
     _SEQ_CLOCK.set_hour(hour_start)
     orig_dt, orig_time = geraete.datetime, geraete.time
     orig_cancel = geraete.RegelHeizpatrone._cancel_conflicting_overrides
+    orig_logge = geraete.logge_extern
     geraete.datetime = _SeqDateTime
     geraete.time = _SeqTime()
     # DB-abhaengige Override-Annullation neutralisieren (host-/laufzeitunabh.)
     geraete.RegelHeizpatrone._cancel_conflicting_overrides = (
         lambda self, desired_state, geraet='hp': None)
+    # Schaltlog-Datei-Seiteneffekt der Extern-Erkennung neutralisieren.
+    geraete.logge_extern = lambda *a, **k: None
     ergebnisse = []
     try:
         matrix = copy.deepcopy(lade_matrix())
@@ -298,6 +324,7 @@ def _run_sequence(name, hour_start, ticks):
         geraete.datetime = orig_dt
         geraete.time = orig_time
         geraete.RegelHeizpatrone._cancel_conflicting_overrides = orig_cancel
+        geraete.logge_extern = orig_logge
 
 
 def erzeuge_snapshot() -> dict:

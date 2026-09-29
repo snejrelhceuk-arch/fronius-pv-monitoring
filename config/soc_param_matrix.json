@@ -906,6 +906,37 @@
           "einheit": "kWh",
           "beschreibung": "Nachmittags spät: größere Reserve für sichere Batterie-Volladung"
         },
+        "_ueberschuss_doc": "Momentan-Überschuss-Override: hält die HP bei nachweislichem PV-Überschuss (Batterie nahe voll, kein Netzbezug) auch bei Verbraucher-Konkurrenz (EV/WP) oder Nachmittags-Ladewunsch an — sonst ginge die Energie in die Abregelung. Der Netzbezug-Integral-Guard (aus_netzbezug_*) bleibt die eigentliche Schutzinstanz gegen echten Netzbezug.",
+        "ueberschuss_grid_bezug_max_w": {
+          "wert": 300,
+          "bereich": [
+            0,
+            1000
+          ],
+          "einheit": "W",
+          "obs_feld": "grid_power_w",
+          "beschreibung": "Überschuss-Override nur bei aktuellem Netzbezug unter diesem Wert (kein akuter Bezug)."
+        },
+        "ueberschuss_batt_entlade_tol_w": {
+          "wert": 300,
+          "bereich": [
+            0,
+            2000
+          ],
+          "einheit": "W",
+          "obs_feld": "batt_power_w",
+          "beschreibung": "Überschuss-Override nur wenn die Batterie nicht stärker als dieser Wert entlädt."
+        },
+        "ueberschuss_soc_hoch_pct": {
+          "wert": 85,
+          "bereich": [
+            70,
+            95
+          ],
+          "einheit": "%",
+          "obs_feld": "batt_soc_pct",
+          "beschreibung": "Überschuss-Override nur bei SOC über diesem Wert (Batterie nahe voll → Überschuss würde sonst abgeregelt; bei niedrigem SOC hat Batterieladung Vorrang)."
+        },
         "speicher_temp_max_c": {
           "wert": 78,
           "bereich": [

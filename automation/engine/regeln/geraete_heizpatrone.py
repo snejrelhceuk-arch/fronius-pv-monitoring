@@ -391,6 +391,43 @@ class RegelHeizpatrone(Regel):
                           f'(Ø {avg_w:.0f} W, aktuell {grid_current:.0f} W)')
         return False, ''
 
+    def _ueberschuss_traegt_hp(self, obs: ObsState,
+                               matrix: dict) -> tuple[bool, str]:
+        """Traegt der momentane PV-Ueberschuss die HP (ohne Netzbezug)?
+
+        Gegenstueck zum Netzbezug-Integral (`_netzbezug_aus_ausloesen`, die
+        eigentliche Schutzinstanz gegen *tatsaechlichen* Netzbezug): erkennt den
+        Fall, dass genug Momentan-Ueberschuss vorhanden ist, sodass die HP trotz
+        konkurrierender Grossverbraucher (EV/WP) bzw. trotz Nachmittags-
+        Ladewunsch NICHT hart abgeschaltet werden muss — sonst ginge die Energie
+        in die Abregelung.
+
+        Kriterien (alle erfuellt):
+          - kein akuter Netzbezug: grid_power_w < ueberschuss_grid_bezug_max_w
+          - Batterie nicht am Entladen:
+            batt_power_w >= -ueberschuss_batt_entlade_tol_w
+          - Batterie nahe voll: batt_soc_pct >= ueberschuss_soc_hoch_pct
+            (nur dann ist der Ueberschuss ueberzaehlig und wuerde sonst
+            abgeregelt; bei niedrigem SOC hat die Batterieladung Vorrang)
+
+        Returns (traegt, grund). Der Netzbezug-Integral-Guard bleibt Backstop.
+        """
+        grid = obs.grid_power_w
+        p_batt = obs.batt_power_w
+        soc = obs.batt_soc_pct
+        if grid is None or p_batt is None or soc is None:
+            return False, ''
+        grid_max = float(get_param(
+            matrix, self.regelkreis, 'ueberschuss_grid_bezug_max_w', 300))
+        entlade_tol = float(get_param(
+            matrix, self.regelkreis, 'ueberschuss_batt_entlade_tol_w', 300))
+        soc_hoch = float(get_param(
+            matrix, self.regelkreis, 'ueberschuss_soc_hoch_pct', 85))
+        if grid >= grid_max or p_batt < -entlade_tol or soc < soc_hoch:
+            return False, ''
+        return True, (f'Ueberschuss traegt HP: Netz {grid:.0f}W<{grid_max:.0f}W, '
+                      f'P_Batt {p_batt:.0f}W, SOC {soc:.0f}%>={soc_hoch:.0f}%')
+
     def _batt_entladung_toleriert(self, potenzial: str, soc_max_eff: int,
                                    obs: ObsState) -> bool:
         """Wird Batterie-Entladung toleriert (HP darf trotzdem laufen)?
@@ -504,17 +541,32 @@ class RegelHeizpatrone(Regel):
     # frueher aufgetretene stille Drift zwischen beiden Pfaden.
 
     def _ww_temp_aus_pruefen(self, obs: ObsState, matrix: dict,
-                             now_h: float) -> tuple[bool, str, str]:
+                             now_h: float,
+                             nur_hart_cap: bool = False) -> tuple[bool, str, str]:
         """WW-Temp-AUS-Entscheidung mit dynamischem WP-Koordinations-Cap.
 
         Nutzt `_dynamic_temp_max_c` fuer BEIDE Pfade (frueher: erzeuge_aktionen
         verglich gegen den Roh-Cap `speicher_temp_max_c` = 78 C, bewerte gegen
         den dynamischen Cap → Score/Aktion drifteten im Drain-/Abend-Fenster).
 
+        `nur_hart_cap=True` blendet die weichen WP-Koordinations-Caps
+        (drain/abend) aus und prueft nur die harte Sicherheitsschwelle
+        `speicher_temp_max_c` (78 C). Damit ueberstimmt die WP-Koordination
+        keine explizite Nutzer-/Operator-Autoritaet (manueller HP-EIN oder
+        Steuerbox-Override, beide als Extern-EIN erkannt): der Bediener darf den
+        WW-Speicher bewusst ueber die Abend-/Drain-Grenze aufheizen (z. B. bei
+        WP-Defekt, HP als Ersatzheizung); nur die harte 78-C-Grenze (nahe dem
+        mechanischen Thermostat ~72 C) bleibt zwingend.
+
         Returns: (ist_aus, grund, temp_max_grund) mit
                  temp_max_grund ∈ {'hart','drain','abend'}.
         """
-        temp_max, temp_max_grund = self._dynamic_temp_max_c(obs, matrix, now_h)
+        if nur_hart_cap:
+            temp_max = float(get_param(
+                matrix, self.regelkreis, 'speicher_temp_max_c', 78))
+            temp_max_grund = 'hart'
+        else:
+            temp_max, temp_max_grund = self._dynamic_temp_max_c(obs, matrix, now_h)
         if obs.ww_temp_c is not None and obs.ww_temp_c >= temp_max:
             grund = (f'HART: Übertemperatur ({obs.ww_temp_c:.0f}°C ≥ '
                      f'{temp_max:.0f}°C)')
@@ -583,8 +635,14 @@ class RegelHeizpatrone(Regel):
                 return 'entladung', (f'Batterie entlädt ({p_batt:.0f}W) '
                                      f'bei Potenzial={potenzial}, SOC_MAX={soc_max_eff}%')
         if not self._hp_parallel_erlaubt(potenzial, wp_aktiv, ev_aktiv):
-            return 'konkurrenz', (f'Verbraucher-Konkurrenz: Potenzial={potenzial}, '
-                                  f'WP={wp_aktiv}, EV={ev_aktiv}')
+            # Verbraucher-Konkurrenz ist ein *praediktiver* Block (Forecast-Rest
+            # niedrig + Grossverbraucher). Traegt der momentane PV-Ueberschuss
+            # die HP aber nachweislich (Batt nahe voll, kein Netzbezug), nicht
+            # hart abschalten — das Netzbezug-Integral unten bleibt die
+            # eigentliche Schutzinstanz gegen echten Netzbezug.
+            if not self._ueberschuss_traegt_hp(obs, matrix)[0]:
+                return 'konkurrenz', (f'Verbraucher-Konkurrenz: Potenzial={potenzial}, '
+                                      f'WP={wp_aktiv}, EV={ev_aktiv}')
         self._grid_avg(obs)  # Side-Effect: Historie pflegen
         aus_ausloesen, netz_grund = self._netzbezug_aus_ausloesen(obs, matrix)
         if aus_ausloesen:
@@ -820,9 +878,13 @@ class RegelHeizpatrone(Regel):
             if soc_now < max(0, target_soc - 1):
                 # HP nur sperren wenn Batterie aktiv laedt UND Ladeleistung < 8 kW.
                 # Bei starker Ladung (>=8 kW) reicht PV fuer beide; bei fehlender
-                # Ladung (Batterie entlaedt oder idle) ist kein Konflik vorhanden.
+                # Ladung (Batterie entlaedt oder idle) ist kein Konflikt vorhanden.
+                # Ausnahme: momentaner PV-Ueberschuss traegt die HP bereits (Batt
+                # nahe voll, kein Netzbezug) — dann nicht abschalten, sonst ginge
+                # die Energie in die Abregelung (Nachmittags-Ladewunsch-Fall).
                 batt_w = obs.batt_power_w
-                if batt_w is not None and 0 < batt_w < 8000:
+                if (batt_w is not None and 0 < batt_w < 8000
+                        and not self._ueberschuss_traegt_hp(obs, matrix)[0]):
                     if obs.heizpatrone_aktiv:
                         return int(score * 1.6)
                     return 0
@@ -832,10 +894,16 @@ class RegelHeizpatrone(Regel):
             min_rest_h = get_param(matrix, self.regelkreis, 'min_rest_h', 2.0)
             soc_schutz_abs = SOC_SCHUTZ_ABS_PCT
 
-            # ── HARTE Kriterien: IMMER sofort, auch bei Extern ──
+            # ── HARTE Kriterien: IMMER sofort ──
+            # Bei manueller/Operator-Autoritaet (ist_extern: manueller HP-EIN
+            # ODER Steuerbox-Override, beide als Extern-EIN erkannt) gelten NUR
+            # die harte 78-C-Sicherheitsschwelle und die SOC-Floors — die
+            # weichen WP-Koordinations-Caps (drain/abend) ueberstimmen den
+            # Bediener nicht (WP-Defekt-Fall: HP als Ersatzheizung ueber 65 C).
             if obs.ww_temp_c is not None:
                 self._ww_temp_letzte_gueltig = time.time()
-                ww_aus, ww_grund, _ = self._ww_temp_aus_pruefen(obs, matrix, now_h)
+                ww_aus, ww_grund, _ = self._ww_temp_aus_pruefen(
+                    obs, matrix, now_h, nur_hart_cap=ist_extern)
                 if ww_aus:
                     LOG.info('HP-AUS: %s', ww_grund)
                     return int(score * 1.5)
@@ -1021,8 +1089,11 @@ class RegelHeizpatrone(Regel):
         if intent and bool(intent.get('pause_hp_until_target', False)):
             target_soc = int(intent.get('target_soc_pct', 100))
             if soc < max(0, target_soc - 1):
-                # HP nur abschalten wenn Batterie aktiv laedt UND Ladeleistung < 8 kW.
-                if 0 < p_batt < 8000:
+                # HP nur abschalten wenn Batterie aktiv laedt UND Ladeleistung < 8 kW
+                # UND kein momentaner PV-Ueberschuss die HP bereits traegt (Batt
+                # nahe voll + kein Netzbezug → Energie sonst abgeregelt).
+                if (0 < p_batt < 8000
+                        and not self._ueberschuss_traegt_hp(obs, matrix)[0]):
                     if obs.heizpatrone_aktiv:
                         remaining_min = int(intent.get('respekt_remaining_s', 0)) // 60
                         self._letzte_aus = time.time()
@@ -1057,8 +1128,12 @@ class RegelHeizpatrone(Regel):
                           and (time.time() - self._extern_ein_ts) < extern_respekt)
             soc_schutz_abs = SOC_SCHUTZ_ABS_PCT
 
-            # ── HARTE Kriterien: IMMER sofort (dynamischer WP-Koordinations-Cap) ──
-            ww_aus, ww_grund, _ = self._ww_temp_aus_pruefen(obs, matrix, now_h)
+            # ── HARTE Kriterien: IMMER sofort ──
+            # Bei manueller/Operator-Autoritaet (ist_extern) nur die harte
+            # 78-C-Schwelle; die weichen WP-Koordinations-Caps (drain/abend)
+            # ueberstimmen den Bediener nicht (s. bewerte()).
+            ww_aus, ww_grund, _ = self._ww_temp_aus_pruefen(
+                obs, matrix, now_h, nur_hart_cap=ist_extern)
             if ww_aus:
                 aus_grund = ww_grund
                 should_cancel_override = True

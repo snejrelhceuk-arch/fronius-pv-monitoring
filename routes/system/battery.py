@@ -11,7 +11,7 @@ import logging
 import os
 import sqlite3
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from flask import jsonify
@@ -54,6 +54,117 @@ def _build_battery_status_result(now, api):
     _fetch_bms_counters(now, result)
     _fetch_soh(result)
     return result
+
+
+def _greeting_num(val, dez=0):
+    """Kennzahl als knapper String (Standard: ganzzahlig gerundet)."""
+    try:
+        if dez <= 0:
+            return str(int(round(float(val))))
+        return f'{float(val):.{dez}f}'
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_sunset_hour(val):
+    """Sonnenuntergang ('YYYY-MM-DDTHH:MM' oder 'HH:MM') → Dezimalstunde."""
+    try:
+        s = str(val)
+        if 'T' in s:
+            s = s.split('T', 1)[1]
+        teile = s.split(':')
+        return int(teile[0]) + int(teile[1]) / 60.0
+    except (TypeError, ValueError, IndexError):
+        return None
+
+
+def _remaining_harvest_kwh(target_date, now_ts, ratio_pct):
+    """Grobschätzung der Rest-Ernte ab jetzt: Clear-Sky-Rest × Prognose-Ratio."""
+    try:
+        from solar_geometry import get_clearsky_day_curve
+        curve = get_clearsky_day_curve(target_date, interval_min=15)
+        if not curve:
+            return None
+        wh = 0.0
+        for p in curve:
+            if p.get('timestamp', 0) >= now_ts:
+                wh += max(0.0, float(p.get('total_ac', 0) or 0)) * 0.25
+        cs_rest = wh / 1000.0
+        frac = (ratio_pct / 100.0) if ratio_pct else 1.0
+        rest = cs_rest * frac
+        return round(rest, 1) if rest > 0.05 else 0.0
+    except Exception:
+        return None
+
+
+def _apply_greeting(now, result):
+    """Kontextbezogene Begrüßungs-Phrase setzen (Bausteine: routes/flow_greetings.py)."""
+    try:
+        from routes import flow_greetings
+        from routes.helpers import get_forecast, get_stored_forecast
+
+        now_dt = datetime.now()
+        now_h = now_dt.hour + now_dt.minute / 60.0
+        today = date.today()
+
+        today_q = result.get('pv_forecast_quality')
+        today_kwh = result.get('pv_forecast_expected_kwh')
+        ratio_pct = result.get('pv_forecast_ratio_pct')
+
+        forecast = get_forecast()
+        day_fc = forecast.get_day_forecast(today) if forecast else None
+        if not day_fc:
+            day_fc = get_stored_forecast(today.isoformat())
+        sunset_h = _parse_sunset_hour(day_fc.get('sunset')) if day_fc else None
+
+        tomorrow = today + timedelta(days=1)
+        tm_fc = forecast.get_day_forecast(tomorrow) if forecast else None
+        if not tm_fc:
+            tm_fc = get_stored_forecast(tomorrow.isoformat())
+        morgen_kwh = tm_fc.get('expected_kwh') if tm_fc else None
+        morgen_q = tm_fc.get('quality') if tm_fc else None
+
+        rest_kwh = _remaining_harvest_kwh(today, now, ratio_pct)
+
+        soc = result.get('current_soc')
+        soc_max = result.get('soc_max')
+
+        lage = None
+        if isinstance(soc, (int, float)):
+            grenze = (min(100, soc_max) - 3) if isinstance(soc_max, (int, float)) else 95
+            if soc >= grenze:
+                lage = 'akku_voll'
+            elif soc <= 20:
+                lage = 'akku_leer'
+
+        ctx = {
+            'period': flow_greetings.period_of(now_h, sunset_h),
+            'today_quality': today_q,
+            'lage': lage,
+            '_bucket': int(now // 900),  # 15-Min-Bucket → Variety ohne Flackern
+        }
+        kwh_s = _greeting_num(today_kwh)
+        if kwh_s is not None:
+            ctx['kwh'] = kwh_s
+        morgen_s = _greeting_num(morgen_kwh)
+        if morgen_s is not None:
+            ctx['morgen_kwh'] = morgen_s
+        if morgen_q:
+            ctx['morgen_qual'] = {'gut': 'sonnig', 'mittel': 'wechselhaft',
+                                  'schlecht': 'trüb'}.get(morgen_q, morgen_q)
+        rest_s = _greeting_num(rest_kwh)
+        if rest_s is not None:
+            ctx['rest_kwh'] = rest_s
+        soc_s = _greeting_num(soc)
+        if soc_s is not None:
+            ctx['soc'] = soc_s
+
+        g = flow_greetings.build_greeting(ctx)
+        if g:
+            result['greeting'] = g.get('full')
+            result['greeting_short'] = g.get('short')
+    except Exception as e:
+        logging.debug(f"Greeting-Kontext nicht verfügbar: {e}")
 
 
 def _build_flow_status_result(now, api):
@@ -125,6 +236,7 @@ def _build_flow_status_result(now, api):
     except Exception as e:
         logging.warning(f"PV-Prognose-Emoji konnte nicht geladen werden: {e}")
 
+    _apply_greeting(now, result)
     return result
 
 

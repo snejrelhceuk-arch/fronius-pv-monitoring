@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/regeln/geraete_heizpatrone.py"
 tags: [heizpatrone, fritzdect, ww-speicher, prognose]
 status: stable
-last_review: 2026-09-28
+last_review: 2026-09-29
 ---
 
 # Regel Heizpatrone
@@ -21,6 +21,8 @@ Zusätzlich pausiert die Regel bei aktivem `afternoon_charge_request` den HP-Bet
 - **WP-Koordinations-Cap:** `automation/engine/regeln/geraete_heizpatrone.py:RegelHeizpatrone._dynamic_temp_max_c`
 - **Gemeinsame AUS-Entscheidung (Single-Source für Score + Aktion):** `automation/engine/regeln/geraete_heizpatrone.py:RegelHeizpatrone._aus_kontext_pruefen` — zusammen mit `_ww_temp_aus_pruefen` (dyn. Cap), `_phase4_aus_pruefen`, `_phase0_haushalt_netto`; von `bewerte()` (Score) UND `erzeuge_aktionen()` (Aktion) genutzt.
 - **Gemeinsame EIN-Entscheidung (Single-Source für Score + Aktion):** `automation/engine/regeln/geraete_heizpatrone.py:RegelHeizpatrone._ein_entscheidung` — liefert Phase (0/1/1b/2/4), Burst-Dauer, Score-Gewicht sowie Probe-/Drain-Flag; von `bewerte()` (Score) UND `erzeuge_aktionen()` (Aktion/Zustand) genutzt.
+- **Momentan-Überschuss-Override (Konkurrenz/Ladewunsch):** `automation/engine/regeln/geraete_heizpatrone.py:RegelHeizpatrone._ueberschuss_traegt_hp`
+- **WW-Temp-AUS (weiche Caps weichen der Autorität):** `automation/engine/regeln/geraete_heizpatrone.py:RegelHeizpatrone._ww_temp_aus_pruefen`
 - **Aktor:** `automation/engine/aktoren/aktor_fritzdect.py:AktorFritzDECT.ausfuehren` (Kommando `hp_ein`/`hp_aus`)
 - **Matrix:** `config/soc_param_matrix.json` Regelkreis `heizpatrone`
 - **AIN-Mapping:** `config/fritz_config.json`
@@ -41,6 +43,7 @@ Zusätzlich pausiert die Regel bei aktivem `afternoon_charge_request` den HP-Bet
   - `<= abend_ww_cap_aktiv_vor_sunset_h` vor Sunset → Cap = `abend_ww_temp_c` (Default 65 °C, Bereich 60–70).
   - Sonst → Hart-Cap `speicher_temp_max_c` (78 °C).
   Wirkt **sowohl AUS-Pfad als auch EIN-Pfad**; Phasen-Reihenfolge, Score, Forecast-Bedingungen, Netzbezug-Integral, ExternalRespect bleiben unberührt.
+  - **Weiche Caps weichen der Autorität:** Bei manueller/Operator-Autorität (`ist_extern` — manueller HP-EIN *oder* Steuerbox-`hp_toggle(on)`, beide als Extern-EIN erkannt) prüft `_ww_temp_aus_pruefen(nur_hart_cap=True)` **nur** die harte Schwelle `speicher_temp_max_c` (78 °C). Die weichen drain/abend-Caps schalten dann **nicht** ab und cancellen die Override **nicht** — der Bediener darf den WW-Speicher bewusst über die Abend-/Drain-Grenze aufheizen (z. B. bei WP-Defekt, HP als Ersatzheizung). Nur die 78-°C-Schwelle (nahe mechanischem Thermostat ~72 °C) bleibt zwingend.
 - **Netzbezug-AUS (`_netzbezug_aus_ausloesen`, seit 2026-05-16, Vorfall »3 h Netzbezug im Drain«):** Energie-Integral-Verfahren
   1. **Veto:** Aktueller Bezug `< aus_netzbezug_aktuell_veto_w` (200 W) → keine Auswertung (Historie evtl. veraltet, kein akuter Bezug).
   2. **Messung:** Σ der positiven `grid_power_w`-Samples der letzten `aus_netzbezug_fenster_min` (5) Engine-Ticks (≈ 60 s/Tick) als Energie (kWh = Σ_W / 60000).
@@ -51,6 +54,7 @@ Zusätzlich pausiert die Regel bei aktivem `afternoon_charge_request` den HP-Bet
 - Externe Schaltung erkannt → `_cancel_conflicting_overrides()` annulliert offene Operator-Overrides + setzt 30-min-Respekt-Hold (`extern_respekt_s`).
 - Schreibbestätigung: Aktor muss Engine-Wert registrieren, sonst falsch-positive Extern-Erkennung.
 - Bei aktivem Nachmittags-Ladewunsch (`afternoon_charge_request` + `pause_hp_until_target=true`) schaltet die Engine HP AUS **nur wenn** `0 < batt_power_w < 8000 W` (Batterie laedt mit schwacher Leistung). Bei fehlender Ladung (Batterie idle/entlaedt) oder starker Ladung (>=8 kW) bleibt HP freigegeben.
+- **Momentan-Überschuss-Override (`_ueberschuss_traegt_hp`):** Sowohl die Verbraucher-Konkurrenz-AUS (`_aus_kontext_pruefen`, Grund `konkurrenz`) als auch die Ladewunsch-Pause weichen, wenn der momentane PV-Überschuss die HP nachweislich trägt: `grid_power_w < ueberschuss_grid_bezug_max_w` (300 W) **und** `batt_power_w ≥ -ueberschuss_batt_entlade_tol_w` (−300 W) **und** `SOC ≥ ueberschuss_soc_hoch_pct` (85 %, Batterie nahe voll). Dann bleibt HP EIN — die Energie ginge sonst in die Abregelung. Das Netzbezug-Integral (`_netzbezug_aus_ausloesen`) bleibt die eigentliche Schutzinstanz gegen echten Netzbezug; bei niedrigerem SOC hat die Batterieladung weiter Vorrang.
 
 ## No-Gos
 - Keine HP-Einschaltung bei Tier-1-Alarm.
@@ -61,6 +65,7 @@ Zusätzlich pausiert die Regel bei aktivem `afternoon_charge_request` den HP-Bet
 - Phasenschwelle ändern → Matrix `heizpatrone.<phase>.<param>` (z. B. `phase2.soc_min_freigabe`).
 - ExternalRespect-Dauer ändern → Matrix `heizpatrone.extern_respekt_s` (Default 1800).
 - WP-Koordinations-Cap justieren → Matrix `heizpatrone.drain_aus_ww_temp_c` (Morgens, 50–65), `heizpatrone.abend_ww_temp_c` (Abends, 60–70), `heizpatrone.abend_ww_cap_aktiv_vor_sunset_h` (1–8 h).
+- Überschuss-Override justieren → Matrix `heizpatrone.ueberschuss_soc_hoch_pct` (70–95), `heizpatrone.ueberschuss_grid_bezug_max_w` (0–1000), `heizpatrone.ueberschuss_batt_entlade_tol_w` (0–2000).
 - Neue Phase einbauen → `RegelHeizpatrone.bewerte` + Score-Logik + Matrix-Schema dokumentieren.
 - HP-Startup-Check (Daemon-Restart schaltet HP AUS) → `automation/engine/automation_daemon.py:_hp_startup_check`.
 - Ladewunsch-Pause anpassen → `RegelHeizpatrone.bewerte` und `RegelHeizpatrone.erzeuge_aktionen` (Intent-Lesepfad: `automation/engine/operator_intents.py`).

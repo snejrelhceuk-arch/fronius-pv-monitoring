@@ -55,6 +55,34 @@
     "aktionen": [],
     "score": 0
   },
+  "konkurrenz_ev_ohne_ueberschuss_aus|aktiv=False": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_aus",
+        "wert": null
+      }
+    ],
+    "score": 48
+  },
+  "konkurrenz_ev_ohne_ueberschuss_aus|aktiv=True": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_aus",
+        "wert": null
+      }
+    ],
+    "score": 48
+  },
+  "konkurrenz_ev_ueberschuss_haelt|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "konkurrenz_ev_ueberschuss_haelt|aktiv=True": {
+    "aktionen": [],
+    "score": 0
+  },
   "phase1_blockiert_soc|aktiv=False": {
     "aktionen": [],
     "score": 0
@@ -178,6 +206,28 @@
       }
     ],
     "score": 48
+  },
+  "seq:extern_abend_ww_cap_haelt|t0": {
+    "aktionen": [],
+    "score": 0
+  },
+  "seq:extern_abend_ww_cap_haelt|t1": {
+    "aktionen": [],
+    "score": 0
+  },
+  "seq:extern_abend_ww_cap_haelt|t2": {
+    "aktionen": [],
+    "score": 0
+  },
+  "seq:extern_abend_ww_cap_haelt|t3": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_aus",
+        "wert": null
+      }
+    ],
+    "score": 60
   },
   "seq:kurz_burst_sperre|t0": {
     "aktionen": [

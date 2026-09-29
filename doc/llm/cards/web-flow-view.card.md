@@ -2,9 +2,9 @@
 title: Flow-Ansicht Rendering-Mechanik (SVG, Breakpoints, Mobile-Pan)
 domain: web
 role: B
-applyTo: "templates/flow_view.html"
+applyTo: "templates/flow_view.html,routes/flow_greetings.py"
 status: stable
-last_review: 2026-09-27
+last_review: 2026-09-29
 ---
 
 # Flow-Ansicht Rendering-Mechanik
@@ -22,7 +22,7 @@ Wirkung.
 - **Overlay-/Layout-Sync:** `templates/flow_view.html:syncOverlayLayout` (ruft `adjustSvgViewBox`)
 - **Live-Daten:** `routes/realtime.py:/api/flow_realtime`, `/api/flow_devices`; `routes/system/battery.py:/api/flow_status`
 - **Bubble-Kontext-Rollup (P1.0/P1.1/H1):** `static/js/flow-bubbles.js` + `static/css/flow-bubbles.css`; Bubbles tragen `data-bubble="…"` im SVG.
-- **Begrüßungs-/Statuszeile:** `templates/flow_view.html:pvGreeting` (dezent, breitenrobust, kein Umbruch)
+- **Begrüßungs-/Statuszeile:** `templates/flow_view.html:pvGreeting` (dezent, breitenrobust, kein Umbruch). Die **Kontext-Phrase** liefert das Backend: editierbarer Bausteinkatalog `routes/flow_greetings.py` (≤100 Schnipsel; Auswahl über Tageszeit × Prognosequalität × Lage `akku_voll`/`akku_leer`, Platzhalter {kwh}/{rest_kwh}/{morgen_kwh}/{morgen_qual}/{soc}) via `routes/system/battery.py:_apply_greeting` → Felder `greeting`/`greeting_short` in `/api/flow_status`. Der Client stellt Gruß + Ort voran und wählt lang/kurz nach Breite; Fallback = schlichte prognosebasierte Phrase, `<420 px` ausgeblendet.
 - **Flow-Schnellzugriff in der Nav:** `static/js/nav-ui.js:initDrawer` (`.pv-flow-quick` neben dem Burger, außer auf `/flow`; Icon = bidirektionale Fluss-Pfeile). Das Seiten-Menü selbst ist ein aufklappbares Rollup (`nav-ui.js:makeGroup`, Gruppen Monitoring/Analyse/Netzqualität▸Spektralanalyse/Darstellung aller Einzelwerte) — **kein** eigener Flow-Eintrag mehr.
 - **Tooltip-Skin (schwach transparent):** `static/js/nav-ui.js:tooltipResponsive` (+ `static/css/nav-ui.css:.pv-echarts-tip`)
 - **Tagesgüte-Icon (ClearSky-relativ):** `routes/system/battery.py:_build_flow_status_result` setzt `pv_forecast_quality/-emoji` über `solar_forecast.classify_day_relative` (Prognose/ClearSky: <40 % ☁️ schlecht, 40–70 % ⛅ mittel, ≥70 % ☀️ gut) — **nicht** die absolute kWh-Einstufung. Renderer `templates/flow_view.html:setPvForecastIcon`.

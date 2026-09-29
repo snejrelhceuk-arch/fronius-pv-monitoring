@@ -10,10 +10,11 @@ Datenintegrität, Netzqualität und Warnungen laufen über die separaten
 Sofort-Alarm-Mails, nicht über diesen Tagesbericht.
 
 Struktur:
-  Tag    — abgelaufener Kalendertag (00:00→00:00): 5 Kernwerte + Stresszeit + Verbraucher
-  Monat  — laufender Monat bis zum Stand des abgelaufenen Tages: 5 Kernwerte
-  Jahr   — laufendes Jahr bis zum Stand des abgelaufenen Tages: 5 Kernwerte
-  Gesamt — seit Inbetriebnahme bis zum Stand des abgelaufenen Tages: 5 Kernwerte
+  Tag    — abgelaufener Kalendertag (00:00→00:00): Energiebilanz + Autarkie/
+           Eigenverbrauch + Stresszeit + Verbraucher
+  Monat  — laufender Monat bis zum Stand des abgelaufenen Tages: Bilanz + Quoten
+  Jahr   — laufendes Jahr bis zum Stand des abgelaufenen Tages: Bilanz + Quoten
+  Gesamt — seit Inbetriebnahme bis zum Stand des abgelaufenen Tages: Bilanz + Quoten
 """
 
 from __future__ import annotations
@@ -27,19 +28,42 @@ def _zeile(label: str, wert: str, einzug: str = '  ') -> str:
     return f'{einzug}{label:<13}{wert}'
 
 
-def _bilanz_zeilen(sec: dict) -> list:
-    """Die 5 Energie-Kernwerte einer Sektion.
+def _quote(zaehler: float, nenner: float):
+    """Prozentquote (0…100 %) oder None, wenn der Nenner ≤ 0 ist."""
+    if not nenner or nenner <= 0:
+        return None
+    return max(0.0, min(100.0, zaehler / nenner * 100.0))
 
-    Erzeugung / Verbrauch / Netzbezug / Einspeisung / Batterie (Ladung+Entladung).
+
+def _fmt_pct(val) -> str:
+    return '—' if val is None else f'{val:.0f} %'
+
+
+def _bilanz_zeilen(sec: dict) -> list:
+    """Energie-Kernwerte einer Sektion — kompakt, teils nebeneinander.
+
+    Erzeugung/Verbrauch und Netzbezug/Einspeisung stehen je paarweise
+    nebeneinander (Schrägstrich-getrennt); dazu Batterie (Ladung/Entladung)
+    und die Kennzahlen Autarkie sowie Eigenverbrauch:
+
+      Autarkie       = (Verbrauch − Netzbezug) / Verbrauch  (Eigendeckungsgrad)
+      Eigenverbrauch = (Erzeugung − Einspeisung) / Erzeugung (PV-Eigennutzung)
     """
+    erz = sec.get('erzeugung') or 0.0
+    verb = sec.get('verbrauch') or 0.0
+    netz = sec.get('netzbezug') or 0.0
+    einsp = sec.get('einspeisung') or 0.0
+    autarkie = _quote(verb - netz, verb)
+    eigenverbrauch = _quote(erz - einsp, erz)
     return [
-        _zeile('Erzeugung:', _fmt(sec.get('erzeugung'))),
-        _zeile('Verbrauch:', _fmt(sec.get('verbrauch'))),
-        _zeile('Netzbezug:', _fmt(sec.get('netzbezug'))),
-        _zeile('Einspeisung:', _fmt(sec.get('einspeisung'))),
-        _zeile('Batterie:',
-               f'Ladung {_fmt(sec.get("batt_ladung"))} · '
-               f'Entladung {_fmt(sec.get("batt_entladung"))}'),
+        f'  Erzeugung {_fmt(sec.get("erzeugung"))}   /   '
+        f'Verbrauch {_fmt(sec.get("verbrauch"))}',
+        f'  Netzbezug {_fmt(sec.get("netzbezug"))}   /   '
+        f'Einspeisung {_fmt(sec.get("einspeisung"))}',
+        f'  Batterie  Ladung {_fmt(sec.get("batt_ladung"))} / '
+        f'Entladung {_fmt(sec.get("batt_entladung"))}',
+        f'  Autarkie {_fmt_pct(autarkie)}   /   '
+        f'Eigenverbrauch {_fmt_pct(eigenverbrauch)}',
     ]
 
 
