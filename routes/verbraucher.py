@@ -12,6 +12,7 @@ re-exportiert, damit bestehende Importpfade (Tests, Routen) stabil bleiben.
 import re
 from datetime import datetime, timedelta
 from flask import Blueprint, jsonify, request
+import config
 from routes.helpers import get_db_connection, api_error_response, validate_year_month, tag_table
 from routes.verbraucher_helpers import (
     _read_wp_protocol_points, _read_wp_points_from_db_fallback,

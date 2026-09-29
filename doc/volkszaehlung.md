@@ -5,7 +5,7 @@
 ## Übersicht
 
 **Gesamtgröße (Textdateien gezählt):** 3546 MB
-**Gesamtzeilen (Code/Doku/Daten):** 371.871 Zeilen
+**Gesamtzeilen (Code/Doku/Daten):** 371.879 Zeilen
 **Gezählte Dateien:** 837
 **Ausgeschlossene Verzeichnisse:** 29 (.venv, __pycache__, node_modules, .git …)
 
@@ -13,8 +13,8 @@
 
 | Sprache/Typ | Dateien | Zeilen | Anteil |
 |---|---|---|---|
-| **CSV** | 24 | 246.184 | 66.2% |
-| **Python** | 218 | 63.460 | 17.1% |
+| **CSV** | 24 | 246.191 | 66.2% |
+| **Python** | 218 | 63.461 | 17.1% |
 | **Markdown** | 148 | 24.432 | 6.6% |
 | **HTML** | 28 | 16.430 | 4.4% |
 | **Shell** | 70 | 5.637 | 1.5% |
@@ -27,7 +27,7 @@
 | **YAML** | 3 | 562 | 0.2% |
 | **CONF** | 3 | 70 | 0.0% |
 | **TOML** | 1 | 22 | 0.0% |
-| **Total** | 837 | 371.871 | 100% |
+| **Total** | 837 | 371.879 | 100% |
 
 ## Python-Code nach ABCDEN-Rollen
 
@@ -35,7 +35,7 @@
 |---|---|---|---|
 | **C** Automation | `automation/` | 46 | 14.329 |
 | **A** Collector | `collector/` | 19 | 4.935 |
-| **B** Web-API | `routes/` | 28 | 11.658 |
+| **B** Web-API | `routes/` | 28 | 11.659 |
 | **D** Diagnos | `diagnos/` | 10 | 2.440 |
 | **E** Steuerbox | `steuerbox/` | 5 | 1.252 |
 | **N** Netzqualität | `nq/` | 37 | 9.143 |
