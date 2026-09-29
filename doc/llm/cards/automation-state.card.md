@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/obs_state.py"
 tags: [state, obs-state, persist, ram-db, configs]
 status: stable
-last_review: 2026-08-10
+last_review: 2026-09-29
 ---
 
 # Automation-State
@@ -30,6 +30,7 @@ Wo lebt welcher Zustand? Welche Datei/Tabelle ist Quelle der Wahrheit? Klärung 
 - Persist-DB ist **dauerhaft**: einzige Quelle für historische Auswertungen.
 - Configs sind **persistent + manuell editierbar** (per `pv-config.py` TUI). Quelle der Wahrheit für Schwellen.
 - Legacy-State-Dateien sind **Fallback**, nicht primär.
+- **Reload-Vertrag:** `config/soc_param_matrix.json` ist Hot-reload (mtime/SIGHUP im Daemon). Registry, neue Regeln/Aktoren und Hardware-Backend-Configs sind Restart-only. Safe-reload fuer einzelne Aktor-Configs ist noch keine zentrale Schnittstelle.
 
 ## No-Gos
 - Keine Schreibvorgänge auf RAM-DB außerhalb der dafür vorgesehenen Module (Collector, Tier1, Steuerbox).
@@ -39,12 +40,12 @@ Wo lebt welcher Zustand? Welche Datei/Tabelle ist Quelle der Wahrheit? Klärung 
 ## Häufige Aufgaben
 - ObsState-Feld hinzufügen → `obs_state.py` Schema + Producer (Collector) + Consumer (Engine).
 - Operator-Override neu definieren → Steuerbox `intent_handler.py` + `operator_overrides.py`.
-- Matrix-Eintrag ändern → `config/soc_param_matrix.json` (Daemon-Restart bis K-04 erledigt).
+- Matrix-Eintrag ändern → `config/soc_param_matrix.json` (Hot-reload per mtime/SIGHUP).
 
 ## Bekannte Fallstricke
 - **`battery_control_log` (Persist-DB):** Wird nicht mehr geschrieben; der frühere Lese-Fallback in `pv-config.py`/`routes/system/` wurde 2026-05-29 entfernt.
 - RAM-DB-Pfad muss vor Daemon-Start existieren (`/dev/shm/`). Bei Container/Restricted-Mounts prüfen.
-- Config-Reload: Aktuell nur per Daemon-Restart (K-04 in TODO).
+- Config-Reload: Nur die Parametermatrix ist hot-reloaded. Registry-/Aktor-Struktur und Hardware-Backend-Configs erst nach Daemon-Restart ändern.
 - `failover-sync` kann Config-JSONs überschreiben — Pfad-Mapping prüfen (`failover-sync-orange-status-note`).
 
 ## Verwandte Cards

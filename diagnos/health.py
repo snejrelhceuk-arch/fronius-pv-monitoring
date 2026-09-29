@@ -238,6 +238,63 @@ def check_all_services() -> List[dict]:
     return [check_service(u) for u in SERVICES]
 
 
+def _systemd_show(unit: str) -> dict:
+    try:
+        r = subprocess.run(
+            ['systemctl', 'show', unit, '-p', 'LoadState', '-p', 'WorkingDirectory'],
+            capture_output=True, text=True, timeout=5,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return {}
+    if r.returncode != 0:
+        return {}
+    result = {}
+    for line in r.stdout.splitlines():
+        key, sep, value = line.partition('=')
+        if sep:
+            result[key] = value.strip()
+    return result
+
+
+def check_pv_unit_working_directories() -> dict:
+    """Prueft installierte pv-*.service Units auf existierende WorkingDirectory."""
+    try:
+        r = subprocess.run(
+            ['systemctl', 'list-unit-files', 'pv-*.service', '--no-legend', '--no-pager'],
+            capture_output=True, text=True, timeout=5,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return {'check': 'systemd_pv_working_directories', 'severity': OK,
+                'skipped': True, 'detail': 'systemctl nicht verfuegbar'}
+    if r.returncode != 0:
+        return {'check': 'systemd_pv_working_directories', 'severity': OK,
+                'skipped': True, 'detail': 'keine pv-Units listbar'}
+
+    checked = {}
+    missing = {}
+    for line in r.stdout.splitlines():
+        parts = line.split()
+        if not parts or not parts[0].endswith('.service'):
+            continue
+        unit = parts[0]
+        info = _systemd_show(unit)
+        if info.get('LoadState') != 'loaded':
+            continue
+        wd = info.get('WorkingDirectory') or ''
+        if not wd:
+            continue
+        wd = wd.replace('%h', os.path.expanduser('~'))
+        checked[unit] = wd
+        if not os.path.isdir(wd):
+            missing[unit] = wd
+
+    if missing:
+        return {'check': 'systemd_pv_working_directories', 'severity': CRIT,
+                'checked': checked, 'missing': missing,
+                'error': 'PV-Units mit fehlendem WorkingDirectory'}
+    return {'check': 'systemd_pv_working_directories', 'severity': OK, 'checked': checked}
+
+
 # ═══════════════════════════════════════════════════════════
 # Daten-Freshness
 # ═══════════════════════════════════════════════════════════
@@ -303,9 +360,9 @@ def _read_role() -> str:
             return 'primary'
         with open(ROLE_FILE, 'r', encoding='utf-8') as f:
             role = f.readline().strip().lower()
-        return role if role in ('primary', 'failover') else 'primary'
+        return role if role in ('primary', 'failover', 'tech', 'kueche') else 'unknown'
     except OSError:
-        return 'primary'
+        return 'unknown'
 
 
 def check_mirror_sync_age() -> dict:
@@ -378,9 +435,9 @@ def check_notification_ready() -> dict:
     Zustand im Health-Report/Dashboard sichtbar.
     """
     role = _read_role()
-    if role == 'failover':
+    if role != 'primary':
         return {'check': 'notification_ready', 'role': role, 'severity': OK,
-                'skipped': True, 'detail': 'Failover nutzt eigenen Mail-Pfad'}
+                'skipped': True, 'detail': 'nur auf primary relevant'}
     try:
         import config as app_config
         smtp_user = (getattr(app_config, 'NOTIFICATION_SMTP_USER', '') or '').strip()
@@ -482,6 +539,7 @@ def run_all() -> dict:
 
     # Services
     checks.extend(check_all_services())
+    checks.append(check_pv_unit_working_directories())
 
     # Freshness
     for table, ts_col, warn_s, crit_s in FRESHNESS_TABLES:

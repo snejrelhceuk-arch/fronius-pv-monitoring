@@ -5,7 +5,7 @@ role: D
 applyTo: "diagnos/nq_health.py"
 tags: [netzqualitaet, pac4200, freshness, pipeline, rolle-n]
 status: stable
-last_review: 2026-08-10
+last_review: 2026-09-29
 ---
 
 # Diagnos NQ
@@ -17,7 +17,7 @@ Read-only Beobachtung des Netzqualitäts-Subsystems (PAC4200, Rolle N) aus Sicht
 - **Hauptlauf:** `diagnos/nq_health.py:run_all`
 - **Pipeline:** `diagnos/nq_health.py:check_nq_pipeline_freshness` (nq_5min der neuesten Monats-DB)
 - **Energie:** `diagnos/nq_health.py:check_nq_energy_freshness` (nq_energy_daily)
-- **Timer:** `diagnos/nq_health.py:check_nq_services` (Primary-NQ-Timer, nur installierte)
+- **Timer:** `diagnos/nq_health.py:check_nq_services` (Primary-NQ-Timer, nur installierte; Core=crit, Analyse/Event/Backup/Rollup=warn)
 - **Ereignisse:** `diagnos/nq_health.py:check_nq_events_recent` (Info, kein Alarm)
 - **Parameter:** `diagnos/config.py` (`NQ_DB_DIR`, `NQ_PIPELINE_WARN_S`/`_CRIT_S`, `NQ_ENERGY_WARN_DAYS`/`_CRIT_DAYS`, `NQ_TIMERS`)
 - **Mail-/Report-Anteil:** `automation/engine/nq_notifier.py:diff_nq_befunde`, `automation/engine/notify/report_format.py`, `diagnos/status_report.py` (Netz-Status.md)
@@ -30,6 +30,7 @@ Read-only Beobachtung des Netzqualitäts-Subsystems (PAC4200, Rolle N) aus Sicht
 - Strikt read-only; **kein** PAC-Hardwarezugriff (Sache des Tech-Collectors, Rolle N).
 - Rollen-/deploymentbewusst: ohne NQ-Monats-DB oder auf Failover → `skipped`, kein Alarm.
 - Frische-Schwellen zentral in `diagnos/config.py` (Pipeline 5/9,5 h, Energie 2/4 d).
+- `NQ_TIMERS` spiegelt die Primary-Installationskarte: Transfer/Aggregation/Energy/Core-Cap kritisch, Analyse/Event/Backup/Monats-/Jahresrollup warnend.
 - Die PAC-Hardware wird indirekt bewiesen: frische Aggregate = Kette PAC→Tech→Transfer→Aggregation lebt.
 
 ## No-Gos

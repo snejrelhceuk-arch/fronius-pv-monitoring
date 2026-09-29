@@ -29,7 +29,7 @@ import atexit
 from pathlib import Path
 
 import config
-from wattpilot_api import WattpilotClient
+from wattpilot_read_api import WattpilotReadOnly
 
 logging.basicConfig(
     level=logging.INFO,
@@ -145,7 +145,7 @@ def collect_reading():
     Returns:
         dict: Zusammenfassung oder None bei Fehler
     """
-    client = WattpilotClient()
+    client = WattpilotReadOnly()
     
     summary = None
     last_error = None
@@ -170,7 +170,7 @@ def collect_reading():
             logger.info(f"Wattpilot Versuch {attempt}/{MAX_RETRIES+1} fehlgeschlagen: {last_error} "
                         f"→ Retry in {RETRY_INTERVAL}s")
             time.sleep(RETRY_INTERVAL)
-            client = WattpilotClient()  # Frische Verbindung
+            client = WattpilotReadOnly()  # Frische Verbindung
     
     if last_error:
         logger.warning(f"Wattpilot nicht erreichbar nach {MAX_RETRIES+1} Versuchen: {last_error}")

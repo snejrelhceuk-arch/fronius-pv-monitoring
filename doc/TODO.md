@@ -38,13 +38,6 @@
 
 ## Architektur-Haertung
 
-- [ ] P2: Wattpilot-Lesepfad trennen: read-only Client fuer Collector/Web einfuehren; schreibfaehiges `set_value` ausschliesslich im C-Aktor belassen.
-- [ ] P2: Web-DB-Zugriff standardmaessig read-only machen: `get_db_connection_ro` einfuehren, normale Routen darauf umstellen und Forecast-Schreibzugriffe explizit kapseln.
-- [ ] P2: `Actuator.ausfuehren` als harte Exception-/Audit-Grenze ausbauen: Aktor-Exceptions in Fehlerergebnisse wandeln und immer `automation_log` schreiben.
-- [ ] P2: Systemd-Installation gegen nicht existente `WorkingDirectory` absichern und Diagnos-Check fuer installierte PV-Units ergaenzen.
-- [ ] P2: NQ-Diagnose vervollstaendigen: `diagnos/config.py:NQ_TIMERS` mit installierten Primary-NQ-Timern synchronisieren und Kritikalitaeten fuer Core/Analyse/Backup/Rollup staffeln.
-- [ ] P2: Config-Reload-Vertrag dokumentieren und technisch vereinheitlichen: Hot-reload, Safe-reload und Restart-only trennen; optionale Aktor-`reload_config`-Schnittstelle pruefen.
-- [ ] P3: Architekturgrenzen weiter mit Tests absichern: Actuator-Exception-Test und statische Web-DB-Write-Tests ergaenzen.
 - [ ] P3: Hotspot-Dateien nur risikogetrieben zerlegen; vor Aenderungen an grossen Regel-/Routenmodulen passende Charakterisierungstests ergaenzen.
 
 ### User

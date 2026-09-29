@@ -14,7 +14,7 @@ build-backend = "setuptools.backends._legacy:_Backend"
 py-modules = ["config", "db_utils", "db_init", "fritzdect_read", "fronius_api",
               "gunicorn_config", "host_role", "solar_cache", "solar_forecast",
               "solar_geometry", "solar_openmeteo", "statistics_corrections",
-              "wattpilot_api", "web_api", "wp_modbus"]
+              "wattpilot_api", "wattpilot_read_api", "web_api", "wp_modbus"]
 
 [tool.setuptools.packages.find]
 include = ["analysis", "automation*", "collector*", "diagnos*", "nq*",

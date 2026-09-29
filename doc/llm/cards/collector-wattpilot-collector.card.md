@@ -5,7 +5,7 @@ role: A
 applyTo: "collector/wattpilot.py"
 tags: [wattpilot, collector, websocket, eto]
 status: stable
-last_review: 2026-06-06
+last_review: 2026-09-29
 ---
 
 # Wattpilot-Collector
@@ -15,7 +15,7 @@ Liest die Fronius-Wattpilot (go-e basiert) zyklisch via WebSocket-API und persis
 
 ## Code-Anchor
 - **Hauptdatei:** `collector/wattpilot.py` (Daemon-Loop)
-- **API-Client:** `wattpilot_api.py`
+- **Read-only API-Client:** `wattpilot_read_api.py:WattpilotReadOnly` (Collector); Schreibclient nur in Rolle C (`wattpilot_api.py:WattpilotClient`)
 - **Schema:** `doc/collector/schema/db_schema_wattpilot.sql`, `db_init.py`
 
 ## Inputs / Outputs
@@ -28,6 +28,7 @@ Liest die Fronius-Wattpilot (go-e basiert) zyklisch via WebSocket-API und persis
 - **Polling-Intervall** ca. 30 s (`WATTPILOT_POLL_INTERVAL` in `config.py`).
 - **`eto` ist Gesamt-Counter** — Tageswert nur über Differenz.
 - **Auth-Hash-Negotiation:** `wattpilot_api.py` nutzt `authRequired.hash` (`bcrypt` bei Flex, sonst `pbkdf2`).
+- **Read-only-Grenze:** Collector importiert nur `WattpilotReadOnly`; `set_value` bleibt dem C-Aktor vorbehalten.
 - **WS-Konflikt-Tolerance:** Bei Verdraengung durch Fronius-/go-e-App bis zu 3 Retries (`collector/wattpilot.py`).
 - **PID-Lock:** `wattpilot_collector.pid` im Repo-Root.
 

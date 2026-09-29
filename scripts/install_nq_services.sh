@@ -23,12 +23,31 @@ PV_ROLE_GUARD_AUTO=0 source "${BASE}/scripts/role_guard.sh"
 ROLE="$PV_ROLE"
 echo "=== NQ-Services installieren (Rolle: $ROLE) ==="
 
+_BASE_REAL="$(readlink -f "$BASE")"
+
+validate_working_directory() {
+    local unit="$1"
+    local wd
+    wd="$(awk -F= '/^WorkingDirectory=/ {print $2; exit}' "$SRC/$unit")"
+    [ -z "$wd" ] && return 0
+    wd="${wd//%h/$HOME}"
+    if [ ! -d "$wd" ]; then
+        echo "  ✗ $unit: WorkingDirectory existiert nicht: $wd" >&2
+        return 1
+    fi
+    if [ "$(readlink -f "$wd")" != "$_BASE_REAL" ]; then
+        echo "  ✗ $unit: WorkingDirectory zeigt nicht auf diesen Workspace: $wd" >&2
+        return 1
+    fi
+}
+
 install_unit() {
     local unit="$1"
     if [ ! -f "$SRC/$unit" ]; then
         echo "  ✗ $unit fehlt in $SRC — übersprungen"
         return 1
     fi
+    validate_working_directory "$unit"
     sudo install -m 0644 "$SRC/$unit" "$DST/$unit"
     echo "  ✓ $unit installiert"
 }

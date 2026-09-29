@@ -5,7 +5,7 @@ role: D
 applyTo: "diagnos/health.py,diagnos/log_health.py"
 tags: [health, services, freshness, mirror, backup, notification, logs]
 status: stable
-last_review: 2026-08-10
+last_review: 2026-09-29
 ---
 
 # Diagnos Health
@@ -17,6 +17,7 @@ Read-only Zustandspruefung fuer Host, Services und Datenfrische. Liefert eine sc
 - **Hauptlauf:** `diagnos/health.py:run_all`
 - **Host-Checks:** `diagnos/health.py:check_cpu_temp`, `check_throttle`, `check_ram`, `check_disk`, `check_load`, `check_uptime`
 - **Service-Checks:** `diagnos/health.py:check_all_services`
+- **Systemd-Pfade:** `diagnos/health.py:check_pv_unit_working_directories` (installierte `pv-*.service` Units mit fehlendem `WorkingDirectory` melden)
 - **Freshness:** `diagnos/health.py:check_freshness`
 - **Mirror/Backup:** `diagnos/health.py:check_mirror_sync_age`, `check_local_gfs_backup_age`
 - **Mail-Bereitschaft:** `diagnos/health.py:check_notification_ready` (SMTP-Credential vorhanden?)
@@ -25,7 +26,7 @@ Read-only Zustandspruefung fuer Host, Services und Datenfrische. Liefert eine sc
 - **Schwellwerte/Tabellen:** `diagnos/config.py` (`SERVICES`, `FRESHNESS_TABLES`, `LOG_*`, Warn-/Crit-Grenzen)
 
 ## Inputs / Outputs
-- **Inputs:** `/proc/*`, `/sys/class/thermal/*`, `vcgencmd`, `systemctl`, read-only SQLite auf `/dev/shm/fronius_data.db`, `.role`, Mirror-/Backup-Marker.
+- **Inputs:** `/proc/*`, `/sys/class/thermal/*`, `vcgencmd`, `systemctl`, read-only SQLite auf `/dev/shm/fronius_data.db`, `.role` (`primary|failover|tech|kueche|unknown`), Mirror-/Backup-Marker.
 - **Outputs:** JSON auf stdout (`overall` + `checks[]`), Warnungen auf stderr, Exit-Code 0/1/2.
 
 ## Invarianten
@@ -33,7 +34,8 @@ Read-only Zustandspruefung fuer Host, Services und Datenfrische. Liefert eine sc
 - Gesamtseverity ist immer die schlechteste Einzelseverity aus allen Checks.
 - Freshness-Schwellen werden zentral ueber `diagnos/config.py` gesteuert.
 - `mirror_sync_age` gilt nur fuer Rolle `failover`; auf `primary` wird bewusst `skipped` geliefert.
-- `notification_ready` prueft nur auf `primary` (Failover hat eigenen Mail-Pfad) und meldet CRIT, wenn SMTP-User+Events konfiguriert sind, aber `/etc/pv-system/smtp_pass.key` fehlt.
+- `notification_ready` prueft nur auf `primary` und meldet CRIT, wenn SMTP-User+Events konfiguriert sind, aber `/etc/pv-system/smtp_pass.key` fehlt.
+- Installierte `pv-*.service` Units duerfen kein fehlendes `WorkingDirectory` referenzieren; Pfaddrift wird als CRIT sichtbar.
 
 ## No-Gos
 - Keine Service-Restarts, kein Auto-Healing, kein Kill von Prozessen in `diagnos/health.py`.

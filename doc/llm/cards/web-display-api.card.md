@@ -23,7 +23,7 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 - **NQ read-only Datenzugriff:** `nq/tech_read.py` (`fetch_tech_snapshot`, `fetch_aggregates`, `fetch_agg` = 5min-Merge Primary+Tech, `fetch_agg_fast` = 10s aus Tech-RAM)
 - **Read-only Fronius-Zugriff:** `routes/helpers.py:FroniusReadOnly`, `routes/helpers.py:get_fronius_api`
 - **Read-only FritzDECT-Zugriff:** `fritzdect_read.py` fuer Live-Status; Web importiert keine Aktor-Module.
-- **DB-Zugriff:** `routes/helpers.py:get_db_connection`
+- **DB-Zugriff:** `routes/helpers.py:get_db_connection` (read-only Standard), `get_forecast_write_connection` nur fuer Forecast-Persistenz
 - **Page-Routen:** `routes/pages.py` (z. B. `maschinenraum`, `netzqualitaet`)
 - **Forecast-API + Persistierung:** `routes/forecast.py:api_forecast_tag`, `routes/helpers.py:store_forecast_daily`
 - **WP-Leistungsnachweis (Netzbetreiber):** `routes/verbraucher.py:api_verbraucher_wp_leistung` — Zeitreihe WP-Max + Netzbezug (`grid_draw_w`) je Punkt aus `logs/wp_netzbetreiber_leistung.csv`; View `templates/wp_leistung_view.html` (Tooltip belegt Eigenversorgung bei Ueberschreitung).
@@ -44,6 +44,7 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 - Keine Hardware-Schreibzugriffe in Schicht B; Fronius nur ueber `FroniusReadOnly`.
 - API-CORS bleibt auf GET/OPTIONS ausgelegt (`web_api.py:add_cors_headers`).
 - Route-Logik bleibt in Blueprints; gemeinsame DB-/API-Helfer in `routes/helpers.py`.
+- Standard-DB-Verbindungen in Web-Routen sind read-only; Forecast-Persistenz ist die explizit benannte Write-Ausnahme.
 - Mirror-Modus darf Anzeige beeinflussen, aber keine Aktorik ausloesen.
 
 ## No-Gos

@@ -204,7 +204,16 @@ class Actuator:
             return {'ok': False, 'kommando': kommando,
                     'detail': f'FEHLER-Cooldown ({DEDUP_FEHLER_INTERVALL_S}s): letzter Versuch fehlgeschlagen'}
         # Ausführen
-        ergebnis = aktor.ausfuehren(aktion)
+        try:
+            ergebnis = aktor.ausfuehren(aktion)
+        except Exception as exc:
+            LOG.exception("Aktor '%s' Exception bei Kommando '%s'", aktor_name, kommando)
+            ergebnis = {
+                'ok': False,
+                'kommando': kommando,
+                'detail': f'Exception: {exc}',
+                'exception_type': type(exc).__name__,
+            }
 
         # Bei Erfolg: Timestamp für Deduplizierung merken
         if ergebnis.get('ok'):

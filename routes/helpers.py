@@ -2,7 +2,7 @@
 Gemeinsame Hilfsfunktionen für alle Blueprint-Module.
 
 Enthält:
-  - get_db_connection(): tmpfs-DB Verbindung
+    - get_db_connection(): read-only tmpfs-DB Verbindung
   - get_forecast(): SolarForecast Singleton
   - store_forecast_daily() / get_stored_forecast(): Prognose-Persistierung
   - get_fronius_api(): FroniusReadOnly Singleton (NUR Lesen, ABCD-konform)
@@ -78,16 +78,26 @@ def plausible_counter_delta(start, end, fallback):
 
 
 def get_db_connection():
-    """Verbindung zur tmpfs-DB (RAM-Dateisystem).
+    """Read-only Verbindung zur tmpfs-DB (RAM-Dateisystem).
 
-    Delegiert an db_utils.get_db_connection() — einzige kanonische Implementierung.
+    Delegiert an db_utils.get_db_connection_ro() — normale Web-Routen lesen nur.
     Gibt None zurück bei Fehler (Kompatibilität mit bestehenden if-not-conn Checks).
     """
     try:
-        from db_utils import get_db_connection as _canonical
+        from db_utils import get_db_connection_ro as _canonical
         return _canonical()
     except Exception as e:
         logging.error(f"DB-Verbindungsfehler: {e}")
+        return None
+
+
+def get_forecast_write_connection():
+    """Explizite Write-Ausnahme fuer Forecast-Persistierung."""
+    try:
+        from db_utils import get_db_connection as _canonical_write
+        return _canonical_write()
+    except Exception as e:
+        logging.error(f"Forecast-DB-Schreibverbindung fehlgeschlagen: {e}")
         return None
 
 
@@ -154,7 +164,7 @@ def store_forecast_daily(date_str, fc_response, clearsky_data=None, forecast_met
     """
     import json as _json
     try:
-        conn = get_db_connection()
+        conn = get_forecast_write_connection()
         if not conn:
             return
 
@@ -264,7 +274,7 @@ def _interpolate_series(points, target_ts):
 def store_forecast_15min(date_str, forecast_points, clearsky_points=None):
     """Speichert 15min Forecast/Clear-Sky in data_15min (nur Update vorhandener Rows)."""
     try:
-        conn = get_db_connection()
+        conn = get_forecast_write_connection()
         if not conn:
             return
 

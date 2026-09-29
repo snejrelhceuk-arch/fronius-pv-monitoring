@@ -54,6 +54,13 @@ MIRROR_CRIT_S = 1800         # 30 min
 BACKUP_WARN_HOURS = 30.0
 BACKUP_CRIT_HOURS = 48.0
 
+# ── Ausgabe ────────────────────────────────────────────────
+# Severity-Stufen
+OK   = 'ok'
+WARN = 'warn'
+CRIT = 'crit'
+FAIL = 'fail'   # Check selbst fehlgeschlagen
+
 # ── NQ (Rolle N, read-only Beobachtung) ────────────────────
 # Primary beobachtet das PAC4200-Netzqualitaets-Subsystem rein lesend ueber die
 # Monats-DBs (nq/db/nq_YYYY-MM.db). Frische Aggregate beweisen die Kette
@@ -66,12 +73,18 @@ NQ_PIPELINE_CRIT_S = int(9.5 * 3600)   # 9.5 h (mehrere Zyklen verpasst)
 NQ_ENERGY_WARN_DAYS = 2
 NQ_ENERGY_CRIT_DAYS = 4
 # Primary-seitige NQ-Timer (Poller laeuft auf Tech, nicht hier).
+# Format: (unit, severity_bei_inactive_failed)
 NQ_TIMERS = [
-    'pv-nq-agg-transfer.timer',
-    'pv-nq-aggregate.timer',
-    'pv-nq-analysis.timer',
-    'pv-nq-energy-rollup.timer',
-    'pv-nq-primary-cap.timer',
+    ('pv-nq-agg-transfer.timer', CRIT),
+    ('pv-nq-aggregate.timer', CRIT),
+    ('pv-nq-energy-rollup.timer', CRIT),
+    ('pv-nq-primary-cap.timer', CRIT),
+    ('pv-nq-event-transfer.timer', WARN),
+    ('pv-nq-analysis.timer', WARN),
+    ('pv-nq-analysis-hf-nf.timer', WARN),
+    ('pv-nq-energy-rollup-month.timer', WARN),
+    ('pv-nq-energy-rollup-year.timer', WARN),
+    ('pv-nq-backup.timer', WARN),
 ]
 
 # ── Logging (Diagnose-/Wartungs-Dateien, Ueberlaufwache) ────
@@ -81,10 +94,3 @@ LOG_OVERFLOW_WARN_MB = 50.0
 LOG_OVERFLOW_CRIT_MB = 200.0
 # Bewusst endlose Dateien (rechtlicher Langzeitnachweis) -> nur Info, nie Alarm.
 LOG_ENDLESS_FILES = {'wp_netzbetreiber_leistung.csv'}
-
-# ── Ausgabe ────────────────────────────────────────────────
-# Severity-Stufen
-OK   = 'ok'
-WARN = 'warn'
-CRIT = 'crit'
-FAIL = 'fail'   # Check selbst fehlgeschlagen

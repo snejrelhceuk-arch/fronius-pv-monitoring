@@ -58,6 +58,9 @@ WRITE_CLIENT_ALLOWED_PREFIXES = (
     "tests/",
     "tools/",
 )
+WRITE_CLIENT_ALLOWED_FILES = {
+    "wattpilot_read_api.py",
+}
 LEGACY_SYSTEMD_PATHS = ("/srv/pv-system", "/opt/pv-system")
 
 
@@ -212,6 +215,8 @@ def writable_client_findings():
     for p in iter_py_files():
         rel = str(p.relative_to(REPO))
         if rel == "wattpilot_api.py":
+            continue
+        if rel in WRITE_CLIENT_ALLOWED_FILES:
             continue
         if rel.startswith(WRITE_CLIENT_ALLOWED_PREFIXES):
             continue

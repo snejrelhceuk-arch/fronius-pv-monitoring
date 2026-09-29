@@ -43,9 +43,18 @@ def _read_role() -> str:
             return 'primary'
         with open(ROLE_FILE, encoding='utf-8') as f:
             role = f.readline().strip().lower()
-        return role if role in ('primary', 'failover') else 'primary'
+        return role if role in ('primary', 'failover', 'tech', 'kueche') else 'unknown'
     except OSError:
-        return 'primary'
+        return 'unknown'
+
+
+def _iter_nq_timers():
+    for entry in NQ_TIMERS:
+        if isinstance(entry, str):
+            yield entry, WARN
+        else:
+            unit, severity = entry
+            yield unit, severity
 
 
 def _newest_month_db() -> Optional[str]:
@@ -192,7 +201,8 @@ def check_nq_services() -> dict:
     """Primary-NQ-Timer scharf? Nur installierte (loaded) Units werden bewertet."""
     states = {}
     problems = []
-    for unit in NQ_TIMERS:
+    worst = OK
+    for unit, problem_severity in _iter_nq_timers():
         load, active = _timer_status(unit)
         if load is None:
             return {'check': 'nq:services', 'severity': OK, 'skipped': True,
@@ -202,10 +212,12 @@ def check_nq_services() -> dict:
         states[unit] = active
         if active in ('failed', 'inactive'):
             problems.append(f'{unit}={active}')
+            if _SEV_ORDER.get(problem_severity, 0) > _SEV_ORDER.get(worst, 0):
+                worst = problem_severity
     if not states:
         return {'check': 'nq:services', 'severity': OK, 'skipped': True,
                 'detail': 'keine NQ-Timer installiert'}
-    severity = WARN if problems else OK
+    severity = worst if problems else OK
     out = {'check': 'nq:services', 'severity': severity, 'states': states}
     if problems:
         out['error'] = 'NQ-Timer nicht scharf: ' + ', '.join(problems)
@@ -215,7 +227,7 @@ def check_nq_services() -> dict:
 def run_all() -> dict:
     """Alle NQ-Checks ausfuehren (rollen-/deploymentbewusst)."""
     role = _read_role()
-    if role == 'failover':
+    if role != 'primary':
         checks = [{'check': 'nq:module', 'severity': OK, 'skipped': True,
                    'role': role, 'detail': 'NQ-Aggregation laeuft nur auf primary'}]
     else:

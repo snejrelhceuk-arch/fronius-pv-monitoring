@@ -24,7 +24,7 @@ Systemweite Betriebsleitplanken fuer Multi-Host-Betrieb: `.role`-basiertes Verha
 - **Browser-Autostart (Display-Host):** `scripts/pv_kiosk_browser.sh`, `scripts/install_kiosk_autostart.sh`
 - **GFS-Backup:** `scripts/backup_db_gfs.sh`
 - **Publish-Audit:** `scripts/publish_audit.sh`
-- **Service-Definitionen:** `config/systemd/pv-automation.service`, `config/systemd/pv-observer.service`, `config/systemd/pv-wattpilot.service`, `config/systemd/pv-steuerbox.service`
+- **Service-Definitionen:** `config/systemd/pv-automation.service`, `config/systemd/pv-observer.service`, `config/systemd/pv-wattpilot.service`, `config/systemd/pv-steuerbox.service`; Installer pruefen `WorkingDirectory` vor dem Ausrollen.
 - **Optionaler HA-Adapter-Service:** `config/systemd/pv-ha-bridge.service`
 
 ## Inputs / Outputs
@@ -60,6 +60,7 @@ Systemweite Betriebsleitplanken fuer Multi-Host-Betrieb: `.role`-basiertes Verha
 - Code-Sync schliesst absichtlich Laufzeitdateien (`*.db`, `.state`, `.secrets`) aus; Probleme dort nicht mit Code-Sync suchen.
 - Prompt-Paste (`(.venv) user@host:...`) fuehrt in VS Code Tasks oft zu Exit 1; Safe-Runner erkennt und blockt dies frueh.
 - Workspace-Pfadwechsel (OS-Migration `Dokumente/PVAnlage` -> `Dokumente/PVAnlage`): installierte Units in `/etc/systemd/system/` und die `.venv` (bin-Shebangs + `pyvenv.cfg`) tragen absolute Alt-Pfade. Folge: `203/EXEC` beim Service-Restart und laufende Prozesse auf bereits verschwundenen Binaries. Beide Stellen mit-migrieren, dann `daemon-reload` + Restart.
+- `scripts/install_nq_services.sh` blockt Unit-Dateien, deren `WorkingDirectory` nicht existiert oder nicht auf den aktuellen Workspace zeigt; Diagnos meldet installierte `pv-*.service` mit fehlendem `WorkingDirectory`.
 - Pfadwechsel trifft auch die **User-Crontab** (`crontab -l`): Aggregations-Jobs (`min1`/`fifteen`/`daily`/`monthly`) laufen `cd <alt-pfad> && python3 -m collector.aggregate.*` und scheitern still mit `ModuleNotFoundError: No module named 'collector'`. Symptom: `raw_data` frisch, aber `data_1min`/`data_15min`/`hourly_data` stehen -> Monitoring-Chart endet abrupt. Fix: `crontab -l | sed 's#alt#neu#g' | crontab -`. Lücke per `min1._aggregate_1min_impl(conn,cur,bucket_ts)` aus `raw_data` nachfüllen (nur soweit Retention reicht).
 - Failover-DB-Mirror (`failover_sync_db.sh`) braucht Key-Auth Failover->Primary; nach SD-Reflash fehlt der Host-Key (`ssh-keyscan`) und der Pull-Key in `authorized_keys` des Primary.
 
