@@ -7,7 +7,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 User=admin
-WorkingDirectory=/srv/pv-system
+WorkingDirectory=%h/Dokumente/PVAnlage/pv-system
 EnvironmentFile=-%h/.infra.local
 Environment=PYTHONUNBUFFERED=1
 # --auto-month = Vormonat (Timer läuft am Monatsersten). Schreibt nq_energy_monthly.

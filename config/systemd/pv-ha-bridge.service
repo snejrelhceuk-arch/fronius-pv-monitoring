@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 User=admin
-WorkingDirectory=/srv/pv-system
+WorkingDirectory=%h/Dokumente/PVAnlage/pv-system
 ExecStart=/usr/bin/python3 -m steuerbox.ha_mqtt_bridge
 Restart=on-failure
 RestartSec=20

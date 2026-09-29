@@ -36,8 +36,8 @@ _project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_project_root))
 
 import config
-from automation.engine.aktoren.aktor_fritzdect import (
-    _load_fritz_config, _get_session_id, _aha_device_info
+from fritzdect_read import (
+    aha_device_info, get_session_id, load_fritz_config
 )
 
 # ════════════════════════════════════════════════════════════════
@@ -87,7 +87,7 @@ class FritzDectCollector:
         now = int(time.time())
         
         try:
-            cfg = _load_fritz_config()
+            cfg = load_fritz_config()
             host = cfg.get('fritz_ip', '192.168.178.1')
             user = cfg.get('fritz_user', '')
             pw = cfg.get('fritz_password', '')
@@ -100,7 +100,7 @@ class FritzDectCollector:
                 return
             
             # Session-ID holen
-            sid = _get_session_id(host, user, pw)
+            sid = get_session_id(host, user, pw)
             if not sid:
                 if self.error_count < self.max_error_count:
                     LOG.warning("Fritz!Box Session-ID konnte nicht geholt werden")
@@ -123,7 +123,7 @@ class FritzDectCollector:
                     continue
                 
                 # Geräteinfo abrufen
-                info = _aha_device_info(host, ain, sid)
+                info = aha_device_info(host, ain, sid)
                 if not info:
                     continue
                 

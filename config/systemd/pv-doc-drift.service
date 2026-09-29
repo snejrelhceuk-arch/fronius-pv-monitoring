@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=oneshot
-WorkingDirectory=/srv/pv-system
+WorkingDirectory=%h/Dokumente/PVAnlage/pv-system
 ExecStart=/usr/bin/python3 tools/doc_drift_engine.py --write --cleanup
 StandardOutput=journal
 StandardError=journal

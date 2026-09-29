@@ -5,7 +5,7 @@ role: meta
 applyTo: "scripts/**"
 tags: [hosts, deployment, rsync, sync, pi, tech, failover, kueche, rolle-n]
 status: stable
-last_review: 2026-09-28
+last_review: 2026-09-29
 ---
 
 # System Hosts + Deployment
@@ -48,7 +48,7 @@ scripts/sync_code_to_tech.sh --force    # ohne Nachfrage (Cron-tauglich)
 (Der Restart-Hook fasst den Poller nur an, wenn NQ-Code/-Config geändert wurde; Poller ist
 idempotent, `Restart=always`, ~0,5 s PAC-Lücke bei Neustart.)
 
-**Tech-Reboot (nicht nur Restart):** immer `scripts/1_reboot_Tech.sh` oder `scripts/pv_tech_safe_reboot.sh` — beide ziehen zuerst die tmpfs-NQ-Aggregate per `pv_nq_flush.sh` nach Primary. Ohne Flush gehen bis zu 4 h 5-min-Daten verloren (Tech ist RAM-first ohne SD-Persist).
+**Tech-Reboot (nicht nur Restart):** immer `scripts/1_reboot_Tech.sh` oder `scripts/pv_tech_safe_reboot.sh` — beide sind Primary-guarded und ziehen zuerst die tmpfs-NQ-Aggregate per `pv_nq_flush.sh` nach Primary. Ohne Flush gehen bis zu 4 h 5-min-Daten verloren (Tech ist RAM-first ohne SD-Persist).
 
 ## Dienst → Host (Kurz)
 - **Primary:** `pv-web`, `pv-automation`, `pv-collector`, NQ-Primary-Timer

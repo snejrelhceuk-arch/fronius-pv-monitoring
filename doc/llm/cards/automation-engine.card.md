@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/**"
 tags: [engine, tick-loop, regeln, registry]
 status: stable
-last_review: 2026-09-28
+last_review: 2026-09-29
 ---
 
 # Automation-Engine
@@ -43,7 +43,7 @@ Zentrale Steuerschleife (Rolle C). Sammelt Beobachtungen, ruft Schutz-Checks, da
 
 ## Häufige Aufgaben
 - Neue Regel hinzufügen → Regel-Modul unter `automation/engine/regeln/` anlegen (Subklasse `Regel`, `bewerte()` + ggf. `erzeuge_aktionen()`), dann Eintrag in `config/engine_registry.json` → `regeln[]` (`name`, `klasse`, `aktiv`) **an der gewünschten Reihenfolge-Position**. Die Engine lädt die Regeln daraus (`registry.py:lade_regeln`); `DEFAULT_REGELN_SPEC` in `registry.py` ist der Code-Fallback und muss synchron gehalten werden.
-- Regel/Aktor abschalten ohne Code → `"aktiv": false` im Registry-Eintrag.
+- Regel/Aktor abschalten ohne Code → `"aktiv": false` im Registry-Eintrag; harte Safety-Regeln/-Aktoren werden vom Loader trotzdem geladen und als Fehler geloggt.
 - Auswertungsreihenfolge ändern → Reihenfolge in `config/engine_registry.json` → `regeln[]` ändern (= Reihenfolge bei Score-Gleichstand).
 - Tick-Intervall ändern → `automation/engine/automation_daemon.py:AutomationDaemon.run` (Konstanten OBS_COLLECT/FAST/STRATEGIC).
 - Score-Logik einer Regel debuggen → `automation/engine/engine.py:Engine.zyklus` (Logging) + Regel-Klasse `bewerte()`.
@@ -51,7 +51,7 @@ Zentrale Steuerschleife (Rolle C). Sammelt Beobachtungen, ruft Schutz-Checks, da
 - Aktiven Tages-Intent lesen → `automation/engine/operator_intents.py:read_active_afternoon_charge_intent`.
 
 ## Bekannte Fallstricke
-- 17 Regeln registriert (Stand 2026-06). Reihenfolge in `config/engine_registry.json` = Auswertungsreihenfolge bei Score-Gleichstand. Fehlt/defekt die Registry-JSON, fällt `registry.py` sicher auf `DEFAULT_REGELN_SPEC`/`DEFAULT_AKTOREN_SPEC` zurück (Produktion läuft unverändert) — eine kaputte JSON darf nie Schutz-Regeln still verschlucken.
+- 17 Regeln registriert (Stand 2026-06). Reihenfolge in `config/engine_registry.json` = Auswertungsreihenfolge bei Score-Gleichstand. Fehlt/defekt die Registry-JSON, fällt `registry.py` sicher auf `DEFAULT_REGELN_SPEC`/`DEFAULT_AKTOREN_SPEC` zurück (Produktion läuft unverändert) — eine kaputte JSON oder `aktiv:false` darf nie Schutz-Regeln still verschlucken.
 - `engine_vorausschau()` (Web-API, ohne Daemon) nutzt **dieselbe** `lade_regeln()`-Registry wie die Live-Engine (Single-Source, kein Drift mehr).
 - **FBH-Nachtschaltung** (`RegelFussbodenheizungNacht`, `geraete_fbh_nacht.py`): rein zeitbasierte, flankengetriggerte Schaltung der Fußbodenheizungs-Steckdose (Fritz!DECT) — genau 1× `fbh_ein` zu `fenster_start_h` und 1× `fbh_aus` im Nachlauf nach `fenster_ende_h`, je Kalendertag. Once-pro-Tag-Sperre über `_absenkung_done['fbh_ein'/'fbh_aus']` (erst nach Aktor-Erfolg via `meta_absenkung_tag`). Läuft im Schutz-Pass (Whitelist in `_ist_schutz`), kein Nachstellen → oszillationssicher und konfliktarm zur HomeAssistant-Heizung. Matrix: `regelkreise.fussbodenheizung`. Gedacht als Sommer-Regelmäßigkeit (HA-Automation dann aus); im Winter `aktiv:false` setzen, da HA die FBH verwaltet.
 - ExternalRespect-Hold (HP/WP, 30 min) wird per `extern_respekt_s` in der Matrix gesteuert — siehe `automation-regel-heizpatrone.card.md` und `automation-regel-wattpilot.card.md`.

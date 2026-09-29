@@ -3,8 +3,8 @@ registry.py — Plugin-Registry für Engine-Regeln und Aktoren (Schicht C)
 
 Single-Source für die Registrierung von Regeln (geordnet) und Aktoren.
 Liest `config/engine_registry.json`; die Reihenfolge der Regeln dort ist
-die Auswertungsreihenfolge bei Score-Gleichstand. Jeder Eintrag kann per
-`"aktiv": false` ohne Code-Änderung deaktiviert werden.
+die Auswertungsreihenfolge bei Score-Gleichstand. Komfort-/Policy-Einträge
+können per `"aktiv": false` ohne Code-Änderung deaktiviert werden.
 
 Sicherheit: Fehlt die Registry-Datei oder ist sie strukturell defekt,
 fällt der Loader auf die im Code hinterlegten Default-Specs zurück
@@ -65,6 +65,18 @@ DEFAULT_AKTOREN_SPEC: list[tuple[str, str, bool]] = [
     ('waermepumpe', 'automation.engine.aktoren.aktor_waermepumpe.AktorWaermepumpe', True),
 ]
 
+HARD_SAFETY_RULES = frozenset({
+    'sls_schutz',
+    'einspeise_schutz',
+    'wattpilot_battschutz',
+})
+
+HARD_SAFETY_AKTOREN = frozenset({
+    'batterie',
+    'wattpilot',
+    'fritzdect',
+})
+
 
 # ── Hilfsfunktionen ──────────────────────────────────────────
 
@@ -104,6 +116,9 @@ def _load_specs_from_json(path: str, key: str) -> list[tuple[str, str, bool]] | 
 def _instanziiere_regeln(specs: list[tuple[str, str, bool]]) -> list[Regel]:
     regeln: list[Regel] = []
     for name, dotted, aktiv in specs:
+        if name in HARD_SAFETY_RULES and not aktiv:
+            LOG.error(f"Safety-Regel '{name}' darf nicht deaktiviert werden — lade trotzdem")
+            aktiv = True
         if not aktiv:
             LOG.info(f"Regel '{name}' per Registry deaktiviert — übersprungen")
             continue
@@ -118,6 +133,9 @@ def _instanziiere_aktoren(specs: list[tuple[str, str, bool]],
                           dry_run: bool) -> dict[str, AktorBase]:
     aktoren: dict[str, AktorBase] = {}
     for name, dotted, aktiv in specs:
+        if name in HARD_SAFETY_AKTOREN and not aktiv:
+            LOG.error(f"Safety-Aktor '{name}' darf nicht deaktiviert werden — lade trotzdem")
+            aktiv = True
         if not aktiv:
             LOG.info(f"Aktor '{name}' per Registry deaktiviert — übersprungen")
             continue

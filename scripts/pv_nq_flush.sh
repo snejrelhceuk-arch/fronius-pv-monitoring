@@ -18,6 +18,7 @@
 set -uo pipefail
 
 BASE="$(cd "$(dirname "$0")/.." && pwd)"
+source "${BASE}/scripts/role_guard.sh" 2>/dev/null || { echo "NQ-Flush nur auf role=primary erlaubt" >&2; exit 1; }
 cd "$BASE"
 HOURS="${1:-12}"
 PY=/usr/bin/python3   # NQ-Dienste laufen unter System-Python (siehe systemd-Units)

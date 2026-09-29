@@ -5,7 +5,7 @@ role: A
 applyTo: "collector/fritzdect.py"
 tags: [fritzdect, collector, aha-api, ain]
 status: stable
-last_review: 2026-09-02
+last_review: 2026-09-29
 ---
 
 # FritzDECT-Collector
@@ -15,6 +15,7 @@ Liest Fritz!DECT-Steckdosen (z. B. Heizpatrone, Klimaanlage, WP-Schaltdose) via 
 
 ## Code-Anchor
 - **Hauptdatei:** `collector/fritzdect.py`
+- **Read-only Helper:** `fritzdect_read.py` (Config, Session-ID, `getdevicelistinfos`); Aktor-Schaltbefehle bleiben in Rolle C.
 - **Config:** `config/fritz_config.json` (Fritz!Box-IP, Geräteliste mit `device_id`, `ain`, `name`, `active`-Flag, `polling_interval_s`)
 - **Schema:** `db_init.py` Tabelle `fritzdect_readings`
 
@@ -25,6 +26,7 @@ Liest Fritz!DECT-Steckdosen (z. B. Heizpatrone, Klimaanlage, WP-Schaltdose) via 
 ## Invarianten
 - **Polling-Intervall** typisch 10 s (`polling_interval_s` in `fritz_config.json`).
 - **Session-Cache:** 15 min, danach Reauth.
+- Collector/Web/Aggregation importieren nur `fritzdect_read.py`, keine Aktor-Module.
 - **AIN-Mapping** ist aus `fritz_config.json` zu lesen — Single Source.
 - Bei <10 aufeinanderfolgenden Fehlern: Log; danach quiet (`collector/fritzdect.py`).
 - **Retention 7 Tage** (`config.FRITZDECT_RETENTION_DAYS`). Autoritativer Prune-Pfad ist `cleanup_db()` im Poller (`collector/poller.py`, stündlich im dauerhaft laufenden `pv-collector`) — unabhängig vom fritzdect-Collector-Loop. `cleanup_old_readings()` im Collector ist nur ein redundanter Fallback (greift nur, wenn der Collector-Loop ≥1 h durchläuft).

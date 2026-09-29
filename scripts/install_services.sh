@@ -15,6 +15,7 @@
 
 set -e
 BASE="$(cd "$(dirname "$0")/.." && pwd)"
+source "${BASE}/scripts/role_guard.sh" 2>/dev/null || { echo "Services-Installation nur auf role=primary erlaubt" >&2; exit 1; }
 
 echo "=== PV-System Systemd-Services installieren ==="
 

@@ -7,7 +7,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 User=admin
-WorkingDirectory=/srv/pv-system
+WorkingDirectory=%h/Dokumente/PVAnlage/pv-system
 EnvironmentFile=-%h/.infra.local
 Environment=PYTHONUNBUFFERED=1
 # --auto-year = Vorjahr (Timer läuft am 1.1.). Schreibt nq_energy_yearly (nq_YYYY-01.db).

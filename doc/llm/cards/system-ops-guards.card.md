@@ -5,7 +5,7 @@ role: meta
 applyTo: "scripts/**"
 tags: [role-guard, failover, backup, publish-guard, sync]
 status: stable
-last_review: 2026-08-04
+last_review: 2026-09-29
 ---
 
 # System Ops-Guards
@@ -14,8 +14,8 @@ last_review: 2026-08-04
 Systemweite Betriebsleitplanken fuer Multi-Host-Betrieb: `.role`-basiertes Verhalten, sichere Code-Synchronisation, Backup-Rhythmus und Publish-Guard vor oeffentlichen Pushes.
 
 ## Code-Anchor
-- **Python-Rollencheck:** `host_role.py:get_role`, `is_primary`, `is_failover`
-- **Shell-Rollencheck:** `scripts/role_guard.sh`
+- **Python-Rollencheck:** `host_role.py:get_role`, `require_primary`, `require_role`, `is_primary`, `is_failover`, `is_tech`, `is_kueche`
+- **Shell-Rollencheck:** `scripts/role_guard.sh` (`require_primary`, `require_role`; Default beim Sourcen = Primary-only)
 - **Cron-Monitore:** `scripts/monitor_collector.sh`, `scripts/monitor_wattpilot.sh`, `scripts/monitor_steuerbox.sh`
 - **Terminal-Safe-Runner:** `scripts/terminal_safe_run.sh`
 - **Code-Sync Primary->Failover:** `scripts/sync_code_to_peer.sh`
@@ -55,7 +55,7 @@ Systemweite Betriebsleitplanken fuer Multi-Host-Betrieb: `.role`-basiertes Verha
 - Workspace-Redundanz auf alle Pi (SD-schonend, wöchentlich) -> `./scripts/sync_workspace_all_hosts.sh` (Crontab-Beispiel im Skriptkopf).
 
 ## Bekannte Fallstricke
-- Fehlt `.role`, ist der Default `primary` (sicher fuer Produktion, gefaehrlich auf falsch konfiguriertem Failover).
+- Fehlt `.role`, ist der Default `primary`; vorhandene unbekannte Rollen werden als `unknown` behandelt und erfuellen keine Primary-Guards.
 - Dienstnamen koennen zwischen Doku und lokaler systemd-Realitaet driften; Diagnos-Servicechecks dann pruefen.
 - Code-Sync schliesst absichtlich Laufzeitdateien (`*.db`, `.state`, `.secrets`) aus; Probleme dort nicht mit Code-Sync suchen.
 - Prompt-Paste (`(.venv) user@host:...`) fuehrt in VS Code Tasks oft zu Exit 1; Safe-Runner erkennt und blockt dies frueh.

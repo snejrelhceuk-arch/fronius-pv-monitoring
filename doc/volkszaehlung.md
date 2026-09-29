@@ -5,40 +5,40 @@
 ## Übersicht
 
 **Gesamtgröße (Textdateien gezählt):** 3546 MB
-**Gesamtzeilen (Code/Doku/Daten):** 370.050 Zeilen
-**Gezählte Dateien:** 833
+**Gesamtzeilen (Code/Doku/Daten):** 371.436 Zeilen
+**Gezählte Dateien:** 836
 **Ausgeschlossene Verzeichnisse:** 29 (.venv, __pycache__, node_modules, .git …)
 
 ## Nach Sprache/Typ
 
 | Sprache/Typ | Dateien | Zeilen | Anteil |
 |---|---|---|---|
-| **CSV** | 24 | 245.825 | 66.4% |
-| **Python** | 215 | 62.654 | 16.9% |
-| **Markdown** | 147 | 23.841 | 6.4% |
+| **CSV** | 24 | 246.144 | 66.3% |
+| **Python** | 217 | 63.093 | 17.0% |
+| **Markdown** | 148 | 24.432 | 6.6% |
 | **HTML** | 28 | 16.426 | 4.4% |
-| **Shell** | 70 | 5.588 | 1.5% |
+| **Shell** | 70 | 5.618 | 1.5% |
 | **JSON** | 283 | 5.195 | 1.4% |
-| **TXT** | 4 | 4.830 | 1.3% |
+| **TXT** | 4 | 4.839 | 1.3% |
 | **JavaScript** | 6 | 1.546 | 0.4% |
 | **CSS** | 6 | 1.494 | 0.4% |
 | **SQL** | 10 | 1.427 | 0.4% |
 | **systemd** | 33 | 568 | 0.2% |
 | **YAML** | 3 | 562 | 0.2% |
 | **CONF** | 3 | 70 | 0.0% |
-| **TOML** | 1 | 24 | 0.0% |
-| **Total** | 833 | 370.050 | 100% |
+| **TOML** | 1 | 22 | 0.0% |
+| **Total** | 836 | 371.436 | 100% |
 
 ## Python-Code nach ABCDEN-Rollen
 
 | Rolle | Verzeichnis | .py-Dateien | Zeilen |
 |---|---|---|---|
-| **C** Automation | `automation/` | 46 | 14.398 |
-| **A** Collector | `collector/` | 19 | 4.937 |
-| **B** Web-API | `routes/` | 28 | 11.650 |
+| **C** Automation | `automation/` | 46 | 14.317 |
+| **A** Collector | `collector/` | 19 | 4.935 |
+| **B** Web-API | `routes/` | 28 | 11.648 |
 | **D** Diagnos | `diagnos/` | 10 | 2.293 |
 | **E** Steuerbox | `steuerbox/` | 5 | 1.252 |
-| **N** Netzqualität | `nq/` | 37 | 9.120 |
+| **N** Netzqualität | `nq/` | 37 | 9.143 |
 
 ## Größte Python-Dateien (Top 10)
 
@@ -48,7 +48,7 @@
 1. `automation/engine/regeln/waermepumpe.py` — 1.132 Zeilen
 1. `routes/realtime.py` — 1.080 Zeilen
 1. `automation/engine/regeln/soc_steuerung.py` — 1.057 Zeilen
-1. `routes/system/battery.py` — 1.025 Zeilen
+1. `routes/system/battery.py` — 1.023 Zeilen
 1. `routes/visualization.py` — 944 Zeilen
 1. `routes/pages.py` — 916 Zeilen
 1. `routes/netzqualitaet.py` — 898 Zeilen

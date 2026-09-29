@@ -1,6 +1,6 @@
 [Unit]
 Description=NQ Netzereignis-Analyse VLF-only täglich 00:30 (Primary, Rolle N)
-Documentation=file:///opt/pv-system/doc/netzqualitaet/NQ_MODUL.md
+Documentation=https://github.com/mvk/pv-system/blob/main/doc/netzqualitaet/NQ_MODUL.md
 
 [Timer]
 # 00:30 — nach Energie-Rollup (00:05), Transfer (00:10), Aggregation (00:15).

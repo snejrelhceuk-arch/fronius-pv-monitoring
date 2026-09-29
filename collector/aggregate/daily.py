@@ -647,19 +647,17 @@ def _fill_fritzdect_daily_from_devstats(c):
     source='fritz_devstats'. Best-effort: ohne Fritz-Zugriff still.
     """
     try:
-        from automation.engine.aktoren.aktor_fritzdect import (
-            _load_fritz_config, _get_session_id,
-        )
+        from fritzdect_read import get_session_id, load_fritz_config
     except Exception:
         return
 
-    cfg = _load_fritz_config()
+    cfg = load_fritz_config()
     host = cfg.get('fritz_ip')
     user = cfg.get('fritz_user', '')
     pw = cfg.get('fritz_password', '')
     if not (host and user and pw):
         return
-    sid = _get_session_id(host, user, pw)
+    sid = get_session_id(host, user, pw)
     if not sid:
         return
 

@@ -5,16 +5,21 @@
 #
 # Nutzung in Cron-Jobs und Monitor-Scripts:
 #   source "$(dirname "$0")/scripts/role_guard.sh" || exit 0
+#   require_primary || exit 0
 #   # Ab hier: nur primary-Code
+#
+# Nur Funktionen laden (z. B. fuer Tech-Jobs):
+#   PV_ROLE_GUARD_AUTO=0 source "$(dirname "$0")/scripts/role_guard.sh"
+#   require_role tech || exit 0
 #
 # Oder mit explizitem Pfad:
 #   source /srv/pv-system/scripts/role_guard.sh || exit 0
 #
 # Funktionsweise:
 #   - Liest .role-Datei im Repo-Root
-#   - Wenn Rolle = "failover" → return 1 (→ exit 0 im Aufrufer)
-#   - Wenn Rolle = "primary"  → return 0 (Script läuft weiter)
-#   - Wenn .role fehlt         → return 0 (Default = primary, sicher)
+#   - bekannte Rollen: primary, failover, tech, kueche
+#   - wenn .role fehlt: Default = primary
+#   - vorhandene unbekannte .role: unknown, nie primary
 #
 # Die .role-Datei ist gitignored — jeder Host hat seine eigene.
 # Siehe doc/DUAL_HOST_ARCHITECTURE.md für Details.
@@ -26,7 +31,12 @@ _ROLE_FILE="${ROLE_FILE:-${_ROLE_GUARD_DIR}/.role}"
 
 get_role() {
     if [ -f "$_ROLE_FILE" ]; then
-        head -1 "$_ROLE_FILE" | tr -d '[:space:]'
+        local role
+        role="$(head -1 "$_ROLE_FILE" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+        case "$role" in
+            primary|failover|tech|kueche) echo "$role" ;;
+            *) echo "unknown" ;;
+        esac
     else
         echo "primary"
     fi
@@ -34,7 +44,22 @@ get_role() {
 
 PV_ROLE="$(get_role)"
 
-# Guard: Wenn failover → return 1 (Aufrufer sieht Fehler → exit 0)
-if [ "$PV_ROLE" = "failover" ]; then
-    return 1 2>/dev/null || exit 0
+require_role() {
+    local wanted
+    for wanted in "$@"; do
+        if [ "$PV_ROLE" = "$wanted" ]; then
+            return 0
+        fi
+    done
+    echo "role=${PV_ROLE} -> required one of: $*" >&2
+    return 1
+}
+
+require_primary() {
+    require_role primary
+}
+
+# Kompatibilitaet: bestehende Aufrufer mit `source ... || exit 0` bleiben Primary-only.
+if [ "${PV_ROLE_GUARD_AUTO:-1}" != "0" ]; then
+    require_primary || return 1 2>/dev/null || exit 0
 fi

@@ -6,8 +6,8 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 User=admin
-WorkingDirectory=/srv/pv-system
-ExecStart=/srv/pv-system/.venv/bin/python /srv/pv-system/scripts/pv_weekly_maintenance_report.py
+WorkingDirectory=%h/Dokumente/PVAnlage/pv-system
+ExecStart=%h/Dokumente/PVAnlage/pv-system/.venv/bin/python %h/Dokumente/PVAnlage/pv-system/scripts/pv_weekly_maintenance_report.py
 StandardOutput=journal
 StandardError=journal
 Nice=15

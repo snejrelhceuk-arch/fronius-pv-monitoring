@@ -7,6 +7,7 @@
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/role_guard.sh" 2>/dev/null || { echo "Tech-Reboot nur auf role=primary erlaubt" >&2; exit 1; }
 source "$SCRIPT_DIR/load_infra_env.sh"
 source "$SCRIPT_DIR/_reboot_remote_host.sh"
 

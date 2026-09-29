@@ -12,8 +12,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Rollen-Guard: auf Failover nichts tun
-source "$SCRIPT_DIR/role_guard.sh" 2>/dev/null || { echo "role=failover -> skip"; exit 0; }
+# Rollen-Guard: nur Primary installiert den Steuerbox-Proxy.
+source "$SCRIPT_DIR/role_guard.sh" 2>/dev/null || { echo "Steuerbox-Proxy nur auf role=primary erlaubt"; exit 0; }
 
 CRT=/etc/ssl/certs/steuerbox.crt
 KEY=/etc/ssl/private/steuerbox.key

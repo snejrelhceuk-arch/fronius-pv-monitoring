@@ -33,6 +33,7 @@ Schicht E nimmt Operator-Intents entgegen, validiert sie und schreibt sie als Ov
 
 ## Invarianten
 - Steuerbox macht keine direkten Hardware-Schreibzugriffe (kein Modbus/FritzDECT/Wattpilot aus E).
+- Vor direktem Aktor-Dispatch prueft Schicht C (`OperatorOverrideProcessor`) aktuelle `obs_state`-Hard-Guards und auditiert blockierte Overrides in `steuerbox_audit`.
 - Die optionale HA-MQTT-Bridge liest `/api/ha/*` (B) für Telemetrie-Publish und schreibt **ausschliesslich** `afternoon_charge_request` via loopback-POST zu `/api/ops/intent` (Schicht E). Kein direkter Aktor-/Modbus-Schreibpfad.
 - IP-Allowlist wird vor der Intent-Verarbeitung geprueft.
 - Auf Failover sind nicht-GET Ops-Endpunkte blockiert (`403`, read-only Verhalten).

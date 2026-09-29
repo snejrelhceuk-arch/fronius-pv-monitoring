@@ -8,6 +8,8 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any
 
+import config
+
 LOG = logging.getLogger('engine.operator_overrides')
 
 RAM_DB_PATH = '/dev/shm/automation_obs.db'
@@ -107,6 +109,13 @@ class OperatorOverrideProcessor:
                     skipped += 1
                     continue
 
+                safety_block = self._check_override_safety(action, params, action_plan, obs_flags)
+                if safety_block:
+                    self._set_status(conn, override_id, 'failed')
+                    self._audit(conn, action, params, safety_block, override_id, 'override blocked by safety guard')
+                    failed += 1
+                    continue
+
                 self._mark_engine_origin_for_actions(action_plan)
 
                 results = actuator.ausfuehren_plan(action_plan)
@@ -177,6 +186,13 @@ class OperatorOverrideProcessor:
                     skipped += 1
                     continue
 
+                safety_block = self._check_override_safety(action, params, action_plan, obs_flags)
+                if safety_block:
+                    self._set_status(conn, override_id, 'failed')
+                    self._audit(conn, action, params, safety_block, override_id, 'override blocked by safety guard')
+                    failed += 1
+                    continue
+
                 self._mark_engine_origin_for_actions(action_plan)
 
                 results = actuator.ausfuehren_plan(action_plan)
@@ -230,9 +246,51 @@ class OperatorOverrideProcessor:
                 'soc_mode': str(data['soc_mode']).lower() if data.get('soc_mode') is not None else None,
                 'soc_min': int(data['soc_min']) if data.get('soc_min') is not None else None,
                 'soc_max': int(data['soc_max']) if data.get('soc_max') is not None else None,
+                'batt_soc_pct': float(data['batt_soc_pct']) if data.get('batt_soc_pct') is not None else None,
+                'ww_temp_c': float(data['ww_temp_c']) if data.get('ww_temp_c') is not None else None,
+                'grid_power_w': float(data['grid_power_w']) if data.get('grid_power_w') is not None else None,
+                'alarm_uebertemp': bool(data.get('alarm_uebertemp')),
+                'alarm_ueberlast': bool(data.get('alarm_ueberlast')),
             }
         except Exception:
             return {}
+
+    @staticmethod
+    def _check_override_safety(action: str, params: dict[str, Any],
+                               action_plan: list[dict[str, Any]],
+                               obs_flags: dict[str, Any]) -> dict[str, Any] | None:
+        for act in action_plan:
+            aktor = act.get('aktor')
+            kommando = act.get('kommando')
+
+            if aktor == 'fritzdect' and kommando == 'hp_ein':
+                soc = obs_flags.get('batt_soc_pct')
+                ww = obs_flags.get('ww_temp_c')
+                if soc is not None and soc <= config.STEUERBOX_HP_AUS_SOC_PCT:
+                    return {'ok': False, 'error': 'hp blocked: soc too low', 'soc_pct': soc}
+                if obs_flags.get('alarm_uebertemp'):
+                    return {'ok': False, 'error': 'hp blocked: overtemperature alarm'}
+                if ww is not None and ww >= config.STEUERBOX_HP_UEBERTEMP_C:
+                    return {'ok': False, 'error': 'hp blocked: overtemperature', 'ww_temp_c': ww}
+
+            if aktor == 'wattpilot' and kommando in {'resume_charging', 'set_max_current', 'set_charge_mode_default'}:
+                if obs_flags.get('alarm_ueberlast'):
+                    return {'ok': False, 'error': 'wattpilot blocked: overload alarm'}
+                grid = obs_flags.get('grid_power_w')
+                if grid is not None and grid >= 26000:
+                    return {'ok': False, 'error': 'wattpilot blocked: grid overload', 'grid_power_w': grid}
+
+            if aktor == 'batterie' and kommando == 'set_soc_min':
+                wert = act.get('wert')
+                if wert is None or int(wert) < config.STEUERBOX_SOC_MIN_PCT:
+                    return {'ok': False, 'error': 'battery blocked: soc_min below hard guard', 'wert': wert}
+
+            if aktor == 'batterie' and kommando == 'set_soc_max':
+                wert = act.get('wert')
+                if wert is None or int(wert) > config.STEUERBOX_SOC_MAX_PCT:
+                    return {'ok': False, 'error': 'battery blocked: soc_max above hard guard', 'wert': wert}
+
+        return None
 
     @staticmethod
     def _active_hold_needs_reapply(action: str, params: dict[str, Any],

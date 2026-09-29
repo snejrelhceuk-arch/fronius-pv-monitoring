@@ -21,6 +21,7 @@ import os
 import subprocess
 import time
 
+from host_role import require_primary
 from nq.nq_common import load_config, open_db, PRIMARY_SCHEMA, BASE_DIR
 
 _WINDOW_H = 5     # Übernahme-Fenster in Stunden (>4 h → at-least-once bei 4-h-Timer)
@@ -43,6 +44,14 @@ def _primary_db(ts: int) -> str:
     import time as _t
     month = _t.strftime("%Y-%m", _t.localtime(ts))
     return os.path.join(BASE_DIR, "nq", "db", f"nq_{month}.db")
+
+
+def _assert_primary_transfer_target(db_path: str) -> None:
+    require_primary()
+    expected_dir = os.path.realpath(os.path.join(BASE_DIR, "nq", "db"))
+    target = os.path.realpath(db_path)
+    if not target.startswith(expected_dir + os.sep):
+        raise RuntimeError(f"NQ-Transfer-Ziel ausserhalb Primary-nq/db: {target}")
 
 
 def _window_bounds(hours: float = _WINDOW_H) -> tuple[int, int]:
@@ -79,6 +88,7 @@ def _ssh_fetch(host: str, tmpfs_db: str, query: str, params: tuple, timeout: int
 
 def _ssh_delete(host: str, tmpfs_db: str, table: str, t0: int, t1: int) -> int:
     """Löscht Zeilen [t0, t1) in `table` auf Tech — erst nach Primary-Quittung aufrufen."""
+    require_primary()
     remote = (
         "import sqlite3;"
         f"c=sqlite3.connect('{tmpfs_db}');"
@@ -132,6 +142,7 @@ def transfer(hours: float = _WINDOW_H) -> dict:
     host = _tech_host(cfg)
     t0, t1 = _window_bounds(hours)
     db_path = _primary_db(t0)
+    _assert_primary_transfer_target(db_path)
 
     # --- nq_5min (Skalare) ---
     agg_rows = _ssh_fetch(

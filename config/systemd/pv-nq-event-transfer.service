@@ -7,7 +7,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 User=admin
-WorkingDirectory=/srv/pv-system
+WorkingDirectory=%h/Dokumente/PVAnlage/pv-system
 EnvironmentFile=-%h/.infra.local
 Environment=PYTHONUNBUFFERED=1
 # Holt event=1-Schnipsel der letzten Stunde von Tech, baut nq_events + nq_event_*.

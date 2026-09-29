@@ -861,19 +861,17 @@ def _fetch_hp_status(now, result):
         else:
             fritz_live = None
             try:
-                from automation.engine.aktoren.aktor_fritzdect import (
-                    _load_fritz_config, _get_session_id, _aha_device_info
-                )
-                _fcfg = _load_fritz_config()
+                from fritzdect_read import aha_device_info, get_session_id, load_fritz_config
+                _fcfg = load_fritz_config()
                 _fhost = _fcfg.get('fritz_ip', '192.168.178.1')
                 _fain = _fcfg.get('ain', '')
                 _fuser = _fcfg.get('fritz_user', '')
                 _fpass = _fcfg.get('fritz_password', '')
 
                 if _fain and _fuser and _fpass:
-                    _fsid = _get_session_id(_fhost, _fuser, _fpass)
+                    _fsid = get_session_id(_fhost, _fuser, _fpass)
                     if _fsid:
-                        fritz_live = _aha_device_info(_fhost, _fain, _fsid)
+                        fritz_live = aha_device_info(_fhost, _fain, _fsid)
             except Exception as _fe:
                 logging.debug(f"Fritz!DECT Live-Query: {_fe}")
 

@@ -5,7 +5,7 @@ role: N
 applyTo: "nq/transfer/**,nq/aggregate/**"
 tags: [netzqualitaet, nq, transfer, aggregation, primary, rolle-n]
 status: stable
-last_review: 2026-09-23
+last_review: 2026-09-29
 ---
 
 # NQ Transfer + Aggregation
@@ -39,6 +39,7 @@ fächert zu `hourly → daily` auf und hält Event-RAW dauerhaft.
 
 ## Invarianten
 - **At-least-once:** Löschen der tmpfs-Zeilen auf Tech **erst nach Ingest-Quittung**.
+- Transfer/Ack/Delete laufen nur auf `.role=primary`; die Python-Transfermodule pruefen zusätzlich, dass die lokale Ziel-DB unter `nq/db/` im Primary-Workspace liegt.
 - **Idempotenter Ingest:** doppelte Übernahme verändert das Ergebnis nicht (PKs, `INSERT OR REPLACE`/`ON CONFLICT`).
 - NQ schreibt ausschließlich in `nq/db/` — **niemals** in `data.db`/Produktionstabellen.
 - **Event-RAW wird nicht aggregiert** und dauerhaft aufbewahrt (Transienten-Rekonstruktion).

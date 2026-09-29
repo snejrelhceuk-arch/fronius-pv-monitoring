@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/collectors/tier1_checker.py"
 tags: [schutz, tier1, sls, no-op, watchdog]
 status: stable
-last_review: 2026-09-28
+last_review: 2026-09-29
 ---
 
 # Schutzregeln
@@ -28,6 +28,7 @@ Hartstop-Schutzschicht oberhalb der normalen Regel-Engine. Tier-1-Alarme bypasse
 ## Invarianten
 - **Tier-1 pausiert Engine.** Nur die Schutzregeln und ihre Aktoren laufen weiter.
 - **SLS-Schwelle 35 A** (Hauptsicherung): bei Überschreitung sofort Wattpilot reduzieren.
+- **Registry-Safety:** `sls_schutz`, `einspeise_schutz`, `wattpilot_battschutz` sowie Safety-Aktoren `batterie`, `wattpilot`, `fritzdect` sind nicht per `aktiv:false` deaktivierbar; `automation/engine/registry.py` lädt sie trotzdem und loggt einen Fehler.
 - **HP-Startup-Check:** Bei jedem Daemon-Neustart wird HP/Klima per FritzDECT AUS geschaltet — verhindert Hängenbleiben in unbekanntem Zustand.
 - **No-Op-Sentinel:** `BatteryConfig.write` liefert `_NoOpResult` (truthy, `.noop=True`) wenn Soll==Ist. `aktor_batterie._retry` muss truthy-checken, sonst FEHLER-Cooldown obwohl alles ok (Bug-Fix 2026-04-27).
 

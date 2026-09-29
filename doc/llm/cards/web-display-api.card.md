@@ -5,7 +5,7 @@ role: B
 applyTo: "routes/**"
 tags: [web-api, blueprints, templates, formatting, read-only]
 status: stable
-last_review: 2026-09-28
+last_review: 2026-09-29
 ---
 
 # Web Display/API
@@ -22,6 +22,7 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 - **Chart-Peak-Marker:** `static/js/nav-ui.js:PVChart.peakHeadroomMax(dataMax, peakVal, {floor,cap,round})` — Y-Achsen-Obergrenze mit Luft, damit der Peak-Pin (Wert-Label) nie den oberen Rahmen touchiert (verbraucher/erzeuger/tag_view).
 - **NQ read-only Datenzugriff:** `nq/tech_read.py` (`fetch_tech_snapshot`, `fetch_aggregates`, `fetch_agg` = 5min-Merge Primary+Tech, `fetch_agg_fast` = 10s aus Tech-RAM)
 - **Read-only Fronius-Zugriff:** `routes/helpers.py:FroniusReadOnly`, `routes/helpers.py:get_fronius_api`
+- **Read-only FritzDECT-Zugriff:** `fritzdect_read.py` fuer Live-Status; Web importiert keine Aktor-Module.
 - **DB-Zugriff:** `routes/helpers.py:get_db_connection`
 - **Page-Routen:** `routes/pages.py` (z. B. `maschinenraum`, `netzqualitaet`)
 - **Forecast-API + Persistierung:** `routes/forecast.py:api_forecast_tag`, `routes/helpers.py:store_forecast_daily`

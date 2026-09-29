@@ -19,7 +19,8 @@ BASE="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$BASE/config/systemd"
 DST="/etc/systemd/system"
 
-ROLE="$(cat "$BASE/.role" 2>/dev/null || echo primary)"
+PV_ROLE_GUARD_AUTO=0 source "${BASE}/scripts/role_guard.sh"
+ROLE="$PV_ROLE"
 echo "=== NQ-Services installieren (Rolle: $ROLE) ==="
 
 install_unit() {

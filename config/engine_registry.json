@@ -1,5 +1,5 @@
 {
-  "_doc": "Plugin-Registry der Automation-Engine (Rolle C). Single-Source für Regel- und Aktor-Registrierung. Die Reihenfolge unter 'regeln' ist die Auswertungsreihenfolge bei Score-Gleichstand. 'aktiv': false deaktiviert einen Eintrag ohne Code-Änderung. Fehlt/defekt diese Datei, nutzt die Engine die Code-Defaults in automation/engine/registry.py (Produktion läuft unverändert weiter). 'klasse' ist der dotted Import-Pfad; muss von Regel bzw. AktorBase erben.",
+  "_doc": "Plugin-Registry der Automation-Engine (Rolle C). Single-Source für Regel- und Aktor-Registrierung. Die Reihenfolge unter 'regeln' ist die Auswertungsreihenfolge bei Score-Gleichstand. 'aktiv': false deaktiviert nur Komfort-/Policy-Einträge; harte Safety-Regeln/-Aktoren werden vom Loader trotz false geladen und als Fehler geloggt. Fehlt/defekt diese Datei, nutzt die Engine die Code-Defaults in automation/engine/registry.py (Produktion läuft unverändert weiter). 'klasse' ist der dotted Import-Pfad; muss von Regel bzw. AktorBase erben.",
   "_version": "1.0.0",
   "_updated": "2026-06-29",
   "regeln": [

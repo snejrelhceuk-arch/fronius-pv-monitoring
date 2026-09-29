@@ -16,6 +16,7 @@
 set -uo pipefail
 
 BASE="$(cd "$(dirname "$0")/.." && pwd)"
+source "${BASE}/scripts/role_guard.sh" 2>/dev/null || { echo "Tech-Reboot nur auf role=primary erlaubt" >&2; exit 1; }
 set -a; . "${BASE}/.infra.local" 2>/dev/null; set +a
 TECH_IP="${PV_TECH_IP:-192.0.2.181}"
 TECH_USER="${PV_TECH_USER:-admin}"

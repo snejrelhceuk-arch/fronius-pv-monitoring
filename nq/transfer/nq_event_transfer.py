@@ -22,6 +22,7 @@ import os
 import subprocess
 import time
 
+from host_role import require_primary
 from nq.nq_common import load_config, open_db, PRIMARY_SCHEMA, BASE_DIR
 
 # nq_raw_fast-Spaltenreihenfolge (ohne event) = nq_event_fast (ohne event_id)
@@ -44,6 +45,14 @@ def _tech_host(cfg: dict) -> str:
 def _primary_db(ts: int) -> str:
     month = time.strftime("%Y-%m", time.localtime(ts))
     return os.path.join(BASE_DIR, "nq", "db", f"nq_{month}.db")
+
+
+def _assert_primary_transfer_target(db_path: str) -> None:
+    require_primary()
+    expected_dir = os.path.realpath(os.path.join(BASE_DIR, "nq", "db"))
+    target = os.path.realpath(db_path)
+    if not target.startswith(expected_dir + os.sep):
+        raise RuntimeError(f"NQ-Event-Transfer-Ziel ausserhalb Primary-nq/db: {target}")
 
 
 # ---------------------------------------------------------------------------
@@ -229,6 +238,8 @@ def transfer_events(hours: float = 5.0) -> dict:
     post = ef.get("post_window_s", 30)
     now = int(time.time())
     t0 = now - int(hours * 3600)
+    db_path = _primary_db(t0)
+    _assert_primary_transfer_target(db_path)
 
     fcols = ",".join(["ts_ms"] + _FAST_COLS)
     mcols = ",".join(["ts_ms"] + _MED_COLS)
@@ -250,12 +261,13 @@ def transfer_events(hours: float = 5.0) -> dict:
     if not snippets:
         return {"markers": 0, "kept": 0, "skipped": 0}
 
-    conn = open_db(_primary_db(t0), PRIMARY_SCHEMA)
+    conn = open_db(db_path, PRIMARY_SCHEMA)
     summary = ingest_snippets(conn, snippets, cfg)
     conn.close()
 
     # Marker auf Tech quittieren (event=0 setzen), damit sie nicht erneut transferiert werden
     if markers:
+        require_primary()
         ids = ",".join(str(int(m)) for m in markers)
         ack = (
             "import sqlite3\n"
