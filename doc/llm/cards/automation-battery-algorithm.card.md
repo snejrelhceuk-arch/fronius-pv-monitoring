@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/aktoren/aktor_batterie.py"
 tags: [batterie, soc, fronius, modbus]
 status: stable
-last_review: 2026-09-23
+last_review: 2026-09-30
 ---
 
 # Battery-Algorithm
@@ -48,7 +48,7 @@ Setzt SOC-Grenzen (`soc_min`, `soc_max`) und Lademodus an der Fronius GEN24 — 
 - **Frühes Fenster für gut-Prognose**: `gut_vorlauf_min=90min` öffnet das Zeitfenster 90 Minuten vor SR (statt 30 min), damit SOC_MIN=5% gesetzt wird bevor die Batterie auf den Nacht-Reserve-Floor trifft und Netzbezug entsteht.
 - Wattpilot-Ladung kann SOC kritisch ziehen → siehe `automation-regel-wattpilot.card.md` (RegelWattpilotBattSchutz hebt `soc_min` an).
 - `HYB_EVU_CHARGEFROMGRID` (Netzladen) wird selten gesetzt; bei Änderung Konflikt mit `RegelMorgenSocMin` prüfen.
-- **SOC_MAX=100% muss immer in Auto-Modus münden**: `RegelNachmittagSocMax` nutzt Zwei-Phasen-Ablauf nur bei regelbasierter Aktivierung: Phase 1 `manual/5–25%/100%` (Fronius lädt durch), Phase 2 `set_soc_mode=auto` sobald **Prognose=`gut`** UND **SOC > `nachmittag_soc_max.auto_switch_min_soc_pct`** (default 15%). Bei aktivem `afternoon_charge_request` (Steuerbox) pausiert die Regel komplett (Score=0) — der `OperatorOverrideProcessor` führt stattdessen eine 2-Schritt-Sequenz aus: Phase 1 (initial) `set_soc_max → target_soc_pct`, 60s Wartezeit (Policy Hold), Phase 2 (elapsed_s ≥ 60) `set_soc_mode → auto`. Begründung: Bei guter Prognose ist PV-Refill gesichert — manuelles 100%-Halten unnötig; Auto-Modus entlastet BMS-Hysterese (kein ständiges Nachladen). `RegelForecastPlausi` (setzt SOC_MAX=100 bei *schlechter* Prognose) bleibt bewusst in manual.
+- **SOC_MAX=100% muss immer in Auto-Modus münden**: `RegelNachmittagSocMax` nutzt einen Zwei-Phasen-Ablauf: Phase 1 `manual/…/100%` (Fronius lädt durch), Phase 2 `set_soc_mode=auto` sobald **Prognose=`gut`** UND **SOC > `nachmittag_soc_max.auto_switch_min_soc_pct`** (default 15%). Bei aktivem `afternoon_charge_request` (Steuerbox-Ladewunsch) hebt der Intent nur das Ziel auf `SOC_MAX=target` (default 100) und liefert das Fenster `start_earliest_h..start_latest_h` (12–15 h); den **Startzeitpunkt** berechnet `_berechne_intent_startzeit` prognose-/SOC-abhängig (hoher SOC + starke Prognose → spät Richtung `start_latest_h`, damit ~100 % erst spät nachmittags; Deadline `max_stunden_vor_sunset`). Der `OperatorOverrideProcessor` hält den Intent nur als **Policy-Hold** (`_map_override_to_actions → []`), kein direkter SOC-Schreibpfad. Begründung Phase 2: Bei guter Prognose ist PV-Refill gesichert — manuelles 100%-Halten unnötig; Auto-Modus entlastet BMS-Hysterese (kein ständiges Nachladen). `RegelForecastPlausi` (setzt SOC_MAX=100 bei *schlechter* Prognose) bleibt bewusst in manual.
 
 ## Verwandte Cards
 - [`automation-engine.card.md`](./automation-engine.card.md)

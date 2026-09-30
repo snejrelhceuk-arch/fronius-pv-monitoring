@@ -5,7 +5,7 @@ role: E
 applyTo: "steuerbox/**"
 tags: [intent, overrides, respekt, hard-guards, audit]
 status: stable
-last_review: 2026-09-29
+last_review: 2026-09-30
 ---
 
 # Steuerbox Intents
@@ -27,7 +27,7 @@ Schicht E nimmt Operator-Intents entgegen, validiert sie und schreibt sie als Ov
 - **Outputs:** DB-Schreibpfad in `/dev/shm/automation_obs.db` (`operator_overrides`, `steuerbox_audit`) und API-Response mit `override_id`, Restlaufzeit, normalisierten Parametern.
 
 ### Action-Hinweis
-- `afternoon_charge_request`: Tages-Intent für Nachmittags-Ladewunsch. Standardmäßig wird `respekt_s` serverseitig bis Sunset desselben Tages abgeleitet (Fallback 17:00), damit ein HA-Einmal-Trigger ohne zweite Aktion auskommt. Parameter: `target_soc_pct` (default 100), `pause_hp_until_target` (default False seit 2026-05-22), `start_earliest_h` (default 12.0), `start_latest_h` (default 15.0). Ausführung: 2-Phasen-Sequenz — Phase 1 (ab `start_earliest_h`): `set_soc_max → target_soc_pct`, Phase 2 (nach 60s): `set_soc_mode → auto`. Vor `start_earliest_h` bleibt der Intent als policy hold inaktiv. Während der Hold-Zeit pausiert `RegelNachmittagSocMax` (Score=0), sodass keine Doppelausführung erfolgt.
+- `afternoon_charge_request`: Tages-Intent für Nachmittags-Ladewunsch. Standardmäßig wird `respekt_s` serverseitig bis Sunset desselben Tages abgeleitet (Fallback 17:00), damit ein HA-Einmal-Trigger ohne zweite Aktion auskommt. Parameter: `target_soc_pct` (default 100), `pause_hp_until_target` (default False seit 2026-05-22), `start_earliest_h` (default 12.0), `start_latest_h` (default 15.0). **Policy-Hold** (`_map_override_to_actions → []`, keine direkte Aktoraktion): der Processor hält nur den Status `active` über das Respekt-Fenster. Die SOC-Öffnung führt `RegelNachmittagSocMax` aus — Ziel `SOC_MAX=target`, **Startzeitpunkt prognose-/SOC-abhängig** im Fenster `start_earliest_h..start_latest_h` (`_berechne_intent_startzeit`: hoher SOC + starke Prognose → spät, damit ~100 % erst spät nachmittags; niedriger SOC/schwache Prognose → früh), 2-Phasen-Schaltung (`SOC_MAX→100` manual, dann `SOC_MODE→auto`).
 - `wattpilot_amp`: Ladestrom-Stufen `8 | 16 | 24 A` (oder `neutral`). Validierung in `steuerbox/validators.py`, Cockpit-Button-Reihe in `steuerbox/static/js/cockpit.js`, Mapping `automation/engine/operator_overrides.py:_map_override_to_actions` → `wattpilot set_max_current` (Aktor klemmt hart auf 6–32 A).
 - `hp_dauerbetrieb`: HP-Dauerbetrieb als **Ersatzheizung bei WP-Defekt** (Cockpit-Schalter `hp-dauerbetrieb` mit Sicherheits-Rückfrage). **Policy-Hold** (`_map_override_to_actions` → `[]`, keine direkte Aktoraktion): die HP-Regel liest den Intent (`automation/engine/operator_intents.py:read_active_hp_dauerbetrieb_intent`) und zwingt die HP EIN/hält sie — überstimmt weiche WP-Koordinations-Caps, Verbraucher-Konkurrenz, Ladewunsch, SOC-Floor und Netzbezug (läuft bewusst aus dem Netz). Einzige Software-AUS: `WW ≥ 78 °C` (mit Hysterese); ein laufender WP (`≥ drain_max_wp_w`) hebt den Zwang auf. Dauer serverseitig `STEUERBOX_HP_DAUERBETRIEB_DEFAULT_S` (8 h), Hard-Cap `STEUERBOX_HP_DAUERBETRIEB_MAX_S` (24 h, in `.infra.local` editierbar); Cockpit sendet **ohne** `respekt_s` (Default greift). `state=on` hält als Policy; `off`/`neutral` geben die Regel sofort frei. Physischer Restschutz: 35-A-Netzanschluss-Sicherung.
 

@@ -23,23 +23,6 @@ WP_WW_BARRIER_C = 55
 BATTERY_AUTO_PHASE2_DELAY_S = 60   # Sekunden bis Fronius-Auto-Modus nach manuellem Voll-Lade-Anlauf
 
 
-def _afternoon_window_elapsed_s(params: dict[str, Any], elapsed_s: int) -> float | None:
-    """Sekunden seit Öffnung des Ladewunsch-Fensters (start_earliest_h).
-
-    Das Zwei-Phasen-Timing zählt ab Fensterstart, NICHT ab created_at: ein
-    Tastendruck VOR start_earliest_h darf die Phase-1-Öffnung (SOC_MAX) nicht
-    verlieren (sonst springt der Override bei Fensteröffnung direkt in Phase 2,
-    weil elapsed_s ab created_at bereits die Phase-2-Delay überschritten hat).
-    None → Fenster noch nicht offen (now_h < earliest).
-    """
-    now = datetime.now()
-    now_h = now.hour + now.minute / 60.0
-    earliest = float(params.get('start_earliest_h', 12.0))
-    if now_h < earliest:
-        return None
-    return min(float(elapsed_s), max(0.0, (now_h - earliest) * 3600.0))
-
-
 class OperatorOverrideProcessor:
     """Liest offene operator_overrides und fuehrt sie ueber den Actuator aus."""
 
@@ -382,17 +365,7 @@ class OperatorOverrideProcessor:
                     return False
                 return True
         if action == 'afternoon_charge_request':
-            # Reapply-Ziel folgt dem Fensterstart-Timing (s. _map_override_to_actions):
-            # Phase 1 bis SOC_MAX == target, danach Phase 2 bis Fronius-Auto-Modus.
-            sek_im_fenster = _afternoon_window_elapsed_s(params, elapsed_s)
-            if sek_im_fenster is None:
-                return False   # Fenster noch nicht offen
-            if sek_im_fenster >= BATTERY_AUTO_PHASE2_DELAY_S:
-                ist_mode = obs_flags.get('soc_mode')
-                return ist_mode is None or ist_mode != 'auto'
-            target = int(params.get('target_soc_pct', 100))
-            ist_max = obs_flags.get('soc_max')
-            return ist_max is None or int(ist_max) != target
+            return False   # Reiner Policy-Hold — RegelNachmittagSocMax schreibt SOC.
         # Für andere Actions konservativ: Reapply erlaubt.
         return True
 
@@ -649,24 +622,12 @@ class OperatorOverrideProcessor:
             return None
 
         if action == 'afternoon_charge_request':
-            # Steuerbox Tages-Intent: Phase 1 öffnet SOC_MAX → target, nach
-            # BATTERY_AUTO_PHASE2_DELAY_S schaltet Phase 2 auf Fronius-Auto-Modus.
-            # Das Zwei-Phasen-Timing zählt ab Fensterstart (start_earliest_h),
-            # NICHT ab created_at — ein Tastendruck vor dem Fenster darf die
-            # Phase-1-Öffnung (SOC_MAX) nicht verlieren.
-            sek_im_fenster = _afternoon_window_elapsed_s(params, elapsed_s)
-            if sek_im_fenster is None:
-                return []   # Fenster noch nicht offen → Policy-Hold ohne Aktion
-            if sek_im_fenster >= BATTERY_AUTO_PHASE2_DELAY_S:
-                return [
-                    self._mk('batterie', 'set_soc_mode', 'auto',
-                             'Steuerbox Override: Nachmittag Phase2 → Fronius-Auto-Modus'),
-                ]
-            target = int(params.get('target_soc_pct', 100))
-            return [
-                self._mk('batterie', 'set_soc_max', target,
-                         f'Steuerbox Override: Nachmittag-Ladewunsch: SOC_MAX → {target}%'),
-            ]
+            # Reiner Policy-Hold: die eigentliche SOC-Öffnung plant und schreibt
+            # `RegelNachmittagSocMax` prognose-/SOC-abhängig — der Startzeitpunkt
+            # wird so berechnet, dass die Batterie erst spät genug öffnet, um
+            # ~100 % zum späten Nachmittag zu erreichen (nicht sofort). Der
+            # Processor hält nur den Intent-Status `active` über das Respekt-Fenster.
+            return []
 
         return None
 

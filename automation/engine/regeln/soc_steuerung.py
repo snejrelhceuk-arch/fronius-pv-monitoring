@@ -563,13 +563,14 @@ class RegelNachmittagSocMax(Regel):
 
         intent = read_active_afternoon_charge_intent()
 
-        # ── Steuerbox-Intent: Override-Processor übernimmt ──
-        # Wenn ein afternoon_charge_request aktiv ist, pausiert die Regel
-        # komplett. Der OperatorOverrideProcessor führt die 2-Schritt-Logik
-        # aus (SOC_MAX → target, nach 60s SOC_MODE → auto). Dies vermeidet
-        # Doppelausführung und respektiert die Steuerbox-Autorität.
-        if intent:
-            return 0
+        # ── Steuerbox-Intent (Ladewunsch »spät nachmittags«) ──
+        # Die Regel plant die Öffnung selbst: der Intent hebt nur das Ziel auf
+        # SOC_MAX=target (Default 100 %) und liefert das Startfenster
+        # (start_earliest_h..start_latest_h). Der eigentliche Startzeitpunkt wird
+        # prognose-/SOC-abhängig berechnet (_berechne_intent_startzeit), damit die
+        # Batterie NICHT sofort auf 100 % geladen wird, sondern erst spät genug,
+        # um ~100 % zum späten Nachmittag zu erreichen. Der OperatorOverride-
+        # Processor hält den Intent nur als Policy (kein direkter SOC-Schreibpfad).
 
         # ── SOC-Extern-Toleranz ──
         soc_extern_tracker.aktualisiere(obs, matrix)
@@ -641,11 +642,8 @@ class RegelNachmittagSocMax(Regel):
     def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
         komfort = get_param(matrix, self.regelkreis, 'komfort_max_pct', 75)
         stress = get_param(matrix, self.regelkreis, 'stress_max_pct', 100)
+        intent = read_active_afternoon_charge_intent()
         aktionen = []
-
-        # Hinweis: Bei aktivem afternoon_charge_request gibt bewerte() bereits
-        # Score=0 zurück → diese Methode wird in dem Fall nicht aufgerufen.
-        # Der OperatorOverrideProcessor übernimmt die Ausführung.
 
         if obs.soc_mode != 'manual':
             aktionen.append({
@@ -672,6 +670,11 @@ class RegelNachmittagSocMax(Regel):
                 f"{prog['wp_est_kwh']:.1f}kWh" if prog['wp_est_kwh'] is not None else '-',
                 prog['samples'], soc_max_ziel,
             )
+
+        # Ladewunsch »spät nachmittags« hebt das Ziel auf target (Default 100 %),
+        # auch wenn die Nacht-Dynamik weniger vorsähe.
+        if intent:
+            soc_max_ziel = max(soc_max_ziel, int(intent.get('target_soc_pct', 100)))
 
         # Phase 2: Ziel=100%, manual-Modus → Fronius-Auto, sobald Prognose 'gut'
         # UND SOC > min_soc (default 15%). PV-Refill ist gesichert → kein Bedarf
