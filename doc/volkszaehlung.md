@@ -1,25 +1,25 @@
 # Volkszählung — PV-System Workspace
 
-> Stand: 2026-09-29 · auto-generiert von `tools/generate_volkszaehlung.py` (pre-commit).
+> Stand: 2026-09-30 · auto-generiert von `tools/generate_volkszaehlung.py` (pre-commit).
 
 ## Übersicht
 
-**Gesamtgröße (Textdateien gezählt):** 3546 MB
-**Gesamtzeilen (Code/Doku/Daten):** 371.879 Zeilen
-**Gezählte Dateien:** 837
+**Gesamtgröße (Textdateien gezählt):** 3579 MB
+**Gesamtzeilen (Code/Doku/Daten):** 373.104 Zeilen
+**Gezählte Dateien:** 838
 **Ausgeschlossene Verzeichnisse:** 29 (.venv, __pycache__, node_modules, .git …)
 
 ## Nach Sprache/Typ
 
 | Sprache/Typ | Dateien | Zeilen | Anteil |
 |---|---|---|---|
-| **CSV** | 24 | 246.191 | 66.2% |
-| **Python** | 218 | 63.461 | 17.1% |
-| **Markdown** | 148 | 24.432 | 6.6% |
+| **CSV** | 24 | 247.228 | 66.3% |
+| **Python** | 219 | 63.590 | 17.0% |
+| **Markdown** | 148 | 24.439 | 6.6% |
 | **HTML** | 28 | 16.430 | 4.4% |
 | **Shell** | 70 | 5.637 | 1.5% |
-| **JSON** | 283 | 5.195 | 1.4% |
-| **TXT** | 4 | 4.839 | 1.3% |
+| **JSON** | 283 | 5.220 | 1.4% |
+| **TXT** | 4 | 4.866 | 1.3% |
 | **JavaScript** | 6 | 1.551 | 0.4% |
 | **CSS** | 6 | 1.494 | 0.4% |
 | **SQL** | 10 | 1.427 | 0.4% |
@@ -27,13 +27,13 @@
 | **YAML** | 3 | 562 | 0.2% |
 | **CONF** | 3 | 70 | 0.0% |
 | **TOML** | 1 | 22 | 0.0% |
-| **Total** | 837 | 371.879 | 100% |
+| **Total** | 838 | 373.104 | 100% |
 
 ## Python-Code nach ABCDEN-Rollen
 
 | Rolle | Verzeichnis | .py-Dateien | Zeilen |
 |---|---|---|---|
-| **C** Automation | `automation/` | 46 | 14.329 |
+| **C** Automation | `automation/` | 46 | 14.349 |
 | **A** Collector | `collector/` | 19 | 4.935 |
 | **B** Web-API | `routes/` | 28 | 11.659 |
 | **D** Diagnos | `diagnos/` | 10 | 2.440 |
@@ -43,7 +43,7 @@
 ## Größte Python-Dateien (Top 10)
 
 1. `solar_geometry.py` — 1.980 Zeilen
-1. `automation/engine/regeln/geraete_heizpatrone.py` — 1.511 Zeilen
+1. `automation/engine/regeln/geraete_heizpatrone.py` — 1.525 Zeilen
 1. `solar_forecast.py` — 1.177 Zeilen
 1. `automation/engine/regeln/waermepumpe.py` — 1.132 Zeilen
 1. `routes/realtime.py` — 1.080 Zeilen

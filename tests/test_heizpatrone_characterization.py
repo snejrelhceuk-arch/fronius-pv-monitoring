@@ -96,6 +96,11 @@ SZENARIEN = [
     ('drain_soc_zu_niedrig',  6.5,  {'batt_soc_pct': 15, 'sunshine_hours': 9}),
     ('phase1_blockiert_soc',  10.5, {'batt_soc_pct': 15, 'batt_power_w': 3500, 'forecast_rest_kwh': 38}),
     ('phase1_burst',          11.75,{'batt_soc_pct': 71, 'soc_max': 75, 'batt_power_w': 3800, 'forecast_rest_kwh': 38}),
+    # Morgen-Totzone geschlossen: SOC 25 % (weit unter SOC_MAX-5) steigt an einem
+    # sonnigen Vormittag; Batterie laedt kraeftig (4 kW) und die Restprognose
+    # (60 kWh) fuellt die Batterie noch bis SOC_MAX (+Reserve). Phase 1 startet
+    # jetzt prognosegetragen (frueher: erst ab SOC~SOC_MAX -> HP schwieg bis ~10 Uhr).
+    ('phase1_morgen_ueberschuss', 8.25, {'batt_soc_pct': 25, 'soc_max': 75, 'batt_power_w': 4000, 'pv_total_w': 5000, 'forecast_rest_kwh': 60, 'sunshine_hours': 9}),
     ('phase1b_probe',         12.0, {'batt_soc_pct': 73, 'soc_max': 75, 'batt_power_w': 0, 'pv_total_w': 4000}),
     ('phase2_blockiert',      14.0, {'batt_soc_pct': 85, 'soc_max': 100, 'batt_power_w': 5100}),
     ('phase2_burst',          14.0, {'batt_soc_pct': 96, 'soc_max': 100, 'batt_power_w': 5100, 'pv_total_w': 6000}),

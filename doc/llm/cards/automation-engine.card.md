@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/**"
 tags: [engine, tick-loop, regeln, registry]
 status: stable
-last_review: 2026-09-29
+last_review: 2026-09-30
 ---
 
 # Automation-Engine
@@ -27,8 +27,8 @@ Zentrale Steuerschleife (Rolle C). Sammelt Beobachtungen, ruft Schutz-Checks, da
 - **Inputs:** ObsState (Sensorwerte alle 10 s), Tier-1-Flags, `soc_param_matrix.json`, Operator-Overrides aus Steuerbox.
 - **Outputs:** Hardware-Calls über Aktoren (`aktor_batterie`, `aktor_fritzdect`, `aktor_wattpilot`), `automation_log`-Inserts, Engine-Werte für ExternalRespect-Tracker.
 
-### Override-Hinweis (neu)
-- `afternoon_charge_request` ist ein Policy-Hold ohne direkte Aktoraktion in `OperatorOverrideProcessor`: Status bleibt `active` und wird von `RegelNachmittagSocMax`/`RegelHeizpatrone` ausgewertet.
+### Override-Hinweis
+- `afternoon_charge_request` führt der `OperatorOverrideProcessor` als **Zwei-Phasen-Aktion** aus: Phase 1 `set_soc_max → target` (Default 100 %), nach `BATTERY_AUTO_PHASE2_DELAY_S` (60 s) Phase 2 `set_soc_mode → auto`. Das Timing zählt **ab Fensterstart** (`start_earliest_h`, Default 12:00) über `_afternoon_window_elapsed_s`, nicht ab `created_at` — sonst verliert ein Tastendruck **vor** dem Fenster die Phase-1-Öffnung (Override wird `active`, springt bei Fensteröffnung direkt in Phase 2, `SOC_MAX` bleibt auf dem Morgen-Deckel). `RegelNachmittagSocMax` steht bei aktivem Intent still (Score 0) und überlässt dem Processor die Ausführung; `RegelHeizpatrone` wertet den Policy-Hold (HP-Pause) aus.
 
 ## Invarianten
 - **Tick-Schichten:** OBS_COLLECT=10 s, FAST=60 s, STRATEGIC=900 s. Reihenfolge pro Zyklus: DataCollector → Tier1Checker → Engine.fast → Engine.strategic → OperatorOverrideProcessor.

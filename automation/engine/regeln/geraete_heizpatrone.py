@@ -476,6 +476,13 @@ class RegelHeizpatrone(Regel):
                                                                 füllen noch nicht nötig)
                     schlecht (<40):       nie toleriert
         """
+        # Nur nahe SOC_MAX tolerieren: dort pendelt die Batterie ohnehin um den
+        # Deckel. Bei niedrigem SOC (Morgen-Überschuss-Burst der Phase 1) beendet
+        # echte Entladung die HP sofort — die Batterieladung hat dann Vorrang
+        # (kein Leerziehen der fast leeren Batterie bei kurzer Wolke).
+        soc = obs.batt_soc_pct
+        if soc is not None and soc < (soc_max_eff - 5):
+            return False
         tier = forecast_tier_of(potenzial)
         if tier >= FC_TIER_GUT:
             return True
@@ -774,25 +781,32 @@ class RegelHeizpatrone(Regel):
                 drain_burst = get_param(matrix, self.regelkreis, 'drain_burst_dauer_s', 2700)
                 return EinEntscheidung('phase0', drain_burst, phase0_score, False, True)
 
-        # ── Phase 1: Vormittags (SOC≈MAX, Überlaufventil) ──
+        # ── Gemeinsame Vorbereitungen (Phase 1/1b/2) ──
+        min_lade = self._min_lade_nach_potenzial(potenzial, matrix)
+        reserve = get_param(matrix, self.regelkreis, 'batt_reserve_kwh', 2.0)
+        if rest_h < 3.0:
+            reserve = get_param(matrix, self.regelkreis, 'batt_reserve_nachmittag_kwh', 3.0)
+        parallel_ok = self._hp_parallel_erlaubt(potenzial, wp_aktiv, ev_aktiv)
+
+        # ── Phase 1: Vormittags-Überschuss (prognosegetragen) ──
+        # Schließt die Morgen-Totzone: solange die Batterie kräftig lädt (PV-
+        # Überschuss trägt die HP, kein Netzbezug) UND die Restprognose die
+        # Batterie noch bis SOC_MAX (+Reserve) füllt, läuft die HP auch weit
+        # unter SOC_MAX — statt bis ~SOC_MAX zu warten (Batterie füllt morgens
+        # langsam). Der SOC-Floor (drain_start_soc_pct) schützt die leere Batterie.
         min_lade_morgens = get_param(matrix, self.regelkreis, 'min_ladeleistung_morgens_w', 3000)
         min_rest_kwh_morgens = get_param(matrix, self.regelkreis, 'min_rest_kwh_morgens', 20.0)
         min_rest_h_morgens = get_param(matrix, self.regelkreis, 'min_rest_h_morgens', 5.0)
-        soc_nah_max_phase1 = soc >= (soc_max_eff - 5)
-        if rest_h > min_rest_h_morgens and rest_kwh > min_rest_kwh_morgens and soc_nah_max_phase1:
+        morgen_soc_floor = get_param(matrix, self.regelkreis, 'drain_start_soc_pct', 20)
+        soc_ok_phase1 = soc >= (soc_max_eff - 5) or (
+            soc >= morgen_soc_floor and rest_kwh > batt_rest_kwh + reserve)
+        if rest_h > min_rest_h_morgens and rest_kwh > min_rest_kwh_morgens and soc_ok_phase1:
             schwelle = min_lade_morgens
             if (self._letzte_phase == 'phase1' and self._letzte_aus > 0
                     and (time.time() - self._letzte_aus) < 600):
                 schwelle = max(1000, min_lade_morgens - self.HP_NENN_W)
             if p_batt > schwelle:
                 return EinEntscheidung('phase1', burst_lang, score, False, False)
-
-        # ── Phase 2/3 Vorbereitungen (auch von Phase 1b genutzt) ──
-        min_lade = self._min_lade_nach_potenzial(potenzial, matrix)
-        reserve = get_param(matrix, self.regelkreis, 'batt_reserve_kwh', 2.0)
-        if rest_h < 3.0:
-            reserve = get_param(matrix, self.regelkreis, 'batt_reserve_nachmittag_kwh', 3.0)
-        parallel_ok = self._hp_parallel_erlaubt(potenzial, wp_aktiv, ev_aktiv)
 
         # ── Phase 1b: Nulleinspeiser-Überschuss (Probe-Puls) ──
         hp_last = self.HP_NENN_W
@@ -1377,9 +1391,9 @@ class RegelHeizpatrone(Regel):
                                     f'rest_kwh={rest_kwh:.1f} '
                                     f'→ +{verlaengern_s // 60} Min')
 
-                        # Phasen 1b/2/3: Verlängerung nur bei weiter guten Überschusskriterien.
+                        # Phasen 1b/2: Verlängerung nur bei weiter guten Überschusskriterien.
                         if (not auto_verlaengert
-                                and self._letzte_phase in ('phase1b', 'phase2', 'phase3')):
+                                and self._letzte_phase in ('phase1b', 'phase2')):
                             grid_ok_tol = get_param(matrix, self.regelkreis,
                                                     'grid_ok_toleranz_w', 500)
                             grid_jetzt = obs.grid_power_w or 0

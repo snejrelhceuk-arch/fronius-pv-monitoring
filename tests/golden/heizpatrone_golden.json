@@ -111,6 +111,26 @@
     ],
     "score": 0
   },
+  "phase1_morgen_ueberschuss|aktiv=False": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_ein",
+        "wert": null
+      }
+    ],
+    "score": 0
+  },
+  "phase1_morgen_ueberschuss|aktiv=True": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_ein",
+        "wert": null
+      }
+    ],
+    "score": 0
+  },
   "phase1b_probe|aktiv=False": {
     "aktionen": [],
     "score": 0
