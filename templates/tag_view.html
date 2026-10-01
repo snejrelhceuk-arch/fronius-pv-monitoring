@@ -644,11 +644,13 @@
                     ? Math.min(100, Math.max(0, (1 - bezugTotal / verbrauchTotal) * 100))
                     : 0;
 
-                let kwpRef = null;
+                let specificText = '–';
                 if (currentPeriod === 'monat') {
-                    kwpRef = getInstalledKwpForMonth(currentYear, currentMonth);
+                    const kwpRef = getInstalledKwpForMonth(currentYear, currentMonth);
+                    specificText = kwpRef ? formatSpecificYield(ertragTotal, kwpRef) : '–';
                 } else if (currentPeriod === 'jahr') {
                     const monthsWithData = chartData.datapoints.filter(dp => !dp.is_forecast && (dp.w_pv_total || 0) > 0);
+                    let kwpRef;
                     if (monthsWithData.length > 0) {
                         const kwpSum = monthsWithData.reduce((sum, dp) => {
                             const m = dp.month || 0;
@@ -658,17 +660,19 @@
                     } else {
                         kwpRef = getAverageInstalledKwpForYear(currentYear);
                     }
+                    specificText = kwpRef ? formatSpecificYield(ertragTotal, kwpRef) : '–';
                 } else if (currentPeriod === 'gesamt') {
-                    const yearsWithData = chartData.datapoints.filter(dp => !dp.is_forecast && dp.year);
+                    // Spez. Ertrag im Gesamt = Mittel der Jahres-Einzelwerte (Summe der
+                    // Jahres-kWh/kWp geteilt durch Anzahl Jahre), nicht kumuliert.
+                    const yearsWithData = chartData.datapoints.filter(dp => !dp.is_forecast && dp.year && (dp.w_pv_total || 0) > 0);
                     if (yearsWithData.length > 0) {
-                        const kwpYearSum = yearsWithData.reduce((sum, dp) => sum + getAverageInstalledKwpForYear(dp.year), 0);
-                        kwpRef = kwpYearSum / yearsWithData.length;
-                    } else {
-                        kwpRef = 37.59;
+                        const specSum = yearsWithData.reduce((sum, dp) => {
+                            const kwp = getAverageInstalledKwpForYear(dp.year);
+                            return sum + (kwp > 0 ? (dp.w_pv_total / kwp) : 0);
+                        }, 0);
+                        specificText = `${(specSum / yearsWithData.length).toFixed(1)} kWh/kWp`;
                     }
                 }
-
-                const specificText = kwpRef ? formatSpecificYield(ertragTotal, kwpRef) : '–';
                 
                 let summaryText = `${formatEnergy(ertragTotal)} / ${formatEnergy(verbrauchTotal)} · ${autarkiePeriod.toFixed(1)}% · ${specificText}`;
                 
@@ -2386,8 +2390,6 @@
                         result += '<br/>';
                         result += `<strong>Spez. Ertrag:</strong> ${formatSpecificYield(dp.w_pv_total || 0, getInstalledKwpForDate(datum))}<br/>`;
                         result += `<strong>Verbrauch:</strong> ${formatEnergy(dp.w_gesamtverbrauch)}<br/>`;
-                        result += formatPacMirror(dp.w_netzbezug, pac ? pac.wh_imp_kwh : null, 'Bezug', 'PAC');
-                        result += formatPacMirror(dp.w_einspeisung, pac ? pac.wh_exp_kwh : null, 'Einspeisung', 'PAC');
                         result += `<strong>Autarkie:</strong> ${dp.autarkie != null ? Number(dp.autarkie).toFixed(1) : "&ndash;"} %`;
                         
                         if (periodExtremes && periodExtremes.by_key && window.PVExtremes) {
@@ -2701,8 +2703,6 @@
                         }
                         result += `<strong>Spez. Ertrag:</strong> ${formatSpecificYield(dp.w_pv_total || 0, kwpRef)}<br/>`;
                         result += `<strong>Verbrauch:</strong> ${formatEnergy(dp.w_gesamtverbrauch)}<br/>`;
-                        result += formatPacMirror(dp.w_netzbezug, pac ? pac.wh_imp_kwh : null, 'Bezug', 'PAC');
-                        result += formatPacMirror(dp.w_einspeisung, pac ? pac.wh_exp_kwh : null, 'Einspeisung', 'PAC');
                         result += `<strong>Autarkie:</strong> ${dp.autarkie != null ? Number(dp.autarkie).toFixed(1) : "&ndash;"} %`;
                         
                         if (periodExtremes && periodExtremes.by_key && window.PVExtremes) {

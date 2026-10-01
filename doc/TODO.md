@@ -39,5 +39,3 @@
 ## Architektur-Haertung
 
 - [ ] P3: Hotspot-Dateien nur risikogetrieben zerlegen; vor Aenderungen an grossen Regel-/Routenmodulen passende Charakterisierungstests ergaenzen.
-
-### User

@@ -1,11 +1,11 @@
 # Volkszählung — PV-System Workspace
 
-> Stand: 2026-09-30 · auto-generiert von `tools/generate_volkszaehlung.py` (pre-commit).
+> Stand: 2026-10-01 · auto-generiert von `tools/generate_volkszaehlung.py` (pre-commit).
 
 ## Übersicht
 
-**Gesamtgröße (Textdateien gezählt):** 3579 MB
-**Gesamtzeilen (Code/Doku/Daten):** 373.074 Zeilen
+**Gesamtgröße (Textdateien gezählt):** 3765 MB
+**Gesamtzeilen (Code/Doku/Daten):** 374.584 Zeilen
 **Gezählte Dateien:** 838
 **Ausgeschlossene Verzeichnisse:** 29 (.venv, __pycache__, node_modules, .git …)
 
@@ -13,13 +13,13 @@
 
 | Sprache/Typ | Dateien | Zeilen | Anteil |
 |---|---|---|---|
-| **CSV** | 24 | 247.257 | 66.3% |
-| **Python** | 219 | 63.531 | 17.0% |
-| **Markdown** | 148 | 24.439 | 6.6% |
+| **CSV** | 24 | 248.664 | 66.4% |
+| **Python** | 219 | 63.602 | 17.0% |
+| **Markdown** | 148 | 24.439 | 6.5% |
 | **HTML** | 28 | 16.430 | 4.4% |
 | **Shell** | 70 | 5.637 | 1.5% |
-| **JSON** | 283 | 5.220 | 1.4% |
-| **TXT** | 4 | 4.866 | 1.3% |
+| **JSON** | 283 | 5.225 | 1.4% |
+| **TXT** | 4 | 4.893 | 1.3% |
 | **JavaScript** | 6 | 1.551 | 0.4% |
 | **CSS** | 6 | 1.494 | 0.4% |
 | **SQL** | 10 | 1.427 | 0.4% |
@@ -27,7 +27,7 @@
 | **YAML** | 3 | 562 | 0.2% |
 | **CONF** | 3 | 70 | 0.0% |
 | **TOML** | 1 | 22 | 0.0% |
-| **Total** | 838 | 373.074 | 100% |
+| **Total** | 838 | 374.584 | 100% |
 
 ## Python-Code nach ABCDEN-Rollen
 
@@ -35,7 +35,7 @@
 |---|---|---|---|
 | **C** Automation | `automation/` | 46 | 14.313 |
 | **A** Collector | `collector/` | 19 | 4.935 |
-| **B** Web-API | `routes/` | 28 | 11.659 |
+| **B** Web-API | `routes/` | 28 | 11.730 |
 | **D** Diagnos | `diagnos/` | 10 | 2.440 |
 | **E** Steuerbox | `steuerbox/` | 5 | 1.252 |
 | **N** Netzqualität | `nq/` | 37 | 9.143 |
@@ -49,7 +49,7 @@
 1. `routes/realtime.py` — 1.080 Zeilen
 1. `automation/engine/regeln/soc_steuerung.py` — 1.060 Zeilen
 1. `routes/system/battery.py` — 1.023 Zeilen
-1. `routes/visualization.py` — 944 Zeilen
+1. `routes/visualization.py` — 1.015 Zeilen
 1. `routes/pages.py` — 916 Zeilen
 1. `routes/netzqualitaet.py` — 898 Zeilen
 

@@ -5,7 +5,7 @@ role: B
 applyTo: "routes/**"
 tags: [web-api, blueprints, templates, formatting, read-only]
 status: stable
-last_review: 2026-09-29
+last_review: 2026-10-01
 ---
 
 # Web Display/API
@@ -19,6 +19,7 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 - **Energievergleich (PAC4200 ↔ SM ↔ iMSys):** `routes/pac4200/energy.py:api_nq_energy_compare` (`/api/nq/energy_compare?agg=day|month|year|ims`); Tag/Monat/Jahr summieren die Tages-Deltas (Δ nur ueber Tage mit PAC UND SM), `ims` liefert `nq_ims_reading` + Intervall-Vergleich (Näherung auf Tagesgrenzen; präzise Fixpunkte in `doc/MESSSYSTEM_FIXPUNKTE.md`). Die Tagesansicht führt eine **Quelle**-Spalte aus `_pac_days_kwh` (`src`/`n_samples`): `PAC ✓` (counter, n/288), `Teil-Tag` (partial), `SM-Ersatz` (sm_substitute). View `templates/nq_energie_vergleich_view.html` mit Erklärbox der drei Messsysteme + iMSys-Klartext-Zusammenfassung (mittlere |Abweichung| SM/PAC vs. iMSys).
 - **Tooltip-Skin (schwach transparent):** `static/js/nav-ui.js:PVChart.tooltipResponsive` vereinheitlicht alle ECharts-Tooltips (halbtransparenter Hintergrund + Blur, `.pv-echarts-tip`), damit die Kurve unter dem Tooltip lesbar bleibt. Charts reichen ihre `tooltip`-Option hier durch.
 - **Perioden-Extremwerte (Tooltips):** `routes/visualization.py:api_period_extremes` liefert Peak-Leistung, Spannung L-L, Frequenz (Datum/Uhrzeit) — **ohne** cos φ. Geteilter Formatter `static/js/extremes.js` (Monitoring/Analyse-Tooltips).
+- **Monatsansicht-Rekonstruktion (Jahre vor lokaler Erfassung):** `routes/visualization.py:_synthesize_month_from_monthly` erzeugt bei fehlenden `daily_data` synthetische Tages-Datenpunkte aus `monthly_statistics` (Gleichverteilung über die Tage; Ertrags-/Verbrauchs-Stapel als Residuen, Monatssummen exakt erhalten; Feld `reconstructed:true`), damit `/api/monat_visualization` für Altjahre nicht leer bleibt. Read-only.
 - **Chart-Peak-Marker:** `static/js/nav-ui.js:PVChart.peakHeadroomMax(dataMax, peakVal, {floor,cap,round})` — Y-Achsen-Obergrenze mit Luft, damit der Peak-Pin (Wert-Label) nie den oberen Rahmen touchiert (verbraucher/erzeuger/tag_view).
 - **NQ read-only Datenzugriff:** `nq/tech_read.py` (`fetch_tech_snapshot`, `fetch_aggregates`, `fetch_agg` = 5min-Merge Primary+Tech, `fetch_agg_fast` = 10s aus Tech-RAM)
 - **Read-only Fronius-Zugriff:** `routes/helpers.py:FroniusReadOnly`, `routes/helpers.py:get_fronius_api`
@@ -62,6 +63,7 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 ## Bekannte Fallstricke
 - **Batterie-Vollzyklen (`/api/verbraucher/batterie`):** `summary.full_cycles` = intervallbezogen Σ Ladung / Nominal-Kapazität (`config.battery_capacity_kwh_for`, Ausbaustufen 10.24/20.48/25.6 kWh). Tag aus `daily_data`, Monat/Jahr/Gesamt aus `monthly_statistics` — deckungsgleich mit der PV-Übersicht (`routes/pages.py`, Spalte „Vollzyklen“). SOH-Historie + Tages-Vollzyklen persistiert `battery_health_daily` (Rolle A, `collector/aggregate/battery_health.py`). Der Batterie-View (`templates/batterie_view.html`) nutzt dasselbe `monitoring.css`-Gerüst wie Erzeuger/Verbraucher.
 - **Tag-Chart-Spaltenwahl:** `routes/visualization.py:_build_tag_query` unterscheidet nur `data_15min` (Detailspalten fehlen → NULL) von `data_1min`/`stats.data_5min_permanent` (volles data_1min-Schema). Für Tage älter als die 90-T-Retention liefert die permanente 5-min-Tabelle so die vollständigen Leistungs-/Verbrauchskurven, nicht nur SOC/Batterie.
+- **Spez. Ertrag in der Gesamt-Ansicht:** Die Summenzeile (`templates/tag_view.html:updateSummaryDisplay`, Zweig `gesamt`) mittelt die Jahres-Einzelwerte (Σ Jahres-kWh/kWp ÷ Anzahl Jahre), zeigt also den durchschnittlichen spezifischen Jahresertrag — **nicht** den kumulierten Gesamtertrag/kWp. Monats-/Jahres-Tooltips führen Netzbezug/Einspeisung nur einmal (oberer Block mit PAC-Spiegel).
 - Display-Formatter sind template-lokal; parallele Formatter in anderen Views koennen driften.
 - **Template-/Static-Deploy:** Unter Gunicorn (Prod) cached Jinja kompilierte Templates; `templates/*.html`-Änderungen werden erst nach Reload des Web-Workers wirksam (`sudo kill -HUP $(cat /tmp/pv_web.pid)` bzw. Restart `pv-web.service`). `static/*` (JS/CSS) liefert dagegen mit `Cache-Control: no-cache` + ETag frisch aus.
 - Forecast-Persistierung schreibt in DB-Tabellen (`forecast_daily`, `data_15min`) und ist damit eine kontrollierte Ausnahme vom read-only Zielbild.
