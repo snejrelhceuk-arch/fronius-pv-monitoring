@@ -90,8 +90,12 @@ def load_solarweb_data():
     return data
 
 
-def import_solarweb(dry_run=False):
-    """Importiere Solarweb-Daten in daily_data und wattpilot_daily."""
+def import_solarweb(dry_run=False, only_missing=False):
+    """Importiere Solarweb-Daten in daily_data und wattpilot_daily.
+
+    only_missing=True: nur Tage ohne bestehende daily_data-Zeile einfuegen
+    (bestehende Messwerte bleiben unberuehrt — fuellt genau die leeren Tage).
+    """
     sw_data = load_solarweb_data()
     if not sw_data:
         logging.error("Keine Solarweb-Daten geladen!")
@@ -104,6 +108,7 @@ def import_solarweb(dry_run=False):
 
     updated = 0
     inserted = 0
+    skipped = 0
     wp_updated = 0
 
     for date_str in sorted(sw_data.keys()):
@@ -124,6 +129,11 @@ def import_solarweb(dry_run=False):
         # Prüfe ob daily_data-Eintrag existiert
         c.execute("SELECT ts FROM daily_data WHERE ts = ?", (ts,))
         exists = c.fetchone() is not None
+
+        # only_missing: bestehende Tage unangetastet lassen (nur Luecken fuellen)
+        if exists and only_missing:
+            skipped += 1
+            continue
 
         if exists:
             # UPDATE: Energie-Felder ersetzen, Counter-Start/End nullen
@@ -167,15 +177,17 @@ def import_solarweb(dry_run=False):
 
         # Wattpilot: INSERT OR REPLACE in wattpilot_daily
         if wattpilot_wh > 0:
-            # Prüfe ob wattpilot_daily den gleichen ts-Offset nutzt
             # wattpilot_daily ts: 1770854400 = 2026-02-12 01:00 CET = midnight UTC
             wp_ts = float(ts)
-            if not dry_run:
-                c.execute("""
-                    INSERT OR REPLACE INTO wattpilot_daily (ts, energy_wh)
-                    VALUES (?, ?)
-                """, (wp_ts, wattpilot_wh))
-            wp_updated += 1
+            wp_exists = c.execute("SELECT 1 FROM wattpilot_daily WHERE ts = ?", (wp_ts,)).fetchone() is not None
+            # only_missing: lokale Wattpilot-Tageswerte nicht ueberschreiben
+            if not (only_missing and wp_exists):
+                if not dry_run:
+                    c.execute("""
+                        INSERT OR REPLACE INTO wattpilot_daily (ts, energy_wh)
+                        VALUES (?, ?)
+                    """, (wp_ts, wattpilot_wh))
+                wp_updated += 1
 
     if not dry_run:
         conn.commit()
@@ -183,12 +195,15 @@ def import_solarweb(dry_run=False):
     conn.close()
 
     logging.info(f"\n{'DRY-RUN: ' if dry_run else ''}Ergebnis:")
-    logging.info(f"  daily_data:     {updated} aktualisiert, {inserted} neu eingefügt")
+    logging.info(f"  daily_data:     {updated} aktualisiert, {inserted} neu eingefügt, {skipped} uebersprungen")
     logging.info(f"  wattpilot_daily: {wp_updated} Tage mit Wattpilot-Daten")
 
 
 if __name__ == '__main__':
     dry_run = '--dry-run' in sys.argv
+    only_missing = '--only-missing' in sys.argv
     if dry_run:
         logging.info("=== DRY-RUN Modus (keine DB-Änderungen) ===")
-    import_solarweb(dry_run=dry_run)
+    if only_missing:
+        logging.info("=== ONLY-MISSING: nur fehlende Tage einfügen (bestehende bleiben) ===")
+    import_solarweb(dry_run=dry_run, only_missing=only_missing)

@@ -110,6 +110,17 @@ python3 scripts/import_solarweb_daily.py
 - Importiert Wattpilot-kWh in `wattpilot_daily`
 - **Schützt geschützte Tage:** Monate vor `PROTECTED_MONTHS_BEFORE` bleiben unverändert
 
+**Nur fehlende Tage füllen (`--only-missing`):**
+
+```bash
+python3 scripts/import_solarweb_daily.py --only-missing
+```
+
+Fügt ausschließlich Tage **ohne** bestehende `daily_data`-Zeile ein; lokal erhobene
+Tage (und ihre `wattpilot_daily`-Werte) bleiben unverändert. Damit werden historische
+Jahre vor der lokalen Erfassung sowie einzelne Collector-Lücken mit echten Solarweb-
+Tageswerten aufgefüllt, ohne vorhandene Messtage zu überschreiben.
+
 ### 4.2 Geschützte Monate
 
 In [collector/aggregate/statistics.py](../../collector/aggregate/statistics.py#L47):
