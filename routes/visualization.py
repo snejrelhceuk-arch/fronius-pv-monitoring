@@ -7,7 +7,6 @@ Enthält: /api/tag_visualization, /api/monat_visualization,
 Alle Perioden-APIs (monat/jahr/gesamt) liefern freq_extremes mit
 Netzfrequenz-Min/Max inkl. Zeitstempel aus data_1min.
 """
-import calendar
 import logging
 from datetime import datetime
 from flask import Blueprint, jsonify, request
@@ -589,66 +588,6 @@ def api_tag_visualization():
                 pass
 
 
-def _synthesize_month_from_monthly(cursor, year, month):
-    """Rekonstruiert Tages-Datenpunkte aus monthly_statistics, wenn keine daily_data
-    vorliegen (Jahre vor Beginn der lokalen Erfassung). Gleichverteilung ueber die
-    Tage; die Monatssummen bleiben exakt erhalten (konsistent mit Jahres-/Gesamt-
-    Ansicht). Read-only — keine DB-Mutation (Rolle B). Leere Liste, wenn kein
-    Monatsaggregat existiert."""
-    cursor.execute("""
-        SELECT solar_erzeugung_kwh, netz_bezug_kwh, netz_einspeisung_kwh,
-               batt_ladung_kwh, batt_entladung_kwh, gesamt_verbrauch_kwh,
-               heizpatrone_kwh, wattpilot_kwh, autarkie_prozent
-        FROM monthly_statistics
-        WHERE year = ? AND month = ?
-    """, (year, month))
-    row = cursor.fetchone()
-    if not row:
-        return []
-    solar, bezug, einsp, batt_lad, batt_entl, gesamt, heiz, wattpilot, autarkie = (v or 0 for v in row)
-    if solar <= 0 and gesamt <= 0:
-        return []
-
-    days_in_month = calendar.monthrange(year, month)[1]
-    if gesamt <= 0:
-        gesamt = max(0.0, solar - einsp - batt_lad + batt_entl + bezug)
-
-    per = 1.0 / days_in_month
-    solar_d, einsp_d, batt_lad_d = solar * per, einsp * per, batt_lad * per
-    batt_entl_d, bezug_d, gesamt_d = batt_entl * per, bezug * per, gesamt * per
-    wattpilot_d, heiz_d = wattpilot * per, heiz * per
-    # Residuen wie in der Jahres-/Gesamt-Ansicht: Ertrags-Stapel geht exakt auf PV,
-    # Verbrauchs-Stapel exakt auf den Gesamtverbrauch auf.
-    direkt_ertrag_d = max(0.0, solar_d - einsp_d - batt_lad_d)
-    direkt_verbrauch_d = max(0.0, gesamt_d - batt_entl_d - bezug_d)
-
-    datapoints = []
-    for day in range(1, days_in_month + 1):
-        ts = int(datetime(year, month, day).timestamp())
-        datapoints.append({
-            'timestamp': ts,
-            'date': f'{year:04d}-{month:02d}-{day:02d}',
-            'day': day,
-            'w_einspeisung': round(einsp_d, 2),
-            'w_batterieladung': round(batt_lad_d, 2),
-            'w_direktverbrauch': round(direkt_ertrag_d, 2),
-            'w_direktverbrauch_verbrauch': round(direkt_verbrauch_d, 2),
-            'w_waermepumpe': round(heiz_d, 2),
-            'w_wattpilot': round(wattpilot_d, 2),
-            'w_netzbezug': round(bezug_d, 2),
-            'w_batterieentladung': round(batt_entl_d, 2),
-            'w_pv_total': round(solar_d, 2),
-            'w_gesamtverbrauch': round(gesamt_d, 2),
-            'autarkie': round(autarkie, 1),
-            'soc_avg': 0,
-            'f_netz_avg': None, 'f_netz_min': None, 'f_netz_max': None,
-            'wattpilot_sessions': 0, 'wattpilot_charging_hours': 0,
-            'forecast_kwh': None,
-            'reconstructed': True,
-        })
-    return datapoints
-
-
 @bp.route('/api/monat_visualization')
 def monat_visualization():
     """Liefert Tagesdaten für Monatsansicht - gestapelte Balken"""
@@ -704,16 +643,6 @@ def monat_visualization():
 
         rows = cursor.fetchall()
         logging.info(f"Query ergab {len(rows)} Zeilen für Monat {month}/{year}")
-
-        # Keine Tagesdaten (z. B. Jahre vor Beginn der lokalen Erfassung): aus
-        # monthly_statistics rekonstruieren, damit die Monatsansicht nicht leer bleibt.
-        if not rows:
-            synth = _synthesize_month_from_monthly(cursor, year, month)
-            resp = {'year': year, 'month': month, 'datapoints': synth}
-            if synth:
-                resp['reconstructed'] = True
-            return jsonify(resp)
-
         if rows:
             logging.info(f"Erste Zeile: ts={rows[0][0]}, Letzte: ts={rows[-1][0]}")
 

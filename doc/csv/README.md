@@ -1,6 +1,6 @@
 # CSV-Archiv — Datenverwaltung & Monitoring
 
-Stand: 01.07.2026
+Stand: 01.10.2026
 Quelle: Pi5-Backup-Archiv
 
 ---
@@ -22,24 +22,14 @@ Quelle: Pi5-Backup-Archiv
 
 ### Solarweb-Tagesdaten (Working-CSVs)
 
-| Datei | Größe | Beschreibung |
-|---|---:|---|
-| solarweb_daily_2026-01_working.csv | 1,8 KB | Jan 2026 — Fronius Solarweb täglich |
-| solarweb_daily_2026-02_working.csv | 1,7 KB | Feb 2026 — Fronius Solarweb täglich |
-| solarweb_daily_2026-03_working.csv | 1,9 KB | Mär 2026 — Fronius Solarweb täglich |
-| solarweb_daily_2026-04_working.csv | 1,8 KB | Apr 2026 — Fronius Solarweb täglich |
-| solarweb_daily_2026-05_working.csv | 1,9 KB | Mai 2026 — Fronius Solarweb täglich |
-| solarweb_daily_2026-06_working.csv | 1,8 KB | Jun 2026 — Fronius Solarweb täglich |
-
-**Status März–Juni 2026:** Vollständig (nachgeholt am 01.07.2026)
-  - Am 01.07.2026 per `fetch_solarweb_daily.py --year 2026 --months 3-6` von Solarweb geholt
-  - Alle 122 Tageswerte (31+30+31+30) vollständig
-  - Abgleich mit lokalen Daten: siehe [SOLARWEB_ABGLEICH.md § 6.5](../audit/SOLARWEB_ABGLEICH.md#65-vergleich-märzjuni-2026-solarweb-vs-lokal)
+Tägliche Fronius-Solarweb-Energiewerte je Monat: `solarweb_daily_YYYY-MM_working.csv`.
+Abgedeckt ist der gesamte Anlagenzeitraum **2021-11 bis laufender Monat** (Anlagenstart Nov 2021).
+Monate vor Inbetriebnahme liefert Solarweb nicht — dafür existiert keine Datei.
 
 **Feldtrennzeichen:** `;` (Semikolon)
-**Felder:** date, gesamt_prod_kwh, einspeisung_kwh, in_batt_kwh, wattpilot_kwh, direkt_kwh, netzbezug_kwh, out_batt_kwh, verbrauch_kwh
-
-**Quelle:** `scripts/fetch_solarweb_daily.py`
+**Felder:** date, einspeisung_kwh, in_batt_kwh, wattpilot_kwh, direkt_kwh, gesamt_prod_kwh, netzbezug_kwh, out_batt_kwh, verbrauch_kwh
+**Quelle:** `scripts/fetch_solarweb_daily.py` (OAuth2-Login via `.secrets`, Chart-API je Monat)
+**Abgleich:** Tagessummen decken sich je Monat mit `monthly_statistics` (PV nach Solarweb-Produktionsdefinition ~2–3 % höher; `wattpilot_kwh` = nur PV-Direkt-Anteil, lokale Messung vollständig).
 
 ---
 
