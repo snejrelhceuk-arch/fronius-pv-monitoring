@@ -5,7 +5,7 @@ role: D
 applyTo: "diagnos/integrity.py,diagnos/gap_checks.py,diagnos/gap_accept.py,diagnos/rollup_checks.py"
 tags: [integritaet, gap-scan, gap-accept, rollup, balance, config-parse]
 status: stable
-last_review: 2026-09-02
+last_review: 2026-10-08
 ---
 
 # Diagnos Integritaet
@@ -33,7 +33,7 @@ Tiefe read-only Pruefung der Datenkonsistenz: Energiebilanz, Monats-/Jahresrollu
 - **Akzeptierte Lücken** (`config/diagnos_gap_accept.json`) treiben keine Severity mehr (`accepted_gap_count` statt `fresh`), bleiben aber im Sample sichtbar (`accepted: true`). Damit tauchen bestätigte/rekonstruierte Lücken nicht mehr als Warn-Zustand auf — die Zählerstände bleiben per Backfill verifiziert.
 - `overall` entspricht immer der schlechtesten Einzelseverity.
 - Gap-Annotationen geben Kontext, reparieren aber keine Daten.
-- WR-Zustand: aktuelle Collector-Liveness schlägt eine ältere gespeicherte Vollprüfung (live + fehlerfrei ⇒ kein `crit`).
+- WR-Zustand: aktuelle Fronius-Collector-Liveness (Rolle A, `pv-collector.service`) schlägt eine ältere gespeicherte Vollprüfung (live + fehlerfrei ⇒ kein `crit`). Der Assessment-Text nennt explizit den **Fronius-Collector** (nicht den PAC/Tech-Collector der Rolle N) — ein ausgeschalteter WR (z. B. F1 während Umbau) erscheint hier als „Fronius-Collector inaktiv".
 
 ## No-Gos
 - Keine Rekonstruktion/Interpolation technischer Zeitreihen in Diagnos.
@@ -50,7 +50,7 @@ Tiefe read-only Pruefung der Datenkonsistenz: Energiebilanz, Monats-/Jahresrollu
 ## Bekannte Fallstricke
 - Monats-/Jahresrollup ist **feld-differenziert**: nur Fluss-Felder (Solar/Bezug/Einspeisung/Gesamtverbrauch) treiben Alarm. Batterie & Direktverbrauch divergieren methodisch bedingt (Monat = eichgenaue Counter-Diff `data_monthly`, Tag = BMS-Checkpoints/`W_PV_Direct`) und werden nur berichtet — sonst Dauer-CRIT ohne realen Datenfehler.
 - SQL-Rollups nutzen `localtime`; bei TZ-/DST-Sonderfaellen koennen Monatsgrenzen anders wirken als reine UTC-Auswertung.
-- Ein fehlender/unvollständiger Attachment-State führt bei lebendem Collector nur zu `warn` (nicht `crit`); ohne lebenden Collector weiterhin `crit`.
+- Ein fehlender/unvollständiger Attachment-State führt bei lebendem Fronius-Collector nur zu `warn` (nicht `crit`); ohne lebenden Fronius-Collector weiterhin `crit`.
 - Konsistente Folgedaten koennen historische Gaps relativieren, aber nicht automatisch entkraeften.
 - „Gesetzte" Lücken (> `GAP_SETTLE_S`) verschwinden aus der Alarmschwere, bleiben aber in `RAW-Status.md` und in `settled_gap_count` sichtbar — ein realer, frischer Ausfall darf so nicht übersehen werden (er bleibt < 25 h alarmrelevant).
 

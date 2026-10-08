@@ -91,13 +91,19 @@ def check_nq_pipeline_freshness() -> dict:
             severity = CRIT
         elif age_s > NQ_PIPELINE_WARN_S:
             severity = WARN
-        return {
+        result = {
             'check': 'nq:pipeline_freshness',
             'severity': severity,
             'db': os.path.basename(db),
             'last_utc': datetime.fromtimestamp(float(row[0]), tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S'),
             'age_s': round(age_s),
         }
+        if severity != OK:
+            result['detail'] = (
+                'NQ-Aggregate veraltet — PAC4200/Tech-Collector (Rolle N) oder '
+                'Tech→Primary-Transfer liefert nicht.'
+            )
+        return result
     except sqlite3.Error as exc:
         return {'check': 'nq:pipeline_freshness', 'severity': FAIL, 'error': str(exc)}
     finally:

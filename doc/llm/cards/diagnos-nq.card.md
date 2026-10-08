@@ -5,7 +5,7 @@ role: D
 applyTo: "diagnos/nq_health.py"
 tags: [netzqualitaet, pac4200, freshness, pipeline, rolle-n]
 status: stable
-last_review: 2026-09-29
+last_review: 2026-10-08
 ---
 
 # Diagnos NQ
@@ -31,7 +31,7 @@ Read-only Beobachtung des Netzqualitäts-Subsystems (PAC4200, Rolle N) aus Sicht
 - Rollen-/deploymentbewusst: ohne NQ-Monats-DB oder auf Failover → `skipped`, kein Alarm.
 - Frische-Schwellen zentral in `diagnos/config.py` (Pipeline 5/9,5 h, Energie 2/4 d).
 - `NQ_TIMERS` spiegelt die Primary-Installationskarte: Transfer/Aggregation/Energy/Core-Cap kritisch, Analyse/Event/Backup/Monats-/Jahresrollup warnend.
-- Die PAC-Hardware wird indirekt bewiesen: frische Aggregate = Kette PAC→Tech→Transfer→Aggregation lebt.
+- Die PAC-Hardware wird indirekt bewiesen: frische Aggregate = Kette PAC→Tech→Transfer→Aggregation lebt. Bei Überschreitung trägt `nq:pipeline_freshness` ein `detail`, das den **PAC4200/Tech-Collector (Rolle N)** bzw. den Tech→Primary-Transfer als Ausfallursache benennt — so ist eindeutig, welcher Collector gemeint ist (nicht der Fronius-Collector der Rolle A).
 
 ## No-Gos
 - Kein Schreibpfad zur PAC oder in NQ-DBs.

@@ -147,9 +147,9 @@ def check_fronius_attachment_state() -> dict:
         parts.append('Keine Vollprüfung gespeichert.')
 
     if collector_live is True:
-        parts.append(f'Collector aktiv (letzter Poll vor {poll_age_s}s).')
+        parts.append(f'Fronius-Collector aktiv (letzter Poll vor {poll_age_s}s).')
     elif collector_live is False:
-        parts.append(f'Collector inaktiv seit {poll_age_s}s!')
+        parts.append(f'Fronius-Collector inaktiv seit {poll_age_s}s!')
     # else: Feld noch nicht vorhanden (alter Collector-Code)
 
     if consecutive_errors > 0:
