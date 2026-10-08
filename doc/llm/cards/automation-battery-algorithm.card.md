@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/aktoren/aktor_batterie.py"
 tags: [batterie, soc, fronius, modbus]
 status: stable
-last_review: 2026-09-30
+last_review: 2026-10-08
 ---
 
 # Battery-Algorithm

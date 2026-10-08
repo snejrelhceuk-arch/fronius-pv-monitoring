@@ -35,7 +35,7 @@ PROFILE = {
         'name': 'Vollbetrieb (Eigenverbrauch Max)',
         'beschreibung': 'Volle Kapazität, SOC 25–75%',
         'battery_control': {
-            'batterie.kapazitaet_kwh': 20.48,
+            'batterie.kapazitaet_kwh': 25.6,
             'batterie.max_lade_w': 12000,
             'batterie.max_entlade_w': 12000,
             'soc_grenzen.komfort_min': 25,
@@ -46,7 +46,7 @@ PROFILE = {
         'name': 'Konservativ (Einfahren)',
         'beschreibung': 'Engeres SOC-Fenster 30–70%, max 6 kW (1-Tower-Rate)',
         'battery_control': {
-            'batterie.kapazitaet_kwh': 20.48,
+            'batterie.kapazitaet_kwh': 25.6,
             'batterie.max_lade_w': 6000,
             'batterie.max_entlade_w': 6000,
             'soc_grenzen.komfort_min': 30,

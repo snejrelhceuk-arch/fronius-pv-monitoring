@@ -181,7 +181,7 @@ Vor externer Veröffentlichung gilt die Checkliste in
 
 - **Inverter:** Fronius GEN24 12.0 (Modbus TCP)
 - **PV:** 37.59 kWp (3 Strings: S1 Süd30°, S2 Nord15°, S3 Süd10°)
-- **Battery:** BYD HVS 2×10.24 kWh parallel (20.48 kWh netto, LFP)
+- **Battery:** BYD HVS 2×12,8 kWh parallel (25,6 kWh netto, LFP, 10 Module à 2,56 kWh)
 - **Protokoll:** SunSpec Modbus TCP + Fronius HTTP-API
 - **Verbraucher:** WattPilot 22 kW, Heizpatrone 2 kW (Fritz!DECT), Dimplex WP (geplant)
 

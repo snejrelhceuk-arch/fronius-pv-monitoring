@@ -19,7 +19,7 @@
                           │ Überschuss
                           ▼
               ┌───────────────────────┐
-              │  Batterie (20,48 kWh) │  ← Priorität 2 (Winter: hoch)
+              │  Batterie (25,6 kWh)  │  ← Priorität 2 (Winter: hoch)
               └───────────┬───────────┘
                           │ Überschuss
                           ▼
@@ -233,7 +233,7 @@ HP_aktiv      = Fritz!DECT-Status (ein/aus, via getswitchstate)
 HP_letzte_aus = Zeitpunkt letztes Ausschalten
 rest_kwh      = get_remaining_pv_surplus_kwh()  # Prognose Restertrag
 rest_h        = Stunden bis Sonnenuntergang (aus solar_geometry)
-batt_rest_kwh = (SOC_MAX - SOC) * 20.48 / 100  # kWh bis Batterie voll
+batt_rest_kwh = (SOC_MAX - SOC) * 25.6 / 100  # kWh bis Batterie voll
 sunrise       = Sonnenaufgang (Dezimalstunde, aus solar_geometry)
 sunshine_h    = prognostizierte Sonnenstunden heute [h] (aus Wetter-API)
 
@@ -358,7 +358,7 @@ die Regelung des Nulleinspeisers braucht bis zu 30 s zum Nachregeln.
 -1000 W Toleranz bei hohem SOC vermeidet unnötige Abschaltungen.
 
 > **Warum P_Batt > 5 kW als Schwelle?**
-> Die Batterie (BYD HVS 2×10.24 kWh parallel, 20.48 kWh netto) kann mit max. ~5 kW laden.
+> Die Batterie (BYD HVS 2×12,8 kWh parallel, 25,6 kWh netto) kann mit max. ~5 kW laden.
 > Wenn sie bereits mit >5 kW lädt, bedeutet das: Die PV-Anlage produziert
 > deutlich mehr als Haus + Batterie brauchen. Die 2 kW HP passen problemlos
 > dazu. Die Abregelung des Nulleinspeisers wird sogar reduziert.

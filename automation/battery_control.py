@@ -3,7 +3,7 @@
 battery_control.py — Batterie-Diagnose und -Steuerung via SunSpec Model 124
 
 Liest und schreibt Storage-Register des Fronius Symo Hybrid / Gen24.
-2× BYD HVS 10,24 kWh parallel (LFP-Chemie, Hochvolt).
+2× BYD HVS parallel, 10 Module à 2,56 kWh = 25,6 kWh (LFP-Chemie, Hochvolt).
 
 HINWEIS: Die automatische Laderate-/Entladerate-Steuerung in der
 Automation-Engine wurde am 2026-03-07 entfernt. Manuelle Modbus-Eingriffe
@@ -317,7 +317,7 @@ def read_int16_scaled(client, addr, sf_addr):
 def print_status(client):
     """Zeigt kompletten Batterie-Status"""
     print("=" * 65)
-    print("  BYD HVS 10,2 kWh - Batterie-Status via SunSpec Model 124")
+    print("  BYD HVS 25,6 kWh - Batterie-Status via SunSpec Model 124")
     print("=" * 65)
 
     # Prüfe Model 124 Präsenz

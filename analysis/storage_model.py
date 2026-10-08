@@ -433,7 +433,7 @@ def run_sweep(add_pv_kwp: float = 0.0, use_curtailment: bool = True,
             'export_kwh_year': round(export_kwh_year, 0),
             'surplus_kwh_year': round(surplus_kwh_year, 0),
             'pv_kwp': pv_kwp,
-            'batt_bestand_kwh': float(bestand.get('batt_kwh_nominal', getattr(config, 'PV_BATTERY_KWH', 20.48))),
+            'batt_bestand_kwh': float(bestand.get('batt_kwh_nominal', getattr(config, 'PV_BATTERY_KWH', 25.6))),
         },
         'tech': tech,
         'econ_defaults': {

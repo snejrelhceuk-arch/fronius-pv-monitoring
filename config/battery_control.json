@@ -1,11 +1,11 @@
 {
   "_doc": "Batterie-Steuerungs-Konfiguration — Fronius Gen24 + BYD HVS parallel",
-  "_updated": "2026-03-07",
+  "_updated": "2026-10-08",
   "batterie": {
     "_doc": "Hardware-Parameter der Batterie (selten ändern)",
-    "kapazitaet_kwh": 20.48,
+    "kapazitaet_kwh": 25.6,
     "chemie": "LFP",
-    "modell": "BYD HVS parallel (BCU2.0)",
+    "modell": "BYD HVS parallel (BCU2.0), 10 Module à 2,56 kWh",
     "soh_prozent": 92,
     "max_lade_w": 12000,
     "max_entlade_w": 12000

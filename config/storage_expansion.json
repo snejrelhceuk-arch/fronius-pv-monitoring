@@ -1,6 +1,6 @@
 {
   "_doc": "Parameter fuer die Speicherausbau-Amortisationsanalyse (/analyse/speicherausbau). Read-only Entscheidungsmodell (Rolle B). Werte sind Default-Annahmen und werden im UI per Schieber ueberschrieben.",
-  "_updated": "2026-09-11",
+  "_updated": "2026-10-08",
   "wirtschaft": {
     "strompreis_eur_kwh": 0.30,
     "_strompreis_doc": "Bezugspreis. Default wird zur Laufzeit aus config.get_strompreis(aktueller Monat) gezogen; dieser Wert ist Fallback.",
@@ -36,7 +36,7 @@
   },
   "bestand": {
     "pv_kwp": 37.59,
-    "batt_kwh_nominal": 20.48,
+    "batt_kwh_nominal": 25.6,
     "_doc": "Bestandsanlage (aus config.py gespiegelt). Der Ausbau kommt on-top."
   },
   "presets": [

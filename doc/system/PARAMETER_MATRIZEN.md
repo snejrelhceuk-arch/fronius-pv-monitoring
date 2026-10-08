@@ -71,12 +71,12 @@ Das NNW-Fenster ist der kritischste Faktor für die Abend-Strategie.
 
 ## 2. Speicher-Matrix
 
-### 2.1 Heimspeicher 2× BYD HVS 20.48 kWh (F1)
+### 2.1 Heimspeicher 2× BYD HVS 25,6 kWh (F1)
 
 | Parameter | Wert |
 |---|---|
 | Typ | LFP (LiFePO₄) |
-| Nennkapazität | 20.48 kWh (2× 10.24 kWh parallel) |
+| Nennkapazität | 25,6 kWh (2× 12,8 kWh parallel, 10 Module à 2,56 kWh) |
 | SOH aktuell | ~96 % (BMS-Live) |
 | Nutzbare Kapazität | ~9.4 kWh |
 | Max. Ladeleistung (DC) | 5 kW |

@@ -5,7 +5,7 @@ Ansicht: **`/analyse/speicherausbau`** (Analyse-Bereich). Read-only Entscheidung
 vermeidet ein größerer Speicher zusätzlich — und amortisiert sich der Ausbau?**
 
 ## Fragestellung
-Die Bestandsanlage (37,59 kWp PV, 20,48 kWh Speicher, **Nulleinspeiser**) performt
+Die Bestandsanlage (37,59 kWp PV, 25,6 kWh Speicher, **Nulleinspeiser**) performt
 wirtschaftlich bereits stark. Zusätzliche Investitionen (Hybrid-WR + großer Speicher,
 optional PV-Zubau an freien MPPT) müssen sich innerhalb der Amortisationsgrenze des
 Bedieners (Default 10 Jahre) rechnen. Das Modell liefert den Nachweis über die gesamte

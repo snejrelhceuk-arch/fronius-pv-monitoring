@@ -708,7 +708,7 @@ class RegelHeizpatrone(Regel):
         überhaupt läuft — die Aktion ist die Schnittmenge beider Pfade):
           - Phase 2 nutzt nur `rest_kwh > batt_rest + reserve`; die frühere
             Zusatzbedingung `rest_kwh > min_rest_kwh` (12) war bei SOC≈MAX
-            (batt_rest ≤ 5 %·20,48 kWh ≈ 1 kWh, +reserve ≤ 3 kWh) nie zusätzlich
+            (batt_rest ≤ 5 %·25,6 kWh ≈ 1,3 kWh, +reserve ≤ 3 kWh) nie zusätzlich
             erreichbar → entfällt.
           - `reserve` nutzt den Nachmittagswert (`batt_reserve_nachmittag_kwh`,
             rest_h < 3 h) auch in Phase 1b/2 (erzeuge_aktionen nutzte dort fix 2,0).

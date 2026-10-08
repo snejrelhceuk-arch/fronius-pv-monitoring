@@ -56,7 +56,7 @@ KWP_PHASE = {2021: 21.40, 2022: 21.40, 2023: 21.40, 2024: 21.40,
 
 # kWh Batterie-Kapazität je Phase (für Vollzyklen-Berechnung)
 BATT_KWH_PHASE = {2021: 10.24, 2022: 10.24, 2023: 10.24, 2024: 10.24,
-                  2025: 10.24, 2026: 20.48}  # ab März 2026: 2× HVS parallel
+                  2025: 10.24, 2026: 20.48}  # ab März 2026: 2× HVS parallel; ab Okt 2026: +2 Module → 25,6 kWh
 
 # ── Farben ──
 COL_HEADER_BG = colors.HexColor('#1a5276')
@@ -221,7 +221,7 @@ def build_hardware_page():
     elements.append(Paragraph("Batteriespeicher", styles['SectionHead']))
     batt_data = [
         ["Modell", "2× BYD Battery-Box Premium HVS (parallel, BCU 2.0)"],
-        ["Kapazit\u00e4t", "20,48 kWh (nutzbar) / 12 kW Lade-/Entladeleistung"],
+        ["Kapazit\u00e4t", "25,6 kWh / 12 kW Lade-/Entladeleistung"],
         ["Typ", "LiFePO4 (Lithium-Eisenphosphat)"],
         ["Kopplung", "DC-gekoppelt an F1 (Gen24 Hybrid)"],
         ["BMS", "BYD Battery Management System (Modbus RTU via Gen24)"],
@@ -527,9 +527,9 @@ def _phase_note(year):
         return ("Phase 1 (Jan-Apr): 21,40 kWp  >  Phase 2 (Mai-Sep): 26,07 kWp  >  "
                 "Phase 3 (ab Okt): 37,59 kWp")
     elif year == 2026:
-        return ("Phase 3: 37,59 kWp, 3 WR  -  ab M\u00e4rz: 2\u00d7 BYD HVS parallel (20,48 kWh)")
+        return ("Phase 3: 37,59 kWp, 3 WR  -  ab M\u00e4rz: 2\u00d7 BYD HVS parallel; ab Okt: +2 Module (25,6 kWh)")
     else:
-        return "Phase 3: 37,59 kWp, 3 Wechselrichter, 98 Module, 2\u00d7 BYD HVS (20,48 kWh)"
+        return "Phase 3: 37,59 kWp, 3 Wechselrichter, 98 Module, 2\u00d7 BYD HVS (25,6 kWh)"
 
 
 # ══════════════════════════════════════════════════════════════════════

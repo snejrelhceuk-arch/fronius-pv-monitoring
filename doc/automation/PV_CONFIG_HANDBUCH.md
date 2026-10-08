@@ -1031,7 +1031,7 @@ Editor-Wechsel per SSH verfügbar.
 
 ## 10. Grundlagenwissen
 
-### SOC-Bereiche der 2× BYD HVS 20.48 kWh (LFP)
+### SOC-Bereiche der 2× BYD HVS 25,6 kWh (LFP)
 
 ```
   0%  ████░░░░░░░░░░░░░░░░  25% ████████████░░░░  75% ████████████████  100%
@@ -1079,7 +1079,7 @@ Bei gleichzeitig aktiven Regeln entscheidet der Score:
 | Parameter | Wert |
 |-----------|------|
 | Batterie | 2× BYD HVS parallel (LFP, BCU 2.0 Master) |
-| Kapazität | 20.48 kWh (2× 10.24 kWh) |
+| Kapazität | 25,6 kWh (2× 12,8 kWh) |
 | Max. Ladeleistung | ~9,5 kW effektiv (GEN24 DC-DC ~22 A HW-Limit; nominell 12 kW) |
 | Max. Entladeleistung | ~9,5 kW effektiv (GEN24 DC-DC ~22 A HW-Limit; nominell 12 kW) |
 | PV-Anlage | 37.59 kWp (3 Strings) |

@@ -4,9 +4,9 @@
 
 | Parameter | Wert | Quelle |
 |-----------|------|--------|
-| Batterie | 2× BYD HVS 20.48 kWh (LFP, parallel, SOH ~96%) | battery_control.json |
-| Nutzbar 20→5% | **3.07 kWh** | (15% × 20.48) |
-| Nutzbar 70→100% | **6.14 kWh** | (30% × 20.48) |
+| Batterie | 2× BYD HVS 25,6 kWh (LFP, parallel, 10 Module à 2,56 kWh) | battery_control.json |
+| Nutzbar 20→5% | **3.84 kWh** | (15% × 25.6) |
+| Nutzbar 70→100% | **7.68 kWh** | (30% × 25.6) |
 | Nacht-Grundlast | ~1000 W (00–06 Uhr) | DB Mittelwert 7d |
 | Morgen-Last | ~2500 W (07–09 Uhr) | DB Mittelwert 7d |
 | PV-Start (Feb) | ~08:00 (spürbar ab 09:00) | Forecast |

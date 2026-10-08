@@ -1,7 +1,7 @@
 {
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
-  "_updated": "2026-09-30",
+  "_updated": "2026-10-08",
   "regelkreise": {
     "soc_extern": {
       "_doc": "Toleranz für extern geänderte SOC-Werte (z.B. manuell via Fronius App). Wenn SOC_MIN oder SOC_MAX außerhalb der Automation geändert werden, respektiert die Engine die Werte für die konfigurierte Dauer.",
@@ -2005,9 +2005,9 @@
   },
   "hardware": {
     "_doc": "Unveränderliche Hardware-Referenz (read-only, aus battery_control.json gespiegelt)",
-    "kapazitaet_kwh": 20.48,
+    "kapazitaet_kwh": 25.6,
     "chemie": "LFP",
-    "modell": "BYD HVS 2×10.2 (parallel)",
+    "modell": "BYD HVS 2× parallel (10 Module à 2,56 kWh)",
     "max_lade_w": 12000,
     "max_entlade_w": 12000
   },
