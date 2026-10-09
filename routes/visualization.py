@@ -576,6 +576,17 @@ def api_tag_visualization():
         if counter_totals:
             result['counter_totals'] = counter_totals
 
+        # ─── Ausfall-Klassifikation (Netzausfall vs. System-/Insel) ────
+        # Lücken in der Fronius-Reihe werden gegen NQ/PAC-Evidenz gekreuzt,
+        # damit die Anzeige nicht jede Collector-Pause als Netzausfall labelt.
+        try:
+            from diagnos.outage_classify import classify_timestamps
+            outages = classify_timestamps([dp['timestamp'] for dp in data_points])
+            if outages:
+                result['outages'] = outages
+        except Exception as e:
+            logging.warning(f"Ausfall-Klassifikation Fehler: {e}")
+
         return jsonify(result)
 
     except Exception as e:

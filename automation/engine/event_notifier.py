@@ -590,6 +590,80 @@ class EventNotifier:
 
         return ausgeloest
 
+    def pruefe_stoerungs_alarm(self) -> Optional[str]:
+        """Einmal-Warnmail nach einer Betriebsunterbrechung des pv-system.
+
+        Klassifiziert die jüngste Fronius-Datenlücke (``raw_data``) und meldet die
+        *wahre* Ursache: echter Netzausfall vs. reine System-/Collector-
+        Unterbrechung (Netz lag an) vs. Insel-/Notstrombetrieb — per Cross-Check
+        gegen die unabhängige NQ/PAC-Evidenz (``diagnos.outage_classify``,
+        read-only). Wird beim Daemon-Start aufgerufen; die 1×/Event-Dedup
+        (Schlüssel = Lückenbeginn) verhindert Wiederholungen.
+
+        Returns: Alarm-Key bei Versand, sonst ``None``.
+        """
+        if not self._email:
+            return None
+        try:
+            from diagnos.outage_classify import classify_latest_gap
+        except Exception as exc:
+            LOG.debug(f"Störungs-Alarm: Klassifikator nicht verfügbar: {exc}")
+            return None
+
+        boot_ts = None
+        try:
+            boot_ts = time.time() - float(open('/proc/uptime').read().split()[0])
+        except Exception:
+            pass
+
+        try:
+            conn = sqlite3.connect(
+                f'file:{app_config.DB_PATH}?mode=ro', uri=True, timeout=5)
+        except Exception as exc:
+            LOG.debug(f"Störungs-Alarm: DB nicht erreichbar: {exc}")
+            return None
+        try:
+            ev = classify_latest_gap(conn, lookback_h=12, boot_ts=boot_ts)
+        except Exception as exc:
+            LOG.debug(f"Störungs-Alarm: Klassifikation fehlgeschlagen: {exc}")
+            return None
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+        if not ev:
+            return None
+
+        start_str = datetime.fromtimestamp(ev['start_ts']).strftime('%d.%m.%Y %H:%M')
+        end_str = datetime.fromtimestamp(ev['end_ts']).strftime('%H:%M')
+        dauer_min = int(ev['duration_s'] // 60)
+        kategorie = {
+            'netzausfall': 'NETZAUSFALL',
+            'insel': 'INSEL/NOTSTROM',
+            'systemausfall': 'SYSTEMUNTERBRECHUNG',
+        }.get(ev['cls'], 'STÖRUNG')
+        text = (f"{ev['label']} ({ev['confidence']}): Betrieb {start_str}–{end_str} "
+                f"unterbrochen ({dauer_min} min)")
+        details = {
+            'Klasse': ev['label'],
+            'Konfidenz': ev['confidence'],
+            'Beginn': start_str,
+            'Wiederkehr': end_str,
+            'Dauer': f"{dauer_min} min",
+            'Ursache': ev['detail'],
+            'NQ-Messpunkte': ev['nq_points'],
+            'Frequenz': (f"{ev['freq_min']}–{ev['freq_max']} Hz"
+                         if ev['freq_max'] is not None else '—'),
+            'Spannung_LL_max': (f"{ev['u_max']} V"
+                                if ev['u_max'] is not None else '—'),
+        }
+        alarm_key = f"stoerung:{ev['start_ts']}"
+        if self._sende_diagnos_alarm(alarm_key, text, details, kategorie=kategorie):
+            return alarm_key
+        return None
+
     @staticmethod
     def _format_health_alarm(name: str, sev: str, check: dict) -> tuple[str, dict]:
         """Baue Alarm-Text + Detaildict für eine Health-Check-Sofortmeldung."""

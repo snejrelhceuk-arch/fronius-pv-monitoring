@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/**"
 tags: [engine, tick-loop, regeln, registry]
 status: stable
-last_review: 2026-09-30
+last_review: 2026-10-09
 ---
 
 # Automation-Engine
@@ -17,7 +17,7 @@ Zentrale Steuerschleife (Rolle C). Sammelt Beobachtungen, ruft Schutz-Checks, da
 - **Hauptdatei:** `automation/engine/automation_daemon.py:AutomationDaemon`
 - **Engine-Kern:** `automation/engine/engine.py:Engine.zyklus`
 - **Plugin-Registry (Regeln + Aktoren):** `automation/engine/registry.py:lade_regeln`/`lade_aktoren`, deklarativ in `config/engine_registry.json`
-- **Benachrichtigung (Sunset-Mail/Sofort-Alarme):** `automation/engine/event_notifier.py:EventNotifier`; Helfer-Paket `automation/engine/notify/` (`dedup.py`, `thresholds.py`, `mail.py`)
+- **Benachrichtigung (Sunset-Mail/Sofort-Alarme):** `automation/engine/event_notifier.py:EventNotifier`; Helfer-Paket `automation/engine/notify/` (`dedup.py`, `thresholds.py`, `mail.py`). Beim Daemon-Start 1× `pruefe_stoerungs_alarm` (Störungs-Warnmail mit klassifizierter Ausfall-Ursache; s. `diagnos-daily-mail.card.md`), nur produktiv (nicht `--once`/`--dry-run`).
 - **Zugehörige Configs:** `config/soc_param_matrix.json` (zentrale Parameter-Matrix)
 - **State (RAM):** `/dev/shm/automation_obs.db` (ObsState, Tier1, Operator-Overrides)
 - **State (Persist):** `data.db` Tabelle `automation_log` (Aktor-Resultate)
@@ -35,6 +35,7 @@ Zentrale Steuerschleife (Rolle C). Sammelt Beobachtungen, ruft Schutz-Checks, da
 - **Tier-1 hält Engine an:** Bei aktivem Tier-1-Alarm (z. B. `batt_temp>45 °C`, `SOC<5 %`) pausiert die Regel-Auswertung, Schutz-Aktoren bleiben frei.
 - **Score 0..100:** Regeln werden bewertet; Schutz-Regeln (Name enthält `schutz` oder `aktor=fritzdect`) laufen parallel, Optimierungs-Regeln nur Gewinner pro Aktor-Cascade.
 - **ExternalRespect:** Nach erfolgreichem Aktor-Schreibvorgang muss der Engine-Zielwert via `_registriere_erfolgreiche_soc_aktionen()` registriert werden, sonst falsch-positive Extern-Erkennung.
+- **Globaler SOC-Not-Aus:** Top-Level-Flag `soc_automation_aktiv` in `config/soc_param_matrix.json` (Default `true`). Ist es `false`, überspringt `Engine.zyklus` **jede** Regel mit `aktor == 'batterie'` (Morgen-/Nachmittags-SOC, Komfort-Reset, Einspeise-/WattPilot-/Zellausgleich-Schutz, Forecast-Plausi) → SOC_MIN/SOC_MAX/SOC_MODE bleiben unangetastet (Batterie-Formatierung von Hand). Tier-1-Hardware-Alarm bleibt wirksam. Helfer `param_matrix.py:soc_automation_aktiv`; gesetzt über Steuerbox `/api/ops/soc-automation-aktiv` (s. `steuerbox-intents.card.md`), Live-Reload via mtime.
 
 ## No-Gos
 - **Keine Software-Ratenlimits an die Batterie** (GEN24 DC-DC = 22 A HW-Limit). Entfernt 2026-03-07: `RegelSocSchutz`, `RegelTempSchutz`, `RegelAbendEntladerate`, `RegelLaderateDynamisch`, Modbus-`InWRte`/`OutWRte`-Manipulation.

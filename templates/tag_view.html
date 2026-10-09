@@ -1533,10 +1533,13 @@
             const axis = buildTimeAxis();
             const hasFC = axis.hasForecast;
             const clearSky = buildClearSkyAxis();
-            // Netzausfall-Luecken: Mess-Serien auftrennen, Forecast bleibt durchgehend.
-            const outages = (window.PVChart && PVChart.detectOutages)
-                ? PVChart.detectOutages(chartData.datapoints)
-                : { gaps: [], markLine: null, markArea: null };
+            // Ausfall-Marker: serverseitige Klassifikation (Netzausfall vs. System/Insel),
+            // Fallback = clientseitige Luecken-Heuristik. Mess-Serien an Luecken auftrennen.
+            const outages = (chartData.outages && window.PVChart && PVChart.outagesFromServer)
+                ? PVChart.outagesFromServer(chartData.outages)
+                : (window.PVChart && PVChart.detectOutages)
+                    ? PVChart.detectOutages(chartData.datapoints)
+                    : { gaps: [], markLine: null, markArea: null };
             const td = (f) => (window.PVChart && PVChart.breakSeriesAtGaps)
                 ? PVChart.breakSeriesAtGaps(axis.tsData(f), outages.gaps)
                 : axis.tsData(f);
@@ -1774,10 +1777,13 @@
             const axis = buildTimeAxis();
             const hasFC = axis.hasForecast;
             const clearSky = buildClearSkyAxis();
-            // Netzausfall-Luecken: Mess-Serien auftrennen, Forecast bleibt durchgehend.
-            const outages = (window.PVChart && PVChart.detectOutages)
-                ? PVChart.detectOutages(chartData.datapoints)
-                : { gaps: [], markLine: null, markArea: null };
+            // Ausfall-Marker: serverseitige Klassifikation (Netzausfall vs. System/Insel),
+            // Fallback = clientseitige Luecken-Heuristik. Mess-Serien an Luecken auftrennen.
+            const outages = (chartData.outages && window.PVChart && PVChart.outagesFromServer)
+                ? PVChart.outagesFromServer(chartData.outages)
+                : (window.PVChart && PVChart.detectOutages)
+                    ? PVChart.detectOutages(chartData.datapoints)
+                    : { gaps: [], markLine: null, markArea: null };
             const td = (f) => (window.PVChart && PVChart.breakSeriesAtGaps)
                 ? PVChart.breakSeriesAtGaps(axis.tsData(f), outages.gaps)
                 : axis.tsData(f);

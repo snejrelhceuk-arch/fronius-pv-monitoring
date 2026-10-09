@@ -156,6 +156,17 @@ class AutomationDaemon:
         # Siehe: doc/TIEFENPRUEFUNG_2026-03-08.md §7.3
         self._hp_startup_check()
 
+        # ── Störungs-Warnmail nach Wiederanlauf ────────────────
+        # War der Betrieb kurz zuvor unterbrochen (Rohdaten-Lücke), die wahre
+        # Ursache klassifizieren (Netzausfall vs. System/Insel) und 1× melden.
+        if not self.once and not self.dry_run and self._notifier:
+            try:
+                key = self._notifier.pruefe_stoerungs_alarm()
+                if key:
+                    LOG.warning(f"Störungs-Warnmail gesendet: {key}")
+            except Exception as e:
+                LOG.error(f"Störungs-Warnmail Fehler: {e}")
+
         # Tier-3: Forecast-Thread (trigger-basiert, prüft alle 30s)
         if not self.once:
             self._forecast_thread = threading.Thread(

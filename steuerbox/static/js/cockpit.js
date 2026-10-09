@@ -296,6 +296,7 @@ async function init() {
 
   controls.forEach(buildControl);
   buildKlimaRegelControl();
+  buildSocAutomationControl();
   if (respektInput) {
     respektInput.addEventListener('input', refreshDurationHint);
     respektInput.addEventListener('change', refreshDurationHint);
@@ -367,6 +368,86 @@ function buildKlimaRegelControl() {
       if (data && data.ok) updateKlimaRegelButtons(data.aktiv);
     })
     .catch((err) => logLine(`klima_regel_aktiv: Status nicht geladen: ${err.message}`));
+}
+
+// ── SOC-Automation Not-Aus (globaler Batterie-Regel-Schalter, direkte Config-API) ──
+
+function updateSocAutomationButtons(aktiv) {
+  const container = document.getElementById('soc-automation-aktiv');
+  if (!container) return;
+  const buttons = container.querySelectorAll('.state-btn');
+  buttons.forEach((btn) => {
+    const selected = btn.dataset.value === String(aktiv);
+    btn.classList.toggle('selected', selected);
+    btn.classList.toggle('intent-on', selected && btn.dataset.flavor === 'on');
+    btn.classList.toggle('intent-off', selected && btn.dataset.flavor === 'off');
+    btn.classList.toggle('intent-other', selected && btn.dataset.flavor === 'other');
+  });
+}
+
+function confirmSocAutomationAus() {
+  return window.confirm(
+    'ALLE SOC-Automationen deaktivieren?\n\n'
+    + 'Die Engine lässt SOC_MIN / SOC_MAX / SOC-Modus danach unangetastet '
+    + '(kein Morgen-/Nachmittags-SOC, kein Einspeise-/WattPilot-/Zellausgleich-'
+    + 'Schutz). Nur so kannst du die Batterie manuell formatieren.\n\n'
+    + 'Hardware-Not-Aus (Tier-1-Temperatur/Kritisch-Alarm) bleibt aktiv.\n\n'
+    + 'Jetzt deaktivieren?'
+  );
+}
+
+function buildSocAutomationControl() {
+  const container = document.getElementById('soc-automation-aktiv');
+  if (!container) return;
+
+  const states = [
+    { label: 'INAKTIV', value: false, flavor: 'off' },
+    { label: 'AKTIV', value: true, flavor: 'on' },
+  ];
+
+  states.forEach((entry) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'state-btn';
+    button.dataset.value = String(entry.value);
+    button.dataset.flavor = entry.flavor;
+
+    const label = document.createElement('span');
+    label.className = 'state-btn-label';
+    label.textContent = entry.label;
+    button.appendChild(label);
+
+    button.addEventListener('click', async () => {
+      // Zweischrittige Deaktivierung: Klick INAKTIV → Ja/Nein-Rückfrage.
+      if (entry.value === false && !confirmSocAutomationAus()) {
+        return;
+      }
+      try {
+        const response = await fetch('/api/ops/soc-automation-aktiv', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ aktiv: entry.value }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.description || data.error || `HTTP ${response.status}`);
+        }
+        updateSocAutomationButtons(data.aktiv);
+        logLine(`soc_automation_aktiv: ${data.aktiv ? 'aktiviert' : 'DEAKTIVIERT (Formatierungsmodus)'}`);
+      } catch (err) {
+        logLine(`soc_automation_aktiv: Fehler ${err.message}`);
+      }
+    });
+
+    container.appendChild(button);
+  });
+
+  fetch('/api/ops/soc-automation-aktiv', { method: 'GET' })
+    .then((r) => r.json())
+    .then((data) => {
+      if (data && data.ok) updateSocAutomationButtons(data.aktiv);
+    })
+    .catch((err) => logLine(`soc_automation_aktiv: Status nicht geladen: ${err.message}`));
 }
 
 init();

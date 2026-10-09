@@ -171,6 +171,16 @@ def ist_aktiv(matrix: dict, regelkreis: str) -> bool:
     return rk.get('aktiv', False)
 
 
+def soc_automation_aktiv(matrix: dict) -> bool:
+    """Globaler Not-Aus für alle SOC-schreibenden Regeln (Batterie-Aktor).
+
+    Ist dieser Schalter False, überspringt die Engine jede Regel mit
+    ``aktor == 'batterie'`` — SOC_MIN/SOC_MAX/SOC_MODE bleiben unangetastet,
+    damit der Bediener die Batterie manuell formatieren kann. Default True.
+    """
+    return bool(matrix.get('soc_automation_aktiv', True))
+
+
 def get_score_gewicht(matrix: dict, regelkreis: str) -> int:
     """Hole das Score-Gewicht für Engine-Ranking."""
     rk = get_regelkreis(matrix, regelkreis)

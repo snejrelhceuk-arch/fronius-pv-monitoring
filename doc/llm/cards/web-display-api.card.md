@@ -5,7 +5,7 @@ role: B
 applyTo: "routes/**"
 tags: [web-api, blueprints, templates, formatting, read-only]
 status: stable
-last_review: 2026-10-01
+last_review: 2026-10-09
 ---
 
 # Web Display/API
@@ -29,6 +29,7 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 - **WP-Leistungsnachweis (Netzbetreiber):** `routes/verbraucher.py:api_verbraucher_wp_leistung` — Zeitreihe WP-Max + Netzbezug (`grid_draw_w`) je Punkt aus `logs/wp_netzbetreiber_leistung.csv`; View `templates/wp_leistung_view.html` (Tooltip belegt Eigenversorgung bei Ueberschreitung).
 - **Verbraucher-Read-Helfer:** `routes/verbraucher_helpers.py` (WP-Protokoll/Downsampling, SOC-Zeitreihe + Akku-Stress, Batterie-Wirkungsgrad/Vollzyklen, Fritz!DECT-/Heizpatrone-Tagesenergie) — read-only, re-exportiert über `routes/verbraucher.py` (Importpfade für Routen/Tests stabil).
 - **Display-Formatter:** `templates/tag_view.html:formatValue`
+- **Ausfall-Klassifikation (Anzeige):** `/api/tag_visualization` reichert die Antwort um `outages[]` an — serverseitig klassifizierte Datenlücken aus `diagnos/outage_classify.py:classify_timestamps` (Cross-Check der Fronius-Lücke gegen NQ/PAC-Präsenz + Netzspannung/-frequenz): Klassen `netzausfall`/`insel`/`systemausfall`/`unbekannt` mit `label`/`color`/`confidence`/`detail`. Das Frontend rendert sie via `static/js/nav-ui.js:PVChart.outagesFromServer` (Label + Klassenfarbe je Marker; `(?)` bei Konfidenz < hoch); Fallback = clientseitige `PVChart.detectOutages`. Ersetzt die pauschale „Netzausfall"-Beschriftung jeder 20-min-Lücke.
 - **Clear-Sky-Infozeile (Tag-View):** `templates/tag_view.html:buildClearSkyInfoLine`/`applyClearSkyTitle` blenden die Sonnen-/Clear-Sky-Zeile als Chart-Untertitel überall dort ein, wo die Clear-Sky-Kurve gezeichnet wird (Ertrag- **und** Verbrauch-Chart, auch reine Zukunftstage via Kalender) — nicht mehr nur im Prognose-Chart.
 - **Seiten-Menü (Rollup):** `static/js/nav-ui.js:DEFAULT_PAGES`/`makeGroup` rendern die Schublade als aufklappbare Gruppen (Monitoring/Analyse/Netzqualität▸Spektralanalyse/Darstellung aller Einzelwerte). Flow hat einen eigenen Schnellzugriff-Button, **keinen** Menü-Eintrag; `Verbraucher` heißt im Menü `Lasten`.
 

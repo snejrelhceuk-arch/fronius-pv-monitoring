@@ -428,6 +428,48 @@
         };
     }
 
+    // #rrggbb → rgba(r,g,b,a) fuer die klassenspezifische Flaechen-Schattierung.
+    function _hexA(hex, a) {
+        var m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
+        if (!m) return AREA;
+        return 'rgba(' + parseInt(m[1], 16) + ',' + parseInt(m[2], 16) + ',' + parseInt(m[3], 16) + ',' + a + ')';
+    }
+
+    // Server-klassifizierte Ausfall-Events (cls/label/color/confidence/detail).
+    // Ersetzt die blinde Luecken-Heuristik: Beschriftung + Farbe je Klasse
+    // (Netzausfall rot, Insel/Notstrom orange, Systemunterbrechung amber,
+    // unbestaetigt grau). breakSeriesAtGaps() nutzt weiter die gaps-Liste.
+    function outagesFromServer(events) {
+        var evs = events || [];
+        var gaps = evs.map(function (e) { return { startTs: +e.start_ts, endTs: +e.end_ts }; });
+        var lineData = [];
+        var areaData = [];
+        evs.forEach(function (e) {
+            var col = e.color || COL;
+            var lbl = e.label || 'Ausfall';
+            if (e.confidence && e.confidence !== 'hoch') lbl += ' (?)';
+            lineData.push({
+                xAxis: (+e.start_ts) * 1000, lineStyle: { color: col },
+                label: { show: true, formatter: lbl + '\n' + _hhmm(+e.start_ts), position: 'insideStartTop', color: col, fontSize: 10 }
+            });
+            lineData.push({
+                xAxis: (+e.end_ts) * 1000, lineStyle: { color: col },
+                label: { show: true, formatter: 'Wiederkehr\n' + _hhmm(+e.end_ts), position: 'insideEndTop', color: col, fontSize: 10 }
+            });
+            areaData.push([{ xAxis: (+e.start_ts) * 1000, itemStyle: { color: _hexA(col, 0.10) } }, { xAxis: (+e.end_ts) * 1000 }]);
+        });
+        return {
+            gaps: gaps,
+            markLine: {
+                silent: true, symbol: 'none',
+                lineStyle: { color: COL, type: 'dashed', width: 1.5, opacity: 0.9 },
+                emphasis: { disabled: true },
+                data: lineData
+            },
+            markArea: { silent: true, data: areaData }
+        };
+    }
+
     // Trennt eine [ts_ms, value]-Serie an den Luecken auf (null einfuegen),
     // damit die Linie ueber den Ausfall NICHT verbunden wird.
     function breakSeriesAtGaps(series, gaps) {
@@ -442,6 +484,7 @@
 
     Object.assign(window.PVChart, {
         detectOutages: detectOutages,
+        outagesFromServer: outagesFromServer,
         breakSeriesAtGaps: breakSeriesAtGaps
     });
 })();

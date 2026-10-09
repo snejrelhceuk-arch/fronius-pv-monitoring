@@ -2,10 +2,10 @@
 title: Diagnos Daily-Mail (Täglicher Energiebericht + Alarm-Mails)
 domain: diagnos
 role: D
-applyTo: "automation/engine/event_notifier.py,automation/engine/notify/report_format.py"
+applyTo: "automation/engine/event_notifier.py,automation/engine/notify/report_format.py,diagnos/outage_classify.py"
 tags: [mail, tagesbericht, energie, smtp, credential, alarm]
 status: stable
-last_review: 2026-09-29
+last_review: 2026-10-09
 ---
 
 # Diagnos Daily-Mail
@@ -28,6 +28,7 @@ Systemfehler laufen über die separaten Sofort-Alarme (dieselbe SMTP-Infrastrukt
 - **Textformatierung:** `automation/engine/notify/report_format.py:tagesbericht` (4 Abschnitte; kompakte Bilanz paarweise nebeneinander plus Autarkie/Eigenverbrauch via `report_format.py:_bilanz_zeilen` + `report_format.py:_quote`)
 - **Trigger (00:00):** `automation/engine/automation_daemon.py` (Aufruf alle 5 min gedrosselt; Dedup + Reife-Gate steuern Fälligkeit; SMTP-Fehler löst keinen Wiederhol-Sturm aus)
 - **Sofort-Alarme (getrennt):** `automation/engine/event_notifier.py:pruefe_health_alarme` (Whitelist CRIT/FAIL: `cpu_temp`, `throttle`, `disk_root`, `service:*`, `auxiliary_hosts`), `pruefe_integrity_alarme`, `_sende_diagnos_alarm`
+- **Störungs-Warnmail (Wiederanlauf):** `automation/engine/event_notifier.py:pruefe_stoerungs_alarm` — beim Daemon-Start 1× aufgerufen (`automation/engine/automation_daemon.py`), klassifiziert die jüngste `raw_data`-Lücke via `diagnos/outage_classify.py:classify_latest_gap` und meldet die *wahre* Ursache (echter Netzausfall vs. System-/Collector-Unterbrechung bei anliegendem Netz vs. Insel-/Notstrombetrieb). Betreff-Kategorie `NETZAUSFALL`/`INSEL/NOTSTROM`/`SYSTEMUNTERBRECHUNG`/`STÖRUNG`; Dedup-Key = Lückenbeginn.
 - **Statusdateien (entkoppelt):** `automation/engine/event_notifier.py:_aktualisiere_statusdateien` → `diagnos/status_report.py:write_status_reports`
 - **SMTP-Low-Level:** `automation/engine/notify/mail.py:smtp_versand`
 - **Passwort (verschlüsselt):** `automation/engine/credential_store.py:lade` → `/etc/pv-system/smtp_pass.key`

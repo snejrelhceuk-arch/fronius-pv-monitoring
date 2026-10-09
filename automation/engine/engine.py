@@ -25,7 +25,7 @@ import automation.engine.obs_state as obs_mod
 from automation.engine.obs_state import read_obs_state
 from automation.engine.actuator import Actuator
 from automation.engine.param_matrix import (
-    lade_matrix, get_score_gewicht, DEFAULT_MATRIX_PATH,
+    lade_matrix, get_score_gewicht, soc_automation_aktiv, DEFAULT_MATRIX_PATH,
 )
 from automation.engine.regeln.soc_extern import soc_extern_tracker
 from automation.engine.regeln.waermepumpe import reset_wp_extern_tracking
@@ -201,9 +201,17 @@ class Engine:
             return []
 
         # 3. Regeln bewerten (nur passende Zyklen)
+        #    Globaler SOC-Not-Aus: Batterie-Regeln überspringen, damit der
+        #    Bediener SOC_MIN/SOC_MAX manuell (Formatierung) halten kann.
+        soc_aut = soc_automation_aktiv(self._matrix)
+        if not soc_aut:
+            LOG.info("SOC-Automation deaktiviert (Formatierungsmodus) — "
+                     "Batterie-Regeln werden übersprungen")
         scores: list[tuple[int, Regel]] = []
         for regel in self._regeln:
             if zyklus_typ == 'fast' and regel.engine_zyklus == 'strategic':
+                continue
+            if not soc_aut and regel.aktor == 'batterie':
                 continue
             try:
                 score = regel.bewerte(obs, self._matrix)
