@@ -28,6 +28,7 @@
 8. **Rolle N ist read-only gegenüber Produktions-DATEN.** PAC4200/NQ schreibt nur eigene NQ-DBs, niemals `data.db` oder Aktoren. Tech-Collector arbeitet RAM-first (tmpfs), SD nur selten. (Betrifft **Runtime-Daten**, nicht Code-Deployment — s. Deployment-Policy unten.)
 9. **Doku = IST-Zustand.** Cards und Human-Docs beschreiben ausschließlich den *aktuellen* Stand/Funktion — **kein** „was wann warum geändert" (kein Changelog, keine `## Changes`-Sektion, kein `changes:`-Frontmatter, keine datierten Verlaufslisten). Historie lebt in **git**. Einzige Ausnahme: `doc/meta/KI_BEITRAGSANALYSE.md`.
 10. **UI-Änderungen visuell verifizieren.** Vor „fertig": Ziel-Viewport headless rendern + screenshotten (Browser-Tools) und den Effekt belegen — nicht den Bediener prüfen lassen. Mobile/Portrait immer bei 390×844 gegenprüfen.
+11. **Commits immer themensortiert.** Pro Commit genau ein fachliches Thema; keine fremden Dateien im selben Commit. Vor jedem Commit den Stage-Stand prüfen (`git --no-pager diff --cached --name-only`) und nur passende Dateien aufnehmen.
 ## Hosts (knapp)
 
 Nach der **REFORMATION** (Umzug der Produktion auf Pi5, 2026-07-11) gilt die Vier-Host-Topologie:
