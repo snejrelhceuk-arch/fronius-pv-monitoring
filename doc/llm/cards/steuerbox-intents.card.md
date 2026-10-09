@@ -5,7 +5,7 @@ role: E
 applyTo: "steuerbox/**"
 tags: [intent, overrides, respekt, hard-guards, audit]
 status: stable
-last_review: 2026-09-30
+last_review: 2026-10-09
 ---
 
 # Steuerbox Intents
@@ -16,6 +16,7 @@ Schicht E nimmt Operator-Intents entgegen, validiert sie und schreibt sie als Ov
 ## Code-Anchor
 - **API-Einstieg:** `steuerbox/steuerbox_api.py:api_intent`
 - **Security-Gate:** `steuerbox/steuerbox_api.py:_security_gate`
+- **Port-Guard beim Start:** `steuerbox/steuerbox_api.py:_check_port_available`
 - **Validatoren:** `steuerbox/validators.py:check_allowlist`, `validate_action`
 - **Persistenz/Audit:** `steuerbox/intent_handler.py:handle_intent`, `get_status`, `get_audit`
 - **HA-MQTT-Bridge (optional):** `steuerbox/ha_mqtt_bridge.py:HaMqttBridge`
@@ -53,6 +54,7 @@ Schicht E nimmt Operator-Intents entgegen, validiert sie und schreibt sie als Ov
 - Neue Aktion einfuehren -> `config.py:STEUERBOX_ALLOWED_ACTIONS` + `steuerbox/validators.py:validate_action` + `automation/engine/operator_overrides.py:_map_override_to_actions`.
 - UI-Meta fuer neue Buttons -> `steuerbox/steuerbox_api.py:api_control_meta` erweitern.
 - **Klima-Regelkreis dauerhaft deaktivieren/aktivieren:** `GET/POST /api/ops/klima-regel-aktiv` (direkte Config-API, kein Intent — schreibt `regelkreise.klimaanlage.aktiv` in `soc_param_matrix.json` atomar). Endpoint in `steuerbox/steuerbox_api.py:api_klima_regel_aktiv_get/set`. Failover: read-only (403 auf POST).
+- **Alle SOC-Automationen deaktivieren/aktivieren (Batterie-Formatierung):** `GET/POST /api/ops/soc-automation-aktiv` (direkte Config-API, kein Intent — schreibt Top-Level `soc_automation_aktiv` in `soc_param_matrix.json` atomar). Endpoint `steuerbox/steuerbox_api.py:api_soc_automation_aktiv_get/set`, Setter `_set_soc_automation_aktiv`. Cockpit-Schalter „SOC-Automation“ (Batterie-Karte) mit **zweistufiger Ja/Nein-Rückfrage bei Deaktivierung** (`steuerbox/static/js/cockpit.js:confirmSocAutomationAus`/`buildSocAutomationControl`). `false` → Engine überspringt alle `aktor=='batterie'`-Regeln (s. `automation-battery-algorithm.card.md`). Failover: read-only (403 auf POST).
 - Override-Lebenszyklus debuggen -> `GET /api/ops/status` und `GET /api/ops/audit` vergleichen.
 - HA-Ladewunsch anbinden -> `action='afternoon_charge_request'` mit optionalen Parametern (`target_soc_pct`, `pause_hp_until_target`, Startfenster 12-15h).
 - MQTT-Button in HA: Bridge subscribt `{state_prefix}/{node_id}/cmd/afternoon_charge_request` (payload `PRESS`/`ON`) und POSTet Intent lokal zu `HA_BRIDGE_STEUERBOX_BASE/api/ops/intent`.

@@ -31,6 +31,18 @@ logging.basicConfig(level=logging.INFO)
 app = Flask(__name__, template_folder='templates', static_folder='static')
 
 
+def _check_port_available(host: str, port: int) -> bool:
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        probe.bind((host, int(port)))
+        return True
+    except OSError:
+        return False
+    finally:
+        probe.close()
+
+
 def _matrix_param(matrix: dict, regelkreis: str, param: str, fallback: float | int) -> float:
     try:
         return float(matrix['regelkreise'][regelkreis]['parameter'][param]['wert'])
@@ -154,7 +166,32 @@ def _set_regelkreis_aktiv(regelkreis: str, aktiv: bool) -> dict:
     return {'ok': True, 'aktiv': aktiv}
 
 
-def _check_port_available(host: str, port: int) -> bool:
+def _set_soc_automation_aktiv(aktiv: bool) -> dict:
+    """Setzt den globalen SOC-Automation-Not-Aus (Top-Level-Flag), speichert atomar."""
+    try:
+        matrix = lade_matrix(DEFAULT_MATRIX_PATH)
+    except Exception as exc:
+        return {'ok': False, 'error': f'Matrix lesen fehlgeschlagen: {exc}'}
+
+    matrix['soc_automation_aktiv'] = bool(aktiv)
+    matrix['_updated'] = date.today().isoformat()
+
+    fehler = validiere_matrix(matrix)
+    if fehler:
+        return {'ok': False, 'error': f'Validierungsfehler: {fehler[0]}'}
+
+    tmp_path = DEFAULT_MATRIX_PATH + '.tmp'
+    try:
+        with open(tmp_path, 'w') as f:
+            json.dump(matrix, f, indent=2, ensure_ascii=False)
+            f.write('\n')
+        os.replace(tmp_path, DEFAULT_MATRIX_PATH)
+    except Exception as exc:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        return {'ok': False, 'error': f'Speichern fehlgeschlagen: {exc}'}
+
+    return {'ok': True, 'aktiv': bool(aktiv)}
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -266,6 +303,28 @@ def api_klima_regel_aktiv_set():
     if not result['ok']:
         abort(500, description=result.get('error', 'unknown error'))
     LOG.info('klima_regel_aktiv gesetzt: %s (von %s)', aktiv, request.remote_addr)
+    return jsonify(result)
+
+
+@app.route('/api/ops/soc-automation-aktiv', methods=['GET'])
+def api_soc_automation_aktiv_get():
+    matrix = _load_matrix_safe()
+    aktiv = matrix.get('soc_automation_aktiv', True)
+    return jsonify({'ok': True, 'aktiv': bool(aktiv)})
+
+
+@app.route('/api/ops/soc-automation-aktiv', methods=['POST'])
+def api_soc_automation_aktiv_set():
+    if is_failover():
+        abort(403, description='failover host is read-only')
+    payload = request.get_json(silent=True) or {}
+    aktiv = payload.get('aktiv')
+    if not isinstance(aktiv, bool):
+        abort(422, description='aktiv must be bool')
+    result = _set_soc_automation_aktiv(aktiv)
+    if not result['ok']:
+        abort(500, description=result.get('error', 'unknown error'))
+    LOG.info('soc_automation_aktiv gesetzt: %s (von %s)', aktiv, request.remote_addr)
     return jsonify(result)
 
 
