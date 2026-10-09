@@ -5,7 +5,7 @@ role: meta
 applyTo: "scripts/**"
 tags: [hosts, deployment, rsync, sync, pi, tech, failover, kueche, rolle-n]
 status: stable
-last_review: 2026-09-29
+last_review: 2026-10-09
 ---
 
 # System Hosts + Deployment
@@ -68,6 +68,7 @@ pv-system-Programme/Skripte/Docs, die hier fehlen, werden sie **hierher integrie
 - **Einzel-Sync (Failover):** `scripts/sync_code_to_peer.sh`
 - **Tech-Sync + Poller-Restart-Hook:** `scripts/sync_code_to_tech.sh`
 - **NQ-Installer:** `scripts/install_nq_services.sh` (aus `scripts/install_services.sh` aufgerufen)
+- **Steuerbox-Restart (Backend + Proxy):** `scripts/restart_steuerbox.sh`
 - **Rollen-Logik:** `host_role.py`
 
 ## No-Gos

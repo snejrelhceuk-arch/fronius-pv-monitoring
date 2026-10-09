@@ -1,43 +1,43 @@
 # Volkszählung — PV-System Workspace
 
-> Stand: 2026-10-08 · auto-generiert von `tools/generate_volkszaehlung.py` (pre-commit).
+> Stand: 2026-10-09 · auto-generiert von `tools/generate_volkszaehlung.py` (pre-commit).
 
 ## Übersicht
 
-**Gesamtgröße (Textdateien gezählt):** 3682 MB
-**Gesamtzeilen (Code/Doku/Daten):** 386.924 Zeilen
-**Gezählte Dateien:** 890
+**Gesamtgröße (Textdateien gezählt):** 3686 MB
+**Gesamtzeilen (Code/Doku/Daten):** 389.012 Zeilen
+**Gezählte Dateien:** 892
 **Ausgeschlossene Verzeichnisse:** 29 (.venv, __pycache__, node_modules, .git …)
 
 ## Nach Sprache/Typ
 
 | Sprache/Typ | Dateien | Zeilen | Anteil |
 |---|---|---|---|
-| **CSV** | 76 | 260.558 | 67.3% |
-| **Python** | 219 | 63.552 | 16.4% |
-| **Markdown** | 148 | 24.440 | 6.3% |
-| **HTML** | 28 | 16.430 | 4.2% |
-| **Shell** | 70 | 5.637 | 1.5% |
-| **TXT** | 4 | 5.351 | 1.4% |
-| **JSON** | 283 | 5.262 | 1.4% |
-| **JavaScript** | 6 | 1.551 | 0.4% |
+| **CSV** | 76 | 261.810 | 67.3% |
+| **Python** | 220 | 64.013 | 16.5% |
+| **Markdown** | 148 | 24.466 | 6.3% |
+| **HTML** | 28 | 16.440 | 4.2% |
+| **Shell** | 71 | 5.762 | 1.5% |
+| **TXT** | 4 | 5.436 | 1.4% |
+| **JSON** | 283 | 5.267 | 1.4% |
+| **JavaScript** | 6 | 1.675 | 0.4% |
 | **CSS** | 6 | 1.494 | 0.4% |
 | **SQL** | 10 | 1.427 | 0.4% |
 | **systemd** | 33 | 568 | 0.1% |
 | **YAML** | 3 | 562 | 0.1% |
 | **CONF** | 3 | 70 | 0.0% |
 | **TOML** | 1 | 22 | 0.0% |
-| **Total** | 890 | 386.924 | 100% |
+| **Total** | 892 | 389.012 | 100% |
 
 ## Python-Code nach ABCDEN-Rollen
 
 | Rolle | Verzeichnis | .py-Dateien | Zeilen |
 |---|---|---|---|
-| **C** Automation | `automation/` | 46 | 14.313 |
+| **C** Automation | `automation/` | 46 | 14.416 |
 | **A** Collector | `collector/` | 19 | 4.935 |
-| **B** Web-API | `routes/` | 28 | 11.659 |
-| **D** Diagnos | `diagnos/` | 10 | 2.446 |
-| **E** Steuerbox | `steuerbox/` | 5 | 1.252 |
+| **B** Web-API | `routes/` | 28 | 11.670 |
+| **D** Diagnos | `diagnos/` | 11 | 2.746 |
+| **E** Steuerbox | `steuerbox/` | 5 | 1.299 |
 | **N** Netzqualität | `nq/` | 37 | 9.143 |
 
 ## Größte Python-Dateien (Top 10)
@@ -49,7 +49,7 @@
 1. `routes/realtime.py` — 1.080 Zeilen
 1. `automation/engine/regeln/soc_steuerung.py` — 1.060 Zeilen
 1. `routes/system/battery.py` — 1.023 Zeilen
-1. `routes/visualization.py` — 944 Zeilen
+1. `routes/visualization.py` — 955 Zeilen
 1. `routes/pages.py` — 916 Zeilen
 1. `routes/netzqualitaet.py` — 898 Zeilen
 

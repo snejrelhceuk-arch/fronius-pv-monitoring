@@ -6,6 +6,8 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 
 > **Agenten-Workflow:** Aufgabe lesen → in der Trigger-Tabelle suchen → genannte Card öffnen → dort weitermachen. Wenn nichts passt: `AGENTS.md` (Stufe 1).
 
+> **Tooling-Hinweis (Pflicht):** Bei `Unsupported system page size` immer auf Shell-Fallback wechseln und `/usr/bin/grep` verwenden (siehe `AGENTS.md`, Abschnitt „Tooling-Fallback“).
+
 ## Trigger-Tabelle
 
 | Aufgabe / Stichwort | Card | Status |

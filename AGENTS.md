@@ -77,6 +77,12 @@ angepasst) — Primary ist die vollständige Quelle. Deploy-Kommandos + Dienst�
 - Code-Refs als Markdown-Links: `[file.py](file.py#L42)`.
 - Bei Unsicherheit über Fakten: lade die zuständige Card, statt zu raten.
 
+## Tooling-Fallback (fest verdrahtet)
+
+- Wenn integrierte Suche mit `Unsupported system page size` fehlschlägt, **nicht** weiter mit Built-in-`grep`/`rg` arbeiten.
+- Dann immer Shell-Fallback mit **GNU grep** nutzen: `/usr/bin/grep` (ggf. mit `find ... | /usr/bin/grep ...`).
+- Für reine Dateisuche in diesem Fall bevorzugt `find` + `/usr/bin/grep` statt Tooling-Replays.
+
 ## Datei- und Ordneranlage (LLM-Richtlinien)
 
 - **Rollentrennung beachten:** Dateien müssen der Rolle (A-E) zugeordnet werden.
