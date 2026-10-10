@@ -304,7 +304,7 @@
                         let s = `<b>${ps[0].axisValue} kWh</b> (nominal)`;
                         ps.forEach((p) => { s += `<br>${p.marker} ${p.seriesName}: <b>${p.value == null ? '–' : nf0.format(p.value)}</b>${p.seriesName.indexOf('Amort') >= 0 ? ' a' : ' kWh/a'}`; });
                         return s;
-                    } },
+                    } }),
                 legend: { data: ['Vermiedener Netzbezug', 'Amortisation'], textStyle: { color: AX }, top: 0 },
                 grid: { left: 55, right: 60, top: 40, bottom: 45 },
                 xAxis: { type: 'category', data: xs, name: 'Zusatz-Speicher (kWh nominal)', nameLocation: 'middle', nameGap: 28,
