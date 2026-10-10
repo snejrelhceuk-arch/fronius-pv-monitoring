@@ -4,7 +4,7 @@ domain: web
 role: B
 applyTo: "templates/flow_view.html,routes/flow_greetings.py"
 status: stable
-last_review: 2026-09-29
+last_review: 2026-10-10
 ---
 
 # Flow-Ansicht Rendering-Mechanik
@@ -17,7 +17,7 @@ bekannter Fallstrick-Herd: Beschnitt entsteht an **drei** unabhängigen Stellen 
 Wirkung.
 
 ## Code-Anchor
-- **Seite/Route:** `routes/pages.py:flow` → `templates/flow_view.html` (injiziert `steuerbox_cockpit_url` aus `config.STEUERBOX_EXTERNAL_PORT`/`STEUERBOX_COCKPIT_URL`, getattr-robust)
+- **Seite/Route:** `routes/pages.py:flow` → `templates/flow_view.html` (injiziert `steuerbox_cockpit_url` sowie `inverter_urls` = Direkt-Links F1/F2/F3 auf `http://<subnetz>.122|.123|.124/`, abgeleitet aus `config.INVERTER_IP`)
 - **SVG-Skalierung/Pan:** `templates/flow_view.html:adjustSvgViewBox` (setzt viewBox + Mobile-Wrapper)
 - **Overlay-/Layout-Sync:** `templates/flow_view.html:syncOverlayLayout` (ruft `adjustSvgViewBox`)
 - **Live-Daten:** `routes/realtime.py:/api/flow_realtime`, `/api/flow_devices`; `routes/system/battery.py:/api/flow_status`
@@ -27,12 +27,21 @@ Wirkung.
 - **Tooltip-Skin (schwach transparent):** `static/js/nav-ui.js:tooltipResponsive` (+ `static/css/nav-ui.css:.pv-echarts-tip`)
 - **Tagesgüte-Icon (ClearSky-relativ):** `routes/system/battery.py:_build_flow_status_result` setzt `pv_forecast_quality/-emoji` über `solar_forecast.classify_day_relative` (Prognose/ClearSky: <40 % ☁️ schlecht, 40–70 % ⛅ mittel, ≥70 % ☀️ gut) — **nicht** die absolute kWh-Einstufung. Renderer `templates/flow_view.html:setPvForecastIcon`.
 
-## Kontext-Rollup je Bubble (Komfort/Info/Hinweis)
-- Hover (Desktop) bzw. Long-Press (Touch, ~520 ms) auf einer Bubble öffnet ein **HTML-Overlay-Rollup** (`.fb-rollup`, `position:fixed`, an der Bubble-Bildschirmposition). Kurzer Tap behält die bestehende Schnell-Navigation der Haupt-Bubbles. Der Rollup-Skin ist identisch zum ECharts-Tooltip (`rgba(15,23,42,0.60)` + `blur(3px)`, s. `.pv-echarts-tip`).
-- Gruppen: **Komfort · Cockpit** = segmentierte **Mini-Schalter** (`sw` im `MENU`, Optik wie das Cockpit-Statebar; z. B. Ladestrom 8/16/24 A), jedes Segment ein **Deep-Link** auf die passende Cockpit-Karte (Schicht E, `#card-wp`/`#card-wattpilot`/`#card-battery`/`#card-toggles`); **[I] Info** = read-only Navigations-/Monitoring-Links; **[D] Hinweis** = reiner Guard-Hinweis (kein Link).
-- **Keine Maschinenraum-Deep-Links mehr aus den Bubbles.** Der Maschinenraum ist ausschließlich über den 60-s-Button unterhalb der Netz-Bubble erreichbar; dessen Sub-Button ist **ein** `ssh://admin@<host>`-Link auf `pv-config` (kein Ausführen aus der API).
-- **Rolle B bleibt read-only:** kein direkter Aktor-/POST-Pfad aus der Bubble. Komfort läuft ausschließlich als Deep-Link ins Cockpit (mTLS/Allowlist der Steuerbox). Wattpilot-Komfort trägt einen Multi-Master-Hinweis (kein paralleler WS-Client).
-- Menü-Katalog + Interaktionslogik in `static/js/flow-bubbles.js` (`MENU`, `makeSwitchRow`), Bubble-Zuordnung über `data-bubble` im SVG.
+## Kontext-Rollup je Bubble (Info/Hinweis — read-only)
+- Hover (Desktop) bzw. Long-Press (Touch, ~520 ms) auf einer Bubble öffnet ein **HTML-Overlay-Rollup**
+  (`.fb-rollup`, `position:fixed`, an der Bubble-Bildschirmposition). Kurzer Tap behält die bestehende
+  Schnell-Navigation der Haupt-Bubbles. Skin identisch zum ECharts-Tooltip (`rgba(15,23,42,0.60)` + `blur(3px)`).
+- Gruppen: **[I] Info** = read-only Navigations-/Monitoring-Links; **[D] Hinweis** = reiner Guard-/Status-Hinweis
+  (kein Link). **Keine Schalt-/Komfort-Segmente** mehr — aus der Web-API sind keinerlei Schreibvorgänge erlaubt.
+- Bubble-Spezifika: **PV Gesamt** erster Eintrag = PV-Erzeugungs-Monitoring (`/monitoring?view=ertrag`), dann
+  `/erzeuger` + `/analyse/pv`. **WP** = Verbraucher-Monitoring + WP §14a (`/verbraucher/wp-leistung`).
+  **F1/F2/F3** erster Eintrag = WR-Direkt-Link (externes `http(s)`, öffnet neuen Tab) aus `window.PV_INVERTER_URLS`.
+- **Keine Maschinenraum-Deep-Links aus den Bubbles.** Der Maschinenraum ist ausschließlich über den 60-s-Button
+  unterhalb der Netz-Bubble erreichbar; dessen Sub-Button ist **ein** Link auf den **PAC-Klon** (`/pac4200`,
+  read-only Live-Clone). Während der 60-s-Laufzeit wird der **Ticker pausiert** (mehr Platz für die Infos).
+- **Rolle B bleibt read-only:** kein POST/WS/Aktor-Pfad aus der Bubble. Externe `http(s)`-Links (WR-Direkt) tragen
+  `target="_blank"` + `rel="noopener"`.
+- Menü-Katalog + Interaktionslogik in `static/js/flow-bubbles.js` (`MENU`), Bubble-Zuordnung über `data-bubble` im SVG.
 
 ## Rendering-Mechanik (IST)
 - **Ein festes SVG** mit `viewBox="130 -40 590 460"` (Konstante `DEFAULT_VIEWBOX`). Alle Knoten
@@ -66,7 +75,7 @@ Wirkung.
 - **viewBox nie beschneiden** (kein `"80 70 500 320"` o. ä.) — schneidet die rechten Knoten hart ab.
 - **Sub-Bubbles nie per `display:none` ausblenden** — dann laufen die Flussleitungen ins Leere.
 - **SVG nicht per `height:100%` auf die Wrapper-Höhe strecken** — erzeugt Leerraum + Kleinskalierung.
-- Keine Aktor-/Schreibzugriffe (Rolle B, read-only). Bubble-Komfort **nur** als Deep-Link ins Cockpit (E), nie als direkter POST/WS aus der Web-UI.
+- Keine Aktor-/Schreibzugriffe (Rolle B, read-only). **Keine Schalt-/Komfort-Segmente in den Bubbles** — aus der Web-API sind keine Schreibvorgänge erlaubt; Bubble-Menüs sind rein navigierende Info-/Hinweis-Links.
 - Begrüßungszeile nie mehrzeilig: bei wenig Platz kürzen (Stufen in `pvGreeting`) bzw. `<420 px` ausblenden — kein Zeilenumbruch.
 
 ## Häufige Aufgaben
