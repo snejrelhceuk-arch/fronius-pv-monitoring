@@ -405,9 +405,18 @@ def flow():
     ext_port = getattr(config, 'STEUERBOX_EXTERNAL_PORT', 11933)
     cockpit_url = getattr(config, 'STEUERBOX_COCKPIT_URL', '') or (
         f'https://{host}:{ext_port}/' if host else '')
+    # Direkt-Links auf die Weboberfläche/Solar-API der drei Wechselrichter (F1/F2/F3).
+    # Host-Oktette .122/.123/.124 relativ zum konfigurierten INVERTER_IP-Subnetz.
+    inv_base = '.'.join(str(config.INVERTER_IP).split('.')[:3]) or '192.0.2'
+    inverter_urls = {
+        'f1': f'http://{inv_base}.122/',
+        'f2': f'http://{inv_base}.123/',
+        'f3': f'http://{inv_base}.124/',
+    }
     return render_template('flow_view.html',
                            PV_BATTERY_KWH=config.PV_BATTERY_KWH,
-                           steuerbox_cockpit_url=cockpit_url)
+                           steuerbox_cockpit_url=cockpit_url,
+                           inverter_urls=inverter_urls)
 
 
 @bp.route('/monitoring')

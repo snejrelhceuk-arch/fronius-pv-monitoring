@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="/static/css/nav-ui.css">
     <link rel="stylesheet" href="/static/css/flow-bubbles.css">
     <script>window.PV_STEUERBOX_URL = {{ (steuerbox_cockpit_url or '')|tojson }};</script>
+    <script>window.PV_INVERTER_URLS = {{ (inverter_urls or {})|tojson }};</script>
     <script src="/static/js/flow-bubbles.js" defer></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -528,8 +529,18 @@
         @media (max-width: 768px) {
             .flow-chart { padding: 12px; }
             #flow-svg { height: 400px; aspect-ratio: auto; }
-            .battery-detail { gap: 10px; font-size: 11px; }
-            .inverter-temps { gap: 8px; font-size: 10px; }
+            /* Klein-Screen: Infos umbrechen statt abschneiden → nichts geht verloren. */
+            .battery-detail {
+                gap: 6px 12px; font-size: 11px;
+                flex-wrap: wrap; justify-content: center;
+                white-space: normal; overflow: visible;
+            }
+            .inverter-temps {
+                gap: 6px 10px; font-size: 10px;
+                flex-wrap: wrap; justify-content: center;
+                white-space: normal; overflow: visible;
+            }
+            .battery-detail .bd-sep, .inverter-temps .it-sep { display: none; }
         }
 
         /* ══════ Mobile Responsive ══════ */
@@ -905,13 +916,13 @@
                               letter-spacing="0.2">Maschinenraum</text>
                     </g>
 
-                      <!-- Sub-Button: pv-config per SSH (nur sichtbar nach Klick auf Maschinenraum) -->
-                    <g id="btn-pvconfig" class="mr-subbtn" transform="translate(200, 356)" style="display:none; cursor:pointer;">
+                      <!-- Sub-Button: PAC-Klon (Live-Clone /pac4200), nur sichtbar nach Klick auf Maschinenraum -->
+                    <g id="btn-pacclone" class="mr-subbtn" transform="translate(200, 356)" style="display:none; cursor:pointer;">
                         <rect x="-58" y="-13" width="116" height="26" rx="6"
                               fill="rgba(99,102,241,0.18)" stroke="rgba(129,140,248,0.6)" stroke-width="1"/>
                         <text x="0" y="4" text-anchor="middle"
                               fill="rgba(199,210,254,0.95)" font-size="10" font-weight="600"
-                            letter-spacing="0.2">⚙ pv-config (SSH)</text>
+                            letter-spacing="0.2">📟 PAC-Klon</text>
                     </g>
 
                     <!-- PV Gesamt -->
@@ -2348,16 +2359,14 @@
         const tickerWrap = document.getElementById('ticker-wrap');
         const tickerText = document.getElementById('ticker-text');
         const tickerSubText = document.getElementById('ticker-subtext');
-        const btnPvConfig = document.getElementById('btn-pvconfig');
+        const btnPacClone = document.getElementById('btn-pacclone');
         let timerInterval = null;
 
-        // Sub-Button: pv-config per SSH öffnen. Rolle B bleibt read-only — dies ist
-        // nur ein Link auf eine SSH-Sitzung zum Host, auf dem pv-config läuft; der
-        // Terminal-Handler des Betriebssystems übernimmt (kein Ausführen aus der API).
-        btnPvConfig.addEventListener('click', function(ev) {
+        // Sub-Button: PAC-Klon öffnen — read-only Live-Clone-Anzeige (/pac4200).
+        // Rolle B bleibt read-only: reiner Navigations-Link, kein Schreibpfad.
+        btnPacClone.addEventListener('click', function(ev) {
             ev.stopPropagation();
-            const host = location.hostname || '';
-            window.location.href = 'ssh://admin@' + host;
+            window.location.href = '/pac4200';
         });
 
                 // Ticker Fetcher
@@ -2406,7 +2415,9 @@
         function hideInfo() {
             if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
             infoWrap.classList.remove('visible');
-            btnPvConfig.style.display = 'none';
+            btnPacClone.style.display = 'none';
+            // Ticker wieder einblenden (war während des Maschinenraums pausiert).
+            if (tickerWrap) tickerWrap.classList.add('visible');
             resetBtn();
             if (typeof adjustSvgViewBox === 'function') adjustSvgViewBox(false);
         }
@@ -2415,7 +2426,9 @@
             // zweiter Klick: sofort ausblenden
             if (timerInterval) { hideInfo(); return; }
             infoWrap.classList.add('visible');
-            btnPvConfig.style.display = '';
+            btnPacClone.style.display = '';
+            // Ticker während der 60s-Laufzeit beenden → mehr Platz für die Infos.
+            if (tickerWrap) tickerWrap.classList.remove('visible');
             btnBg.setAttribute('fill', 'rgba(99,102,241,0.28)');
             btnBg.setAttribute('stroke', 'rgba(129,140,248,0.75)');
             if (typeof adjustSvgViewBox === 'function') adjustSvgViewBox(false);

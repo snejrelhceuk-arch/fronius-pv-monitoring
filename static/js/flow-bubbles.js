@@ -1,12 +1,12 @@
 /* flow-bubbles.js — Kontext-Rollup je Flow-Bubble.
  *
- * Rollen-Reinheit (siehe AGENTS.md): Die Web-UI (Rolle B) bleibt read-only.
+ * Rollen-Reinheit (siehe AGENTS.md): Die Web-UI (Rolle B) bleibt strikt read-only.
  *  - [I] Info  : reine Navigations-/Monitoring-Links (kein Schreibpfad)      → P1.0
- *  - [K] Komfort: Deep-Link auf das Steuerbox-Cockpit (Schicht E)             → P1.1 / H1
- *  - [D] Deep  : Maschinenraum/pv-config bzw. reiner Hinweis (mit Rückfrage)  → P1.3-Ansatz
+ *  - [D] Hinweis: reiner Guard-/Status-Hinweis (kein Link, kein Schreibpfad) → P1.3-Ansatz
  *
- * Es gibt bewusst KEINEN direkten POST an einen Aktor aus dieser Datei. Komfort
- * wirkt ausschließlich über die bestehende, gehärtete Steuerbox (mTLS/Allowlist).
+ * Es gibt bewusst KEINEN Schaltpfad aus dieser Datei — weder direkter POST an
+ * einen Aktor noch Deep-Link in ein schaltendes Cockpit. Aus der Web-API sind
+ * keinerlei Schreibvorgänge ins System erlaubt (nur lesende Navigation).
  *
  * Interaktion:
  *  - Desktop (hover): Zeiger über eine Bubble → Rollup fadet ein.
@@ -16,8 +16,7 @@
 (function () {
     'use strict';
 
-    var COCKPIT = (window.PV_STEUERBOX_URL || '').replace(/\/$/, '');
-    function cockpit(hash) { return COCKPIT ? (COCKPIT + '/' + (hash || '')) : null; }
+    var INVERTER_URLS = window.PV_INVERTER_URLS || {};
 
     // Zeit-Kontext-Query an Info-Links hängen (Zeitraum über Seitenwechsel halten).
     function withCtx(href) {
@@ -34,10 +33,9 @@
     // Menü-Katalog je Bubble.
     //  · i-Eintrag  = [Label, href|null, sameTab?, hint?]  (read-only Navigation)
     //  · d-Eintrag  = [Label, href|null, sameTab?, hint?]  (reiner Guard-Hinweis)
-    //  · sw-Eintrag = { label, opts:[[Segment, cockpit-Anker], …] }  (Komfort-Mini-Schalter,
-    //                 Optik wie das Steuerbox-Cockpit; jedes Segment ist ein Deep-Link ins
-    //                 Cockpit (Schicht E) — die Web-UI (B) schaltet NICHT selbst.)
-    // KEINE Maschinenraum-Deep-Links mehr aus den Bubbles (bewusst entfernt).
+    // KEINE Schalt-/Schreibpfade aus den Bubbles (Rolle B read-only): weder Steuerbox-
+    // Schalter noch Maschinenraum-Deep-Links. Externe http(s)-Links (z. B. WR-Direkt-API)
+    // öffnen in einem neuen Tab.
     var MENU = {
         netz: { title: 'Netz', i: [
                 ['Verbrauch-Monitoring', '/monitoring?view=verbrauch', true],
@@ -45,10 +43,10 @@
                 ['Energievergleich (iMSys/SM/PAC)', '/netzqualitaet/energievergleich'],
                 ['Netzkriterien', '/netzqualitaet']] },
         pv: { title: 'PV Gesamt', i: [
-                ['Erzeuger-Monitoring', '/erzeuger', true],
+                ['PV-Erzeugung · Monitoring', '/monitoring?view=ertrag', true],
+                ['Erzeuger-Monitoring', '/erzeuger'],
                 ['PV-Übersicht', '/analyse/pv']] },
         battery: { title: 'Batterie',
-            sw: [{ label: 'Modus', opts: [['AUTO', '#card-battery'], ['KOMFORT', '#card-battery']] }],
             i: [['Batterie-Analyse & Stress', '/analyse/batterie', true],
                 ['Speicher-Ausbau', '/analyse/speicherausbau']],
             d: [['SOC-Matrix ändern (pv-config)', null, false,
@@ -60,30 +58,30 @@
                 ['Haushalt-Analyse', '/analyse/haushalt', true],
                 ['Verbraucher-Monitoring', '/verbraucher']] },
         wattpilot: { title: 'Wattpilot (Wallbox)',
-            sw: [
-                { label: 'Laden', opts: [['START', '#card-wattpilot'], ['STOP', '#card-wattpilot']] },
-                { label: 'Modus', opts: [['ECO', '#card-wattpilot'], ['DEFAULT', '#card-wattpilot']] },
-                { label: 'Ladestrom', opts: [['8A', '#card-wattpilot'], ['16A', '#card-wattpilot'], ['24A', '#card-wattpilot']] }],
             i: [['Verbraucher-Monitoring', '/verbraucher', true]],
             d: [['⚠ Multi-Master (F1 / HA / go-e-App)', null, false,
                  'Schaltwünsche nur über Cockpit/Steuerbox — kein paralleler WebSocket-Client.']] },
         heatpump: { title: 'Wärmepumpe (WP)',
-            sw: [{ label: 'Modus', opts: [['MIN', '#card-wp'], ['STD', '#card-wp'], ['MAX', '#card-wp']] }],
-            i: [['WP-Leistung', '/wp_leistung', true]] },
+            i: [['Verbraucher-Monitoring', '/verbraucher', true],
+                ['WP §14a (Leistungsnachweis)', '/verbraucher/wp-leistung']] },
         heizpatrone: { title: 'Heizpatrone (HP)',
-            sw: [{ label: 'Schalten', opts: [['AUS', '#card-toggles'], ['AN', '#card-toggles']] }],
             i: [['Verbraucher-Monitoring', '/verbraucher', true]],
             d: [['Hard-Guard aktiv', null, false,
                  'HP wird bei niedrigem SOC bzw. Übertemperatur hart AUS geschaltet.']] },
         klima: { title: 'Klimaanlage',
-            sw: [{ label: 'Schalten', opts: [['AUS', '#card-toggles'], ['AN', '#card-toggles']] }],
             i: [['Verbraucher-Monitoring', '/verbraucher', true]],
             d: [['Schaltfrequenz-Cooldown', null, false,
                  'Ein aktiver Cooldown überstimmt einen Komfort-EIN-Wunsch.']] },
-        f1: { title: 'F1 · steuert Wattpilot', i: [['Erzeuger-Monitoring', '/erzeuger', true]],
+        f1: { title: 'F1 · steuert Wattpilot', i: [
+                ['WR-Direkt (F1)', INVERTER_URLS.f1 || null, false, 'Weboberfläche/Solar-API des Wechselrichters F1.'],
+                ['Erzeuger-Monitoring', '/erzeuger', true]],
             d: [['Hinweis: F1 steuert den Wattpilot', null, false, 'Nur Information — keine eigene Steuerung.']] },
-        f2: { title: 'F2', i: [['Erzeuger-Monitoring', '/erzeuger', true]] },
-        f3: { title: 'F3', i: [['Erzeuger-Monitoring', '/erzeuger', true]] }
+        f2: { title: 'F2', i: [
+                ['WR-Direkt (F2)', INVERTER_URLS.f2 || null, false, 'Weboberfläche/Solar-API des Wechselrichters F2.'],
+                ['Erzeuger-Monitoring', '/erzeuger', true]] },
+        f3: { title: 'F3', i: [
+                ['WR-Direkt (F3)', INVERTER_URLS.f3 || null, false, 'Weboberfläche/Solar-API des Wechselrichters F3.'],
+                ['Erzeuger-Monitoring', '/erzeuger', true]] }
     };
 
     var GROUP_META = {
@@ -122,6 +120,7 @@
             if (href) {
                 row = document.createElement('a');
                 row.href = withCtx(href);
+                if (/^https?:/i.test(href)) { row.target = '_blank'; row.rel = 'noopener'; }
                 if (hint) row.title = hint;
             } else {
                 // Reiner Hinweis (kein Link) — z. B. Guard-Info.
@@ -136,51 +135,6 @@
         return g;
     }
 
-    // Komfort-Mini-Schalter (Optik wie das Steuerbox-Cockpit). Jedes Segment ist
-    // ein Deep-Link auf die passende Cockpit-Karte (Schicht E), Ziel-Tab
-    // 'pv-cockpit'. Die Web-UI (Rolle B) schaltet bewusst NICHT selbst — sie
-    // verlinkt nur; der Schreibpfad bleibt exklusiv bei der gehärteten Steuerbox.
-    function makeSwitchRow(sw) {
-        var row = document.createElement('div');
-        row.className = 'fb-switch';
-        var h = document.createElement('span');
-        h.className = 'fb-switch-h';
-        h.textContent = sw.label;
-        row.appendChild(h);
-        var seg = document.createElement('div');
-        seg.className = 'fb-switch-seg';
-        sw.opts.forEach(function (o) {
-            var url = cockpit(o[1]);
-            var b;
-            if (url) {
-                b = document.createElement('a');
-                b.href = url;
-                b.target = 'pv-cockpit';
-                b.rel = 'noopener';
-                b.title = sw.label + ' im Steuerbox-Cockpit schalten';
-            } else {
-                b = document.createElement('span');
-                b.title = 'Steuerbox-Cockpit nicht erreichbar konfiguriert.';
-            }
-            b.className = 'fb-seg';
-            b.textContent = o[0];
-            seg.appendChild(b);
-        });
-        row.appendChild(seg);
-        return row;
-    }
-
-    function makeSwitchGroup(switches) {
-        var g = document.createElement('div');
-        g.className = 'fb-group fb-k';
-        var h = document.createElement('div');
-        h.className = 'fb-group-h';
-        h.textContent = 'Komfort · Cockpit';
-        g.appendChild(h);
-        switches.forEach(function (sw) { g.appendChild(makeSwitchRow(sw)); });
-        return g;
-    }
-
     function buildRollup(key) {
         var cfg = MENU[key];
         if (!cfg) return null;
@@ -192,8 +146,6 @@
         title.className = 'fb-rollup-title';
         title.textContent = cfg.title;
         box.appendChild(title);
-
-        if (cfg.sw && cfg.sw.length) box.appendChild(makeSwitchGroup(cfg.sw));
 
         ['i', 'd'].forEach(function (kind) {
             var entries = cfg[kind];
