@@ -2,7 +2,7 @@
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
   "_updated": "2026-10-09",
-  "soc_automation_aktiv": false,
+  "soc_automation_aktiv": true,
   "regelkreise": {
     "soc_extern": {
       "_doc": "Toleranz für extern geänderte SOC-Werte (z.B. manuell via Fronius App). Wenn SOC_MIN oder SOC_MAX außerhalb der Automation geändert werden, respektiert die Engine die Werte für die konfigurierte Dauer.",
@@ -208,7 +208,7 @@
           "beschreibung": "Mindest-PV-Prognose für Sunrise+1h damit Öffnung stattfindet"
         },
         "stress_min_pct": {
-          "wert": 5,
+          "wert": 7,
           "bereich": [
             0,
             15
@@ -419,7 +419,7 @@
           "beschreibung": "Ende des Nachtfensters (lokale Zeit; darf am Folgetag liegen)"
         },
         "nacht_soc_usable_kwh": {
-          "wert": 18.0,
+          "wert": 22.0,
           "bereich": [
             10.0,
             24.0
@@ -428,7 +428,7 @@
           "beschreibung": "Nutzbare Batteriemenge (5-100% -> typ. 18kWh)"
         },
         "nacht_soc_min_floor_pct": {
-          "wert": 5,
+          "wert": 7,
           "bereich": [
             0,
             20
@@ -455,7 +455,7 @@
           "beschreibung": "Unteres Clamp-Limit fuer prognostizierten Nachtverbrauch"
         },
         "nachtverbrauch_max_kwh": {
-          "wert": 18.0,
+          "wert": 22.0,
           "bereich": [
             8.0,
             24.0
@@ -559,12 +559,12 @@
     },
     "zellausgleich": {
       "_doc": "Monatlicher Vollzyklus für BYD-Zellbalancing",
-      "aktiv": false,
+      "aktiv": true,
       "prioritaet": 3,
       "beschreibung": "Prognosegesteuert: Am ersten guten Sonnentag vollständig laden",
       "parameter": {
         "soc_min_waehrend_pct": {
-          "wert": 5,
+          "wert": 7,
           "bereich": [
             0,
             10
@@ -603,7 +603,7 @@
           "beschreibung": "Gesenkte Schwelle wenn max_tage überschritten"
         },
         "max_tage_ohne_ausgleich": {
-          "wert": 92,
+          "wert": 30,
           "bereich": [
             30,
             180
@@ -1355,7 +1355,7 @@
     },
     "klimaanlage": {
       "_doc": "Klimaanlage via Fritz!DECT als Thermoschutz im Heizhaus. Vor Sonnenaufgang nur mit Forecast 'gut' und Temp >= initial_temp_c. Nach Sonnenaufgang Start je nach Prognose: gut -> initial_temp_c_gut_nach_sunrise, sonst initial_temp_c_maessig. Laufender Betrieb temperaturgeführt mit Hysterese temp_hysterese_k. Sunset/SOC-Stop bleibt aktiv.",
-      "aktiv": false,
+      "aktiv": true,
       "prioritaet": 2,
       "beschreibung": "Klima-Thermoschutz: Vor-Sunrise 15°C+Forecast, nach Sunrise ab 20°C, Sunset-SOC-Stopp parametrierbar",
       "parameter": {
@@ -1442,7 +1442,7 @@
       "beschreibung": "Nachts WW-Temperatur um konfigurierbare Absenkung senken (Standard 57→52°C)",
       "parameter": {
         "standard_temp_c": {
-          "wert": 57,
+          "wert": 55,
           "bereich": [
             55,
             62
@@ -1498,7 +1498,7 @@
       "beschreibung": "Ab 18:00 Heiz-Soll um 2K absenken, um 03:00 auf Standardwert zurückstellen",
       "parameter": {
         "standard_temp_c": {
-          "wert": 37,
+          "wert": 38,
           "bereich": [
             28,
             47
@@ -1670,7 +1670,7 @@
       "beschreibung": "Heiz-Soll bei schlechter Energiebilanz zusätzlich absenken (SOC niedrig, PV gering, Forecast gut)",
       "parameter": {
         "soc_schwelle_pct": {
-          "wert": 10,
+          "wert": 15,
           "bereich": [
             5,
             50
