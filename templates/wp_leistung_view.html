@@ -464,6 +464,7 @@
             xAxis: {
                 type: 'time',
                 axisLabel: {
+                    hideOverlap: true,
                     formatter: value => new Date(value).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })
                 }
             },
@@ -487,7 +488,15 @@
                     markLine: {
                         symbol: ['none', 'none'],
                         lineStyle: { color: '#dc2626', width: 1.5, type: 'dashed' },
-                        label: { formatter: `Grenzwert ${limitW.toFixed(0)} W` },
+                        label: {
+                            formatter: `Grenzwert ${limitW.toFixed(0)} W`,
+                            position: 'insideStartTop',
+                            color: '#dc2626',
+                            fontWeight: 700,
+                            backgroundColor: 'rgba(255,255,255,0.85)',
+                            padding: [2, 4],
+                            borderRadius: 3
+                        },
                         data: [{ yAxis: limitW }]
                     }
                 },
