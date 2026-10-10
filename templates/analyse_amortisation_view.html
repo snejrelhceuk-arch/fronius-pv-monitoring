@@ -44,6 +44,31 @@
             </div>
         </div>
 
+        <!-- Methodik & Vollständigkeit (Belastbarkeit der Amortisation) -->
+        <div class="header-info" style="border-left:4px solid #46d17a; background:rgba(70,209,122,0.08);">
+            <h3>Methodik &amp; Vollständigkeit — warum die Amortisation belastbar ist</h3>
+            <p><strong>Was als Ersparnis zählt:</strong> ausschließlich der <em>gemessene, selbst genutzte</em> PV-Strom.
+               Die Anlage ist <strong>Nulleinspeiser</strong> — abgeregelter Überschuss (voller Speicher) wird vom Zähler
+               gar nicht erst als Erzeugung erfasst. Dadurch gilt messtechnisch
+               <strong>Solar&nbsp;≈&nbsp;Verbrauch&nbsp;−&nbsp;Netzbezug</strong> (Selbstverbrauch ≈ 100&nbsp;%): es wird
+               <em>keine</em> ungenutzte kWh als Einsparung gutgeschrieben (keine Luftbuchung).</p>
+            <p><strong>Enthaltene laufende Kosten (also auch der Netzbezug):</strong></p>
+            <p style="padding-left:14px">
+               • <strong>Arbeitspreis × Netzbezug</strong> (Rest-Strombezug aus dem Netz) — Spalte „Netz-Kosten".<br>
+               • <strong>Grundpreis inkl. Zählermiete</strong> (monatliche Fixkosten, verbrauchsunabhängig) — in den Netzkosten enthalten.<br>
+               • <strong>Einspeisevergütung = 0</strong> (Nulleinspeiser) — es wird kein fiktiver Einspeiseerlös angesetzt.</p>
+            <p><strong>Zwei Sichten, bewusst getrennt:</strong>
+               <em>PV-Amortisation</em> stellt den Bruttowert des selbst genutzten Solarstroms der PV-Investition gegenüber
+               (Anlagen-Rendite). Die <em>Haushalts-Amortisation</em> rechnet <strong>netto</strong> — also nach Abzug sämtlicher
+               laufender Netzkosten inkl. Grundpreis/Zählermiete — und ist damit die konservative Gesamtbilanz.</p>
+            <p style="color:rgba(255,255,255,0.55); font-size:12px; margin-top:8px;">
+               <strong>Randnotiz Heizpatrone:</strong> Der in die Warmwasser-Heizpatrone geflossene PV-Strom zählt zwar als
+               Selbstverbrauch, ist aber <em>nicht</em> voll amortisationswirksam: dasselbe Warmwasser ließe sich mit der
+               Wärmepumpe bei rund <strong>⅓</strong> des Stromeinsatzes erzeugen. Der Heizpatronen-Betrieb dient primär der
+               Sommer-Schonung der WP und dem Abfangen von Überschuss — amortisationswirksam ist allenfalls der WP-äquivalente
+               Anteil. Eine exakte Korrektur wäre laufend nachzuführen und bleibt daher bewusst als Hinweis stehen.</p>
+        </div>
+
         <!-- PV-Amortisation -->
         <div class="section">
             <div class="section-title">PV-Amortisation (Invest: {{ "{:,.0f}".format(gesamt_invest_pv).replace(",", "X").replace(".", ",").replace("X", ".") }} €)</div>
@@ -85,7 +110,7 @@
                 </tfoot>
             </table>
             <div style="margin-top: 15px; font-size: 12px; color: rgba(255,255,255,0.45);">
-                <p><strong>Brutto-Ersparnis:</strong> Solar-Erzeugung × Strompreis (Nulleinspeiser)</p>
+                <p><strong>Brutto-Ersparnis:</strong> selbst genutzter PV-Strom × Strompreis (Nulleinspeiser → abgeregelter Überschuss ist nicht enthalten)</p>
                 <p><strong>Kum. Ersparnis:</strong> Aufaddierte Brutto-Ersparnisse seit Beginn</p>
                 <p><strong>Fortschritt:</strong> Kum. Ersparnis / Investition × 100</p>
                 <p><strong>€/kWh (25J):</strong> Investition / Prognose 25 Jahre (mit 18.000 kWh/Jahr ab 2026)</p>
@@ -102,7 +127,7 @@
             <p><strong>Okt 2025:</strong> PV-Zubau (36×0,45 kWp) — Kosten in der Investliste</p>
             <p><strong>Mai 2026:</strong> Wattpilot Flex (Ersatz) — {{ "{:,.0f}".format(invest_wallbox_2026).replace(",", "X").replace(".", ",").replace("X", ".") }} €</p>
             <p><strong>2026:</strong> Zweite BYD 10,2 kWh — {{ "{:,.0f}".format(invest_batt_2026).replace(",", "X").replace(".", ",").replace("X", ".") }} €</p>
-            <p><strong>Sep 2026:</strong> 2×2,56 kWh Module (Aufstockung auf je 12,8 kWh) — {{ "{:,.0f}".format(invest_batt_modules_2026).replace(",", "X").replace(".", ",").replace("X", ".") }} € (Lieferung Ende Sep)</p>
+            <p><strong>Sep 2026:</strong> 2×2,56 kWh Module (Aufstockung auf je 12,8 kWh) — {{ "{:,.0f}".format(invest_batt_modules_2026).replace(",", "X").replace(".", ",").replace("X", ".") }} €</p>
             <br>
             <p><strong>PV-Gesamt:</strong> {{ "{:,.0f}".format(gesamt_invest_pv).replace(",", "X").replace(".", ",").replace("X", ".") }} €</p>
             <p><strong>Haushalt-Gesamt:</strong> {{ "{:,.0f}".format(gesamt_invest_haushalt).replace(",", "X").replace(".", ",").replace("X", ".") }} €</p>
