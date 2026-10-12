@@ -59,6 +59,152 @@
     <div class="container">
         <div class="top-nav"></div>
 
+        <!-- String- und Wechselrichter-Konfiguration -->
+        <div class="section">
+            <div class="section-title">Anlagenkonfiguration: Strings und Wechselrichter</div>
+            <table class="string-config-table">
+                <thead>
+                    <tr>
+                        <th>String-ID</th>
+                        <th>Wechselrichter</th>
+                        <th>Module</th>
+                        <th>Einzelmodul</th>
+                        <th>Anzahl</th>
+                        <th>String-Leistung</th>
+                        <th>Ausrichtung</th>
+                        <th>Neigung</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Wechselrichter F1 -->
+                    <tr class="inverter-group">
+                        <td colspan="8" class="inverter-header">
+                            <strong>F1: Fronius Gen24 12 kW</strong> — Gesamt: 19,32 kWp (Overpaneling 161%)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>F1-S1</td>
+                        <td rowspan="2" class="inverter-cell">F1<br><small>MPPT1</small></td>
+                        <td>20× 345 Wp</td>
+                        <td>345 Wp</td>
+                        <td>20</td>
+                        <td class="string-power">6,90 kWp</td>
+                        <td>SSO (150°)</td>
+                        <td>52°</td>
+                    </tr>
+                    <tr>
+                        <td>F1-S2</td>
+                        <td>20× 345 Wp</td>
+                        <td>345 Wp</td>
+                        <td>20</td>
+                        <td class="string-power">6,90 kWp</td>
+                        <td>NNW (330°)</td>
+                        <td>52°</td>
+                    </tr>
+                    <tr>
+                        <td>F1-S3</td>
+                        <td rowspan="2" class="inverter-cell">F1<br><small>MPPT2</small></td>
+                        <td>8× 345 Wp</td>
+                        <td>345 Wp</td>
+                        <td>8</td>
+                        <td class="string-power">2,76 kWp</td>
+                        <td>SSO (150°)</td>
+                        <td>45°</td>
+                    </tr>
+                    <tr class="last-string-of-inverter">
+                        <td>F1-S4</td>
+                        <td>8× 345 Wp</td>
+                        <td>345 Wp</td>
+                        <td>8</td>
+                        <td class="string-power">2,76 kWp</td>
+                        <td>NNW (330°)</td>
+                        <td>45°</td>
+                    </tr>
+                    <tr class="inverter-subtotal">
+                        <td colspan="5" style="text-align: right; font-weight: 700;">Wechselrichter F1 Gesamt:</td>
+                        <td class="subtotal-power">19,32 kWp</td>
+                        <td colspan="2"></td>
+                    </tr>
+
+                    <!-- Wechselrichter F2 -->
+                    <tr class="inverter-group">
+                        <td colspan="8" class="inverter-header">
+                            <strong>F2: Fronius Gen24 10 kW</strong> — Gesamt: 12,42 kWp (Overpaneling 124%)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>F2-S5</td>
+                        <td rowspan="1" class="inverter-cell">F2<br><small>MPPT1</small></td>
+                        <td>15× 450 Wp</td>
+                        <td>450 Wp</td>
+                        <td>15</td>
+                        <td class="string-power">6,75 kWp</td>
+                        <td>WSW (240°)</td>
+                        <td>18°</td>
+                    </tr>
+                    <tr>
+                        <td>F2-S6</td>
+                        <td rowspan="2" class="inverter-cell">F2<br><small>MPPT2</small></td>
+                        <td>8× 450 Wp</td>
+                        <td>450 Wp</td>
+                        <td>8</td>
+                        <td class="string-power">3,60 kWp</td>
+                        <td>WSW (240°)</td>
+                        <td>90°</td>
+                    </tr>
+                    <tr class="last-string-of-inverter">
+                        <td>F2-S7</td>
+                        <td>6× 345 Wp*</td>
+                        <td>345 Wp</td>
+                        <td>6</td>
+                        <td class="string-power">2,07 kWp</td>
+                        <td>WSW (240°)</td>
+                        <td>90°</td>
+                    </tr>
+                    <tr class="inverter-subtotal">
+                        <td colspan="5" style="text-align: right; font-weight: 700;">Wechselrichter F2 Gesamt:</td>
+                        <td class="subtotal-power">12,42 kWp</td>
+                        <td colspan="2"><small>*mit Optimierern</small></td>
+                    </tr>
+
+                    <!-- Wechselrichter F3 -->
+                    <tr class="inverter-group">
+                        <td colspan="8" class="inverter-header">
+                            <strong>F3: Fronius Symo 4,5 kW</strong> — Gesamt: 5,85 kWp (Overpaneling 130%)
+                        </td>
+                    </tr>
+                    <tr class="last-string-of-inverter">
+                        <td>F3-S8</td>
+                        <td class="inverter-cell">F3<br><small>MPPT1</small></td>
+                        <td>13× 450 Wp</td>
+                        <td>450 Wp</td>
+                        <td>13</td>
+                        <td class="string-power">5,85 kWp</td>
+                        <td>SSO (150°)</td>
+                        <td>90°</td>
+                    </tr>
+                    <tr class="inverter-subtotal">
+                        <td colspan="5" style="text-align: right; font-weight: 700;">Wechselrichter F3 Gesamt:</td>
+                        <td class="subtotal-power">5,85 kWp</td>
+                        <td colspan="2"></td>
+                    </tr>
+
+                    <!-- Gesamtsumme -->
+                    <tr class="grand-total">
+                        <td colspan="5" style="text-align: right; font-weight: 700;">GESAMTANLAGE:</td>
+                        <td class="total-power">37,59 kWp</td>
+                        <td colspan="2"><strong>26,5 kW AC</strong> (Wechselrichter-Clipping)</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p style="font-size:12px;color:rgba(255,255,255,0.55);margin-top:12px;">
+                <strong>Erläuterungen:</strong> String-Leistung = Anzahl Module × Einzelmodul-Leistung. 
+                Overpaneling: Solargenerator deutlich größer als Inverter-Nennleistung für höhere Erträge bei diffusem Licht und Morgen/Abend.
+                AC-Ausgangsleistung begrenzt durch Wechselrichter auf 12 kW (F1) + 10 kW (F2) + 4,5 kW (F3) = 26,5 kW.
+                F2-S7 mit Optimierern: gleichen unterschiedliche Modultypen (450/345 Wp) automatisch aus.
+            </p>
+        </div>
+
         <!-- Summary Cards -->
         <div class="summary-cards">
             <div class="summary-card">
@@ -238,7 +384,7 @@
 
         {% if monthly_extremes %}
         <div class="section">
-            <div class="section-title">Extremwerte Spannung und Frequenz</div>
+            <div class="section-title">Extremwerte Spannung und Frequenz seit 2026</div>
             <style>
                 .extremwerte-table { width: 100%; border-collapse: collapse; font-size: 13px; }
                 .extremwerte-table th, .extremwerte-table td { padding: 6px 4px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
@@ -282,7 +428,7 @@
                     {% set metrics = ['pmax', 'umin', 'umax', 'fmin', 'fmax'] %}
                     {% set metric_labels = {'pmax': 'P_max', 'umin': 'U_min', 'umax': 'U_max', 'fmin': 'f_min', 'fmax': 'f_max'} %}
                     
-                    {% for year in monthly_extremes.data.keys()|sort %}
+                    {% for year in monthly_extremes.data.keys()|sort if year >= 2026 %}
                     {% for metric in metrics %}
                     {% set i = loop.index0 %}
                     <tr class="{% if i == 4 %}last-metric{% else %}metric-row{% endif %}">
