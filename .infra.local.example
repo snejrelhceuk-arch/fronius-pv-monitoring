@@ -75,3 +75,19 @@ PV_NOTIFICATION_FROM=alerts@example.invalid
 # Dashboard-URL des Kiosk-Browsers zeigt auf den Primary (.204):
 # PV_KIOSK_URL=http://192.0.2.204:8000
 # PV_KIOSK_FULLSCREEN=0   # 0 = maximiert/touch-bedienbar (Default), 1 = echtes Vollbild
+
+# ── Home-Assistant-MQTT-Bridge (optional, steuerbox/ha_mqtt_bridge.py) ───────
+# Adapter B(read /api/ha/*) + E(write afternoon_charge_request). Broker-Auth ist
+# PFLICHT (Mosquitto allow_anonymous=false + password_file). USERNAME hier,
+# PASSWORT in .secrets (PV_HA_BRIDGE_MQTT_PASSWORD). Beide muessen einem Eintrag
+# im Broker-password_file entsprechen, sonst Journal 'MQTT connect failed rc=5'.
+# Details + Troubleshooting: doc/web/HA_INTEGRATION.md
+# PV_HA_BRIDGE_ENABLED=1
+# PV_HA_BRIDGE_MQTT_HOST=192.0.2.180
+# PV_HA_BRIDGE_MQTT_PORT=1883
+# PV_HA_BRIDGE_MQTT_USERNAME=ha_pv
+# PV_HA_BRIDGE_MQTT_PASSWORD=   # NICHT hier — in .secrets ablegen
+# PV_HA_BRIDGE_NODE_ID=pv_system_erlau
+# PV_HA_BRIDGE_DISCOVERY_PREFIX=homeassistant
+# PV_HA_BRIDGE_STATE_PREFIX=pv_system
+# PV_HA_BRIDGE_POLL_S=10

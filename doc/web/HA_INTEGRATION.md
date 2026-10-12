@@ -1,6 +1,6 @@
 # Home Assistant Integration (REST, read-first)
 
-Stand: 2026-05-03
+Stand: 2026-10-12
 
 ## 1) Discovery im pv-system
 
@@ -78,17 +78,47 @@ Die Bridge ist bewusst als separater Adapter umgesetzt:
 
 Die Automation-Engine (Schicht C) bleibt unveraendert und HA-unabhaengig.
 
-## 6) Aktivierung (optional)
+## 6) Aktivierung
 
-In `.infra.local` oder als Env setzen:
+Nicht-sensible Keys in `.infra.local`, das **Passwort in `.secrets`** (gitignored):
 
 ```bash
+# .infra.local
 PV_HA_BRIDGE_ENABLED=1
-PV_HA_BRIDGE_MQTT_HOST=192.0.2.180
+PV_HA_BRIDGE_MQTT_HOST=192.0.2.180   # HA-Host mit Mosquitto-Broker
 PV_HA_BRIDGE_MQTT_PORT=1883
-PV_HA_BRIDGE_MQTT_USERNAME=<optional>
-PV_HA_BRIDGE_MQTT_PASSWORD=<optional>
+PV_HA_BRIDGE_MQTT_USERNAME=ha_pv
 ```
+
+```bash
+# .secrets
+PV_HA_BRIDGE_MQTT_PASSWORD=<broker-passwort fuer user ha_pv>
+```
+
+**Broker-Auth ist Pflicht:** Der Mosquitto-Broker läuft mit `allow_anonymous false`
+und einem `password_file`. Benutzername **und** Passwort müssen exakt einem Eintrag
+in diesem `password_file` entsprechen (angelegt via `mosquitto_passwd`). `USERNAME`
+und `PASSWORD` sind daher **nicht optional** — ohne gültiges Paar lehnt der Broker
+die Verbindung ab.
+
+### Troubleshooting MQTT-Auth
+- Journal zeigt dauerhaft `MQTT connect failed rc=5` → der Broker weist die
+  Anmeldung ab (**NOT AUTHORIZED**). Ursache ist praktisch immer ein fehlender
+  oder abweichender Benutzer im `password_file` des Brokers (z. B. nach
+  Neuaufsetzen/Umzug des HA-Hosts: der pv-system-User wurde nicht neu angelegt).
+- Prüfen (auf dem HA-Host, Mosquitto als Docker-Container `mosquitto`):
+  ```bash
+  docker exec mosquitto cut -d: -f1 /mosquitto/config/passwordfile   # existierende User
+  ```
+- User (neu) anlegen/Passwort setzen — **ohne** `-c` (das `-c`-Flag würde die
+  Datei neu erzeugen und alle anderen User löschen!) — danach Broker neu laden:
+  ```bash
+  docker exec mosquitto mosquitto_passwd -b /mosquitto/config/passwordfile ha_pv '<passwort>'
+  docker exec mosquitto sh -c 'kill -HUP 1'   # Reload ohne HA/zigbee zu stören
+  ```
+- Dann `PV_HA_BRIDGE_MQTT_PASSWORD` in `.secrets` auf denselben Wert setzen und
+  `sudo systemctl restart pv-ha-bridge.service`. Erfolg = Journal zeigt
+  `MQTT connected` + `Subscribed to afternoon_charge_request command topic`.
 
 Dann systemd-Unit installieren/starten:
 
