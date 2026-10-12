@@ -155,6 +155,81 @@
         return wrap;
     }
 
+    function normalizePath(href) {
+        return (String(href || '').split('?')[0].replace(/\/$/, '') || '/');
+    }
+
+    function hrefMatchesCurrent(href, herePath, hereParams) {
+        var raw = String(href || '');
+        var qIdx = raw.indexOf('?');
+        var hrefPath = normalizePath(raw);
+        if (hrefPath !== herePath) return false;
+        if (qIdx < 0) return true;
+
+        var expected = new URLSearchParams(raw.slice(qIdx + 1));
+        var matched = true;
+        expected.forEach(function (v, k) {
+            if (hereParams.get(k) !== v) matched = false;
+        });
+        return matched;
+    }
+
+    function findActiveTrail(nodes, herePath, hereParams, prefix) {
+        prefix = prefix || [];
+        for (var i = 0; i < (nodes || []).length; i++) {
+            var node = nodes[i];
+            if (!node || node.sep) continue;
+            if (node.group) {
+                var deep = findActiveTrail(node.items || [], herePath, hereParams, prefix.concat(node.group));
+                if (deep) return deep;
+                continue;
+            }
+            if (node.href && hrefMatchesCurrent(node.href, herePath, hereParams)) {
+                return prefix.concat(node.label);
+            }
+        }
+        return null;
+    }
+
+    function hasDateNavigation(bar) {
+        if (!bar) return false;
+        var selectors = [
+            '.pv-cal-trigger',
+            '#currentDateDisplay', '#currentMonthDisplay', '#currentYearDisplay',
+            '#tagDateDisplay', '#monatDateDisplay', '#jahrDateDisplay',
+            '#dateLabel', '#dateDisplay',
+            '.date-label',
+            '#btnPeriodTag', '#btnPeriodMonat', '#btnPeriodJahr', '#btnPeriodGesamt',
+            '#navPrev', '#navNext', '#navNow'
+        ];
+        return !!bar.querySelector(selectors.join(','));
+    }
+
+    function ensureMenuHeading(opts, bar) {
+        if (!bar) return;
+        if (opts && opts.showMenuHeading === false) return;
+        if (hasDateNavigation(bar)) return;
+        if (bar.querySelector('.pv-menu-heading-inline')) return;
+
+        var herePath = window.location.pathname.replace(/\/$/, '') || '/';
+        var hereParams = new URLSearchParams(window.location.search || '');
+        var pages = (opts && opts.pages) || DEFAULT_PAGES;
+        var trail = findActiveTrail(pages, herePath, hereParams, []);
+        if (!trail || trail.length < 2) return;
+
+        var h = document.createElement('span');
+        h.className = 'pv-menu-heading-inline';
+        h.textContent = trail.join('/');
+        h.title = trail.join(' / ');
+
+        var after = bar.querySelector('.pv-flow-quick') || bar.querySelector('.pv-burger');
+        if (after && after.nextSibling) {
+            bar.insertBefore(h, after.nextSibling);
+        } else {
+            bar.appendChild(h);
+        }
+    }
+
     // Zeit-Kontext-Query bei jedem Öffnen frisch an die Seitenlinks hängen,
     // damit der zuletzt gewählte Zeitraum über Seitenwechsel erhalten bleibt.
     function refreshPageLinks(wrap) {
@@ -222,6 +297,8 @@
         close.addEventListener('click', shut);
         backdrop.addEventListener('click', shut);
         document.addEventListener('keydown', function (e) { if (e.key === 'Escape') shut(); });
+
+        ensureMenuHeading(opts, bar);
     }
 
     function attachCalendar(triggerEl, kind, getCurrent, onPick, opts) {

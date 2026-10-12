@@ -47,6 +47,29 @@
     .pv-flow-quick { padding: 0 8px; }
 }
 
+/* Kompakter Seiten-Titel direkt in der Navi-Leiste (nur ohne Datumsnavigation) */
+.pv-menu-heading-inline {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    padding: 0 2px;
+    color: rgba(255, 255, 255, 0.88);
+    font-size: 14px;
+    font-weight: 650;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: min(52vw, 520px);
+}
+@media (max-width: 600px) {
+    .pv-menu-heading-inline {
+        font-size: 12px;
+        margin-left: 6px;
+        max-width: 46vw;
+    }
+}
+
 /* Backdrop hinter der Schublade */
 .pv-drawer-backdrop {
     position: fixed;
