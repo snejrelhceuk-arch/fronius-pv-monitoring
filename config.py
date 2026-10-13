@@ -299,7 +299,7 @@ GESAMT_INVEST_PV = INVEST_PV_2021 + INVEST_PV_2024 + INVEST_BATT_2026 + INVEST_B
 # Haushalt-Gesamt umfasst PV-Gesamt + Wärmepumpe + Wallboxen (2024 + 2026)
 GESAMT_INVEST_HAUSHALT = GESAMT_INVEST_PV + INVEST_WP_2021 + INVEST_WALLBOX_2024 + INVEST_WALLBOX_2026
 
-HAUSHALT_BASIS_KWH = 3000        # kWh/Jahr Grundlast (Licht, Komfort, Lüftung)
+HAUSHALT_BASIS_KWH = 4500        # kWh/Jahr Grundlast (Licht, Komfort, Lüftung)
 
 # Haushaltsstrom-Referenz für die Counterfactual-Bilanz ("Zustand ohne Investition"):
 # Vor-PV-Komfortverbrauch (Licht, Kochen, Kühlen, Medien) ohne WP und E-Auto.
@@ -323,13 +323,25 @@ HEIZKOSTEN_ERSPARNIS = {
     2021: 750,     # Nur Nov+Dez, also 750 EUR für die Heizperiode
     2022: 1500,    # 100% Basis
     2023: 3000,    # 200% (Energiekrise)
-    2024: 2250,    # 150%
-    2025: 2250,    # 150%
-    2026: 2250,    # 150% (aktuelle Basis, später ggf. anpassen)
+    2024: 2400,    # 160%
+    2025: 2700,    # 180%
+    2026: 3000,    # 200% (aktuelle Basis, später ggf. anpassen)
 }
 
 # Heizperiode: Monate in denen Heizkosten anfallen
 HEIZPERIODE_MONATE = {10, 11, 12, 1, 2, 3}  # Okt–Mär (6 Monate)
+
+# Fossile Kraftstoff-Referenzpreise pro Jahr (€/Liter, Super E5).
+# Jahresmittel laut MTS-K/Statista; einmal jährlich pflegen (wie HEIZKOSTEN_ERSPARNIS).
+# Quelle für die Mobilitäts-Counterfactual-Bilanz ("Zustand ohne Investition").
+BENZINPREISE = {
+    2021: 1.58,
+    2022: 1.93,
+    2023: 1.85,
+    2024: 1.79,
+    2025: 1.74,
+    2026: 2.10,    # 2,00-Marke dauerhaft gebrochen; Ost-Niveau, konservativ
+}
 
 # --- Primärenergie-Modell (Rückrechnung der ersetzten Primärenergie) ---
 # Aus gemessener elektrischer Energie wird die früher benötigte Primärenergie

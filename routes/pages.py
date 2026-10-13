@@ -235,10 +235,8 @@ def _build_energy_costs_data(years_data, invest_pv_2021, invest_pv_2024, invest_
     (selbst genutzter PV-Strom). Konsistente WP-Behandlung: gemessener
     WP-Strom, vor 2026 aus WP_BASIS (~3.000 kWh/a)."""
 
-    # Fossile Kraftstoff-Referenzpreise pro Jahr (€/Liter)
-    benzinpreise = {
-        2021: 1.52, 2022: 1.86, 2023: 1.79, 2024: 1.79, 2025: 1.69, 2026: 1.91,
-    }
+    # Fossile Kraftstoff-Referenzpreise pro Jahr (€/Liter) — zentral in config.py
+    benzinpreise = config.BENZINPREISE
 
     energy_costs_data = []
     kum_pv_invest = 0.0
@@ -475,9 +473,7 @@ def analyse():
 
     # Fossile Referenzpreise für die Counterfactual-Bilanz (Zustand ohne Investition)
     verbrenner_l_100km = config.VERBRENNER_L_100KM
-    benzinpreise = {
-        2021: 1.52, 2022: 1.86, 2023: 1.79, 2024: 1.79, 2025: 1.69, 2026: 1.91,
-    }
+    benzinpreise = config.BENZINPREISE
 
     # Nulleinspeiser - keine Einspeisevergütung
 
