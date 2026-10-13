@@ -38,35 +38,10 @@
                 <div class="sub">{% if amort_haushalt_data %}Fortschritt {{ "{:,.0f}".format(amort_haushalt_data[-1].fortschritt).replace(",", "X").replace(".", ",").replace("X", ".") }}%{% endif %}</div>
             </div>
             <div class="summary-card">
-                <div class="label">Haushalt amortisiert</div>
+                <div class="label">Haushalt gedeckt</div>
                 <div class="value accent">{% if amort_haushalt_jahr %}~{{ amort_haushalt_jahr }}{% else %}–{% endif %}</div>
-                <div class="sub">{% if amort_haushalt_data %}Kum. {{ "{:,.0f}".format(amort_haushalt_data[-1].kum_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} € bisher{% endif %}</div>
+                <div class="sub">{% if amort_haushalt_data %}Kum. Vorteil {{ "{:,.0f}".format(amort_haushalt_data[-1].kum_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} € bisher{% endif %}</div>
             </div>
-        </div>
-
-        <!-- Methodik & Vollständigkeit (Belastbarkeit der Amortisation) -->
-        <div class="header-info" style="border-left:4px solid #46d17a; background:rgba(70,209,122,0.08);">
-            <h3>Methodik &amp; Vollständigkeit — warum die Amortisation belastbar ist</h3>
-            <p><strong>Was als Ersparnis zählt:</strong> ausschließlich der <em>gemessene, selbst genutzte</em> PV-Strom.
-               Die Anlage ist <strong>Nulleinspeiser</strong> — abgeregelter Überschuss (voller Speicher) wird vom Zähler
-               gar nicht erst als Erzeugung erfasst. Dadurch gilt messtechnisch
-               <strong>Solar&nbsp;≈&nbsp;Verbrauch&nbsp;−&nbsp;Netzbezug</strong> (Selbstverbrauch ≈ 100&nbsp;%): es wird
-               <em>keine</em> ungenutzte kWh als Einsparung gutgeschrieben (keine Luftbuchung).</p>
-            <p><strong>Enthaltene laufende Kosten (also auch der Netzbezug):</strong></p>
-            <p style="padding-left:14px">
-               • <strong>Arbeitspreis × Netzbezug</strong> (Rest-Strombezug aus dem Netz) — Spalte „Netz-Kosten".<br>
-               • <strong>Grundpreis inkl. Zählermiete</strong> (monatliche Fixkosten, verbrauchsunabhängig) — in den Netzkosten enthalten.<br>
-               • <strong>Einspeisevergütung = 0</strong> (Nulleinspeiser) — es wird kein fiktiver Einspeiseerlös angesetzt.</p>
-            <p><strong>Zwei Sichten, bewusst getrennt:</strong>
-               <em>PV-Amortisation</em> stellt den Bruttowert des selbst genutzten Solarstroms der PV-Investition gegenüber
-               (Anlagen-Rendite). Die <em>Haushalts-Amortisation</em> rechnet <strong>netto</strong> — also nach Abzug sämtlicher
-               laufender Netzkosten inkl. Grundpreis/Zählermiete — und ist damit die konservative Gesamtbilanz.</p>
-            <p style="color:rgba(255,255,255,0.55); font-size:12px; margin-top:8px;">
-               <strong>Randnotiz Heizpatrone:</strong> Der in die Warmwasser-Heizpatrone geflossene PV-Strom zählt zwar als
-               Selbstverbrauch, ist aber <em>nicht</em> voll amortisationswirksam: dasselbe Warmwasser ließe sich mit der
-               Wärmepumpe bei rund <strong>⅓</strong> des Stromeinsatzes erzeugen. Der Heizpatronen-Betrieb dient primär der
-               Sommer-Schonung der WP und dem Abfangen von Überschuss — amortisationswirksam ist allenfalls der WP-äquivalente
-               Anteil. Eine exakte Korrektur wäre laufend nachzuführen und bleibt daher bewusst als Hinweis stehen.</p>
         </div>
 
         <!-- PV-Amortisation -->
@@ -137,29 +112,36 @@
             <p><strong>Einspeisevergütung:</strong> Nulleinspeiser</p>
         </div>
 
-        <!-- Haushalts-Amortisation -->
+        <!-- Haushalts-Bilanz: ohne vs. mit Investition -->
         <div class="section">
-            <div class="section-title">Haushalts-Amortisation (Invest: {{ "{:,.0f}".format(gesamt_invest_haushalt).replace(",", "X").replace(".", ",").replace("X", ".") }} €, inkl. Wärmepumpe)</div>
+            <div class="section-title">Haushalts-Bilanz — ohne vs. mit Investition (Invest: {{ "{:,.0f}".format(gesamt_invest_haushalt).replace(",", "X").replace(".", ",").replace("X", ".") }} €, inkl. Wärmepumpe &amp; Wallboxen)</div>
             <table>
                 <thead>
                     <tr>
-                        <th>Jahr</th>
-                        <th>Strom-Netto</th>
-                        <th>Heizung</th>
-                        <th>Benzin</th>
-                        <th>Jahres-Ersparnis</th>
-                        <th>Kum. Ersparnis</th>
-                        <th>Fortschritt</th>
+                        <th rowspan="2">Jahr</th>
+                        <th colspan="4" style="text-align:center;">Ohne Investition (Alt-Kosten)</th>
+                        <th rowspan="2">Mit Investition<br>(Ist-Kosten)</th>
+                        <th rowspan="2">Vorteil/Jahr</th>
+                        <th rowspan="2">Kum. Vorteil</th>
+                        <th rowspan="2">Fortschritt</th>
+                    </tr>
+                    <tr>
+                        <th>Haushalt</th>
+                        <th>Heizen</th>
+                        <th>Mobilität</th>
+                        <th>Σ</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for year in amort_haushalt_data %}
                     <tr>
                         <td><strong>{{ year.year }}</strong></td>
-                        <td><strong>{{ "{:,.2f}".format(year.strom_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</strong></td>
-                        <td><strong>{{ "{:,.0f}".format(year.heiz_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</strong></td>
-                        <td><strong>{{ "{:,.2f}".format(year.benzin_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</strong></td>
-                        <td><strong>{{ "{:,.2f}".format(year.gesamt_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</strong></td>
+                        <td>{{ "{:,.0f}".format(year.alt_haushalt).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
+                        <td>{{ "{:,.0f}".format(year.alt_heizen).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
+                        <td>{{ "{:,.0f}".format(year.alt_mobilitaet).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
+                        <td><strong>{{ "{:,.0f}".format(year.alt_gesamt).replace(",", "X").replace(".", ",").replace("X", ".") }} €</strong></td>
+                        <td>{{ "{:,.0f}".format(year.ist_gesamt).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
+                        <td><strong>{{ "{:,.0f}".format(year.vorteil_jahr).replace(",", "X").replace(".", ",").replace("X", ".") }} €</strong></td>
                         <td><strong>{{ "{:,.0f}".format(year.kum_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</strong></td>
                         <td><strong>{{ "%.1f"|format(year.fortschritt)|replace(".", ",") }}%</strong></td>
                     </tr>
@@ -168,20 +150,24 @@
                 <tfoot>
                     <tr>
                         <td>Gesamt</td>
-                        <td>{{ "{:,.2f}".format(totals.netto_ersparnis_strom).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
-                        <td>{{ "{:,.0f}".format(totals.heiz_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
-                        <td>{{ "{:,.2f}".format(totals.benzin_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
-                        <td>{{ "{:,.2f}".format(totals.netto_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
+                        <td>{{ "{:,.0f}".format(totals.alt_haushalt).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
+                        <td>{{ "{:,.0f}".format(totals.alt_heizen).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
+                        <td>{{ "{:,.0f}".format(totals.alt_mobilitaet).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
+                        <td>{{ "{:,.0f}".format(totals.alt_gesamt).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
+                        <td>{{ "{:,.0f}".format(totals.ist_gesamt).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
+                        <td>{{ "{:,.0f}".format(totals.vorteil).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
                         <td>{{ "{:,.0f}".format(amort_haushalt_data[-1].kum_ersparnis).replace(",", "X").replace(".", ",").replace("X", ".") }} €</td>
                         <td>{{ "%.1f"|format(amort_haushalt_data[-1].fortschritt)|replace(".", ",") }}%</td>
                     </tr>
                 </tfoot>
             </table>
             <div style="margin-top: 15px; font-size: 12px; color: rgba(255,255,255,0.45);">
-                <p><strong>Strom-Netto:</strong> (Solar × Preis) − Netzkosten inkl. Grundpreis</p>
-                <p><strong>Heizung:</strong> Eingesparte Brennstoffkosten, nur Okt–Mär (2022: 250€, 2023: 500€, ab 2024: 450€ pro Heizmonat)</p>
-                <p><strong>Benzin:</strong> E-Auto statt Verbrenner (15 kWh/100km → 10 €/100km gespart)</p>
-                {% if amort_haushalt_jahr %}<p><strong>Prognose:</strong> Amortisation ca. {{ amort_haushalt_jahr }} (Ø letzte 2 Jahre)</p>{% endif %}
+                <p><strong>Lesart:</strong> „Ohne Investition" = was dieselbe Versorgung heute kosten würde, wenn nichts investiert worden wäre — Haushaltsstrom voll aus dem Netz, Wärme aus Holz, Mobilität fossil. „Mit Investition" = die tatsächliche Energierechnung. Die Differenz ist der Vorteil.</p>
+                <p><strong>Haushalt:</strong> Vor-PV-Komfortverbrauch (4.500 kWh/a, für Teiljahre anteilig) × Strompreis des Jahres — den Haushaltsstrom hätte man ohne Investition weiter aus dem Netz bezogen.</p>
+                <p><strong>Heizen:</strong> fossile Holzkosten für die gelieferte Wärme, nur Okt–Mär.</p>
+                <p><strong>Mobilität:</strong> fossile Kraftstoffkosten für dieselbe Fahrstrecke (6 l/100 km × Jahres-Spritpreis).</p>
+                <p><strong>Ist-Kosten:</strong> tatsächlicher Netzbezug × Arbeitspreis + Grundpreis inkl. Zählermiete (verbrauchsunabhängig). Konservativ: der Grundpreis zählt nur auf der Ist-Seite.</p>
+                {% if amort_haushalt_jahr %}<p><strong>Prognose:</strong> Investition gedeckt ca. {{ amort_haushalt_jahr }} (Ø letzte 2 Jahre).</p>{% endif %}
             </div>
         </div>
 
@@ -245,6 +231,21 @@
                 <p><strong>Spalte 7 (Gewichtet €/kWh):</strong> Durchschnittliche Netto-Energiekosten über alle Bereiche.</p>
                 <p><em>Alle Preise auf 2 Nachkommastellen gerundet. Rückwirkend aus vorhandenen Daten, ab 2026 aus gemessenem WP-Zähler.</em></p>
             </div>
+        </div>
+
+        <!-- Methodik & Annahmen (nachgestellt — die Zahlen stehen zuerst) -->
+        <div class="header-info" style="margin-top:30px; opacity:0.85;">
+            <h3>Methodik &amp; Annahmen</h3>
+            <p><strong>Datengrundlage:</strong> gemessener, selbst genutzter PV-Strom. Die Anlage ist <strong>Nulleinspeiser</strong> —
+               abgeregelter Überschuss (voller Speicher) wird vom Zähler nicht als Erzeugung erfasst, es gilt also
+               <strong>Solar&nbsp;≈&nbsp;Verbrauch&nbsp;−&nbsp;Netzbezug</strong>. Einspeisevergütung = 0.</p>
+            <p><strong>Laufende Kosten:</strong> Arbeitspreis × Netzbezug sowie Grundpreis inkl. Zählermiete (verbrauchsunabhängige
+               Fixkosten) — zusammengefasst in der Spalte „Netz-Kosten".</p>
+            <p><strong>Zwei Sichten:</strong> Die <em>PV-Amortisation</em> stellt den Bruttowert des selbst genutzten Solarstroms
+               der PV-Investition gegenüber. Die <em>Haushalts-Bilanz</em> vergleicht den <em>Zustand ohne Investition</em>
+               (dieselbe Versorgung heute fossil / voll aus dem Netz, jedes Jahr zu seinem eigenen Preisniveau) mit der
+               tatsächlichen Energierechnung. Haushaltsstrom, Wärme und Mobilität werden dabei getrennt ausgewiesen und
+               jeweils aus gemessenen Verbräuchen hergeleitet — keine fiktiven Pauschalen.</p>
         </div>
     </div>
 

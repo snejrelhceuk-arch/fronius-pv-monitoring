@@ -1,11 +1,11 @@
 # Volkszählung — PV-System Workspace
 
-> Stand: 2026-10-12 · auto-generiert von `tools/generate_volkszaehlung.py` (pre-commit).
+> Stand: 2026-10-13 · auto-generiert von `tools/generate_volkszaehlung.py` (pre-commit).
 
 ## Übersicht
 
-**Gesamtgröße (Textdateien gezählt):** 3811 MB
-**Gesamtzeilen (Code/Doku/Daten):** 394.388 Zeilen
+**Gesamtgröße (Textdateien gezählt):** 3827 MB
+**Gesamtzeilen (Code/Doku/Daten):** 395.699 Zeilen
 **Gezählte Dateien:** 907
 **Ausgeschlossene Verzeichnisse:** 29 (.venv, __pycache__, node_modules, .git …)
 
@@ -13,13 +13,13 @@
 
 | Sprache/Typ | Dateien | Zeilen | Anteil |
 |---|---|---|---|
-| **CSV** | 76 | 266.445 | 67.6% |
-| **Python** | 220 | 64.034 | 16.2% |
+| **CSV** | 76 | 267.660 | 67.6% |
+| **Python** | 220 | 64.059 | 16.2% |
 | **Markdown** | 148 | 24.501 | 6.2% |
-| **HTML** | 28 | 16.633 | 4.2% |
+| **HTML** | 28 | 16.634 | 4.2% |
 | **Shell** | 71 | 5.762 | 1.5% |
-| **TXT** | 4 | 5.680 | 1.4% |
-| **JSON** | 298 | 5.300 | 1.3% |
+| **TXT** | 4 | 5.745 | 1.5% |
+| **JSON** | 298 | 5.305 | 1.3% |
 | **JavaScript** | 6 | 1.704 | 0.4% |
 | **CSS** | 6 | 1.680 | 0.4% |
 | **SQL** | 10 | 1.427 | 0.4% |
@@ -27,7 +27,7 @@
 | **YAML** | 3 | 562 | 0.1% |
 | **CONF** | 3 | 70 | 0.0% |
 | **TOML** | 1 | 22 | 0.0% |
-| **Total** | 907 | 394.388 | 100% |
+| **Total** | 907 | 395.699 | 100% |
 
 ## Python-Code nach ABCDEN-Rollen
 
@@ -35,7 +35,7 @@
 |---|---|---|---|
 | **C** Automation | `automation/` | 46 | 14.416 |
 | **A** Collector | `collector/` | 19 | 4.935 |
-| **B** Web-API | `routes/` | 28 | 11.679 |
+| **B** Web-API | `routes/` | 28 | 11.700 |
 | **D** Diagnos | `diagnos/` | 11 | 2.746 |
 | **E** Steuerbox | `steuerbox/` | 5 | 1.311 |
 | **N** Netzqualität | `nq/` | 37 | 9.143 |
@@ -50,7 +50,7 @@
 1. `automation/engine/regeln/soc_steuerung.py` — 1.060 Zeilen
 1. `routes/system/battery.py` — 1.023 Zeilen
 1. `routes/visualization.py` — 955 Zeilen
-1. `routes/pages.py` — 925 Zeilen
+1. `routes/pages.py` — 946 Zeilen
 1. `routes/netzqualitaet.py` — 898 Zeilen
 
 ## Ausgeschlossene Bereiche

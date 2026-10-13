@@ -526,6 +526,12 @@ def analyse():
     heizkosten_ersparnis = config.HEIZKOSTEN_ERSPARNIS
     heizperiode_monate = config.HEIZPERIODE_MONATE
 
+    # Fossile Referenzpreise für die Counterfactual-Bilanz (Zustand ohne Investition)
+    verbrenner_l_100km = config.VERBRENNER_L_100KM
+    benzinpreise = {
+        2021: 1.52, 2022: 1.86, 2023: 1.79, 2024: 1.79, 2025: 1.69, 2026: 1.91,
+    }
+
     # Nulleinspeiser - keine Einspeisevergütung
 
     # Daten aus DB statt CSV lesen
@@ -679,6 +685,28 @@ def analyse():
         # GESAMT-Ersparnis (Strom-Netto + Heizung + Benzin)
         netto_ersparnis = netto_ersparnis_strom + heiz_ersparnis + benzin_ersparnis
 
+        # ------------------------------------------------------------------
+        # Counterfactual-Bilanz: "Zustand ohne Investition" vs. Ist-Kosten
+        # Alles gemessen; keine fiktiven Pauschalen. Jedes Jahr zu seinem
+        # eigenen Preisniveau. Konservativ: Grundpreis nur auf der Ist-Seite.
+        # In der Gegenwelt gibt es keine WP (Wärme = Holz) und kein E-Auto
+        # (Mobilität = fossil) — Haushaltsstrom daher als Vor-PV-Baseline
+        # (config.HAUSHALT_COUNTERFACTUAL_KWH), für Teiljahre monatsanteilig.
+        # ------------------------------------------------------------------
+        household_kwh = config.HAUSHALT_COUNTERFACTUAL_KWH * (data['monate'] / 12.0)
+
+        # Ohne Investition: Haushaltsstrom voll aus dem Netz, Wärme aus Holz,
+        # Mobilität fossil – jeweils zum Preisniveau des Jahres.
+        alt_haushalt = household_kwh * avg_strompreis
+        alt_heizen = heiz_ersparnis_brutto
+        benzinpreis_jahr = benzinpreise.get(year, 1.80)
+        alt_mobilitaet = (km_gefahren / 100.0) * verbrenner_l_100km * benzinpreis_jahr
+        alt_gesamt = alt_haushalt + alt_heizen + alt_mobilitaet
+
+        # Mit Investition: tatsächliche Energierechnung (Netzbezug + Grundpreis).
+        ist_gesamt = data['kosten_strom']
+        vorteil_jahr = alt_gesamt - ist_gesamt
+
         # Spezifischer Ertrag (kWh/kWp): jahresbezogen, monatsweise nach Ausbauphase gewichtet
         kwp_month_sum = sum(
             _get_installed_kwp_for_month(year, month)
@@ -698,6 +726,13 @@ def analyse():
         data['km_gefahren'] = km_gefahren
         data['netto_ersparnis'] = netto_ersparnis
         data['spez_ertrag'] = spezifischer_ertrag
+        data['household_kwh'] = household_kwh
+        data['alt_haushalt'] = alt_haushalt
+        data['alt_heizen'] = alt_heizen
+        data['alt_mobilitaet'] = alt_mobilitaet
+        data['alt_gesamt'] = alt_gesamt
+        data['ist_gesamt'] = ist_gesamt
+        data['vorteil_jahr'] = vorteil_jahr
 
     # ========================================
     # PV-AMORTISATION (nur PV-Anlage, Brutto)
@@ -757,56 +792,36 @@ def analyse():
         amort_pv_jahr = None
 
     # ========================================
-    # HAUSHALTS-AMORTISATION (inkl. Wärmepumpe, alle Ersparnisse)
+    # HAUSHALTS-BILANZ: Zustand ohne Investition vs. Ist-Kosten
+    # Vorteil = Alt-Kosten (fossil/voll aus Netz) − tatsächliche Energierechnung
     # ========================================
     amort_haushalt_data = []
-    kum_invest_haushalt = 0
-    kum_ersparnis_haushalt = 0
+    kum_vorteil_haushalt = 0
 
     for year in sorted(years_data.keys()):
-        # Investitionen in diesem Jahr (historisch: 2021 + 2024)
-        invest_jahr_haushalt = 0
-        if year == 2021:
-            invest_jahr_haushalt = invest_pv_2021 + invest_wp_2021
-        elif year == 2024:
-            invest_jahr_haushalt = invest_pv_2024
+        d = years_data[year]
+        kum_vorteil_haushalt += d['vorteil_jahr']
 
-        kum_invest_haushalt += invest_jahr_haushalt
-
-        # Gesamt-Ersparnis (Strom-Netto + Heizung + Benzin)
-        gesamt_ersparnis = years_data[year]['netto_ersparnis']
-        kum_ersparnis_haushalt += gesamt_ersparnis
-
-        # Netz-Kosten (was tatsächlich bezahlt wird, inkl. Grundpreis)
-        netz_kosten = years_data[year]['kosten_strom']
-
-        # Fortschritt: Wie viel % der Investition durch kumulierte Ersparnis gedeckt
-        fortschritt_haushalt = (kum_ersparnis_haushalt / gesamt_invest_haushalt * 100) if gesamt_invest_haushalt > 0 else 0
-
-        # Effektiver Strompreis (Netzkosten inkl. Grundpreis / Gesamtverbrauch)
-        if years_data[year]['gesamt_verbr'] > 0:
-            eff_strompreis = netz_kosten / years_data[year]['gesamt_verbr']
-        else:
-            eff_strompreis = years_data[year]['strompreis']
+        # Fortschritt: Wie viel % der Investition durch kumulierten Vorteil gedeckt
+        fortschritt_haushalt = (kum_vorteil_haushalt / gesamt_invest_haushalt * 100) if gesamt_invest_haushalt > 0 else 0
 
         amort_haushalt_data.append({
             'year': year,
-            'invest_jahr': invest_jahr_haushalt,
-            'strom_ersparnis': years_data[year]['netto_ersparnis_strom'],
-            'netz_kosten': netz_kosten,
-            'heiz_ersparnis': years_data[year]['heiz_ersparnis'],
-            'benzin_ersparnis': years_data[year]['benzin_ersparnis'],
-            'gesamt_ersparnis': gesamt_ersparnis,
-            'kum_ersparnis': kum_ersparnis_haushalt,
+            'alt_haushalt': d['alt_haushalt'],
+            'alt_heizen': d['alt_heizen'],
+            'alt_mobilitaet': d['alt_mobilitaet'],
+            'alt_gesamt': d['alt_gesamt'],
+            'ist_gesamt': d['ist_gesamt'],
+            'vorteil_jahr': d['vorteil_jahr'],
+            'kum_ersparnis': kum_vorteil_haushalt,
             'fortschritt': fortschritt_haushalt,
-            'eff_strompreis': eff_strompreis
         })
 
     # Haushalt-Amortisationsprognose: Wann wird 100% erreicht?
-    if amort_haushalt_data and kum_ersparnis_haushalt > 0:
-        rest_haushalt = gesamt_invest_haushalt - kum_ersparnis_haushalt
+    if amort_haushalt_data and kum_vorteil_haushalt > 0:
+        rest_haushalt = gesamt_invest_haushalt - kum_vorteil_haushalt
         letzte_jahre_h = amort_haushalt_data[-2:] if len(amort_haushalt_data) >= 2 else amort_haushalt_data[-1:]
-        avg_ersparnis_h = sum(d['gesamt_ersparnis'] for d in letzte_jahre_h) / len(letzte_jahre_h)
+        avg_ersparnis_h = sum(d['vorteil_jahr'] for d in letzte_jahre_h) / len(letzte_jahre_h)
         if rest_haushalt > 0 and avg_ersparnis_h > 0:
             jahre_rest_h = rest_haushalt / avg_ersparnis_h
             amort_haushalt_jahr = amort_haushalt_data[-1]['year'] + round(jahre_rest_h)
@@ -864,6 +879,12 @@ def analyse():
         'heiz_ersparnis': sum(d['heiz_ersparnis'] for d in years_data.values()),
         'benzin_ersparnis': sum(d['benzin_ersparnis'] for d in years_data.values()),
         'netto_ersparnis': sum(d['netto_ersparnis'] for d in years_data.values()),
+        'alt_haushalt': sum(d['alt_haushalt'] for d in years_data.values()),
+        'alt_heizen': sum(d['alt_heizen'] for d in years_data.values()),
+        'alt_mobilitaet': sum(d['alt_mobilitaet'] for d in years_data.values()),
+        'alt_gesamt': sum(d['alt_gesamt'] for d in years_data.values()),
+        'ist_gesamt': sum(d['ist_gesamt'] for d in years_data.values()),
+        'vorteil': sum(d['vorteil_jahr'] for d in years_data.values()),
         'wattpilot': sum(d['wattpilot'] for d in years_data.values()),
         'sonnenstunden': sum(d.get('sonnenstunden', 0) or 0 for d in years_data.values()),
         'monate': sum(d['monate'] for d in years_data.values()),

@@ -301,6 +301,10 @@ GESAMT_INVEST_HAUSHALT = GESAMT_INVEST_PV + INVEST_WP_2021 + INVEST_WALLBOX_2024
 
 HAUSHALT_BASIS_KWH = 3000        # kWh/Jahr Grundlast (Licht, Komfort, Lüftung)
 
+# Haushaltsstrom-Referenz für die Counterfactual-Bilanz ("Zustand ohne Investition"):
+# Vor-PV-Komfortverbrauch (Licht, Kochen, Kühlen, Medien) ohne WP und E-Auto.
+HAUSHALT_COUNTERFACTUAL_KWH = 4500  # kWh/Jahr (Vor-PV-Niveau)
+
 # WP-elektrisch Basis (ohne Heizpatrone-Anteil)
 WP_BASIS = {
     2021: 0,       # Nur 2 Monate, WP-Daten nicht relevant
