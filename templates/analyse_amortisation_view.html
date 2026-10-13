@@ -173,63 +173,60 @@
 
         <!-- Energiekosten nach Typ: Heizen, Mobilität, Haushalt -->
         <div class="section">
-            <div class="section-title">Energiekosten nach Typ (investitionsgewichtet)</div>
+            <div class="section-title">Energiekosten nach Typ — ohne vs. mit Investition (€/kWh Nutzenergie)</div>
             <table>
                 <thead>
                     <tr>
                         <th rowspan="2" style="text-align: center;">Jahr</th>
-                        <th rowspan="2" style="text-align: center;">€/kWh<br>(real)</th>
+                        <th rowspan="2" style="text-align: center;">PV-Strom<br>€/kWh</th>
                         <th colspan="2" style="text-align: center;">Heizen</th>
                         <th colspan="2" style="text-align: center;">Mobilität</th>
-                        <th rowspan="2" style="text-align: center;">Haushalt<br>€/kWh</th>
-                        <th rowspan="2" style="text-align: center;">Gewichtet<br>€/kWh</th>
+                        <th colspan="2" style="text-align: center;">Haushalt</th>
                     </tr>
                     <tr>
-                        <th style="text-align: center;">Nutzenergie</th>
-                        <th style="text-align: center;">€/kWh</th>
-                        <th style="text-align: center;">Nutzenergie</th>
-                        <th style="text-align: center;">€/kWh</th>
+                        <th style="text-align: center;">ohne (Holz)</th>
+                        <th style="text-align: center;">mit (WP)</th>
+                        <th style="text-align: center;">ohne (fossil)</th>
+                        <th style="text-align: center;">mit (E-Auto)</th>
+                        <th style="text-align: center;">ohne (Netz)</th>
+                        <th style="text-align: center;">mit (PV)</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for year in energy_costs_data %}
                     <tr>
                         <td style="text-align: center;"><strong>{{ year.year }}</strong></td>
-                        <td style="text-align: center;">{{ year.eur_kwh_real | de_currency(2) }}</td>
-                        <td style="text-align: center;">{{ year.heating_cost_per_kwh_nutzenergie | de_currency(2) }}</td>
-                        <td style="text-align: center;">{{ year.heating_cost_per_kwh_net | de_currency(2) }}</td>
-                        <td style="text-align: center;">{{ year.mobility_cost_per_kwh_nutzenergie | de_currency(2) }}</td>
-                        <td style="text-align: center;">{{ year.mobility_cost_per_kwh_net | de_currency(2) }}</td>
-                        <td style="text-align: center;">{{ year.household_cost_per_kwh | de_currency(2) }}</td>
-                        <td style="text-align: center;"><strong>{{ year.total_net_cost_per_kwh_useful | de_currency(2) }}</strong></td>
+                        <td style="text-align: center;"><strong>{{ year.eur_kwh_real | de_currency(2) }}</strong></td>
+                        <td style="text-align: center;">{{ year.heizen_ohne | de_currency(2) }}</td>
+                        <td style="text-align: center;">{{ year.heizen_mit | de_currency(2) }}</td>
+                        <td style="text-align: center;">{{ year.mobilitaet_ohne | de_currency(2) }}</td>
+                        <td style="text-align: center;">{{ year.mobilitaet_mit | de_currency(2) }}</td>
+                        <td style="text-align: center;">{{ year.haushalt_ohne | de_currency(2) }}</td>
+                        <td style="text-align: center;">{{ year.haushalt_mit | de_currency(2) }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
                 <tfoot>
-                    {% if energy_costs_data %}
-                    {% set last = energy_costs_data[-1] %}
+                    {% if energy_costs_totals %}
                     <tr>
                         <td style="text-align: center;">Gesamt</td>
-                        <td style="text-align: center;">{{ last.eur_kwh_real | de_currency(2) }}</td>
-                        <td style="text-align: center;">{{ last.heating_cost_per_kwh_nutzenergie | de_currency(2) }}</td>
-                        <td style="text-align: center;">{{ last.heating_cost_per_kwh_net | de_currency(2) }}</td>
-                        <td style="text-align: center;">{{ last.mobility_cost_per_kwh_nutzenergie | de_currency(2) }}</td>
-                        <td style="text-align: center;">{{ last.mobility_cost_per_kwh_net | de_currency(2) }}</td>
-                        <td style="text-align: center;">{{ last.household_cost_per_kwh | de_currency(2) }}</td>
-                        <td style="text-align: center;"><strong>{{ last.total_net_cost_per_kwh_useful | de_currency(2) }}</strong></td>
+                        <td style="text-align: center;"><strong>{{ energy_costs_totals.eur_kwh_real | de_currency(2) }}</strong></td>
+                        <td style="text-align: center;">{{ energy_costs_totals.heizen_ohne | de_currency(2) }}</td>
+                        <td style="text-align: center;">{{ energy_costs_totals.heizen_mit | de_currency(2) }}</td>
+                        <td style="text-align: center;">{{ energy_costs_totals.mobilitaet_ohne | de_currency(2) }}</td>
+                        <td style="text-align: center;">{{ energy_costs_totals.mobilitaet_mit | de_currency(2) }}</td>
+                        <td style="text-align: center;">{{ energy_costs_totals.haushalt_ohne | de_currency(2) }}</td>
+                        <td style="text-align: center;">{{ energy_costs_totals.haushalt_mit | de_currency(2) }}</td>
                     </tr>
                     {% endif %}
                 </tfoot>
             </table>
             <div style="margin-top: 15px; font-size: 12px; color: rgba(255,255,255,0.45);">
-                <p><strong>Spalte 1 (€/kWh real):</strong> Kumulative PV-Investition / kumulative PV-Erzeugung.</p>
-                <p><strong>Spalte 2 (Heizen Nutzenergie):</strong> Eingesparte Holzkosten pro kWh thermischer Nutzenergie.</p>
-                <p><strong>Spalte 3 (Heizen €/kWh):</strong> Kosten pro kWh im Bereich Heizen (Spalte 1 minus Spalte 2).</p>
-                <p><strong>Spalte 4 (Mobilität Nutzenergie):</strong> Eingesparte Benzinkosten pro kWh Fahrstrecke.</p>
-                <p><strong>Spalte 5 (Mobilität €/kWh):</strong> Kosten pro kWh im Bereich Mobilität (Spalte 1 minus Spalte 4).</p>
-                <p><strong>Spalte 6 (Haushalt €/kWh):</strong> Identisch mit Spalte 1 (keine zusätzliche Ersparnis).</p>
-                <p><strong>Spalte 7 (Gewichtet €/kWh):</strong> Durchschnittliche Netto-Energiekosten über alle Bereiche.</p>
-                <p><em>Alle Preise auf 2 Nachkommastellen gerundet. Rückwirkend aus vorhandenen Daten, ab 2026 aus gemessenem WP-Zähler.</em></p>
+                <p><strong>PV-Strom €/kWh:</strong> amortisierte Kosten einer selbst erzeugten kWh (kumulative PV-Investition / kumulative Erzeugung) — der „mit"-Wert in allen Bereichen.</p>
+                <p><strong>Heizen:</strong> <em>ohne</em> = fossile Holzkosten je kWh thermischer Nutzenergie; <em>mit</em> = PV-Strom je kWh Wärme (PV-Preis ÷ Arbeitszahl WP/Heizpatrone).</p>
+                <p><strong>Mobilität:</strong> <em>ohne</em> = fossile Kraftstoffkosten je kWh Fahrstrecke (6 l/100 km × Spritpreis ÷ 15 kWh/100 km); <em>mit</em> = PV-Strom je kWh.</p>
+                <p><strong>Haushalt:</strong> <em>ohne</em> = Netz-Arbeitspreis des Jahres; <em>mit</em> = PV-Strom je kWh.</p>
+                <p><em>Alle Werte je kWh Nutzenergie, auf 2 Nachkommastellen gerundet. WP-Strom vor 2026 aus WP-Referenz (~3.000 kWh/a), ab 2026 aus gemessenem WP-Zähler.</em></p>
             </div>
         </div>
 
