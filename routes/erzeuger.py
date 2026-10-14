@@ -165,7 +165,7 @@ def api_erzeuger_tag():
 def api_erzeuger_monat():
     """
     Erzeuger-Energieübersicht für Monatsansicht (gestapelte Balken pro Tag).
-    Aggregiert aus data_1min / data_15min.
+    Permanente WR-Aufteilung aus daily_data (W_PV_F*_total), Fallback data_1min/data_15min.
     """
     try:
         year = request.args.get('year', type=int)
@@ -188,7 +188,23 @@ def api_erzeuger_monat():
             return jsonify({"error": "DB nicht verfügbar"}), 500
         cursor = conn.cursor()
 
-        # Prüfe data_1min Verfügbarkeit
+        # Primärquelle: permanente Tages-WR-Aufteilung aus daily_data (W_PV_F*_total).
+        # Unabhängig von der 90-Tage-Retention von data_1min/data_15min.
+        cursor.execute("""
+            SELECT date(ts, 'unixepoch', 'localtime') AS day,
+                   W_PV_F1_total, W_PV_F2_total, W_PV_F3_total
+            FROM daily_data
+            WHERE ts >= ? AND ts < ?
+            ORDER BY day
+        """, (first_ts, last_ts))
+        per_day = {}
+        for day_str, f1, f2, f3 in cursor.fetchall():
+            if f1 is None and f2 is None and f3 is None:
+                continue  # Tag ohne permanente WR-Werte → ggf. Live-Fallback
+            per_day[day_str] = [f1 or 0, f2 or 0, f3 or 0]
+
+        # Live-Fallback für Tage ohne permanente Werte (v.a. der laufende Tag,
+        # bevor die Tagesaggregation lief). Gleiche Netto-Formel wie daily.py.
         cursor.execute("SELECT COUNT(*) FROM data_1min WHERE ts >= ? AND ts < ?", (first_ts, last_ts))
         count = cursor.fetchone()[0]
         table = 'data_1min' if count > 0 else 'data_15min'
@@ -197,16 +213,19 @@ def api_erzeuger_monat():
             SELECT
                 date(ts, 'unixepoch', 'localtime') AS day,
                 SUM(COALESCE(W_DC1_delta, 0) + COALESCE(W_DC2_delta, 0)) AS w_f1,
-                SUM(-COALESCE(W_Exp_F2_delta, 0)) AS w_f2,
-                SUM(-COALESCE(W_Exp_F3_delta, 0)) AS w_f3
+                SUM(-COALESCE(W_Exp_F2_delta, 0) - COALESCE(W_Imp_F2_delta, 0)) AS w_f2,
+                SUM(-COALESCE(W_Exp_F3_delta, 0) - COALESCE(W_Imp_F3_delta, 0)) AS w_f3
             FROM {table}
             WHERE ts >= ? AND ts < ?
             GROUP BY date(ts, 'unixepoch', 'localtime')
             ORDER BY day
         """, (first_ts, last_ts))
+        for day_str, w_f1, w_f2, w_f3 in cursor.fetchall():
+            per_day.setdefault(day_str, [w_f1 or 0, w_f2 or 0, w_f3 or 0])
 
-        rows = cursor.fetchall()
         conn.close()
+
+        rows = sorted((day, vals[0], vals[1], vals[2]) for day, vals in per_day.items())
 
         datapoints = []
         totals = {'f1': 0, 'f2': 0, 'f3': 0, 'gesamt': 0}
@@ -274,24 +293,38 @@ def api_erzeuger_jahr():
         """, (year,))
         stat_totals = {row[0]: row[1] * 1000.0 for row in cursor.fetchall()}
 
-        # ── F1/F2/F3-Aufteilung aus Rohdaten (für Proportionsberechnung) ──
+        # ── F1/F2/F3-Aufteilung je Monat aus permanenter Quelle (daily_data) ──
+        cursor.execute("""
+            SELECT CAST(strftime('%m', datetime(ts, 'unixepoch', 'localtime')) AS INTEGER) AS mon,
+                   SUM(COALESCE(W_PV_F1_total, 0)) AS w_f1,
+                   SUM(COALESCE(W_PV_F2_total, 0)) AS w_f2,
+                   SUM(COALESCE(W_PV_F3_total, 0)) AS w_f3
+            FROM daily_data
+            WHERE ts >= ? AND ts < ?
+              AND (W_PV_F1_total IS NOT NULL OR W_PV_F2_total IS NOT NULL OR W_PV_F3_total IS NOT NULL)
+            GROUP BY mon
+            ORDER BY mon
+        """, (first_ts, last_ts))
+        rows = cursor.fetchall()
+
+        # Live-Fallback (data_1min/data_15min) nur für Monate ohne permanente Werte.
+        have_mon = {r[0] for r in rows}
         cursor.execute("SELECT COUNT(*) FROM data_1min WHERE ts >= ? AND ts < ?", (first_ts, last_ts))
         count = cursor.fetchone()[0]
         table = 'data_1min' if count > 0 else 'data_15min'
-
         cursor.execute(f"""
             SELECT
                 CAST(strftime('%m', datetime(ts, 'unixepoch', 'localtime')) AS INTEGER) AS mon,
                 SUM(COALESCE(W_DC1_delta, 0) + COALESCE(W_DC2_delta, 0)) AS w_f1,
-                SUM(-COALESCE(W_Exp_F2_delta, 0)) AS w_f2,
-                SUM(-COALESCE(W_Exp_F3_delta, 0)) AS w_f3
+                SUM(-COALESCE(W_Exp_F2_delta, 0) - COALESCE(W_Imp_F2_delta, 0)) AS w_f2,
+                SUM(-COALESCE(W_Exp_F3_delta, 0) - COALESCE(W_Imp_F3_delta, 0)) AS w_f3
             FROM {table}
             WHERE ts >= ? AND ts < ?
             GROUP BY mon
             ORDER BY mon
         """, (first_ts, last_ts))
-
-        rows = cursor.fetchall()
+        rows = list(rows) + [r for r in cursor.fetchall() if r[0] not in have_mon]
+        rows.sort(key=lambda r: r[0])
 
         # Beste/schlechteste Tageserträge je Monat (für Tooltip), aus daily_data.W_PV_total.
         cursor.execute("""
@@ -370,7 +403,7 @@ def api_erzeuger_jahr():
 def api_erzeuger_gesamt():
     """
     Erzeuger-Energieübersicht Gesamtansicht (gestapelte Balken pro Jahr).
-    Aggregiert aus data_1min / data_15min.
+    Aggregiert aus permanenter daily_data (W_PV_F*_total), Fallback data_1min/data_15min.
     """
     try:
         conn = get_db_connection()
@@ -378,7 +411,21 @@ def api_erzeuger_gesamt():
             return jsonify({"error": "DB nicht verfügbar"}), 500
         cursor = conn.cursor()
 
-        # Versuche beide Tabellen zu kombinieren
+        # Primärquelle: permanente Tages-WR-Aufteilung je Jahr aus daily_data.
+        cursor.execute("""
+            SELECT CAST(strftime('%Y', datetime(ts, 'unixepoch', 'localtime')) AS INTEGER) AS yr,
+                   SUM(COALESCE(W_PV_F1_total, 0)) AS w_f1,
+                   SUM(COALESCE(W_PV_F2_total, 0)) AS w_f2,
+                   SUM(COALESCE(W_PV_F3_total, 0)) AS w_f3
+            FROM daily_data
+            WHERE W_PV_F1_total IS NOT NULL OR W_PV_F2_total IS NOT NULL OR W_PV_F3_total IS NOT NULL
+            GROUP BY yr
+            ORDER BY yr
+        """)
+        rows = cursor.fetchall()
+
+        # Live-Fallback nur für Jahre ohne permanente Werte.
+        have_yr = {r[0] for r in rows}
         cursor.execute("SELECT COUNT(*) FROM data_1min")
         count_1min = cursor.fetchone()[0]
         table = 'data_1min' if count_1min > 0 else 'data_15min'
@@ -387,14 +434,14 @@ def api_erzeuger_gesamt():
             SELECT
                 CAST(strftime('%Y', datetime(ts, 'unixepoch', 'localtime')) AS INTEGER) AS yr,
                 SUM(COALESCE(W_DC1_delta, 0) + COALESCE(W_DC2_delta, 0)) AS w_f1,
-                SUM(-COALESCE(W_Exp_F2_delta, 0)) AS w_f2,
-                SUM(-COALESCE(W_Exp_F3_delta, 0)) AS w_f3
+                SUM(-COALESCE(W_Exp_F2_delta, 0) - COALESCE(W_Imp_F2_delta, 0)) AS w_f2,
+                SUM(-COALESCE(W_Exp_F3_delta, 0) - COALESCE(W_Imp_F3_delta, 0)) AS w_f3
             FROM {table}
             GROUP BY yr
             ORDER BY yr
         """)
-
-        rows = cursor.fetchall()
+        rows = list(rows) + [r for r in cursor.fetchall() if r[0] not in have_yr]
+        rows.sort(key=lambda r: r[0])
 
         # Jahr-Bereich aus monthly_statistics ermitteln (enthält auch ältere Jahre)
         cursor.execute("SELECT MIN(year), MAX(year) FROM monthly_statistics")

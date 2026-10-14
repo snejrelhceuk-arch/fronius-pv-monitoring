@@ -5,7 +5,7 @@ role: A
 applyTo: "db_init.py"
 tags: [db, schema, raw-data, aggregat]
 status: stable
-last_review: 2026-09-16
+last_review: 2026-10-14
 ---
 
 # DB-Schema
@@ -30,7 +30,7 @@ Schema-Übersicht der zentralen `data.db` (SQLite). Pflichttabellen, Aggregat-Pi
 - `data_1min` — PK `ts`, P×t-Integration, Batterieaufteilung; Retention 90 Tage (`DATA_1MIN_RETENTION_DAYS`).
 - `data_15min` — Buckets + Forecast/Clear-Sky-Overlay.
 - `hourly_data` — stündliche min/max/avg.
-- `daily_data` — Tages-Aggregate (~96 Spalten) + `*_start`/`*_end` Counter-Fixpunkte.
+- `daily_data` — Tages-Aggregate (~96 Spalten) + `*_start`/`*_end` Counter-Fixpunkte. Permanente Tages-WR-Aufteilung (netto, Wh): `W_PV_F1_total` (DC1+DC2), `W_PV_F2_total`, `W_PV_F3_total` — Quelle der Erzeuger-Ansicht (`/api/erzeuger/*`) unabhängig von der 90-T-Retention von `data_1min`/`data_15min`.
 - `data_monthly` — 76 Spalten min/max/avg (technisches Monitoring).
 - `monthly_statistics` — 17 Spalten (kWh+Kosten, **permanent**).
 - `yearly_statistics` — 18 Spalten (**permanent**).

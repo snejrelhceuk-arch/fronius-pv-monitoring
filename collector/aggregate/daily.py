@@ -401,6 +401,42 @@ def aggregate_daily():
             fc_row = c.fetchone()
             forecast_kwh = fc_row[0] if fc_row else None
 
+            # ── 6b. Permanente Tages-Erzeugung je Inverter (Wh, netto) ──
+            # F1 = DC1+DC2, F2/F3 = Export − Standby-Import. Gleiche Formel wie
+            # /api/erzeuger, aber dauerhaft in daily_data → unabhängig von der
+            # 90-Tage-Retention von data_1min/data_15min. Bestes Delta-Raster wählen.
+            c.execute("SELECT COUNT(*) FROM data_1min WHERE ts >= ? AND ts < ?", (q_start, q_end))
+            ez_tbl = 'data_1min' if c.fetchone()[0] > 0 else 'data_15min'
+            c.execute(f"""
+                SELECT
+                    SUM(COALESCE(W_DC1_delta, 0) + COALESCE(W_DC2_delta, 0)),
+                    SUM(-COALESCE(W_Exp_F2_delta, 0) - COALESCE(W_Imp_F2_delta, 0)),
+                    SUM(-COALESCE(W_Exp_F3_delta, 0) - COALESCE(W_Imp_F3_delta, 0))
+                FROM {ez_tbl}
+                WHERE ts >= ? AND ts < ?
+            """, (q_start, q_end))
+            ez_row = c.fetchone()
+            W_PV_F1 = max(0.0, ez_row[0]) if (ez_row and ez_row[0] is not None) else None
+            W_PV_F2 = max(0.0, ez_row[1]) if (ez_row and ez_row[1] is not None) else None
+            W_PV_F3 = max(0.0, ez_row[2]) if (ez_row and ez_row[2] is not None) else None
+
+            # Bestehende Werte bewahren, falls kein Delta-Raster mehr verfügbar ist
+            # (z.B. Voll-Reaggregation alter Tage > 90 T → data_1min/15min weg).
+            # Verhindert, dass INSERT OR REPLACE rekonstruierte Werte löscht.
+            if W_PV_F1 is None or W_PV_F2 is None or W_PV_F3 is None:
+                c.execute("""
+                    SELECT W_PV_F1_total, W_PV_F2_total, W_PV_F3_total
+                    FROM daily_data WHERE ts = ?
+                """, (day_ts,))
+                prev = c.fetchone()
+                if prev:
+                    if W_PV_F1 is None:
+                        W_PV_F1 = prev[0]
+                    if W_PV_F2 is None:
+                        W_PV_F2 = prev[1]
+                    if W_PV_F3 is None:
+                        W_PV_F3 = prev[2]
+
             # ── 7. INSERT OR REPLACE ──
             c.execute("""
                 INSERT OR REPLACE INTO daily_data (
@@ -417,8 +453,9 @@ def aggregate_daily():
                     W_Exp_Netz_start, W_Exp_Netz_end,
                     W_Imp_Netz_start, W_Imp_Netz_end,
                     forecast_kwh,
-                    W_Batt_Charge_BMS, W_Batt_Discharge_BMS
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    W_Batt_Charge_BMS, W_Batt_Discharge_BMS,
+                    W_PV_F1_total, W_PV_F2_total, W_PV_F3_total
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (day_ts,
                   P_AC_Inv_avg, P_AC_Inv_min, P_AC_Inv_max,
                   f_Netz_avg, f_Netz_min, f_Netz_max,
@@ -432,7 +469,8 @@ def aggregate_daily():
                   exp_start, exp_end,
                   imp_start, imp_end,
                   forecast_kwh,
-                  W_Batt_Charge_BMS, W_Batt_Discharge_BMS))
+                  W_Batt_Charge_BMS, W_Batt_Discharge_BMS,
+                  W_PV_F1, W_PV_F2, W_PV_F3))
             count += 1
 
             # ── 7b. Konkurrenter System-Peak (DC1+DC2+F2+F3) ──

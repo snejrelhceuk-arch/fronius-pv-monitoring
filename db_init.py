@@ -611,6 +611,17 @@ def ensure_forecast_table():
             conn.execute("ALTER TABLE daily_data ADD COLUMN P_PV_total_max REAL DEFAULT NULL")
             conn.commit()
             logger.info("daily_data.P_PV_total_max Spalte hinzugefügt")
+
+        # Migration: Permanente Tages-Erzeugung je Inverter (F1=DC1+DC2, F2, F3) in Wh.
+        # Ohne diese Spalten las die Erzeuger-Monatsansicht die WR-Aufteilung live aus
+        # data_1min/data_15min (90-Tage-Retention) → ältere Monate fielen weg.
+        for col in ('W_PV_F1_total', 'W_PV_F2_total', 'W_PV_F3_total'):
+            try:
+                conn.execute(f"SELECT {col} FROM daily_data LIMIT 1")
+            except sqlite3.OperationalError:
+                conn.execute(f"ALTER TABLE daily_data ADD COLUMN {col} REAL DEFAULT NULL")
+                conn.commit()
+                logger.info(f"daily_data.{col} Spalte hinzugefügt")
         
         # Migration: Statistik-Spalten sicherstellen
         monthly_columns = {
