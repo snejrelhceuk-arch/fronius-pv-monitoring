@@ -5,7 +5,7 @@ role: meta
 applyTo: "scripts/**"
 tags: [role-guard, failover, backup, publish-guard, sync]
 status: stable
-last_review: 2026-09-29
+last_review: 2026-10-14
 ---
 
 # System Ops-Guards
@@ -22,13 +22,14 @@ Systemweite Betriebsleitplanken fuer Multi-Host-Betrieb: `.role`-basiertes Verha
 - **Workspace-Redundanz-Sync Primary->alle Pi:** `scripts/sync_workspace_all_hosts.sh` (Hosts aus `.infra.local:PV_SYNC_HOSTS`)
 - **Failover-Quickstart (64bit-Rebuild):** `scripts/failover_postswap_quickstart.sh`, `scripts/install_failover_services.sh`, `scripts/failover_sync_db.sh`
 - **Browser-Autostart (Display-Host):** `scripts/pv_kiosk_browser.sh`, `scripts/install_kiosk_autostart.sh`
-- **GFS-Backup:** `scripts/backup_db_gfs.sh`
+- **GFS-Backup (Stufe 1, `data.db`/RAM-DB):** `scripts/backup_db_gfs.sh`
+- **GFS-Backup (Stufe 2, `data_stats.db`):** `scripts/backup_stats_db_gfs.sh` (gleiches Sohn/Vater/Großvater-Schema, Pi5-Sync; Cron `0 3 * * *` parallel). Sichert `data_5min_permanent` + `fritzdect/wattpilot_5min_permanent`.
 - **Publish-Audit:** `scripts/publish_audit.sh`
 - **Service-Definitionen:** `config/systemd/pv-automation.service`, `config/systemd/pv-observer.service`, `config/systemd/pv-wattpilot.service`, `config/systemd/pv-steuerbox.service`; Installer pruefen `WorkingDirectory` vor dem Ausrollen.
 - **Optionaler HA-Adapter-Service:** `config/systemd/pv-ha-bridge.service`
 
 ## Inputs / Outputs
-- **Inputs:** `.role`, `.infra.local`/ENV, `.publish-guard`, `/dev/shm/fronius_data.db`, Backup-Verzeichnisse unter `backup/db/*`.
+- **Inputs:** `.role`, `.infra.local`/ENV, `.publish-guard`, `/dev/shm/fronius_data.db`, `data_stats.db`, Backup-Verzeichnisse unter `backup/db/*` und `backup/stats/*`.
 - **Outputs:** Rollenbasiertes Enable/Skip von Jobs, rsync-Codeabgleich, GFS-Backups, Publish-Freigabe/Blockade.
 
 ## Invarianten

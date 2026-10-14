@@ -51,6 +51,9 @@ Schema-Übersicht der zentralen `data.db` (SQLite). Pflichttabellen, Aggregat-Pi
 
 **Stats-DB (`data_stats.db`, separat, permanent):**
 - `data_5min_permanent` — 5-min-Downsample (Schema = `data_1min`), hält Tag-Chart-Daten **dauerhaft** (RAM-DB bleibt 90 T). Web hängt sie read-only an (ATTACH `stats` in `db_utils.py`, `config.STATS_DB_PATH`); Tag-Endpunkte via `routes/helpers.py:tag_table`. Eigene DB, **kein** `db_init.py`-Pflichteintrag. Der Tag-Endpunkt `routes/visualization.py` selektiert dabei die vollen `data_1min`-Spalten (nur `data_15min` → NULL), damit Tage > 90 T die kompletten Kurven zeigen (nicht nur SOC/Batterie).
+- `fritzdect_5min_permanent` — `(ts, device_id)` PK, `power_w_avg/max`, `energy_total_wh`. Permanente per-Gerät-5-min-Leistung (Klima/Gefrier/Lüftung/Heizpatrone). Quelle: `fritzdect_readings` (nur 7 T Retention) im täglichen Archiv-Job.
+- `wattpilot_5min_permanent` — `ts` PK, `power_w_avg/max`. Permanente Wattpilot-5-min-Leistung (Quelle `wattpilot_readings`, 90 T Retention).
+- Producer aller drei: `tools/build_stats_db.py` (`--archive-daily` je Vortag inkl. Geräte; `--devices-full` rekonstruiert das Roh-Retention-Fenster). Konsument der Gerätetabellen: `routes/verbraucher.py:/api/verbraucher/tag` (Fallback für Tage ohne Roh-Readings → Lasten bleiben differenziert statt „Haushalt").
 
 ## Invarianten
 - Pflichttabellen müssen existieren — `db_init.py` **prüft** `REQUIRED_TABLES` (kein CREATE der Kern-Tabellen); die Anlage erfolgt aus dem SQL-Schema (`doc/collector/schema/db_schema_v4_tech.sql`, `db_schema_1min.sql`). `db_init.py` legt nur Neben-/Forecast-Tabellen via `CREATE TABLE IF NOT EXISTS` an.

@@ -7,6 +7,12 @@
 - **Tag-Charts sind für den gesamten produktiven Zeitraum (ab 2026-01-01) verfügbar.**
 - Quelle der Wahrheit für alte Tage: **`data_stats.db`** (SD, permanent), Tabelle
   **`data_5min_permanent`** (5-min-Downsample, Schema = `data_1min`).
+- **Last-Leistungskurven je Gerät** (Fritz!DECT: Klima/Gefrier/Lüftung/Heizpatrone;
+  Wattpilot) liegen permanent in **`fritzdect_5min_permanent`** und
+  **`wattpilot_5min_permanent`** (ebenfalls in `data_stats.db`). Ohne sie fielen alte
+  Tage in der Verbraucher-Tagesansicht in „Haushalt" zusammen (Roh-Readings:
+  `fritzdect_readings` nur 7 T, `wattpilot_readings` 90 T). Wärmepumpe (`P_WP_avg`) ist
+  bereits über `data_1min`→`data_5min_permanent` permanent.
 - Die Web-API hängt `data_stats.db` **read-only** an (`db_utils.get_db_connection` →
   `ATTACH … AS stats`, `config.STATS_DB_PATH`). Die Tag-Endpunkte wählen die Tabelle
   über `routes/helpers.py:tag_table()`: `data_1min` (≤90 T) → `data_15min` →
@@ -14,9 +20,33 @@
 - **Backfill** aus GFS-/Pi5-Backups: Jan 1 – Jul 2 (51 692 5-min-Zeilen; 5 Tage mit
   Lücken durch Collector-Ausfälle — bewusst toleriert). Werkzeug: `tools/build_stats_db.py`.
 - **Fortschreibung:** Cron `20 0 * * *` → `scripts/stats_archive_daily.sh` archiviert den
-  Vortag aus der RAM-DB und synct `data_stats.db` nach Pi5 + Failover.
+  Vortag aus der RAM-DB (inkl. per-Gerät-Leistungskurven) und synct `data_stats.db`
+  nach Pi5 + Failover.
 - Die **RAM-DB bleibt klein** (unverändert 90 T Retention); die STATS-DB liegt auf SD
   und wird nur 1×/Tag beschrieben.
+
+## Drei Stufen der Datenhaltung & Sicherung (IST)
+
+| Stufe | Speicher | Inhalt | Raster | Sicherung |
+|---|---|---|---|---|
+| **1 — RAM-DB** | `/dev/shm/fronius_data.db` (tmpfs, konstante Größe via Retention) | `raw_data` (30 T), `data_1min`/`data_15min` (90 T), `fritzdect_readings` (7 T), `wattpilot_readings` (90 T), `hourly_data` (365 T) | 3 s / 1 min / 15 min | 1×/h → SD `data.db` (`db_init._persist_tmpfs_to_sd`); GFS `scripts/backup_db_gfs.sh` |
+| **2 — STATS-DB** | `data_stats.db` (SD, permanent) | `data_5min_permanent` (alle Monitoring-Werte: PV/Netz/Batterie/WP, Zähler, min/max/avg); `fritzdect_5min_permanent` + `wattpilot_5min_permanent` (Last-Leistung je Gerät) | 5 min | 1×/Tag Archiv-Job; rsync Pi5+Failover; **GFS `scripts/backup_stats_db_gfs.sh`** |
+| **3 — Tages-Statistik** | `daily_data`, `*_daily` je Gerät, `monthly_statistics`, `yearly_statistics` (permanent, ~10 J; in RAM-DB → SD persistiert) | Je Tag/Monat eine Zeile mit vielen Spalten (Ertrag/Verbrauch differenziert, Zähler-Fixpunkte, Extrema). **Kein** Intraday-Verlauf. | 1 Tag | mit Stufe 1 (in `data.db`) |
+
+**Gleichbehandlung der Sicherung:** Stufe 1 und Stufe 2 erhalten je ein eigenes
+GFS-Backup (Sohn/Vater/Großvater/Urgroßvater) mit Integritätsprüfung und Pi5-Sync
+(`scripts/backup_db_gfs.sh` → `backup/db/*`, `scripts/backup_stats_db_gfs.sh` →
+`backup/stats/*`). Stufe 3 liegt physisch in `data.db` (Stufe 1) bzw. `data_stats.db`
+(Stufe 2) und ist damit in beiden Backup-Ketten enthalten.
+
+**SD-Schonung:** Hochfrequente Schreibzugriffe bleiben im RAM (Stufe 1). Die SD wird
+nur selten beschrieben: stündlicher Persist (Stufe 1) und 1×/Tag Archiv (Stufe 2).
+Die GFS-Backups lesen per `sqlite3 .backup` (crash-sicher), kein Dauerschreiben.
+
+**Per-Gerät-Rekonstruktion:** `python3 tools/build_stats_db.py --devices-full` füllt die
+Gerätetabellen aus dem noch vorhandenen Roh-Fenster (Fritz ~7 T, Wattpilot ~90 T).
+Ältere per-Gerät-Leistungskurven sind unwiederbringlich (Roh-Readings bereits gelöscht);
+die Tages-Differenzierung bleibt in Stufe 3 (Monat/Jahr) erhalten.
 
 ## Diagnose: Warum keine Tagesdarstellung vor April? (Ursprungsbefund)
 

@@ -348,42 +348,76 @@ def api_verbraucher_tag():
         cursor.execute(query, where_params)
         rows = cursor.fetchall()
 
+        # Quellenauswahl je Last: Roh-Readings (kurze Retention — Fritz 7 T,
+        # Wattpilot 90 T) solange der Tag abgedeckt ist, sonst die permanenten
+        # per-Gerät-5-min-Tabellen in der STATS-DB (via ATTACH `stats`). So bleibt
+        # der Last-Leistungsverlauf auch für alte Tage differenziert statt in
+        # „Haushalt" zusammenzufallen. Permanent-Tabellen sind bereits 5-min-Buckets.
+        cursor.execute(f"SELECT COUNT(*) FROM fritzdect_readings {where}", where_params)
+        fritz_has_raw = cursor.fetchone()[0] > 0
+        try:
+            cursor.execute(f"SELECT COUNT(*) FROM wattpilot_readings {where}", where_params)
+            wp_has_raw = cursor.fetchone()[0] > 0
+        except Exception:
+            wp_has_raw = False
+
         wattpilot_power_map = {}
         try:
-            cursor.execute(
-                f"""
-                SELECT
-                    CAST((ts / 300) AS INTEGER) * 300 AS ts5,
-                    AVG(power_w) AS p_wp
-                FROM wattpilot_readings
-                {where}
-                GROUP BY CAST((ts / 300) AS INTEGER)
-                """,
-                where_params,
-            )
+            if wp_has_raw:
+                cursor.execute(
+                    f"""
+                    SELECT
+                        CAST((ts / 300) AS INTEGER) * 300 AS ts5,
+                        AVG(power_w) AS p_wp
+                    FROM wattpilot_readings
+                    {where}
+                    GROUP BY CAST((ts / 300) AS INTEGER)
+                    """,
+                    where_params,
+                )
+            else:
+                cursor.execute(
+                    f"SELECT ts AS ts5, power_w_avg FROM stats.wattpilot_5min_permanent {where}",
+                    where_params,
+                )
             for r in cursor.fetchall():
                 wattpilot_power_map[int(r[0])] = max(0, r[1] or 0)
         except Exception:
             pass
 
+        # Normalisierte Gerätekennung für die permanente Fritz-Tabelle.
+        _PERM_FRITZ_ID = {
+            'heizpatrone': 'heizpatrone',
+            'klima': 'klimaanlage',
+            'gefrier': 'gefriertruhe',
+            'lueftung': 'lueftung',
+        }
+
         heizpatrone_power_map = {}
         try:
-            cursor.execute(
-                f"""
-                SELECT
-                    CAST((ts / 300) AS INTEGER) * 300 AS ts5,
-                    AVG(power_w) AS p_hp
-                FROM fritzdect_readings
-                {where}
-                  AND (
-                    lower(COALESCE(device_id, '')) = 'heizpatrone'
-                    OR lower(COALESCE(name, '')) LIKE '%heiz%patrone%'
-                    OR lower(COALESCE(name, '')) LIKE '%sdheiz%'
-                  )
-                GROUP BY CAST((ts / 300) AS INTEGER)
-                """,
-                where_params,
-            )
+            if fritz_has_raw:
+                cursor.execute(
+                    f"""
+                    SELECT
+                        CAST((ts / 300) AS INTEGER) * 300 AS ts5,
+                        AVG(power_w) AS p_hp
+                    FROM fritzdect_readings
+                    {where}
+                      AND (
+                        lower(COALESCE(device_id, '')) = 'heizpatrone'
+                        OR lower(COALESCE(name, '')) LIKE '%heiz%patrone%'
+                        OR lower(COALESCE(name, '')) LIKE '%sdheiz%'
+                      )
+                    GROUP BY CAST((ts / 300) AS INTEGER)
+                    """,
+                    where_params,
+                )
+            else:
+                cursor.execute(
+                    f"SELECT ts AS ts5, power_w_avg FROM stats.fritzdect_5min_permanent "
+                    f"{where} AND device_id = ?",
+                    (*where_params, _PERM_FRITZ_ID['heizpatrone']),
+                )
             for r in cursor.fetchall():
                 heizpatrone_power_map[int(r[0])] = max(0, r[1] or 0)
         except Exception:
@@ -401,18 +435,25 @@ def api_verbraucher_tag():
         }
         for key, predicate in fritz_tag_predicates.items():
             try:
-                cursor.execute(
-                    f"""
-                    SELECT
-                        CAST((ts / 300) AS INTEGER) * 300 AS ts5,
-                        AVG(power_w) AS p_fritz
-                    FROM fritzdect_readings
-                    {where}
-                      AND {predicate}
-                    GROUP BY CAST((ts / 300) AS INTEGER)
-                    """,
-                    where_params,
-                )
+                if fritz_has_raw:
+                    cursor.execute(
+                        f"""
+                        SELECT
+                            CAST((ts / 300) AS INTEGER) * 300 AS ts5,
+                            AVG(power_w) AS p_fritz
+                        FROM fritzdect_readings
+                        {where}
+                          AND {predicate}
+                        GROUP BY CAST((ts / 300) AS INTEGER)
+                        """,
+                        where_params,
+                    )
+                else:
+                    cursor.execute(
+                        f"SELECT ts AS ts5, power_w_avg FROM stats.fritzdect_5min_permanent "
+                        f"{where} AND device_id = ?",
+                        (*where_params, _PERM_FRITZ_ID[key]),
+                    )
                 for r in cursor.fetchall():
                     fritz_tag_power_maps[key][int(r[0])] = max(0.0, r[1] or 0.0)
             except Exception:
