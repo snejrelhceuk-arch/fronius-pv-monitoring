@@ -5,7 +5,7 @@ role: A
 applyTo: "collector/aggregate/**"
 tags: [aggregation, pipeline, cron, retention]
 status: stable
-last_review: 2026-10-14
+last_review: 2026-10-18
 ---
 
 # Aggregation-Pipeline
@@ -52,6 +52,7 @@ _Konkrete Cron-Minuten liegen in der User-Crontab (nicht im Repo)._
 - **Counter-Fixpunkte:** `daily_data.*_start`/`*_end` für Drift-Korrektur (Vergleich mit Counter-Differenzen).
 - **PV-Netto-Bilanz (2026-05-25):** `daily.py` rechnet `W_PV_total = DC1+DC2 + (Exp_F2−Imp_F2) + (Exp_F3−Imp_F3)`. Imp_F2/F3 = AC-Standby der WR (~0,2 % von Exp).
 - **Permanente Tages-WR-Aufteilung:** `daily.py` schreibt zusätzlich `daily_data.W_PV_F1/F2/F3_total` (netto, Wh) aus dem besten Delta-Raster (`data_1min`→`data_15min`). Nicht-destruktiv: fehlt das Raster (alte Tage), bleiben bestehende Werte erhalten. Historie wird aus der permanenten `stats.data_5min_permanent` rekonstruiert (`tools/reconstruct_erzeuger_daily.py`, füllt nur NULL-Tage). Konsumenten: `/api/erzeuger/monat|jahr|gesamt`.
+- **3-Stufen-Datenhaltung (RAM konstant):** Permanente Aggregat-Tabellen (`daily_data`, `*_daily`, `forecast_daily`, `battery_health_daily`, `wattpilot_daily`) liegen voll in `analysis.db` (SD, Stufe 3) und werden in der RAM-DB auf **120 T** begrenzt (`collector/poller.py:_cleanup_tiered`, korrelierter Delete gegen `analysis.db`). Täglicher Upsert `tools/build_tiered_dbs.py --sync` (bewahrt Historie) via `scripts/sync_tiered_daily.sh`. 5-min-Verlauf → `monitoring.db` (Stufe 2). Details: `doc/system/TAGESDATEN_HALTBARKEIT.md`.
 - **Counter-Konsistenz Monat (2026-05-25):** `statistics.py` speist `monthly_statistics` vorrangig aus `data_monthly`-Counter-Diffs (eichgenau); Fallback auf `SUM(daily_data)` bei Drift > 3 %/5 kWh oder bei Reset-verdacht (Sanity-Schwelle 5000 kWh/Monat).
 - **Permanenz:** `monthly_statistics`, `yearly_statistics` werden nicht überschrieben (Korrekturen nur additiv).
 

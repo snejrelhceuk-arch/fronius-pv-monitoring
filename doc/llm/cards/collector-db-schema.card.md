@@ -5,7 +5,7 @@ role: A
 applyTo: "db_init.py"
 tags: [db, schema, raw-data, aggregat]
 status: stable
-last_review: 2026-10-14
+last_review: 2026-10-18
 ---
 
 # DB-Schema
@@ -49,11 +49,12 @@ Schema-Übersicht der zentralen `data.db` (SQLite). Pflichttabellen, Aggregat-Pi
 **Batterie-Gesundheit:**
 - `battery_health_daily` — `day_ts` PK, `soh_pct`, `capacity_kwh`, `charge_kwh`, `discharge_kwh`, `full_cycles`, `updated_ts`. SOH-Historie (best-effort BMS-Live, träge fortgeschrieben) + intervallbezogene Vollzyklen (Σ Tagesladung / Nominal-Kapazität der Ausbaustufe). Producer `collector/aggregate/battery_health.py` (im Statistik-Cron-Takt).
 
-**Stats-DB (`data_stats.db`, separat, permanent):**
-- `data_5min_permanent` — 5-min-Downsample (Schema = `data_1min`), hält Tag-Chart-Daten **dauerhaft** (RAM-DB bleibt 90 T). Web hängt sie read-only an (ATTACH `stats` in `db_utils.py`, `config.STATS_DB_PATH`); Tag-Endpunkte via `routes/helpers.py:tag_table`. Eigene DB, **kein** `db_init.py`-Pflichteintrag. Der Tag-Endpunkt `routes/visualization.py` selektiert dabei die vollen `data_1min`-Spalten (nur `data_15min` → NULL), damit Tage > 90 T die kompletten Kurven zeigen (nicht nur SOC/Batterie).
-- `fritzdect_5min_permanent` — `(ts, device_id)` PK, `power_w_avg/max`, `energy_total_wh`. Permanente per-Gerät-5-min-Leistung (Klima/Gefrier/Lüftung/Heizpatrone). Quelle: `fritzdect_readings` (nur 7 T Retention) im täglichen Archiv-Job.
-- `wattpilot_5min_permanent` — `ts` PK, `power_w_avg/max`. Permanente Wattpilot-5-min-Leistung (Quelle `wattpilot_readings`, 90 T Retention).
-- Producer aller drei: `tools/build_stats_db.py` (`--archive-daily` je Vortag inkl. Geräte; `--devices-full` rekonstruiert das Roh-Retention-Fenster). Konsument der Gerätetabellen: `routes/verbraucher.py:/api/verbraucher/tag` (Fallback für Tage ohne Roh-Readings → Lasten bleiben differenziert statt „Haushalt").
+**3-Stufen-Datenhaltung (Stufe 2 = `monitoring.db`, Stufe 3 = `analysis.db`, SD, permanent):**
+- **Stufe 1 (RAM):** rollierende Hot-Tabellen (`raw_data` 30 T, `data_1min`/`data_15min` 90 T, `*_readings`, `hourly_data`) + Prognose +5 T. Permanente Tabellen (`daily_data`, `*_daily`, `forecast_daily`, `battery_health_daily`, `wattpilot_daily`) auf **120 T** begrenzt (`config.TIERED_*_RETENTION_DAYS`, `collector/poller.py:_cleanup_tiered`, korrelierter Delete gegen `analysis.db`). → RAM **konstant**.
+- **Stufe 2 `monitoring.db`** (`config.STATS_DB_PATH`, `stats`-ATTACH): `data_5min_permanent` (5-min, Schema = `data_1min`), `fritzdect_5min_permanent` `(ts,device_id)`, `wattpilot_5min_permanent` `(ts)`. Tag-Charts/Lasten-Verlauf dauerhaft. Producer `tools/build_stats_db.py`; früher `data_stats.db` (jetzt eingefroren).
+- **Stufe 3 `analysis.db`** (`ana`-ATTACH): `daily_data`, `data_monthly`, `monthly/yearly_statistics`, `*_daily`/`*_monthly`, `wattpilot_daily`, `battery_health_daily`, `forecast_daily`, `price_history` — volle Historie seit 2021. Producer/Sync `tools/build_tiered_dbs.py` (`--sync` Upsert bewahrt Historie), täglich via `scripts/sync_tiered_daily.sh`.
+- **Read-Routing** (`config.TIERED_READS`): `db_utils._attach_tiered_ro` legt Shadow-Views an (`RAM ∪ analysis-nicht-in-RAM`) → API liest volle Historie aus `analysis.db`, laufender Tag aus RAM. Null Änderungen an den API-Lesestellen. Konsument Gerätetabellen: `routes/verbraucher.py:/api/verbraucher/tag`.
+- Backup-Gleichbehandlung: `scripts/backup_tiered_dbs_gfs.sh` (GFS für beide SD-DBs). Human-Doku: `doc/system/TAGESDATEN_HALTBARKEIT.md`.
 
 ## Invarianten
 - Pflichttabellen müssen existieren — `db_init.py` **prüft** `REQUIRED_TABLES` (kein CREATE der Kern-Tabellen); die Anlage erfolgt aus dem SQL-Schema (`doc/collector/schema/db_schema_v4_tech.sql`, `db_schema_1min.sql`). `db_init.py` legt nur Neben-/Forecast-Tabellen via `CREATE TABLE IF NOT EXISTS` an.

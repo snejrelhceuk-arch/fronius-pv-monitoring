@@ -48,14 +48,17 @@ Ziel: RAM-DB wirklich **konstant** (nur rollierende Hot-Tabellen 90 T + Prognose
 Monat entspannen. Platzierungs-Manifest: `tools/build_tiered_dbs.py`.
 
 - [x] Stage 1: Parallele SD-DBs `monitoring.db` (5-min) + `analysis.db` (Tag)
-      aufgebaut + Wert-/Zeilen-Äquivalenz verifiziert. Produktion unberührt.
-      (`tools/build_tiered_dbs.py --build/--verify`, `config.MONITORING_DB_PATH`/`ANALYSIS_DB_PATH`)
-- [ ] Stage 2: Schatten-Writer — Aggregations-Pipeline schreibt zusätzlich in
-      monitoring.db + analysis.db (1×/Tag), Tag-über-Tag-Parallelität verifizieren.
-- [ ] Stage 3: API-Read-Routing — RAM nur laufender Tag + Prognose; Vergangenheit
-      & Clearsky-Zukunft aus monitoring.db; Analyse aus analysis.db (Feature-Flag).
-- [ ] Stage 4: Cutover — permanente Tabellen aus RAM-Retention entfernen, RAM-GFS
-      auf Monat, Backups für beide neue DBs (Gleichbehandlung), Cron, Docs, Cards.
+      aufgebaut + Wert-/Zeilen-Äquivalenz verifiziert.
+      (`tools/build_tiered_dbs.py`, `config.MONITORING_DB_PATH`/`ANALYSIS_DB_PATH`)
+- [x] Stage 2: Schatten-Writer — `scripts/sync_tiered_daily.sh` (Cron `35 0`) pflegt
+      monitoring.db + analysis.db täglich (inkrement. Upsert bewahrt Historie).
+- [x] Stage 3: API-Read-Routing via Shadow-Views (`config.TIERED_READS`,
+      `db_utils._attach_tiered_ro`): volle Historie aus analysis.db, laufender Tag
+      aus RAM; 5-min aus monitoring.db (`stats`-Alias = monitoring.db).
+- [x] Stage 4: Cutover — RAM-Retention der permanenten Tabellen auf 120 T
+      (`collector/poller.py:_cleanup_tiered`, korrelierter Delete); RAM-GFS auf Monat;
+      GFS-Backup beider SD-DBs (`scripts/backup_tiered_dbs_gfs.sh`); Cron/Docs/Cards.
+      Rollback: `config.TIERED_READS=False` + Snapshot `backup/pre_tiered_*`/Pi5.
 
 ## User
 Ist die Größe der DB im RAM wirklich konstant, wenn doch jeden Tag neue Daten dazukommen und permanent bleiben sollen? Deine Umsetzung der Struktur der Datenablage ist nicht konsequent. Wie wächst die Datenbank im RAM, wenn jeden Tag ein Satz neuer Daten dazukommt? Wäre nicht die von mir vorgeschlagene Struktur der Datenhaltung besser: (1) Konstant große Datenbank im RAM durch konsequentes Abschneiden nach bekannter Intervalldauer aus AGGREGATION_PIPELINE. ABER hier müssen noch immer je 5 Tage in die Zukunft hinein gespeichert werden - für die Abbildung der Prognosen! (2) Monitoring-Datenbank mit Speicherung der bekannten Größen im 5min-Intervall für die ewige Tag-Ansicht. Dennoch Korrektur der weiteren abgeleiteten Daten durch Zähler-System. (3) Statistik-Datenbank mit Tages-Intervall zur dauerhaften Speicherung der bekannten Größen für den Bereich Analyse im pv-system. 

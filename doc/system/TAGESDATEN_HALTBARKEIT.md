@@ -1,6 +1,8 @@
-# Tagesdaten-Haltbarkeit & permanente 5-min-STATS-DB (IST-Zustand)
+# Tagesdaten-Haltbarkeit & 3-Stufen-Datenhaltung (IST-Zustand)
 
-> **Status: UMGESETZT (2026-07-02).** Task C. Beschreibt den IST-Zustand.
+> **Status: UMGESETZT.** 5-min-Permanenz (2026-07-02) + 3-Stufen-Umbau
+> (monitoring.db/analysis.db, `TIERED_READS`, RAM konstant via 120-T-Retention).
+> Beschreibt den IST-Zustand.
 
 ## IST-Zustand (Kurzfassung)
 
@@ -29,19 +31,34 @@
 
 | Stufe | Speicher | Inhalt | Raster | Sicherung |
 |---|---|---|---|---|
-| **1 — RAM-DB** | `/dev/shm/fronius_data.db` (tmpfs, konstante Größe via Retention) | `raw_data` (30 T), `data_1min`/`data_15min` (90 T), `fritzdect_readings` (7 T), `wattpilot_readings` (90 T), `hourly_data` (365 T) | 3 s / 1 min / 15 min | 1×/h → SD `data.db` (`db_init._persist_tmpfs_to_sd`); GFS `scripts/backup_db_gfs.sh` |
-| **2 — STATS-DB** | `data_stats.db` (SD, permanent) | `data_5min_permanent` (alle Monitoring-Werte: PV/Netz/Batterie/WP, Zähler, min/max/avg); `fritzdect_5min_permanent` + `wattpilot_5min_permanent` (Last-Leistung je Gerät) | 5 min | 1×/Tag Archiv-Job; rsync Pi5+Failover; **GFS `scripts/backup_stats_db_gfs.sh`** |
-| **3 — Tages-Statistik** | `daily_data`, `*_daily` je Gerät, `monthly_statistics`, `yearly_statistics` (permanent, ~10 J; in RAM-DB → SD persistiert) | Je Tag/Monat eine Zeile mit vielen Spalten (Ertrag/Verbrauch differenziert, Zähler-Fixpunkte, Extrema). **Kein** Intraday-Verlauf. | 1 Tag | mit Stufe 1 (in `data.db`) |
+| **1 — RAM-DB** | `/dev/shm/fronius_data.db` (tmpfs, **konstante** Größe) | `raw_data` (30 T), `data_1min`/`data_15min` (90 T), `fritzdect_readings` (7 T), `wattpilot_readings` (90 T), `hourly_data` (365 T rollierend) + **Prognose +5 T** (`forecast_daily` future). Permanente Tabellen (`daily_data`, `*_daily`, `forecast_daily`, `battery_health_daily`, `wattpilot_daily`) auf **120 T** rollierend begrenzt (`TIERED_*_RETENTION_DAYS`). | 3 s / 1 min / 15 min | 1×/h → SD `data.db`; GFS `scripts/backup_db_gfs.sh` (**monatlich** entspannt) |
+| **2 — Monitoring** | `monitoring.db` (SD, permanent; `config.STATS_DB_PATH`, `stats`-ATTACH) | `data_5min_permanent` (alle Monitoring-Werte: PV/Netz/Batterie/WP, Zähler, min/max/avg); `fritzdect_5min_permanent` + `wattpilot_5min_permanent` (Last-Leistung je Gerät) | 5 min | 1×/Tag Tier-Sync (`sync_tiered_daily.sh`); GFS `scripts/backup_tiered_dbs_gfs.sh` |
+| **3 — Analyse** | `analysis.db` (SD, permanent; `ana`-ATTACH) | `daily_data`, `data_monthly`, `monthly_statistics`, `yearly_statistics`, `*_daily`/`*_monthly` je Gerät, `wattpilot_daily`, `battery_health_daily`, `forecast_daily` (volle Historie), `price_history`. **Volle Historie seit 2021** (in RAM nur 120-T-Fenster). | 1 Tag | 1×/Tag Tier-Sync (Upsert, bewahrt Historie); GFS `scripts/backup_tiered_dbs_gfs.sh` |
 
-**Gleichbehandlung der Sicherung:** Stufe 1 und Stufe 2 erhalten je ein eigenes
-GFS-Backup (Sohn/Vater/Großvater/Urgroßvater) mit Integritätsprüfung und Pi5-Sync
-(`scripts/backup_db_gfs.sh` → `backup/db/*`, `scripts/backup_stats_db_gfs.sh` →
-`backup/stats/*`). Stufe 3 liegt physisch in `data.db` (Stufe 1) bzw. `data_stats.db`
-(Stufe 2) und ist damit in beiden Backup-Ketten enthalten.
+**Read-Routing (`config.TIERED_READS=True`):** Die Web-API liest Analyse-Tabellen über
+**Shadow-Views** in der read-only-Verbindung (`db_utils._attach_tiered_ro`): pro Tabelle
+`RAM-Zeilen ∪ analysis-Zeilen-nicht-in-RAM` → volle Historie aus `analysis.db`, laufender
+Tag aus der RAM-DB (gewinnt bei Überlappung). 5-min-Tag-Charts kommen aus `monitoring.db`
+(`stats`-Alias). Null Änderungen an den ~41 API-Lesestellen; Writer unberührt.
 
-**SD-Schonung:** Hochfrequente Schreibzugriffe bleiben im RAM (Stufe 1). Die SD wird
-nur selten beschrieben: stündlicher Persist (Stufe 1) und 1×/Tag Archiv (Stufe 2).
-Die GFS-Backups lesen per `sqlite3 .backup` (crash-sicher), kein Dauerschreiben.
+**RAM konstant:** Der Collector-Cleanup (`collector/poller.py:_cleanup_tiered`) begrenzt die
+permanenten Tabellen in der RAM-DB auf 120 T — **korrelierter Delete** gegen `analysis.db`
+(nur löschen, was dort permanent liegt). So wächst der RAM nicht mehr unbegrenzt; die
+dominierenden rollierenden Fenster (`raw_data`, `data_1min`) bleiben 90 T (Redundanz).
+
+**Gleichbehandlung der Sicherung:** Alle drei Stufen haben versionierte GFS-Backups
+(Sohn/Vater/Großvater/Urgroßvater, Integritätsprüfung, Pi5-Sync): Stufe 1 →
+`scripts/backup_db_gfs.sh` (`backup/db/*`), Stufe 2+3 → `scripts/backup_tiered_dbs_gfs.sh`
+(`backup/tiered/{monitoring,analysis}/*`).
+
+**SD-Schonung:** Hochfrequente Schreibzugriffe bleiben im RAM. SD wird nur selten
+beschrieben: stündlicher Persist (Stufe 1) + 1×/Tag Tier-Sync (Stufe 2+3). GFS-Backups
+lesen per `sqlite3 .backup` (crash-sicher), kein Dauerschreiben.
+
+**Fortschreiber & Werkzeuge:** Aufbau/Reparatur `tools/build_tiered_dbs.py`
+(`--build`/`--sync`/`--verify`); 5-min-Downsample `tools/build_stats_db.py`;
+täglicher Sync `scripts/sync_tiered_daily.sh`. Die frühere `data_stats.db` ist durch
+`monitoring.db` ersetzt und bleibt als eingefrorenes Backup liegen.
 
 **Per-Gerät-Rekonstruktion:** `python3 tools/build_stats_db.py --devices-full` füllt die
 Gerätetabellen aus dem noch vorhandenen Roh-Fenster (Fritz ~7 T, Wattpilot ~90 T).

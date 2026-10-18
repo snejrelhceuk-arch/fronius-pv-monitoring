@@ -5,7 +5,7 @@ role: meta
 applyTo: "scripts/**"
 tags: [role-guard, failover, backup, publish-guard, sync]
 status: stable
-last_review: 2026-10-14
+last_review: 2026-10-18
 ---
 
 # System Ops-Guards
@@ -22,8 +22,8 @@ Systemweite Betriebsleitplanken fuer Multi-Host-Betrieb: `.role`-basiertes Verha
 - **Workspace-Redundanz-Sync Primary->alle Pi:** `scripts/sync_workspace_all_hosts.sh` (Hosts aus `.infra.local:PV_SYNC_HOSTS`)
 - **Failover-Quickstart (64bit-Rebuild):** `scripts/failover_postswap_quickstart.sh`, `scripts/install_failover_services.sh`, `scripts/failover_sync_db.sh`
 - **Browser-Autostart (Display-Host):** `scripts/pv_kiosk_browser.sh`, `scripts/install_kiosk_autostart.sh`
-- **GFS-Backup (Stufe 1, `data.db`/RAM-DB):** `scripts/backup_db_gfs.sh`
-- **GFS-Backup (Stufe 2, `data_stats.db`):** `scripts/backup_stats_db_gfs.sh` (gleiches Sohn/Vater/Großvater-Schema, Pi5-Sync; Cron `0 3 * * *` parallel). Sichert `data_5min_permanent` + `fritzdect/wattpilot_5min_permanent`.
+- **GFS-Backup (Stufe 1, `data.db`/RAM-DB):** `scripts/backup_db_gfs.sh` (Sohn-Intervall auf **monatlich** entspannt, da Stufe 2+3 permanent & separat gesichert; `data.db` trägt nur noch rollierende Hot-Daten + 120-T-Tails).
+- **GFS-Backup (Stufe 2+3, `monitoring.db` + `analysis.db`):** `scripts/backup_tiered_dbs_gfs.sh` (gleiches Sohn/Vater/Großvater-Schema, Integritätscheck, Pi5-Sync; Cron `0 3 * * *` → `backup/tiered/{monitoring,analysis}/*`). Ersetzt das frühere `backup_stats_db_gfs.sh`. Täglicher Fortschreiber der Stufen 2+3: `scripts/sync_tiered_daily.sh` (Cron `35 0`).
 - **Publish-Audit:** `scripts/publish_audit.sh`
 - **Service-Definitionen:** `config/systemd/pv-automation.service`, `config/systemd/pv-observer.service`, `config/systemd/pv-wattpilot.service`, `config/systemd/pv-steuerbox.service`; Installer pruefen `WorkingDirectory` vor dem Ausrollen.
 - **Optionaler HA-Adapter-Service:** `config/systemd/pv-ha-bridge.service`
