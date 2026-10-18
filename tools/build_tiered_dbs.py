@@ -159,6 +159,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Stufe-1-Aufbau monitoring.db + analysis.db")
     ap.add_argument('--build', action='store_true')
     ap.add_argument('--verify', action='store_true')
+    ap.add_argument('--only', choices=['monitoring', 'analysis'],
+                    help='Nur eine der beiden Ziel-DBs bearbeiten')
     ap.add_argument('--monitoring-db', default=config.MONITORING_DB_PATH)
     ap.add_argument('--analysis-db', default=config.ANALYSIS_DB_PATH)
     ap.add_argument('--stats-db', default=config.STATS_DB_PATH)
@@ -168,13 +170,18 @@ def main() -> int:
     if not args.build and not args.verify:
         ap.error("Bitte --build und/oder --verify angeben")
 
+    do_mon = args.only != 'analysis'
+    do_ana = args.only != 'monitoring'
+
     if args.build:
-        build(args.monitoring_db, args.stats_db, MONITORING_TABLES)
-        build(args.analysis_db, args.ram_db, ANALYSIS_TABLES)
+        if do_mon:
+            build(args.monitoring_db, args.stats_db, MONITORING_TABLES)
+        if do_ana:
+            build(args.analysis_db, args.ram_db, ANALYSIS_TABLES)
 
     if args.verify:
-        m_ok = verify(args.monitoring_db, args.stats_db, MONITORING_TABLES)
-        a_ok = verify(args.analysis_db, args.ram_db, ANALYSIS_TABLES)
+        m_ok = verify(args.monitoring_db, args.stats_db, MONITORING_TABLES) if do_mon else True
+        a_ok = verify(args.analysis_db, args.ram_db, ANALYSIS_TABLES) if do_ana else True
         print(f"\nErgebnis: monitoring={'OK' if m_ok else 'ABWEICHUNG'}, "
               f"analysis={'OK' if a_ok else 'ABWEICHUNG'}")
         return 0 if (m_ok and a_ok) else 1
