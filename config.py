@@ -11,6 +11,15 @@ INFRA_FILE = os.path.join(BASE_DIR, '.infra.local')
 DB_PATH = '/dev/shm/fronius_data.db'          # Primäre DB im RAM (tmpfs)
 DB_PERSIST_PATH = os.path.join(BASE_DIR, 'data.db')  # Persist-Kopie auf SD-Card (Pi4)
 STATS_DB_PATH = os.path.join(BASE_DIR, 'data_stats.db')  # Permanente 5-min-Tagesdaten (SD), read-only von Web angehaengt
+
+# --- 3-Stufen-Datenhaltung (Umbau, parallel zu STATS_DB_PATH aufgebaut) ---
+# Stufe 1 = RAM-DB (DB_PATH, rollierend/konstant). Stufe 2 = Monitoring (5-min,
+# permanent). Stufe 3 = Analyse (Tagesraster, permanent). Beide auf SD, read-only
+# von der Web-API angehaengt. Solange der Cutover nicht erfolgt ist, dienen sie
+# nur dem parallelen Aufbau/Test; STATS_DB_PATH bleibt die produktive Stufe 2.
+MONITORING_DB_PATH = os.path.join(BASE_DIR, 'monitoring.db')  # Stufe 2: 5-min permanent (SD)
+ANALYSIS_DB_PATH = os.path.join(BASE_DIR, 'analysis.db')      # Stufe 3: Tagesraster permanent (SD)
+
 PID_FILE = os.path.join(BASE_DIR, 'collector.pid')
 
 
