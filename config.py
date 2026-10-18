@@ -20,6 +20,13 @@ STATS_DB_PATH = os.path.join(BASE_DIR, 'data_stats.db')  # Permanente 5-min-Tage
 MONITORING_DB_PATH = os.path.join(BASE_DIR, 'monitoring.db')  # Stufe 2: 5-min permanent (SD)
 ANALYSIS_DB_PATH = os.path.join(BASE_DIR, 'analysis.db')      # Stufe 3: Tagesraster permanent (SD)
 
+# Read-Routing-Flag (Stage 3): wenn True, liest die Web-API die Analyse-Tabellen
+# (daily_data, monthly/yearly_statistics, *_daily, forecast_daily …) aus analysis.db
+# statt aus der RAM-DB — via Shadow-Views in der read-only-Verbindung (RAM-Zeilen
+# gewinnen bei Überlappung, damit der laufende Tag korrekt bleibt). Default False
+# = unveränderte Produktion. Cutover (Stage 4) setzt True + RAM-Retention.
+TIERED_READS = False
+
 PID_FILE = os.path.join(BASE_DIR, 'collector.pid')
 
 
