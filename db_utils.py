@@ -62,29 +62,24 @@ _ANALYSIS_SHADOW = {
 def _attach_tiered_ro(conn):
     """Stage-3-Read-Routing (nur read-only-Verbindung).
 
-    Hängt analysis.db (Stufe 3) + monitoring.db (Stufe 2) read-only an und legt
-    pro Analyse-Tabelle eine TEMP-VIEW an, die die gleichnamige RAM-Tabelle
-    überdeckt: ``RAM-Zeilen ∪ analysis-Zeilen, die nicht in RAM sind``. So liest
-    die API die volle Historie aus analysis.db, während der laufende Tag (noch
-    nicht in analysis.db gespiegelt) aus der RAM-DB korrekt gewinnt. TEMP-Views
-    sind verbindungslokal → Writer/Collector bleiben unberührt. Best-effort:
+    Hängt analysis.db (Stufe 3) read-only an und legt pro Analyse-Tabelle eine
+    TEMP-VIEW an, die die gleichnamige RAM-Tabelle überdeckt: ``RAM-Zeilen ∪
+    analysis-Zeilen, die nicht in RAM sind``. So liest die API die volle Historie
+    aus analysis.db, während der laufende Tag (noch nicht in analysis.db
+    gespiegelt) aus der RAM-DB korrekt gewinnt. TEMP-Views sind verbindungslokal
+    → Writer/Collector bleiben unberührt. Die Stufe-2-DB (5-min, monitoring.db)
+    ist bereits über den ``stats``-Alias (_attach_stats_db) angehängt. Best-effort:
     jede Tabelle einzeln abgesichert, bei Fehler Fallback auf die RAM-Tabelle.
     """
     if not getattr(config, 'TIERED_READS', False):
         return
     ana = getattr(config, 'ANALYSIS_DB_PATH', None)
-    mon = getattr(config, 'MONITORING_DB_PATH', None)
     try:
         if ana and os.path.exists(ana):
             conn.execute("ATTACH DATABASE ? AS ana", (f"file:{ana}?mode=ro",))
     except Exception as _e:
         logger.debug("analysis-DB ATTACH fehlgeschlagen: %s", _e)
         return
-    try:
-        if mon and os.path.exists(mon):
-            conn.execute("ATTACH DATABASE ? AS mon", (f"file:{mon}?mode=ro",))
-    except Exception as _e:
-        logger.debug("monitoring-DB ATTACH fehlgeschlagen: %s", _e)
     for tbl, keys in _ANALYSIS_SHADOW.items():
         try:
             if not conn.execute(

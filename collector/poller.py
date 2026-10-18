@@ -8,6 +8,7 @@ nicht weiter zerlegt werden.
 """
 
 import logging
+import os
 import sqlite3
 import threading
 import time
@@ -287,6 +288,20 @@ def cleanup_db():
             return
         c = conn.cursor()
 
+        # Tiered-Mode: analysis.db read-only anhängen (vor den DELETEs, da ATTACH
+        # nicht in einer offenen Transaktion laufen darf). Ermöglicht korrelierte
+        # Deletes: RAM verliert nur Zeilen, die nachweislich in analysis.db liegen.
+        tiered = getattr(config, 'TIERED_READS', False)
+        ana_attached = False
+        if tiered:
+            _ana = getattr(config, 'ANALYSIS_DB_PATH', None)
+            if _ana and os.path.exists(_ana):
+                try:
+                    c.execute("ATTACH DATABASE ? AS anaclean", (f"file:{_ana}?mode=ro",))
+                    ana_attached = True
+                except Exception as _e:
+                    logging.warning(f"Tiered-Cleanup: analysis.db ATTACH fehlgeschlagen: {_e}")
+
         # Retention-Policies (monthly/yearly: PERMANENT)
         RETENTION = [
             ('raw_data',    config.RAW_DATA_RETENTION_DAYS),
@@ -303,7 +318,19 @@ def cleanup_db():
             c.execute(f"DELETE FROM {table} WHERE ts < ?", (limit,))
             deleted[table] = c.rowcount
 
+        # ── Tiered-Mode: permanente Tabellen in der RAM-DB auf ein rollierendes
+        # Fenster begrenzen (volle Historie liegt in analysis.db, von wo die API
+        # liest). Korrelierter Delete gegen anaclean = Sicherheits-Guard.
+        if ana_attached:
+            deleted.update(_cleanup_tiered(c, now))
+
         conn.commit()
+
+        if ana_attached:
+            try:
+                c.execute("DETACH DATABASE anaclean")
+            except Exception:
+                pass
 
         # WAL-Checkpoint statt VACUUM (VACUUM blockiert auf tmpfs alles, ist sinnlos im RAM)
         total_deleted = sum(deleted.values())
@@ -318,6 +345,50 @@ def cleanup_db():
     finally:
         if conn:
             conn.close()
+
+
+def _cleanup_tiered(c, now):
+    """Begrenzt permanente Tabellen in der RAM-DB auf ein rollierendes Fenster.
+
+    Voraussetzung: analysis.db ist als `anaclean` read-only angehängt. Es werden
+    AUSSCHLIESSLICH RAM-Zeilen gelöscht, die auch in analysis.db existieren
+    (korrelierter Delete) — so kann die RAM-DB nie Daten verlieren, deren
+    permanente Kopie fehlt. Zukunfts-Prognosen (forecast_daily.date > heute)
+    bleiben IMMER erhalten.
+    """
+    out = {}
+    day_cut = now - config.TIERED_DAILY_RETENTION_DAYS * 86400
+    for t in ('daily_data', 'heizpatrone_daily', 'klimaanlage_daily',
+              'gefriertruhe_daily', 'lueftung_daily', 'wattpilot_daily'):
+        try:
+            c.execute(
+                f"DELETE FROM {t} WHERE ts < ? "
+                f"AND ts IN (SELECT ts FROM anaclean.{t})", (day_cut,))
+            if c.rowcount:
+                out[t] = c.rowcount
+        except Exception as e:
+            logging.debug(f"Tiered-Cleanup {t}: {e}")
+    try:
+        c.execute(
+            "DELETE FROM battery_health_daily WHERE day_ts < ? "
+            "AND day_ts IN (SELECT day_ts FROM anaclean.battery_health_daily)",
+            (day_cut,))
+        if c.rowcount:
+            out['battery_health_daily'] = c.rowcount
+    except Exception as e:
+        logging.debug(f"Tiered-Cleanup battery_health_daily: {e}")
+    # forecast_daily: date TEXT (YYYY-MM-DD). Vergangenheit trimmen, Zukunft bleibt.
+    fc_cut = time.strftime('%Y-%m-%d',
+                           time.localtime(now - config.TIERED_FORECAST_RETENTION_DAYS * 86400))
+    try:
+        c.execute(
+            "DELETE FROM forecast_daily WHERE date < ? "
+            "AND date IN (SELECT date FROM anaclean.forecast_daily)", (fc_cut,))
+        if c.rowcount:
+            out['forecast_daily'] = c.rowcount
+    except Exception as e:
+        logging.debug(f"Tiered-Cleanup forecast_daily: {e}")
+    return out
 
 
 def poller_loop():

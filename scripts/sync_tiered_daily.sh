@@ -3,14 +3,13 @@
 # sync_tiered_daily.sh — Stage 2 Schatten-Writer der 3-Stufen-Datenhaltung
 # =================================================================
 #
-# Hält die beiden permanenten SD-DBs parallel zur Produktion aktuell:
+# Hält die beiden permanenten SD-DBs aktuell:
 #   monitoring.db (Stufe 2, 5-min)  ← direkt aus RAM-DB (data_1min + readings)
-#   analysis.db   (Stufe 3, Tag)    ← aus RAM-DB (daily_data etc., voller Rebuild)
+#   analysis.db   (Stufe 3, Tag)    ← aus RAM-DB (daily_data etc., inkrement. Upsert)
 #
-# PARALLEL-BETRIEB: Solange der Cutover (Stage 4) nicht erfolgt ist, bleibt die
-# bestehende Produktion (RAM-DB-Tabellen, data_stats.db via stats_archive_daily.sh)
-# unverändert. Dieses Skript füttert nur die neuen Tier-DBs (Schattenbetrieb),
-# damit sie Tag-über-Tag verifizierbar mitlaufen.
+# Einziger Fortschreiber der Stufen 2+3 (ersetzt das frühere stats_archive_daily.sh;
+# data_stats.db ist eingefroren). STATS_DB_PATH zeigt auf monitoring.db, daher
+# pflegt build_stats_db hier direkt die produktive Stufe-2-DB.
 #
 # Cron (Primary): 35 0 * * *   (nach stats_archive_daily.sh um 0:20)
 #
@@ -40,8 +39,9 @@ echo "$(date '+%F %T') Tier-Sync: monitoring.db (5-min, aus RAM) + analysis.db (
 # Stufe 2: gestrigen Tag (inkl. per-Gerät) aus der RAM-DB in monitoring.db.
 "$PYBIN" tools/build_stats_db.py --archive-daily --stats-db "$MON_DB"
 
-# Stufe 3: analysis.db komplett aus der RAM-DB neu aufbauen (winzig, idempotent).
-"$PYBIN" tools/build_tiered_dbs.py --build --only analysis
+# Stufe 3: analysis.db inkrementell aus der RAM-DB (Upsert, bewahrt Historie —
+# wichtig nach dem RAM-Trim im Tiered-Mode, sonst würde ein Rebuild sie kürzen).
+"$PYBIN" tools/build_tiered_dbs.py --sync
 
 # Best-effort-Sync zu Pi5 + Failover (Fehler brechen den Job nicht ab).
 for DB in "$MON_DB" "$ANA_DB"; do

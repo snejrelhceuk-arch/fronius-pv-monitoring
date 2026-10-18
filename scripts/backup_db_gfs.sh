@@ -31,7 +31,12 @@ PI5_BACKUP_BASE="${PI5_BACKUP_BASE:-${PV_PI5_BACKUP_BASE:-/srv/pv-system/backup/
 
 STATE_DIR="${STATE_DIR:-${BASE}/.state}"
 SOHN_STAMP_FILE="${STATE_DIR}/backup_gfs_sohn_last_ts"
-SOHN_MIN_AGE_SEC=$((70 * 3600))
+# RAM-GFS entspannt: Sohn-Intervall auf ~Monat verlängert. Die permanenten Daten
+# (Stufe 2 monitoring.db, Stufe 3 analysis.db) haben eigene GFS-Backups
+# (scripts/backup_tiered_dbs_gfs.sh); data.db enthält nur noch rollierende
+# Hot-Daten (90 T im RAM, zusätzlich per Failover-Mirror redundant) + 120-T-Tails.
+# Daher reicht ein monatliches RAM-DB-Backup. (Früher ~3 Tage.)
+SOHN_MIN_AGE_SEC=$((30 * 24 * 3600))
 
 # Retention
 DAILY_KEEP=7

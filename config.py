@@ -10,22 +10,29 @@ SECRETS_FILE = os.path.join(BASE_DIR, '.secrets')
 INFRA_FILE = os.path.join(BASE_DIR, '.infra.local')
 DB_PATH = '/dev/shm/fronius_data.db'          # Primäre DB im RAM (tmpfs)
 DB_PERSIST_PATH = os.path.join(BASE_DIR, 'data.db')  # Persist-Kopie auf SD-Card (Pi4)
-STATS_DB_PATH = os.path.join(BASE_DIR, 'data_stats.db')  # Permanente 5-min-Tagesdaten (SD), read-only von Web angehaengt
 
-# --- 3-Stufen-Datenhaltung (Umbau, parallel zu STATS_DB_PATH aufgebaut) ---
+# --- 3-Stufen-Datenhaltung ---
 # Stufe 1 = RAM-DB (DB_PATH, rollierend/konstant). Stufe 2 = Monitoring (5-min,
-# permanent). Stufe 3 = Analyse (Tagesraster, permanent). Beide auf SD, read-only
-# von der Web-API angehaengt. Solange der Cutover nicht erfolgt ist, dienen sie
-# nur dem parallelen Aufbau/Test; STATS_DB_PATH bleibt die produktive Stufe 2.
+# permanent). Stufe 3 = Analyse (Tagesraster, permanent). Stufe 2+3 liegen auf SD
+# und werden von der Web-API read-only angehängt.
 MONITORING_DB_PATH = os.path.join(BASE_DIR, 'monitoring.db')  # Stufe 2: 5-min permanent (SD)
 ANALYSIS_DB_PATH = os.path.join(BASE_DIR, 'analysis.db')      # Stufe 3: Tagesraster permanent (SD)
+# STATS_DB_PATH ist der Stufe-2-Pfad (historischer Name; via `stats`-ATTACH-Alias
+# überall referenziert). Zeigt jetzt auf monitoring.db. Die frühere data_stats.db
+# bleibt als eingefrorenes Backup liegen (wird nicht mehr beschrieben/gelesen).
+STATS_DB_PATH = MONITORING_DB_PATH
+
+# Read-Routing-Flag (Stage 3): wenn True, liest die Web-API die Analyse-Tabellen
+# (daily_data, monthly/yearly_statistics, *_daily, forecast_daily …) aus analysis.db
+# statt aus der RAM-DB — via Shadow-Views in der read-only-Verbindung (RAM-Zeilen
+# gewinnen bei Überlappung, damit der laufende Tag korrekt bleibt). Default False
 
 # Read-Routing-Flag (Stage 3): wenn True, liest die Web-API die Analyse-Tabellen
 # (daily_data, monthly/yearly_statistics, *_daily, forecast_daily …) aus analysis.db
 # statt aus der RAM-DB — via Shadow-Views in der read-only-Verbindung (RAM-Zeilen
 # gewinnen bei Überlappung, damit der laufende Tag korrekt bleibt). Default False
 # = unveränderte Produktion. Cutover (Stage 4) setzt True + RAM-Retention.
-TIERED_READS = False
+TIERED_READS = True
 
 PID_FILE = os.path.join(BASE_DIR, 'collector.pid')
 
@@ -280,6 +287,15 @@ HOURLY_RETENTION_DAYS = 365       # Stunden-Aggregate
 DAILY_RETENTION_DAYS = 3650       # Tages-Aggregate (~10 Jahre)
 DATA_MONTHLY_RETENTION_DAYS = 3650  # Monatl. techn. Aggregate (~10 Jahre)
 # monthly_statistics + yearly_statistics: PERMANENT (Anlagen-Historie)
+
+# --- Tiered-Mode (TIERED_READS): RAM-DB wirklich konstant halten ---
+# Sobald die volle Historie der permanenten Tabellen in analysis.db liegt und die
+# API von dort liest (TIERED_READS=True), begrenzt der Collector-Cleanup diese
+# Tabellen in der RAM-DB auf ein rollierendes Fenster. Die SD-DBs (analysis.db)
+# behalten die volle Historie. Wirkt NUR bei TIERED_READS=True und nur wenn
+# analysis.db die jeweilige Tabelle führt (Sicherheits-Guard im Cleanup).
+TIERED_DAILY_RETENTION_DAYS = 120     # daily_data, *_daily, wattpilot_daily, battery_health_daily
+TIERED_FORECAST_RETENTION_DAYS = 120  # forecast_daily Vergangenheit (Zukunft bleibt IMMER erhalten)
 
 # --- Stromtarife (PRIMAT — alle Analysen nutzen diese Tabelle) ---
 # Format: (Gültig_ab_Tag, Preis_EUR/kWh)

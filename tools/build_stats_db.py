@@ -48,7 +48,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _ROOT)
 import config  # noqa: E402
 
-STATS_DB_DEFAULT = os.path.join(_ROOT, 'data_stats.db')
+STATS_DB_DEFAULT = config.STATS_DB_PATH  # Stufe-2-DB (monitoring.db)
 TARGET_TABLE = 'data_5min_permanent'
 FRITZ_TABLE = 'fritzdect_5min_permanent'
 WATTPILOT_TABLE = 'wattpilot_5min_permanent'

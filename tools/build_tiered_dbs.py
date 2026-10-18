@@ -92,6 +92,19 @@ def _copy_table(src: sqlite3.Connection, dst: sqlite3.Connection, table: str) ->
     collist = ','.join(f'"{c}"' for c in cols)
     rows = src.execute(f"SELECT {collist} FROM {table}").fetchall()
 
+    # Schrumpf-Schutz: NIE eine volle Ziel-Tabelle durch eine kleinere Quelle
+    # ersetzen (sonst würde ein Rebuild nach RAM-Trim die analysis-Historie löschen).
+    try:
+        have = {r[1] for r in dst.execute(f"PRAGMA table_info({table})")}
+        if have:
+            n_dst = dst.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            if n_dst > len(rows):
+                print(f"  [GUARD] {table}: Ziel={n_dst} > Quelle={len(rows)} → Rebuild "
+                      f"übersprungen (Schrumpf-Schutz; nutze --sync)")
+                return -1
+    except sqlite3.OperationalError:
+        pass
+
     dst.execute(f"DROP TABLE IF EXISTS {table}")
     dst.execute(schema)
     # Indizes der Quelle mitnehmen (ohne die autoindex-Einträge).
@@ -111,6 +124,43 @@ def _copy_table(src: sqlite3.Connection, dst: sqlite3.Connection, table: str) ->
     return len(rows)
 
 
+def _sync_table(src: sqlite3.Connection, dst: sqlite3.Connection, table: str) -> int:
+    """Inkrementeller Upsert RAM→Ziel (INSERT OR REPLACE je PK, NIE Drop).
+
+    Für den Dauerbetrieb nach dem RAM-Trim: aktualisiert/ergänzt die in der RAM-DB
+    vorhandenen (jüngsten) Zeilen und BEWAHRT die ältere Historie im Ziel. Additive
+    Spalten-Synchronisation (ALTER ADD) fängt Schema-Erweiterungen ab.
+    """
+    schema = _table_schema(src, table)
+    if not schema:
+        return -1
+    have = {r[1] for r in dst.execute(f"PRAGMA table_info({table})")}
+    if not have:
+        dst.execute(schema)
+        for (idx_sql,) in src.execute(
+            "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name=? AND sql IS NOT NULL",
+            (table,),
+        ).fetchall():
+            try:
+                dst.execute(idx_sql)
+            except sqlite3.OperationalError:
+                pass
+        have = {r[1] for r in dst.execute(f"PRAGMA table_info({table})")}
+    src_cols = [(r[1], r[2] or 'REAL') for r in src.execute(f"PRAGMA table_info({table})")]
+    for n, t in src_cols:
+        if n not in have:
+            dst.execute(f'ALTER TABLE {table} ADD COLUMN "{n}" {t}')
+    cols = [n for n, _ in src_cols]
+    collist = ','.join(f'"{c}"' for c in cols)
+    rows = src.execute(f"SELECT {collist} FROM {table}").fetchall()
+    if rows:
+        ph = ','.join('?' * len(cols))
+        dst.executemany(f"INSERT OR REPLACE INTO {table} ({collist}) VALUES ({ph})", rows)
+    dst.commit()
+    print(f"  [sync] {table}: {len(rows)} RAM-Zeilen upserted (Historie bewahrt)")
+    return len(rows)
+
+
 def build(target_db: str, source_db: str, tables: list[str]) -> None:
     if not os.path.exists(source_db):
         print(f"FEHLER: Quelle fehlt: {source_db}")
@@ -122,6 +172,23 @@ def build(target_db: str, source_db: str, tables: list[str]) -> None:
         dst.execute("PRAGMA journal_mode=WAL")
         for t in tables:
             _copy_table(src, dst, t)
+    finally:
+        src.close()
+        dst.close()
+
+
+def sync(target_db: str, source_db: str, tables: list[str]) -> None:
+    """Inkrementeller Upsert (Dauerbetrieb) — bewahrt die Ziel-Historie."""
+    if not os.path.exists(source_db):
+        print(f"FEHLER: Quelle fehlt: {source_db}")
+        return
+    print(f"\nSync {os.path.basename(target_db)} ← {os.path.basename(source_db)} (upsert):")
+    src = _ro(source_db)
+    dst = sqlite3.connect(target_db, timeout=60.0)
+    try:
+        dst.execute("PRAGMA journal_mode=WAL")
+        for t in tables:
+            _sync_table(src, dst, t)
     finally:
         src.close()
         dst.close()
@@ -158,6 +225,8 @@ def verify(target_db: str, source_db: str, tables: list[str]) -> bool:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Stufe-1-Aufbau monitoring.db + analysis.db")
     ap.add_argument('--build', action='store_true')
+    ap.add_argument('--sync', action='store_true',
+                    help='Inkrementeller Upsert (bewahrt Ziel-Historie; Dauerbetrieb)')
     ap.add_argument('--verify', action='store_true')
     ap.add_argument('--only', choices=['monitoring', 'analysis'],
                     help='Nur eine der beiden Ziel-DBs bearbeiten')
@@ -167,8 +236,8 @@ def main() -> int:
     ap.add_argument('--ram-db', default=config.DB_PATH)
     args = ap.parse_args()
 
-    if not args.build and not args.verify:
-        ap.error("Bitte --build und/oder --verify angeben")
+    if not args.build and not args.sync and not args.verify:
+        ap.error("Bitte --build, --sync und/oder --verify angeben")
 
     do_mon = args.only != 'analysis'
     do_ana = args.only != 'monitoring'
@@ -178,6 +247,10 @@ def main() -> int:
             build(args.monitoring_db, args.stats_db, MONITORING_TABLES)
         if do_ana:
             build(args.analysis_db, args.ram_db, ANALYSIS_TABLES)
+
+    if args.sync:
+        # Monitoring wird inkrementell über build_stats_db.py gepflegt; hier nur analysis.
+        sync(args.analysis_db, args.ram_db, ANALYSIS_TABLES)
 
     if args.verify:
         m_ok = verify(args.monitoring_db, args.stats_db, MONITORING_TABLES) if do_mon else True
