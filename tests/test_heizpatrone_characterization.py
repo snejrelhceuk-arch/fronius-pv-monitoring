@@ -121,6 +121,16 @@ SZENARIEN = [
     # Gegenprobe: gleiche Konkurrenz, aber SOC 70 < ueberschuss_soc_hoch (85) →
     # kein Ueberschuss-Override → konkurrenz-AUS bleibt (Batterieladung Vorrang).
     ('konkurrenz_ev_ohne_ueberschuss_aus', 12.0, {'heizpatrone_aktiv': True, 'batt_soc_pct': 70, 'soc_max': 75, 'ev_charging': True, 'ev_power_w': 7000, 'batt_power_w': 500, 'grid_power_w': 0, 'forecast_rest_kwh': 20}),
+    # Tagesriegel (Vorfall 18.10.): »schlecht«-Tag (Tagesprognose 23,8 kWh),
+    # SOC absolut niedrig (24 %), Batterie laedt mittags mit 3,6 kW. Trotz
+    # Momentan-Ueberschuss darf die HP NICHT auto-einschalten — die knappe
+    # Rest-PV gehoert ins Batterie-Nachladen fuer den Abend. Erwartung: kein
+    # hp_ein (Score niedrig, keine EIN-Aktion).
+    ('tagesriegel_schlecht_soc_niedrig', 12.5, {'forecast_kwh': 23.8, 'forecast_rest_kwh': 10, 'batt_soc_pct': 24, 'soc_max': 75, 'batt_power_w': 3600, 'pv_total_w': 2700, 'ww_temp_c': 50}),
+    # Gegenprobe: gleicher »schlecht«-Tag, aber Batterie genuinely voll (SOC 80
+    # > SOC_MAX 75) → Riegel passt (SOC >= 70) → Phase 2 darf HP ueberschuss-
+    # getragen einschalten (Batterie braucht die PV nicht mehr).
+    ('tagesriegel_schlecht_soc_hoch', 12.5, {'forecast_kwh': 23.8, 'forecast_rest_kwh': 10, 'batt_soc_pct': 80, 'soc_max': 75, 'batt_power_w': 5100, 'pv_total_w': 2700, 'ww_temp_c': 50}),
 ]
 
 

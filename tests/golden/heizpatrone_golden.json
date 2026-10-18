@@ -367,6 +367,34 @@
     "aktionen": [],
     "score": 48
   },
+  "tagesriegel_schlecht_soc_hoch|aktiv=False": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_ein",
+        "wert": null
+      }
+    ],
+    "score": 0
+  },
+  "tagesriegel_schlecht_soc_hoch|aktiv=True": {
+    "aktionen": [
+      {
+        "aktor": "fritzdect",
+        "kommando": "hp_ein",
+        "wert": null
+      }
+    ],
+    "score": 0
+  },
+  "tagesriegel_schlecht_soc_niedrig|aktiv=False": {
+    "aktionen": [],
+    "score": 0
+  },
+  "tagesriegel_schlecht_soc_niedrig|aktiv=True": {
+    "aktionen": [],
+    "score": 0
+  },
   "ww_drain_cap_konsistent|aktiv=False": {
     "aktionen": [
       {

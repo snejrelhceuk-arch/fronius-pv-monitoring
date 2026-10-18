@@ -121,6 +121,8 @@ class RegelHeizpatrone(Regel):
         # Dauerbetrieb (Steuerbox-Ersatzheizung): WW-Cap-Hysterese-Sperre, damit die
         # HP am 78-C-Cap nicht im Sekundentakt pendelt.
         self._dauerbetrieb_ww_block: bool = False
+        # Tagesriegel: letzter geloggter Sperrgrund (entprellt Log-Spam)
+        self._letzte_riegel_grund: str = ''
 
     def _geraet_label(self) -> str:
         """Kurzlabel für menschenlesbare Extern-Logs."""
@@ -694,6 +696,45 @@ class RegelHeizpatrone(Regel):
             return 'netzbezug', netz_grund
         return '', ''
 
+    def _hp_tagesriegel_ok(self, obs: ObsState, matrix: dict) -> tuple[bool, str]:
+        """Tagesriegel: Auto-EIN (Phase 1/1b/2/4) nur, wenn ABSOLUTER SOC zur
+        Prognosegüte passt.
+
+        Hintergrund (Vorfall 18.10., HP-EIN 12:32 bei SOC 24 % auf einem
+        »schlecht«-Tag, 23,8 kWh, Nebel): Die »nahe-SOC_MAX«-Phasen koppeln an
+        das (im Winter per SOC-Sliding abgesenkte) SOC_MAX, Phase 1 hat kein
+        Quality-Gate. So kann die HP bei absolut niedrigem SOC Überschuss in den
+        WW-Speicher schieben, während die Batterie die knappe Rest-PV zum
+        Nachladen für den Abend braucht.
+
+        Der Riegel entkoppelt die Freigabe vom SOC_MAX-Ceiling und macht den
+        ABSOLUTEN SOC maßgeblich — abhängig von der absoluten Tagesprognose
+        (Jahreszeit/Tageslänge stecken darin: kurze Winter-/Schlechtwettertage
+        liefern wenig kWh → niedriger Tier → hoher SOC-Floor). Gilt NICHT für
+        Phase 0 (Morgen-Drain, eigener Guard) und nicht für Operator-/Dauer-
+        betrieb (die werden vor `_ein_entscheidung` behandelt).
+
+        Returns (ok, grund). ok=False sperrt die Auto-EIN-Phasen.
+        """
+        soc = obs.batt_soc_pct
+        if soc is None:
+            return True, ''  # ohne SOC keine Zusatzsperre (bestehende Guards greifen)
+        tier = get_forecast_tier(obs, matrix)
+        if tier >= FC_TIER_GUT:
+            return True, ''  # guter Tag → PV trägt Batterie-Nachladen UND HP
+        if tier == FC_TIER_MITTEL:
+            soc_min = get_param(
+                matrix, self.regelkreis, 'tagesriegel_mittel_soc_min_pct', 0)
+        else:  # schlecht / unbekannt
+            soc_min = get_param(
+                matrix, self.regelkreis, 'tagesriegel_schlecht_soc_min_pct', 70)
+        if soc < soc_min:
+            tier_name = {FC_TIER_MITTEL: 'mittel'}.get(tier, 'schlecht')
+            return False, (f'Tagesriegel: SOC {soc:.0f}% < {soc_min:.0f}% bei '
+                           f'Prognose »{tier_name}« → Batterie-Nachladen hat '
+                           f'Vorrang vor WW')
+        return True, ''
+
     def _ein_entscheidung(self, obs: ObsState, matrix: dict) -> Optional[EinEntscheidung]:
         """Gemeinsame EIN-Phasen-Entscheidung (Single-Source Score + Aktion).
 
@@ -780,6 +821,18 @@ class RegelHeizpatrone(Regel):
                 phase0_score = max(int(score * 0.25), int(score * drain_frac))
                 drain_burst = get_param(matrix, self.regelkreis, 'drain_burst_dauer_s', 2700)
                 return EinEntscheidung('phase0', drain_burst, phase0_score, False, True)
+
+        # ── Tagesriegel: Phase 1/1b/2/4 nur bei zur Prognose passendem SOC ──
+        # Sperrt die Auto-EIN-Phasen an schwachen/kurzen Tagen bei absolut
+        # niedrigem SOC (Batterie-Nachladen hat Vorrang vor WW). Phase 0 ist
+        # oben bereits abschließend bewertet und bleibt unberührt.
+        riegel_ok, riegel_grund = self._hp_tagesriegel_ok(obs, matrix)
+        if not riegel_ok:
+            if self._letzte_riegel_grund != riegel_grund:
+                LOG.info('HP-EIN gesperrt: %s', riegel_grund)
+                self._letzte_riegel_grund = riegel_grund
+            return None
+        self._letzte_riegel_grund = ''
 
         # ── Gemeinsame Vorbereitungen (Phase 1/1b/2) ──
         min_lade = self._min_lade_nach_potenzial(potenzial, matrix)

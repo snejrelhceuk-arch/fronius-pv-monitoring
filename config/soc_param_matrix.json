@@ -1348,6 +1348,27 @@
           ],
           "einheit": "W",
           "beschreibung": "Nennleistung der Heizpatrone (Lastschätzung in Drain-/Schwellen-/Bedarfslogik)"
+        },
+        "_tagesriegel_doc": "Tagesriegel (Prognose × absoluter SOC × Jahreszeit/Tageslänge): Sperrt die Auto-EIN-Phasen (1/1b/2/4), wenn die Tagesprognose nicht 'gut' ist UND der ABSOLUTE SOC unter dem prognoseabhängigen Floor liegt. Entkoppelt die 'nahe-SOC_MAX'-Phasen vom (im Winter abgesenkten) SOC_MAX: an schwachen/kurzen Tagen (wenig kWh) hat das Batterie-Nachladen Vorrang vor dem WW-Speicher. Verhindert Vorfälle wie 18.10. (HP-EIN bei SOC 24 % auf einem 'schlecht'-Tag). 'gut'-Tage sind nicht betroffen (Sommer-Verhalten bleibt). Phase 0 (Morgen-Drain) und Operator/Dauerbetrieb bleiben unberührt.",
+        "tagesriegel_schlecht_soc_min_pct": {
+          "wert": 70,
+          "bereich": [
+            0,
+            100
+          ],
+          "einheit": "%",
+          "obs_feld": "batt_soc_pct, forecast_quality",
+          "beschreibung": "Prognose 'schlecht'/unbekannt (< schlecht_unter_kwh): HP-Auto-EIN nur, wenn absoluter SOC >= diesem Floor. Darunter hat Batterie-Nachladen Vorrang. 0 = Riegel für schlechte Tage deaktiviert."
+        },
+        "tagesriegel_mittel_soc_min_pct": {
+          "wert": 0,
+          "bereich": [
+            0,
+            100
+          ],
+          "einheit": "%",
+          "obs_feld": "batt_soc_pct, forecast_quality",
+          "beschreibung": "Prognose 'mittel' (schlecht_unter..mittel_unter kWh): HP-Auto-EIN nur, wenn absoluter SOC >= diesem Floor. Default 0 = aus (mittel-Tage regelt die bestehende Refill-Bedingung rest_kwh > batt_rest + reserve). 'gut'-Tage sind nie betroffen. Muss <= tagesriegel_schlecht_soc_min_pct sein."
         }
       },
       "score_gewicht": 40,
