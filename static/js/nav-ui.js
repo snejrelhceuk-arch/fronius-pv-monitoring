@@ -434,24 +434,33 @@
         return top;
     }
 
-    // Erzeugungs-Marker: grünes Dreieck seitlich neben dem Balken, das die
-    // PV-Erzeugung des Intervalls (Tag/Monat/Jahr) markiert — als Lesehilfe, um
-    // die Erzeugung gegen die (Verbrauchs-)Balken zu vergleichen. Liefert eine
-    // fertige ECharts-Scatter-Serie; `points` = [{idx: Kategorie-Index,
-    // value: Erzeugung_kWh}]. Wird NICHT in die Legende aufgenommen (immer
-    // sichtbar, analog zur Prognose-Linie).
+    // Erzeugungs-Marker (nur Lasten-Ansichten): kleines grünes Dreieck links am
+    // Balken, dessen Spitze waagerecht auf die Höhe der PV-Erzeugung des
+    // Intervalls zeigt — so ist in der gestapelten Last-Summe ablesbar, bis zu
+    // welcher Höhe die Erzeugung reicht bzw. ab wann sie überschritten wird.
+    // Liefert eine fertige ECharts-Scatter-Serie; `points` = [{idx: Kategorie-
+    // Index, value: Erzeugung_kWh}]. Größe responsiv (Screen + Balkenanzahl).
+    // Nicht in der Legende (immer sichtbar).
     function erzeugungMarkerSeries(points, opts) {
         opts = opts || {};
         var data = (points || [])
             .filter(function (p) { return p && p.value != null && p.value > 0; })
             .map(function (p) { return { value: [p.idx, p.value] }; });
+        var small = isSmallScreen();
+        var n = opts.count || data.length || 12;
+        var size = opts.symbolSize;
+        if (size == null) {
+            size = small ? (n > 20 ? 6 : 8) : (n > 24 ? 8 : 10);
+        }
         return {
-            name: opts.name || 'Erzeugung ▲',
+            name: opts.name || 'Erzeugung ▶',
             type: 'scatter',
             symbol: 'triangle',
-            symbolRotate: opts.symbolRotate != null ? opts.symbolRotate : 90, // ▶ zeigt auf den Balken
-            symbolSize: opts.symbolSize || (isSmallScreen() ? 9 : 11),
-            symbolOffset: opts.symbolOffset || ['-150%', 0],  // seitlich links neben die Balken
+            // Spitze waagerecht nach rechts auf den Balken (Apex = Erzeugungshöhe).
+            symbolRotate: opts.symbolRotate != null ? opts.symbolRotate : -90,
+            symbolSize: size,
+            // knapp links neben die Balkenmitte, Spitze zeigt in den Balken hinein
+            symbolOffset: opts.symbolOffset || ['-110%', 0],
             itemStyle: { color: opts.color || '#2e7d32', borderColor: '#1b5e20', borderWidth: 0.5 },
             z: opts.z || 12,
             legendHoverLink: false,

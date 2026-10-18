@@ -842,7 +842,7 @@
                     const d = byKey[key];
                     return (d && d.w_pv_total != null) ? { idx: i, value: d.w_pv_total } : null;
                 }).filter(Boolean);
-                option.series.push(PVChart.erzeugungMarkerSeries(erzeugungMarkerData));
+                option.series.push(PVChart.erzeugungMarkerSeries(erzeugungMarkerData, { count: labels.length }));
             }
             chart.setOption(option);
             if (currentView === 'gesamt') {
