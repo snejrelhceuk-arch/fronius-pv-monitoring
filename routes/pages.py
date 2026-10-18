@@ -541,6 +541,7 @@ def analyse():
                 'kosten_fixkosten': 0,  # Grundpreis (für avg_strompreis Berechnung)
                 'monate': 0,
                 'heizmonate': 0,  # Anzahl Heizperiode-Monate (Okt–Mär) mit DB-Daten
+                'dach_heizmonate': 0,  # Heizmonate ab Einzug Dachwohnung (DACHWOHNUNG_AB)
                 'sonnenstunden': 0
             }
 
@@ -564,6 +565,8 @@ def analyse():
         years_data[year]['monate'] += 1
         if month in heizperiode_monate:
             years_data[year]['heizmonate'] += 1
+            if (year, month) >= getattr(config, 'DACHWOHNUNG_AB', (2024, 10)):
+                years_data[year]['dach_heizmonate'] += 1
         if sonnenstd:
             years_data[year]['sonnenstunden'] += sonnenstd
 
@@ -613,10 +616,15 @@ def analyse():
         netz_kosten_auto = anteil_auto_aus_netz * avg_strompreis
 
         # Heizkosten-Ersparnis (eingesparte Brennstoffkosten) MINUS Netz-Anteil WP
-        # Jahresbudget wird nur auf Heizperiode-Monate (Okt–Mär) verteilt
+        # Jahresbudget wird nur auf Heizperiode-Monate (Okt–Mär) verteilt.
+        # Zusatz-Heizlast der 60m²-Dachwohnung: nur für Heizmonate ab Einzug
+        # (DACHWOHNUNG_AB) — Saison-EUR monatsanteilig (config.HEIZKOSTEN_DACH_EUR_PRO_SAISON).
         heiz_budget = heizkosten_ersparnis.get(year, 0)
         heizmonate = data.get('heizmonate', 0)
+        dach_heizmonate = data.get('dach_heizmonate', 0)
+        dach_budget = getattr(config, 'HEIZKOSTEN_DACH_EUR_PRO_SAISON', 0)
         heiz_ersparnis_brutto = (heiz_budget / 6.0) * heizmonate if heizmonate > 0 else 0
+        heiz_ersparnis_brutto += (dach_budget / 6.0) * dach_heizmonate if dach_heizmonate > 0 else 0
         heiz_ersparnis = heiz_ersparnis_brutto - netz_kosten_wp
 
         # Benzin-Ersparnis durch E-Auto (Wattpilot) MINUS Netz-Anteil Auto
@@ -633,10 +641,20 @@ def analyse():
         # Alles gemessen; keine fiktiven Pauschalen. Jedes Jahr zu seinem
         # eigenen Preisniveau. Konservativ: Grundpreis nur auf der Ist-Seite.
         # In der Gegenwelt gibt es keine WP (Wärme = Holz) und kein E-Auto
-        # (Mobilität = fossil) — Haushaltsstrom daher als Vor-PV-Baseline
-        # (config.HAUSHALT_COUNTERFACTUAL_KWH), für Teiljahre monatsanteilig.
+        # (Mobilität = fossil).
+        # Haushaltsstrom-Baseline: 'measured' = gemessener Haushalts-Grundverbrauch
+        # (gesamt − WP-el − E-Auto − Heizpatrone) → erfasst den Mehrverbrauch der
+        # 2 Erwachsenen + Dachwohnung ab Okt 2024 automatisch. Fallback auf die
+        # Pauschale, falls der gemessene Rest ≤ 0 (Datenlücke) oder Modus 'flat'.
         # ------------------------------------------------------------------
-        household_kwh = config.HAUSHALT_COUNTERFACTUAL_KWH * (data['monate'] / 12.0)
+        cf_mode = getattr(config, 'HAUSHALT_COUNTERFACTUAL_MODE', 'flat')
+        household_pauschal = config.HAUSHALT_COUNTERFACTUAL_KWH * (data['monate'] / 12.0)
+        if cf_mode == 'measured':
+            household_gemessen = (data['gesamt_verbr'] - wpel_kwh
+                                  - data['wattpilot'] - data['heizpatrone_el'])
+            household_kwh = household_gemessen if household_gemessen > 0 else household_pauschal
+        else:
+            household_kwh = household_pauschal
 
         # Ohne Investition: Haushaltsstrom voll aus dem Netz, Wärme aus Holz,
         # Mobilität fossil – jeweils zum Preisniveau des Jahres.

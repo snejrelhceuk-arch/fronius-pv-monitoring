@@ -335,7 +335,21 @@ HAUSHALT_BASIS_KWH = 4500        # kWh/Jahr Grundlast (Licht, Komfort, Lüftung)
 
 # Haushaltsstrom-Referenz für die Counterfactual-Bilanz ("Zustand ohne Investition"):
 # Vor-PV-Komfortverbrauch (Licht, Kochen, Kühlen, Medien) ohne WP und E-Auto.
-HAUSHALT_COUNTERFACTUAL_KWH = 4500  # kWh/Jahr (Vor-PV-Niveau)
+HAUSHALT_COUNTERFACTUAL_KWH = 4500  # kWh/Jahr (Vor-PV-Niveau, Fallback)
+
+# Modus der Counterfactual-Haushaltsstrom-Baseline:
+#   'measured' = gemessener Haushalts-Grundverbrauch je Jahr
+#                (gesamt_verbrauch − WP-elektrisch − E-Auto − Heizpatrone).
+#                Erfasst den Mehrverbrauch (2 Erwachsene + 60m²-Dachwohnung ab
+#                Okt 2024) automatisch aus den Messdaten — ohne Pauschal-Schätzung.
+#                Fällt pro Jahr auf HAUSHALT_COUNTERFACTUAL_KWH zurück, falls der
+#                gemessene Rest ≤ 0 ist (z. B. Datenlücke).
+#   'flat'     = pauschal HAUSHALT_COUNTERFACTUAL_KWH × (Monate/12) (Alt-Verhalten).
+HAUSHALT_COUNTERFACTUAL_MODE = 'measured'
+
+# Einzug der 2 Erwachsenen in die 60m²-Dachwohnung (Jahr, Monat) — ab hier steigt
+# sowohl der gemessene Haushaltsstrom (automatisch) als auch die Heizlast.
+DACHWOHNUNG_AB = (2024, 10)
 
 # WP-elektrisch Basis (ohne Heizpatrone-Anteil)
 WP_BASIS = {
@@ -359,6 +373,13 @@ HEIZKOSTEN_ERSPARNIS = {
     2025: 2700,    # 180%
     2026: 3000,    # 200% (aktuelle Basis, später ggf. anpassen)
 }
+
+# Zusätzliche vermiedene Heizkosten für die beheizte 60m²-Dachwohnung (große
+# Außenflächen), NUR für Heizperiode-Monate AB DACHWOHNUNG_AB (Okt 2024).
+# EUR pro voller Heizsaison (6 Monate); wird monatsanteilig auf die betroffenen
+# Heizmonate verteilt. Konservativer, tunbarer Richtwert — bei genauerem Wissen
+# (Wärmemengenzähler o. Ä.) anpassen. 0 = deaktiviert.
+HEIZKOSTEN_DACH_EUR_PRO_SAISON = 600
 
 # Heizperiode: Monate in denen Heizkosten anfallen
 HEIZPERIODE_MONATE = {10, 11, 12, 1, 2, 3}  # Okt–Mär (6 Monate)
