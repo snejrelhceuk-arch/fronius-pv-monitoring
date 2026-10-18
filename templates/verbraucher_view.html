@@ -735,7 +735,10 @@
                         if (d.w_lueftung) html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.lueftung};border-radius:2px;margin-right:5px;"></span>Lüftung: <strong>${formatEnergy(d.w_lueftung)}</strong><br/>`;
                         html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.haushalt};border-radius:2px;margin-right:5px;"></span>Sonstige: <strong>${formatEnergy(d.w_haushalt)}</strong><br/>`;
                         html += `<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>`;
-                        html += `<strong>Gesamt: ${formatEnergy(d.w_gesamt)}</strong>`;
+                        html += `<strong>Verbrauch: ${formatEnergy(d.w_gesamt)}</strong>`;
+                        if (d.w_pv_total != null) {
+                            html += ` &nbsp;·&nbsp; <span style="color:#66bb6a">▲ Erzeugung: ${formatEnergy(d.w_pv_total)}</span>`;
+                        }
                         html += buildRecordRelation(idx, d.w_gesamt);
                         if (periodExtremes && periodExtremes.by_key && window.PVExtremes) {
                             html += PVExtremes.lines(periodExtremes.by_key[String(key)], { period: currentView });
@@ -832,6 +835,14 @@
             if (window.PVChart) {
                 option.tooltip = PVChart.tooltipResponsive(option.tooltip);
                 option.xAxis.axisLabel = PVChart.xAxisLabel((option.xAxis.data || []).length);
+            }
+            if (window.PVChart && PVChart.erzeugungMarkerSeries) {
+                const erzeugungMarkerData = labels.map((l, i) => {
+                    const key = currentView === 'monat' ? (i + 1) : (currentView === 'jahr' ? (i + 1) : l);
+                    const d = byKey[key];
+                    return (d && d.w_pv_total != null) ? { idx: i, value: d.w_pv_total } : null;
+                }).filter(Boolean);
+                option.series.push(PVChart.erzeugungMarkerSeries(erzeugungMarkerData));
             }
             chart.setOption(option);
             if (currentView === 'gesamt') {

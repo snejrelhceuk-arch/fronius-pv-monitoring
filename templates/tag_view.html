@@ -2298,6 +2298,13 @@
                 }
             });
             
+            // Erzeugungs-Marker (grünes Dreieck seitlich): PV-Erzeugung je Tag
+            // (nur reale Tage; Prognose-Tage haben den gestrichelten Prognose-Balken).
+            const erzeugungMarkerData = days.map((_, i) => {
+                const dp = dataByDay[i + 1];
+                return (dp && !dp.is_forecast) ? { idx: i, value: dp.w_pv_total } : null;
+            }).filter(Boolean);
+
             console.log('Monatschart - Tage im Monat:', daysInMonth);
             console.log('Monatschart - Datenpunkte verfügbar:', chartData.datapoints.length);
             
@@ -2586,7 +2593,11 @@
                     }
                 ]
             };
-            
+
+            if (window.PVChart && PVChart.erzeugungMarkerSeries) {
+                option.series.push(PVChart.erzeugungMarkerSeries(erzeugungMarkerData));
+            }
+
             if (window.PVChart && option.tooltip) option.tooltip = PVChart.tooltipResponsive(option.tooltip);
             chart.setOption(option);
             chart.group = 'monthSync';
@@ -2652,6 +2663,12 @@
                 const dp = chartData.datapoints[i];
                 return dp ? { value: getDirektVerbrauchForConsumption(dp), erzeugung: dp.w_pv_total, autarkie: dp.autarkie } : null;
             });
+
+            // Erzeugungs-Marker (grünes Dreieck seitlich): PV-Erzeugung je Balken
+            const erzeugungMarkerData = xLabels.map((_, i) => {
+                const dp = chartData.datapoints[i];
+                return dp ? { idx: i, value: dp.w_pv_total } : null;
+            }).filter(Boolean);
             
             updateSummaryDisplay();
             
@@ -2819,6 +2836,10 @@
                 ]
             };
             
+            if (window.PVChart && PVChart.erzeugungMarkerSeries) {
+                option.series.push(PVChart.erzeugungMarkerSeries(erzeugungMarkerData));
+            }
+
             if (window.PVChart && option.tooltip) option.tooltip = PVChart.tooltipResponsive(option.tooltip);
             chart.setOption(option);
             

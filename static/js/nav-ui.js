@@ -434,11 +434,39 @@
         return top;
     }
 
+    // Erzeugungs-Marker: grünes Dreieck seitlich neben dem Balken, das die
+    // PV-Erzeugung des Intervalls (Tag/Monat/Jahr) markiert — als Lesehilfe, um
+    // die Erzeugung gegen die (Verbrauchs-)Balken zu vergleichen. Liefert eine
+    // fertige ECharts-Scatter-Serie; `points` = [{idx: Kategorie-Index,
+    // value: Erzeugung_kWh}]. Wird NICHT in die Legende aufgenommen (immer
+    // sichtbar, analog zur Prognose-Linie).
+    function erzeugungMarkerSeries(points, opts) {
+        opts = opts || {};
+        var data = (points || [])
+            .filter(function (p) { return p && p.value != null && p.value > 0; })
+            .map(function (p) { return { value: [p.idx, p.value] }; });
+        return {
+            name: opts.name || 'Erzeugung ▲',
+            type: 'scatter',
+            symbol: 'triangle',
+            symbolRotate: opts.symbolRotate != null ? opts.symbolRotate : 90, // ▶ zeigt auf den Balken
+            symbolSize: opts.symbolSize || (isSmallScreen() ? 9 : 11),
+            symbolOffset: opts.symbolOffset || ['-150%', 0],  // seitlich links neben die Balken
+            itemStyle: { color: opts.color || '#2e7d32', borderColor: '#1b5e20', borderWidth: 0.5 },
+            z: opts.z || 12,
+            legendHoverLink: false,
+            silent: opts.silent != null ? opts.silent : true,
+            tooltip: { show: false },  // Achsen-Tooltip des Charts zeigt Erzeugung bereits
+            data: data
+        };
+    }
+
     window.PVChart = {
         isSmallScreen: isSmallScreen,
         xAxisLabel: xAxisLabel,
         tooltipResponsive: tooltipResponsive,
-        peakHeadroomMax: peakHeadroomMax
+        peakHeadroomMax: peakHeadroomMax,
+        erzeugungMarkerSeries: erzeugungMarkerSeries
     };
 })();
 

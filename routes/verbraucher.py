@@ -626,7 +626,8 @@ def api_verbraucher_monat():
         cursor.execute(
             """
             SELECT ts, W_WP_total, W_Consumption_total,
-                   W_PV_Direct_total, W_Batt_Discharge_total, W_Imp_Netz_total
+                   W_PV_Direct_total, W_Batt_Discharge_total, W_Imp_Netz_total,
+                   W_PV_total
             FROM daily_data
             WHERE ts >= ? AND ts < ?
             ORDER BY ts
@@ -651,7 +652,7 @@ def api_verbraucher_monat():
                   'klima': 0, 'gefrier': 0, 'lueftung': 0, 'haushalt': 0, 'gesamt': 0}
 
         for row in daily_rows:
-            ts, w_wp, w_consumption, w_direct, w_batt_dis, w_netz = row
+            ts, w_wp, w_consumption, w_direct, w_batt_dis, w_netz, w_pv_total = row
             w_wp = w_wp or 0
             w_consumption = w_consumption or 0
             if w_consumption <= 0:
@@ -694,6 +695,7 @@ def api_verbraucher_monat():
                 'w_lueftung': round(lueftung_kwh, 2),
                 'w_haushalt': round(haushalt_kwh, 2),
                 'w_gesamt': round(gesamt_kwh, 2),
+                'w_pv_total': round((w_pv_total or 0) / 1000.0, 2),
             })
 
         if heizpatrone_month_total > totals['heizpatrone']:
@@ -737,7 +739,8 @@ def api_verbraucher_jahr():
 
         cursor.execute(
             """
-            SELECT month, gesamt_verbrauch_kwh, waermepumpe_kwh, heizpatrone_kwh, wattpilot_kwh
+            SELECT month, gesamt_verbrauch_kwh, waermepumpe_kwh, heizpatrone_kwh, wattpilot_kwh,
+                   solar_erzeugung_kwh
             FROM monthly_statistics
             WHERE year = ?
             ORDER BY month
@@ -762,7 +765,7 @@ def api_verbraucher_jahr():
         totals = {'wp': 0, 'heizpatrone': 0, 'wattpilot': 0,
                   'klima': 0, 'gefrier': 0, 'lueftung': 0, 'haushalt': 0, 'gesamt': 0}
 
-        for mon, gesamt, wp, heiz, wattpilot in rows:
+        for mon, gesamt, wp, heiz, wattpilot, solar in rows:
             gesamt = gesamt or 0
             wp = wp or 0
             heiz = heiz or 0
@@ -792,6 +795,7 @@ def api_verbraucher_jahr():
                 'w_lueftung': round(lueftung, 2),
                 'w_haushalt': round(haushalt, 2),
                 'w_gesamt': round(gesamt, 2),
+                'w_pv_total': round(solar or 0, 2),
             })
 
         average_summary = _build_average_summary(totals, len(datapoints), 'Monat')
@@ -821,7 +825,8 @@ def api_verbraucher_gesamt():
              SELECT year,
                  COUNT(*),
                    SUM(gesamt_verbrauch_kwh), SUM(waermepumpe_kwh),
-                   SUM(heizpatrone_kwh), SUM(wattpilot_kwh)
+                   SUM(heizpatrone_kwh), SUM(wattpilot_kwh),
+                   SUM(solar_erzeugung_kwh)
             FROM monthly_statistics
             GROUP BY year
             ORDER BY year
@@ -849,7 +854,7 @@ def api_verbraucher_gesamt():
                   'klima': 0, 'gefrier': 0, 'lueftung': 0, 'haushalt': 0, 'gesamt': 0}
         month_count_total = 0
 
-        for yr, month_count, gesamt, wp, heiz, wattpilot in rows:
+        for yr, month_count, gesamt, wp, heiz, wattpilot, solar in rows:
             gesamt = gesamt or 0
             wp = wp or 0
             heiz = heiz or 0
@@ -883,6 +888,7 @@ def api_verbraucher_gesamt():
                 'w_lueftung': round(lueftung, 2),
                 'w_haushalt': round(haushalt, 2),
                 'w_gesamt': round(gesamt, 2),
+                'w_pv_total': round(solar or 0, 2),
             })
 
         average_summary = _build_average_summary(totals, month_count_total, 'Monat')
