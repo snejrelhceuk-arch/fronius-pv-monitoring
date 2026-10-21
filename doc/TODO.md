@@ -1,6 +1,6 @@
 # Zentrale TODO-Liste — PV-System
 
-**Stand:** 2026-10-18  
+**Stand:** 2026-10-21  
 **Regel:** Alle offenen Aufgaben gehoeren in DIESE Datei. Keine verteilten TODOs in Subdirectories. Ausschliesslich offene `- [ ]` ToDos — keine Audit-/Entwicklungsnotizen.
 
 ---
@@ -39,26 +39,3 @@
 ## Architektur-Haertung
 
 - [ ] P3: Hotspot-Dateien nur risikogetrieben zerlegen; vor Aenderungen an grossen Regel-/Routenmodulen passende Charakterisierungstests ergaenzen.
-
-## Datenhaltung: 3-Stufen-Umbau (parallel, Cutover bei Erfolg)
-
-Ziel: RAM-DB wirklich **konstant** (nur rollierende Hot-Tabellen 90 T + Prognose
-+5 T); permanente Daten in zwei SD-DBs. Entscheidungen: zwei Dateien
-(`monitoring.db` + `analysis.db`), RAM-Retention 90 T (Redundanz), RAM-GFS auf
-Monat entspannen. Platzierungs-Manifest: `tools/build_tiered_dbs.py`.
-
-- [x] Stage 1: Parallele SD-DBs `monitoring.db` (5-min) + `analysis.db` (Tag)
-      aufgebaut + Wert-/Zeilen-Äquivalenz verifiziert.
-      (`tools/build_tiered_dbs.py`, `config.MONITORING_DB_PATH`/`ANALYSIS_DB_PATH`)
-- [x] Stage 2: Schatten-Writer — `scripts/sync_tiered_daily.sh` (Cron `35 0`) pflegt
-      monitoring.db + analysis.db täglich (inkrement. Upsert bewahrt Historie).
-- [x] Stage 3: API-Read-Routing via Shadow-Views (`config.TIERED_READS`,
-      `db_utils._attach_tiered_ro`): volle Historie aus analysis.db, laufender Tag
-      aus RAM; 5-min aus monitoring.db (`stats`-Alias = monitoring.db).
-- [x] Stage 4: Cutover — RAM-Retention der permanenten Tabellen auf 120 T
-      (`collector/poller.py:_cleanup_tiered`, korrelierter Delete); RAM-GFS auf Monat;
-      GFS-Backup beider SD-DBs (`scripts/backup_tiered_dbs_gfs.sh`); Cron/Docs/Cards.
-      Rollback: `config.TIERED_READS=False` + Snapshot `backup/pre_tiered_*`/Pi5.
-
-## User
-Tiefgreifendes Audit der Datenerfassung und Aggregation in den neuen 3 Datenablagen RAM/monitoring.db/analysis.db!
