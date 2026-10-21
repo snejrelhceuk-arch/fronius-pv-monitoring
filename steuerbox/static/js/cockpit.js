@@ -33,18 +33,6 @@ const controls = [
     initial: null,
   },
   {
-    elementId: 'hp-dauerbetrieb',
-    action: 'hp_dauerbetrieb',
-    type: 'state',
-    states: [
-      { label: 'AUS', value: 'off', flavor: 'off' },
-      { label: 'DAUER', value: 'on', flavor: 'on' },
-    ],
-    initial: null,
-    omitRespekt: true,   // Dauer kommt aus der Backend-Config (8 h / max 24 h)
-    confirmValue: 'on',
-  },
-  {
     elementId: 'klima-toggle',
     action: 'klima_toggle',
     type: 'state',
@@ -172,18 +160,8 @@ function toParams(control, selectedValue) {
   return { amp: selectedValue };
 }
 
-function confirmDauerbetrieb(control) {
-  if (control.action !== 'hp_dauerbetrieb') {
-    return window.confirm('Aktion bestätigen?');
-  }
-  const stunden = Math.round((cfg.hpDauerDefaultS || 28800) / 3600);
-  return window.confirm(
-    'HP-Dauerbetrieb (Ersatzheizung bei WP-Defekt) aktivieren?\n\n'
-    + 'Die Heizpatrone läuft dann dauerhaft (max. ' + stunden + ' h) — auch aus '
-    + 'dem Netz und bei niedrigem Akku. Nur Übertemperatur (78 °C) und ein '
-    + 'WP-Lauf stoppen sie. Physischer Schutz bleibt die 35-A-Netzsicherung.'
-    + '\n\nFortfahren?'
-  );
+function confirmControl(control) {
+  return window.confirm('Aktion bestätigen?');
 }
 
 async function sendIntent(control, selectedValue) {
@@ -265,7 +243,7 @@ function buildControl(control) {
     button.addEventListener('click', async () => {
       if (control.confirmValue !== undefined
           && String(entry.value) === String(control.confirmValue)
-          && !confirmDauerbetrieb(control)) {
+          && !confirmControl(control)) {
         return;
       }
       const previous = state[control.elementId];
@@ -296,6 +274,7 @@ async function init() {
 
   controls.forEach(buildControl);
   buildKlimaRegelControl();
+  buildHpRegelControl();
   buildSocAutomationControl();
   if (respektInput) {
     respektInput.addEventListener('input', refreshDurationHint);
@@ -305,10 +284,10 @@ async function init() {
   logLine('Schalter initial ohne aktive Auswahl (inkl. Parameter-Vorschau).');
 }
 
-// ── Klima-Regel-Aktiv Control (direkte Config-API, kein Intent-Mechanismus) ──
+// ── Regel-Aktiv Controls (direkte Config-API, kein Intent-Mechanismus) ──
 
-function updateKlimaRegelButtons(aktiv) {
-  const container = document.getElementById('klima-regel-aktiv');
+function updateRegelButtons(elementId, aktiv) {
+  const container = document.getElementById(elementId);
   if (!container) return;
   const buttons = container.querySelectorAll('.state-btn');
   buttons.forEach((btn) => {
@@ -320,8 +299,8 @@ function updateKlimaRegelButtons(aktiv) {
   });
 }
 
-function buildKlimaRegelControl() {
-  const container = document.getElementById('klima-regel-aktiv');
+function buildRegelControl(elementId, endpoint, logKey) {
+  const container = document.getElementById(elementId);
   if (!container) return;
 
   const states = [
@@ -343,7 +322,7 @@ function buildKlimaRegelControl() {
 
     button.addEventListener('click', async () => {
       try {
-        const response = await fetch('/api/ops/klima-regel-aktiv', {
+        const response = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ aktiv: entry.value }),
@@ -352,22 +331,30 @@ function buildKlimaRegelControl() {
         if (!response.ok || !data.ok) {
           throw new Error(data.description || data.error || `HTTP ${response.status}`);
         }
-        updateKlimaRegelButtons(data.aktiv);
-        logLine(`klima_regel_aktiv: ${data.aktiv ? 'aktiviert' : 'deaktiviert'}`);
+        updateRegelButtons(elementId, data.aktiv);
+        logLine(`${logKey}: ${data.aktiv ? 'aktiviert' : 'deaktiviert'}`);
       } catch (err) {
-        logLine(`klima_regel_aktiv: Fehler ${err.message}`);
+        logLine(`${logKey}: Fehler ${err.message}`);
       }
     });
 
     container.appendChild(button);
   });
 
-  fetch('/api/ops/klima-regel-aktiv', { method: 'GET' })
+  fetch(endpoint, { method: 'GET' })
     .then((r) => r.json())
     .then((data) => {
-      if (data && data.ok) updateKlimaRegelButtons(data.aktiv);
+      if (data && data.ok) updateRegelButtons(elementId, data.aktiv);
     })
-    .catch((err) => logLine(`klima_regel_aktiv: Status nicht geladen: ${err.message}`));
+    .catch((err) => logLine(`${logKey}: Status nicht geladen: ${err.message}`));
+}
+
+function buildKlimaRegelControl() {
+  buildRegelControl('klima-regel-aktiv', '/api/ops/klima-regel-aktiv', 'klima_regel_aktiv');
+}
+
+function buildHpRegelControl() {
+  buildRegelControl('hp-regel-aktiv', '/api/ops/hp-regel-aktiv', 'hp_regel_aktiv');
 }
 
 // ── SOC-Automation Not-Aus (globaler Batterie-Regel-Schalter, direkte Config-API) ──

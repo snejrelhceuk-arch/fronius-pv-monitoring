@@ -463,7 +463,7 @@ class OperatorOverrideProcessor:
 
     @staticmethod
     def _is_policy_hold_action(action: str) -> bool:
-        return action in {'afternoon_charge_request', 'hp_dauerbetrieb'}
+        return action in {'afternoon_charge_request'}
 
     def _set_status(self, conn: sqlite3.Connection, override_id: int, status: str) -> None:
         conn.execute(
@@ -505,10 +505,10 @@ class OperatorOverrideProcessor:
             return None
 
         if action == 'hp_dauerbetrieb':
-            # Policy-Hold: keine direkte Aktoraktion. Die HP-Regel liest den Intent
-            # (read_active_hp_dauerbetrieb_intent) und steuert die HP selbst
-            # (Ersatzheizung bei WP-Defekt). Leerer Plan -> Policy-Hold aktiv.
-            return []
+            # Entfernt: HP-Dauerbetrieb wurde durch den hp-regel-aktiv-Schalter
+            # (HP-Automatik deaktivieren) + hp_toggle ersetzt. Defensiv: unbekannte
+            # Alt-Overrides werden als No-Op behandelt.
+            return None
 
         if action == 'klima_toggle':
             state = params.get('state')

@@ -219,7 +219,6 @@ def index():
         default_respekt_s=config.STEUERBOX_DEFAULT_RESPEKT_S,
         min_respekt_s=config.STEUERBOX_MIN_RESPEKT_S,
         max_respekt_s=config.STEUERBOX_MAX_RESPEKT_S,
-        hp_dauerbetrieb_default_s=config.STEUERBOX_HP_DAUERBETRIEB_DEFAULT_S,
         css_version=_asset_version('css/cockpit.css'),
         js_version=_asset_version('js/cockpit.js'),
         favicon_version=_asset_version('img/favicon-steuerbox.svg'),
@@ -303,6 +302,28 @@ def api_klima_regel_aktiv_set():
     if not result['ok']:
         abort(500, description=result.get('error', 'unknown error'))
     LOG.info('klima_regel_aktiv gesetzt: %s (von %s)', aktiv, request.remote_addr)
+    return jsonify(result)
+
+
+@app.route('/api/ops/hp-regel-aktiv', methods=['GET'])
+def api_hp_regel_aktiv_get():
+    matrix = _load_matrix_safe()
+    aktiv = matrix.get('regelkreise', {}).get('heizpatrone', {}).get('aktiv', False)
+    return jsonify({'ok': True, 'aktiv': bool(aktiv)})
+
+
+@app.route('/api/ops/hp-regel-aktiv', methods=['POST'])
+def api_hp_regel_aktiv_set():
+    if is_failover():
+        abort(403, description='failover host is read-only')
+    payload = request.get_json(silent=True) or {}
+    aktiv = payload.get('aktiv')
+    if not isinstance(aktiv, bool):
+        abort(422, description='aktiv must be bool')
+    result = _set_regelkreis_aktiv('heizpatrone', aktiv)
+    if not result['ok']:
+        abort(500, description=result.get('error', 'unknown error'))
+    LOG.info('hp_regel_aktiv gesetzt: %s (von %s)', aktiv, request.remote_addr)
     return jsonify(result)
 
 
