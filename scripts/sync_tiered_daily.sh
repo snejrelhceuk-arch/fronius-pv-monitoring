@@ -43,6 +43,15 @@ echo "$(date '+%F %T') Tier-Sync: monitoring.db (5-min, aus RAM) + analysis.db (
 # wichtig nach dem RAM-Trim im Tiered-Mode, sonst würde ein Rebuild sie kürzen).
 "$PYBIN" tools/build_tiered_dbs.py --sync
 
+# WAL-Checkpoint erzwingen, BEVOR gersynct wird: build_tiered_dbs/build_stats_db
+# schreiben im WAL-Modus; ohne Checkpoint überträgt rsync nur die .db (ohne -wal),
+# sodass der Empfänger einen veralteten Pre-WAL-Stand erhielte.
+for DB in "$MON_DB" "$ANA_DB"; do
+  [ -f "$DB" ] || continue
+  "$PYBIN" -c "import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute('PRAGMA wal_checkpoint(TRUNCATE)'); c.close()" "$DB" \
+    || echo "$(date '+%F %T')   ⚠ WAL-Checkpoint $(basename "$DB") fehlgeschlagen"
+done
+
 # Best-effort-Sync zu Pi5 + Failover (Fehler brechen den Job nicht ab).
 for DB in "$MON_DB" "$ANA_DB"; do
   [ -f "$DB" ] || continue

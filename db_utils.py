@@ -46,8 +46,8 @@ def _attach_stats_db(conn):
 _ANALYSIS_SHADOW = {
     'daily_data': ['ts'],
     'data_monthly': ['ts'],
-    'monthly_statistics': ['id'],
-    'yearly_statistics': ['id'],
+    'monthly_statistics': ['year', 'month'],
+    'yearly_statistics': ['year'],
     'heizpatrone_daily': ['ts'], 'klimaanlage_daily': ['ts'],
     'gefriertruhe_daily': ['ts'], 'lueftung_daily': ['ts'],
     'heizpatrone_monthly': ['year', 'month'], 'klimaanlage_monthly': ['year', 'month'],
@@ -87,11 +87,23 @@ def _attach_tiered_ro(conn):
                 (tbl,),
             ).fetchone():
                 continue
+            # Spalten namentlich (NICHT SELECT *): UNION ALL matcht in SQLite nach
+            # Position. Bei Schema-Drift (additives ALTER im Sync vs. mittige
+            # Migration in der RAM-DB) führte * sonst zu stillem Historienverlust
+            # (Spaltenzahl divergiert → View-Fehler → Fallback RAM-only) oder zu
+            # stiller Spaltenvertauschung. Nur die in BEIDEN DBs vorhandenen
+            # Spalten (Reihenfolge der RAM-DB) werden unioniert.
+            main_cols = [r[1] for r in conn.execute(f"PRAGMA main.table_info({tbl})")]
+            ana_cols = {r[1] for r in conn.execute(f"PRAGMA ana.table_info({tbl})")}
+            common = [c for c in main_cols if c in ana_cols]
+            if not common or not all(k in common for k in keys):
+                continue
+            collist = ", ".join(f'"{c}"' for c in common)
             cond = " AND ".join(f"m.{k}=a.{k}" for k in keys)
             conn.execute(
                 f"CREATE TEMP VIEW {tbl} AS "
-                f"SELECT * FROM main.{tbl} "
-                f"UNION ALL SELECT * FROM ana.{tbl} a "
+                f"SELECT {collist} FROM main.{tbl} "
+                f"UNION ALL SELECT {collist} FROM ana.{tbl} a "
                 f"WHERE NOT EXISTS (SELECT 1 FROM main.{tbl} m WHERE {cond})"
             )
         except Exception as _e:

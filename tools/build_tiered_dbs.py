@@ -125,11 +125,19 @@ def _copy_table(src: sqlite3.Connection, dst: sqlite3.Connection, table: str) ->
 
 
 def _sync_table(src: sqlite3.Connection, dst: sqlite3.Connection, table: str) -> int:
-    """Inkrementeller Upsert RAM→Ziel (INSERT OR REPLACE je PK, NIE Drop).
+    """Inkrementeller Upsert RAM→Ziel (spalten-selektiv je PK, NIE Drop).
 
     Für den Dauerbetrieb nach dem RAM-Trim: aktualisiert/ergänzt die in der RAM-DB
     vorhandenen (jüngsten) Zeilen und BEWAHRT die ältere Historie im Ziel. Additive
     Spalten-Synchronisation (ALTER ADD) fängt Schema-Erweiterungen ab.
+
+    Bei echtem natürlichem PK (z. B. ``ts``, ``date``, ``(year,month)``) wird
+    ``ON CONFLICT(pk) DO UPDATE`` nur auf die RAM-Quellspalten angewandt — Spalten,
+    die ausschliesslich im Ziel (analysis.db) existieren (z. B. historisch
+    rekonstruierte Werte), bleiben so erhalten statt durch den früheren
+    Ganzzeilen-Replace auf NULL gewiped zu werden. Für Tabellen mit Surrogat-PK
+    ``id`` (monthly/yearly_statistics, die einen zusätzlichen UNIQUE-Natur-Schlüssel
+    haben) bleibt ``INSERT OR REPLACE``, damit UNIQUE-Konflikte korrekt greifen.
     """
     schema = _table_schema(src, table)
     if not schema:
@@ -152,10 +160,27 @@ def _sync_table(src: sqlite3.Connection, dst: sqlite3.Connection, table: str) ->
             dst.execute(f'ALTER TABLE {table} ADD COLUMN "{n}" {t}')
     cols = [n for n, _ in src_cols]
     collist = ','.join(f'"{c}"' for c in cols)
+    pk_cols = [r[1] for r in src.execute(f"PRAGMA table_info({table})") if r[5]]
     rows = src.execute(f"SELECT {collist} FROM {table}").fetchall()
     if rows:
         ph = ','.join('?' * len(cols))
-        dst.executemany(f"INSERT OR REPLACE INTO {table} ({collist}) VALUES ({ph})", rows)
+        if pk_cols and pk_cols != ['id']:
+            # Spalten-selektiver Upsert: Ziel-only-Spalten bleiben erhalten.
+            conflict = ','.join(f'"{c}"' for c in pk_cols)
+            updates = ','.join(
+                f'"{c}"=excluded."{c}"' for c in cols if c not in pk_cols
+            )
+            if updates:
+                stmt = (f'INSERT INTO {table} ({collist}) VALUES ({ph}) '
+                        f'ON CONFLICT({conflict}) DO UPDATE SET {updates}')
+            else:
+                stmt = (f'INSERT INTO {table} ({collist}) VALUES ({ph}) '
+                        f'ON CONFLICT({conflict}) DO NOTHING')
+            dst.executemany(stmt, rows)
+        else:
+            # Surrogat-PK ``id`` mit zusätzlichem UNIQUE-Natur-Schlüssel.
+            dst.executemany(
+                f"INSERT OR REPLACE INTO {table} ({collist}) VALUES ({ph})", rows)
     dst.commit()
     print(f"  [sync] {table}: {len(rows)} RAM-Zeilen upserted (Historie bewahrt)")
     return len(rows)

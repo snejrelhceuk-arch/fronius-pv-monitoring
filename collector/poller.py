@@ -311,6 +311,13 @@ def cleanup_db():
             ('hourly_data', config.HOURLY_RETENTION_DAYS),
             ('daily_data',  config.DAILY_RETENTION_DAYS),
         ]
+        # Im Tiered-Mode trimmt ausschliesslich der korrelierte Delete in
+        # _cleanup_tiered die daily_data (nur Zeilen, die in analysis.db
+        # gespiegelt sind). Den ungeschützten, nicht-korrelierten Pfad hier
+        # entfernen, damit ein abgesenktes DAILY_RETENTION_DAYS nie Daten
+        # löscht, deren permanente Kopie fehlt.
+        if ana_attached:
+            RETENTION = [r for r in RETENTION if r[0] != 'daily_data']
 
         deleted = {}
         for table, days in RETENTION:
