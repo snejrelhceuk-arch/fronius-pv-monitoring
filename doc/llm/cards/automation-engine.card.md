@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/**"
 tags: [engine, tick-loop, regeln, registry]
 status: stable
-last_review: 2026-10-09
+last_review: 2026-10-24
 ---
 
 # Automation-Engine
@@ -34,6 +34,8 @@ Zentrale Steuerschleife (Rolle C). Sammelt Beobachtungen, ruft Schutz-Checks, da
 - **Tick-Schichten:** OBS_COLLECT=10 s, FAST=60 s, STRATEGIC=900 s. Reihenfolge pro Zyklus: DataCollector → Tier1Checker → Engine.fast → Engine.strategic → OperatorOverrideProcessor.
 - **Tier-1 hält Engine an:** Bei aktivem Tier-1-Alarm (z. B. `batt_temp>45 °C`, `SOC<5 %`) pausiert die Regel-Auswertung, Schutz-Aktoren bleiben frei.
 - **Score 0..100:** Regeln werden bewertet; Schutz-Regeln (Name enthält `schutz` oder `aktor=fritzdect`) laufen parallel, Optimierungs-Regeln nur Gewinner pro Aktor-Cascade.
+- **Schutz > Optimierung je Kommando:** Kommandos, die eine Schutz-Regel in einem Zyklus bereits erfolgreich geschrieben hat, dürfen Optimierungs-Regeln **nicht** überschreiben (`engine.py:zyklus`, Filter via `schutz_kommandos_erledigt`). Verhindert Wiederhol-Schaltungen/Ping-Pong (z. B. WattPilot-Schutz `set_soc_min=25` vs. Komfort-Reset `set_soc_min=20`). Charakterisiert in `tests/test_engine_schutz_vs_optim.py`.
+- **Wiederhol-Sicherung SOC:** SOC-Setpoint-Schreibpfade schalten nur bei echter Abweichung (`obs.soc_min != ziel`) — auch der nachmittägliche Früh-Reset (`automation/engine/regeln/soc_steuerung.py`, `RegelKomfortReset`); zusätzlich No-Op-Schutz im Aktor (Soll==Ist → kein HTTP).
 - **ExternalRespect:** Nach erfolgreichem Aktor-Schreibvorgang muss der Engine-Zielwert via `_registriere_erfolgreiche_soc_aktionen()` registriert werden, sonst falsch-positive Extern-Erkennung.
 - **Globaler SOC-Not-Aus:** Top-Level-Flag `soc_automation_aktiv` in `config/soc_param_matrix.json` (Default `true`). Ist es `false`, überspringt `Engine.zyklus` **jede** Regel mit `aktor == 'batterie'` (Morgen-/Nachmittags-SOC, Komfort-Reset, Einspeise-/WattPilot-/Zellausgleich-Schutz, Forecast-Plausi) → SOC_MIN/SOC_MAX/SOC_MODE bleiben unangetastet (Batterie-Formatierung von Hand). Tier-1-Hardware-Alarm bleibt wirksam. Helfer `param_matrix.py:soc_automation_aktiv`; gesetzt über Steuerbox `/api/ops/soc-automation-aktiv` (s. `steuerbox-intents.card.md`), Live-Reload via mtime.
 

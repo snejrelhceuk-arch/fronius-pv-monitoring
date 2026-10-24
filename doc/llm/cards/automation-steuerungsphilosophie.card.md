@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/engine.py"
 tags: [philosophie, prioritaet, matrix, external-respect]
 status: stable
-last_review: 2026-09-28
+last_review: 2026-10-24
 ---
 
 # Steuerungsphilosophie
@@ -31,9 +31,11 @@ last_review: 2026-09-28
 **Prioritäten (von hart nach weich):**
 1. Tier-1-Schutz (Engine-Bypass): `Tier1Checker` (batt_temp, SOC<5 %)
 2. Schutzregeln: `RegelSlsSchutz`, `RegelWattpilotBattSchutz`
-3. Komfort-Reset: `RegelKomfortReset` (täglich 25–75 %)
+3. Komfort-Reset: `RegelKomfortReset` (täglich 20–80 %)
 4. Optimierung: `RegelMorgenSocMin`, `RegelNachmittagSocMax`, `RegelZellausgleich`, `RegelForecastPlausi`
 5. Verbraucher: `RegelHeizpatrone`, `RegelKlimaanlage`, `RegelWw/HeizAbsenkung`, `RegelWwBoost`, `RegelWpPflichtlauf`, `RegelHeizBedarf`, `RegelWw/HeizVerschiebung`
+
+**Schutz schlägt Optimierung je Kommando:** Hat eine Schutz-Regel in einem Zyklus ein Kommando (z. B. `set_soc_min`) erfolgreich geschrieben, filtert `engine.py:zyklus` dieses Kommando aus den Optim-Aktionen → keine Wiederhol-/Ping-Pong-Schaltung (z. B. WattPilot-Schutz 25 % vs. Komfort-Reset 20 %).
 
 **ExternalRespect:** Wird eine extern (App, Hand, anderes System) ausgelöste Schaltung erkannt, akzeptiert die Engine sie und tritt für `extern_respekt_s` (Matrix, Default 1800 s) zurück. Voraussetzung: Engine registriert eigene erfolgreiche Schreibvorgänge, sonst Fehlinterpretation.
 

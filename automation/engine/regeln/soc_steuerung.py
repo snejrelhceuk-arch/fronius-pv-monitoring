@@ -998,7 +998,14 @@ class RegelKomfortReset(Regel):
             })
 
         if frueh:
-            # Früh-Reset: nur SOC_MIN anheben (SOC_MAX bleibt wie es ist)
+            # Früh-Reset: nur SOC_MIN anheben (SOC_MAX bleibt wie es ist).
+            # Wiederholsicherung: nur schalten, wenn SOC_MIN tatsächlich
+            # abweicht (Prüfung ja, Schaltung nur wenn erforderlich) — sonst
+            # feuert der Nachmittags-Pfad jeden Zyklus denselben Wert.
+            if obs.soc_min is not None and obs.soc_min == komfort_min:
+                LOG.debug("komfort_reset: Früh-Reset — SOC_MIN bereits %s%%, "
+                          "keine Wiederholschaltung", komfort_min)
+                return aktionen
             soc_str = f"{obs.batt_soc_pct:.0f}" if obs.batt_soc_pct is not None else "?"
             rest_str = f"{obs.forecast_rest_kwh:.1f}" if obs.forecast_rest_kwh is not None else "?"
             aktionen.append({

@@ -295,6 +295,23 @@ class Engine:
                     LOG.error(f"Aktionen erzeugen fehlgeschlagen '{winner.name}': {e}")
                     continue
 
+                # Schutz > Optimierung: Kommandos, die eine Schutz-Regel in
+                # DIESEM Zyklus bereits geschrieben hat, dürfen Optim-Regeln
+                # nicht überschreiben. Verhindert Ping-Pong (z. B. Wattpilot-
+                # Schutz SOC_MIN=25 vs. Komfort-Reset SOC_MIN=20 → wiederholte
+                # Schaltungen). Cascade greift, wenn danach nichts übrig bleibt.
+                if aktionen and schutz_kommandos_erledigt:
+                    gefiltert = [a for a in aktionen
+                                 if a.get('kommando') not in schutz_kommandos_erledigt]
+                    if len(gefiltert) != len(aktionen):
+                        unterdrueckt = sorted(
+                            {a.get('kommando') for a in aktionen}
+                            - {a.get('kommando') for a in gefiltert})
+                        LOG.info(f"  '{winner.name}': {unterdrueckt} unterdrückt — "
+                                 f"bereits durch Schutz-Regel bedient "
+                                 f"(Schutz > Optimierung)")
+                    aktionen = gefiltert
+
                 if aktionen:
                     # 6. An Actuator dispatchen
                     teil_ergebnisse = self.actuator.ausfuehren_plan(aktionen)
