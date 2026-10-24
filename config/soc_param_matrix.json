@@ -1,8 +1,8 @@
 {
   "_doc": "SOC-Parametermatrix — Alle konfigurierbaren Regelkreise für die Batterie-Automation",
   "_version": "1.0.0",
-  "_updated": "2026-10-21",
-  "soc_automation_aktiv": false,
+  "_updated": "2026-10-22",
+  "soc_automation_aktiv": true,
   "regelkreise": {
     "soc_extern": {
       "_doc": "Toleranz für extern geänderte SOC-Werte (z.B. manuell via Fronius App). Wenn SOC_MIN oder SOC_MAX außerhalb der Automation geändert werden, respektiert die Engine die Werte für die konfigurierte Dauer.",
@@ -788,7 +788,7 @@
     },
     "heizpatrone": {
       "_doc": "Heizpatrone (HP, 2kW) via Fritz!DECT-Steckdose — prognosegesteuerte Burst-Strategie. Trigger: Batterie-Ladeleistung + Forecast. Siehe STRATEGIEN.md §2.6",
-      "aktiv": true,
+      "aktiv": false,
       "prioritaet": 2,
       "beschreibung": "HP-Burst wenn Batterie kräftig lädt und Prognose genug Restertrag zeigt",
       "parameter": {
