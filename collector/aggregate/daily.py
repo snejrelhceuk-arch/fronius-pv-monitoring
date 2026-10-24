@@ -286,6 +286,13 @@ def aggregate_daily():
             W_Imp_Netz, src_imp = _counter_or_fallback(cnt_imp, sum_imp_delta, f"{date_str} Bezug")
             W_Exp_Netz, src_exp = _counter_or_fallback(cnt_exp, sum_exp_delta, f"{date_str} Einsp")
 
+            # Befund #8: Netzzähler sind Energiemengen (≥ 0). Vorzeichen explizit
+            # normalisieren, statt auf den Reset-Fallback zu vertrauen — ein
+            # negatives Delta (Zähler-Reset/Init) würde sonst W_Consumption/
+            # W_PV_Direct verfälschen (dort gehen die Werte positiv ein).
+            W_Imp_Netz = max(0.0, W_Imp_Netz)
+            W_Exp_Netz = max(0.0, W_Exp_Netz)
+
             # PV: Counter = DC1+DC2 (F1) + F2_netto + F3_netto | Fallback = SUM(W_PV_total_delta)
             # F2/F3 netto = Exp − Imp (AC-Standby-Bezug der WR abziehen, ~0,2% von Exp)
             if cnt_pv_f1 is not None:

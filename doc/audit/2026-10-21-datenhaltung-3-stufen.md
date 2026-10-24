@@ -29,10 +29,10 @@ doppelter Retention-Pfad für `daily_data`, WAL-rsync ohne Checkpoint.
 | 2 | Mittel | db_utils.py `_ANALYSIS_SHADOW` | Dedup-Key für `monthly_statistics`/`yearly_statistics` = surrogater `id` statt Natur-Schlüssel → Doppelzählung bei ID-Divergenz | **behoben** |
 | 3 | Hoch | tools/build_tiered_dbs.py `_sync_table` | `--sync` = `INSERT OR REPLACE` (Ganzzeilen-Replace) → analysis-only-Spalten im 120-T-Fenster werden auf NULL gewiped | **behoben** |
 | 4 | Mittel | collector/poller.py Retention | `daily_data` hatte zwei Retention-Pfade (nicht-korreliert + korreliert) → abgesenktes `DAILY_RETENTION_DAYS` könnte ungeschützt löschen | **behoben** |
-| 5 | Mittel | db_utils.py / aggregate | Shadow-Views nur auf RO-Verbindung; Aggregatoren nutzen RW (nur RAM) → stille Kopplung „Aggregationsfenster < 120 T" | offen (dokumentiert) |
-| 6 | Niedrig | poller.py `_cleanup_tiered` | `data_monthly`, `*_statistics`, `*_monthly`, `price_history` werden nicht getrimmt | offen (unkritisch, klein) |
+| 5 | Mittel | db_utils.py / aggregate | Shadow-Views nur auf RO-Verbindung; Aggregatoren/Leser nutzten RW (nur RAM) → stille Kopplung „Aggregationsfenster < 120 T" | **behoben** (Tagesmail-Leser auf Tiered-RO; Invariante in Card) |
+| 6 | Niedrig | poller.py `_cleanup_tiered` | `data_monthly`, `*_statistics`, `*_monthly`, `price_history` werden nicht getrimmt | akzeptiert (unkritisch, klein — dokumentiert) |
 | 7 | Niedrig | scripts/sync_tiered_daily.sh | rsync der Live-WAL-DB ohne vorherigen Checkpoint → Empfänger evtl. Pre-WAL-Stand | **behoben** |
-| 8 | Niedrig | collector/aggregate/daily.py | `W_Consumption/W_PV_Direct` setzen `W_Exp_Netz` positiv voraus (durch Reset-Fallback abgefangen) | offen (Empfehlung) |
+| 8 | Niedrig | collector/aggregate/daily.py | `W_Consumption/W_PV_Direct` setzen `W_Exp_Netz` positiv voraus (durch Reset-Fallback abgefangen) | **behoben** (Netzzähler explizit auf ≥ 0 normalisiert) |
 | 9 | Niedrig | Cards | Doku-Wording „INSERT … ON CONFLICT" ↔ Code; „120 vs 90 T" | behoben (Cards) |
 
 ## Behobene Befunde
@@ -74,16 +74,21 @@ schreibt, hätte der Empfänger einen Pre-WAL-Stand erhalten können. **Fix:** v
 rsync wird für `monitoring.db` und `analysis.db` ein `wal_checkpoint(TRUNCATE)`
 erzwungen.
 
-## Offene Empfehlungen (nicht kritisch)
+## Behandelte Empfehlungen
 
-- **5 — RW/RO-Kopplung:** Aggregatoren sehen die Shadow-Views nicht (nur RAM). Das
-  statistics-3-Monats-Fenster muss `< TIERED_DAILY_RETENTION_DAYS` (120 T) bleiben.
-  Aktuell mit ~28 T Rand eingehalten; sollte in der Card dauerhaft als Invariante
-  geführt werden.
+- **5 — RW/RO-Kopplung:** Der Tagesbericht-Leser (`event_notifier._sammle_tagesdaten`)
+  nutzt jetzt `db_utils.get_db_connection_ro()` (Tiered-Shadow-Views) → Jahr/Gesamt
+  lesen die volle Historie aus `analysis.db` statt nur des 120-T-RAM-Fensters
+  (vorher stiller Minderausweis, z. B. Netzbezug). Aggregatoren sehen die
+  Shadow-Views weiterhin nicht (nur RAM); das statistics-3-Monats-Fenster muss
+  `< TIERED_DAILY_RETENTION_DAYS` (120 T) bleiben — als Invariante in der Card geführt.
 - **6 — „RAM konstant":** `data_monthly`, `*_statistics`, `*_monthly`,
-  `price_history` wachsen (monatlich/klein). Unkritisch; Card-Wording präzisiert.
-- **8 — Vorzeichen `W_Exp_Netz`:** In `daily.py` explizit normalisieren
-  (`abs()`/Vorzeichenprüfung), statt sich auf den Reset-Fallback zu verlassen.
+  `price_history` wachsen (monatlich/klein). Als unkritisch **akzeptiert**; Card-Wording
+  präzisiert („RAM konstant" gilt für die hochfrequenten Tabellen, nicht die kleinen
+  Monats-/Statistik-Tabellen).
+- **8 — Vorzeichen `W_Exp_Netz`:** In `daily.py` sind `W_Imp_Netz`/`W_Exp_Netz` nach
+  dem Counter/Fallback-Schritt explizit auf `max(0.0, …)` normalisiert — kein
+  Verlass mehr auf den Reset-Fallback. **Behoben.**
 
 ## Positiv-Befunde (korrekt umgesetzt)
 
