@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regressionstest fuer notify/report_format — Autarkie/Eigenverbrauch + Layout.
+"""Regressionstest fuer notify/report_format — Autarkie + Layout.
 
 Prueft die Kennzahl-Berechnung (inkl. Rand-/Nullfaelle) und dass jede Sektion
 (Tag/Monat/Jahr/Gesamt) eine Autarkie-Zeile traegt.
@@ -40,7 +40,8 @@ def test_bilanz_zeilen_hat_autarkie():
     zeilen = rf._bilanz_zeilen(_sec(45.2, 30.1, 5.3, 20.4, 12.0, 11.5))
     text = '\n'.join(zeilen)
     assert 'Autarkie' in text
-    assert 'Eigenverbrauch' in text
+    # Eigenverbrauch wurde entfernt (war konstant ~99 %).
+    assert 'Eigenverbrauch' not in text
     # Nebeneinander mit Schrägstrich
     assert '/' in zeilen[0]
     # (30.1 - 5.3) / 30.1 ~= 82 %
@@ -52,8 +53,11 @@ def test_tagesbericht_alle_kategorien_mit_autarkie():
         'tag': {**_sec(45.2, 30.1, 5.3, 20.4, 12.0, 11.5),
                 'datum': '28.09.2026', 'fallback': False,
                 'wp_kwh': 8.1, 'hp_kwh': 2.0, 'wattpilot_kwh': 6.5,
-                'haushalt_kwh': 13.5, 'stresszeit_pct': 12.3,
-                'stress_low': 25, 'stress_high': 75},
+                'haushalt_kwh': 13.5,
+                'belastung': {'komfort_minuten': 180.0, 'stress_minuten': 25.0,
+                              'komfort_pct': 12.5, 'stress_pct': 1.7},
+                'baender': {'komfort_min': 20, 'komfort_max': 80,
+                            'stress_low': 10, 'stress_high': 90}},
         'monat': {**_sec(980.0, 720.0, 180.0, 410.0, 300.0, 290.0),
                   'label': 'September 2026', 'bis': '28.09.'},
         'jahr': {**_sec(8200.0, 6100.0, 1450.0, 3600.0, 2600.0, 2500.0),
@@ -64,6 +68,26 @@ def test_tagesbericht_alle_kategorien_mit_autarkie():
     text = rf.tagesbericht(d)
     # Autarkie muss in jeder der vier Kategorien vorkommen.
     assert text.count('Autarkie') == 4
+    # Belastung: Dauer + Prozent für Komfort-Außenzeit und Stress (Teilmenge).
+    assert '3 h außerhalb Komfort (20–80 %), davon 25 min Stress (<10 / >90 %)' in text
+    assert '12,5 % außerhalb Komfort · 1,7 % Stress' in text
+
+
+def test_belastung_fehlt_zeigt_strich():
+    d = {
+        'tag': {**_sec(45.2, 30.1, 5.3, 20.4, 12.0, 11.5),
+                'datum': '28.09.2026', 'fallback': False,
+                'wp_kwh': 8.1, 'hp_kwh': 2.0, 'wattpilot_kwh': 6.5,
+                'haushalt_kwh': 13.5, 'belastung': None, 'baender': {}},
+        'monat': {**_sec(980.0, 720.0, 180.0, 410.0, 300.0, 290.0),
+                  'label': 'September 2026', 'bis': '28.09.'},
+        'jahr': {**_sec(8200.0, 6100.0, 1450.0, 3600.0, 2600.0, 2500.0),
+                 'label': '2026', 'bis': '28.09.'},
+        'gesamt': {**_sec(21000.0, 15000.0, 4000.0, 9000.0, 6600.0, 6400.0),
+                   'label': 'seit Inbetriebnahme', 'bis': '28.09.2026'},
+    }
+    text = rf.tagesbericht(d)
+    assert 'Belastung:' in text and '—' in text
 
 
 def main() -> int:

@@ -10,11 +10,11 @@ Datenintegrität, Netzqualität und Warnungen laufen über die separaten
 Sofort-Alarm-Mails, nicht über diesen Tagesbericht.
 
 Struktur:
-  Tag    — abgelaufener Kalendertag (00:00→00:00): Energiebilanz + Autarkie/
-           Eigenverbrauch + Stresszeit + Verbraucher
-  Monat  — laufender Monat bis zum Stand des abgelaufenen Tages: Bilanz + Quoten
-  Jahr   — laufendes Jahr bis zum Stand des abgelaufenen Tages: Bilanz + Quoten
-  Gesamt — seit Inbetriebnahme bis zum Stand des abgelaufenen Tages: Bilanz + Quoten
+  Tag    — abgelaufener Kalendertag (00:00→00:00): Energiebilanz + Autarkie +
+           Batterie-Belastung (außerhalb Komfort / davon Stress) + Verbraucher
+  Monat  — laufender Monat bis zum Stand des abgelaufenen Tages: Bilanz + Autarkie
+  Jahr   — laufendes Jahr bis zum Stand des abgelaufenen Tages: Bilanz + Autarkie
+  Gesamt — seit Inbetriebnahme bis zum Stand des abgelaufenen Tages: Bilanz + Autarkie
 """
 
 from __future__ import annotations
@@ -39,22 +39,36 @@ def _fmt_pct(val) -> str:
     return '—' if val is None else f'{val:.0f} %'
 
 
+def _pct_de(val) -> str:
+    """Prozent mit deutschem Dezimalkomma, eine Nachkommastelle."""
+    return '—' if val is None else f'{val:.1f}'.replace('.', ',') + ' %'
+
+
+def _fmt_dauer(minuten) -> str:
+    """Minuten → „3 h 12 min" / „25 min" / „0 min"."""
+    if minuten is None:
+        return '—'
+    m = int(round(minuten))
+    h, mm = divmod(m, 60)
+    if h and mm:
+        return f'{h} h {mm} min'
+    if h:
+        return f'{h} h'
+    return f'{mm} min'
+
+
 def _bilanz_zeilen(sec: dict) -> list:
     """Energie-Kernwerte einer Sektion — kompakt, teils nebeneinander.
 
     Erzeugung/Verbrauch und Netzbezug/Einspeisung stehen je paarweise
     nebeneinander (Schrägstrich-getrennt); dazu Batterie (Ladung/Entladung)
-    und die Kennzahlen Autarkie sowie Eigenverbrauch:
+    und die Kennzahl Autarkie:
 
       Autarkie       = (Verbrauch − Netzbezug) / Verbrauch  (Eigendeckungsgrad)
-      Eigenverbrauch = (Erzeugung − Einspeisung) / Erzeugung (PV-Eigennutzung)
     """
-    erz = sec.get('erzeugung') or 0.0
     verb = sec.get('verbrauch') or 0.0
     netz = sec.get('netzbezug') or 0.0
-    einsp = sec.get('einspeisung') or 0.0
     autarkie = _quote(verb - netz, verb)
-    eigenverbrauch = _quote(erz - einsp, erz)
     return [
         f'  Erzeugung {_fmt(sec.get("erzeugung"))}   /   '
         f'Verbrauch {_fmt(sec.get("verbrauch"))}',
@@ -62,8 +76,7 @@ def _bilanz_zeilen(sec: dict) -> list:
         f'Einspeisung {_fmt(sec.get("einspeisung"))}',
         f'  Batterie  Ladung {_fmt(sec.get("batt_ladung"))} / '
         f'Entladung {_fmt(sec.get("batt_entladung"))}',
-        f'  Autarkie {_fmt_pct(autarkie)}   /   '
-        f'Eigenverbrauch {_fmt_pct(eigenverbrauch)}',
+        f'  Autarkie {_fmt_pct(autarkie)}',
     ]
 
 
@@ -86,14 +99,24 @@ def tagesbericht(d: dict) -> str:
     ]
     zeilen += _bilanz_zeilen(tag)
 
-    # Stresszeit — ausschließlich im Tag
-    if tag.get('stresszeit_pct') is not None:
+    # Batterie-Belastung — ausschließlich im Tag: Zeit außerhalb Komfort
+    # (schließt Stress ein) und davon die Stresszeit, je Dauer + Anteil.
+    bel = tag.get('belastung')
+    bd = tag.get('baender') or {}
+    if bel:
+        km, kx = bd.get('komfort_min'), bd.get('komfort_max')
+        sl, sh = bd.get('stress_low'), bd.get('stress_high')
         zeilen.append(_zeile(
-            'Stresszeit:',
-            f'{tag["stresszeit_pct"]:.1f} %  '
-            f'(SOC außerhalb {tag["stress_low"]}–{tag["stress_high"]} %)'))
+            'Belastung:',
+            f'{_fmt_dauer(bel["komfort_minuten"])} außerhalb Komfort '
+            f'({km}–{kx} %), davon {_fmt_dauer(bel["stress_minuten"])} '
+            f'Stress (<{sl} / >{sh} %)'))
+        zeilen.append(_zeile(
+            '',
+            f'{_pct_de(bel["komfort_pct"])} außerhalb Komfort · '
+            f'{_pct_de(bel["stress_pct"])} Stress'))
     else:
-        zeilen.append(_zeile('Stresszeit:', '—'))
+        zeilen.append(_zeile('Belastung:', '—'))
 
     # Verbraucher — ausschließlich im Tag
     zeilen.append(_zeile(

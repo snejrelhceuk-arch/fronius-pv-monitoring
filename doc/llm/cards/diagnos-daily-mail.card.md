@@ -5,7 +5,7 @@ role: D
 applyTo: "automation/engine/event_notifier.py,automation/engine/notify/report_format.py,diagnos/outage_classify.py"
 tags: [mail, tagesbericht, energie, smtp, credential, alarm]
 status: stable
-last_review: 2026-10-09
+last_review: 2026-10-24
 ---
 
 # Diagnos Daily-Mail
@@ -15,17 +15,18 @@ Die „tägliche Mail" ist der **Tagesbericht**: ein reiner Energie-Auszug, ausg
 um **00:00** (Tageswechsel) vom Automation-Daemon, für den **abgelaufenen
 Kalendertag** (00:00→00:00). Vier Abschnitte — **Tag / Monat / Jahr / Gesamt** —
 mit je Energiebilanz (Erzeugung/Verbrauch, Netzbezug/Einspeisung, Batterie
-Ladung/Entladung — paarweise nebeneinander, Schrägstrich-getrennt) plus den
-Kennzahlen **Autarkie** (= (Verbrauch − Netzbezug)/Verbrauch) und
-**Eigenverbrauch** (= (Erzeugung − Einspeisung)/Erzeugung); im Tag zusätzlich
-**Stresszeit-%** (SOC außerhalb Komfortband) und **Verbraucher**
+Ladung/Entladung — paarweise nebeneinander, Schrägstrich-getrennt) plus der
+Kennzahl **Autarkie** (= (Verbrauch − Netzbezug)/Verbrauch); im Tag zusätzlich
+die **Batterie-Belastung** (Zeit *außerhalb Komfort* 20–80 %, davon *Stress*
+<10/>90 %, je Dauer + Prozent) und **Verbraucher**
 (WP/HP/Wattpilot/Haushalt). **Keine** Health-/Integrity-/NQ-/Warn-Inhalte —
 Systemfehler laufen über die separaten Sofort-Alarme (dieselbe SMTP-Infrastruktur).
+Eigenverbrauch (war konstant ~99 %) wird **nicht** mehr ausgewiesen.
 
 ## Code-Anchor
 - **Bericht + Versand:** `automation/engine/event_notifier.py:sende_tagesbericht`, `_sende_tagesbericht_mail`
-- **Datensammlung:** `automation/engine/event_notifier.py:_sammle_tagesdaten` (daily_data + yearly_statistics; hourly_data-Fallback; Stresszeit aus data_1min; Verbraucher aus heizpatrone_daily/wattpilot_daily)
-- **Textformatierung:** `automation/engine/notify/report_format.py:tagesbericht` (4 Abschnitte; kompakte Bilanz paarweise nebeneinander plus Autarkie/Eigenverbrauch via `report_format.py:_bilanz_zeilen` + `report_format.py:_quote`)
+- **Datensammlung:** `automation/engine/event_notifier.py:_sammle_tagesdaten` (via `db_utils.get_db_connection_ro` **mit Tiered-Shadow-Views** → Jahr/Gesamt lesen die volle Historie aus analysis.db, nicht nur das 120-T-RAM-Fenster; daily_data + yearly_statistics; hourly_data-Fallback; Belastung aus data_1min; Verbraucher aus heizpatrone_daily/wattpilot_daily)
+- **Textformatierung:** `automation/engine/notify/report_format.py:tagesbericht` (4 Abschnitte; kompakte Bilanz paarweise nebeneinander plus Autarkie via `report_format.py:_bilanz_zeilen`; Tages-Belastung via `report_format.py:_fmt_dauer`/`_pct_de`)
 - **Trigger (00:00):** `automation/engine/automation_daemon.py` (Aufruf alle 5 min gedrosselt; Dedup + Reife-Gate steuern Fälligkeit; SMTP-Fehler löst keinen Wiederhol-Sturm aus)
 - **Sofort-Alarme (getrennt):** `automation/engine/event_notifier.py:pruefe_health_alarme` (Whitelist CRIT/FAIL: `cpu_temp`, `throttle`, `disk_root`, `service:*`, `auxiliary_hosts`), `pruefe_integrity_alarme`, `_sende_diagnos_alarm`
 - **Störungs-Warnmail (Wiederanlauf):** `automation/engine/event_notifier.py:pruefe_stoerungs_alarm` — beim Daemon-Start 1× aufgerufen (`automation/engine/automation_daemon.py`), klassifiziert die jüngste `raw_data`-Lücke via `diagnos/outage_classify.py:classify_latest_gap` und meldet die *wahre* Ursache (echter Netzausfall vs. System-/Collector-Unterbrechung bei anliegendem Netz vs. Insel-/Notstrombetrieb). Betreff-Kategorie `NETZAUSFALL`/`INSEL/NOTSTROM`/`SYSTEMUNTERBRECHUNG`/`STÖRUNG`; Dedup-Key = Lückenbeginn.
@@ -38,7 +39,7 @@ Systemfehler laufen über die separaten Sofort-Alarme (dieselbe SMTP-Infrastrukt
 - **Operator-UI:** `pv-config.py:menu_benachrichtigung` (Empfänger/Events/Test-Mail/Passwort)
 
 ## Inputs / Outputs
-- **Inputs:** `daily_data` (Tag + Monat-/Jahr-Summen, Counter-nah), `yearly_statistics` (historische Jahre für Gesamt), `heizpatrone_daily`/`wattpilot_daily` (Verbraucher), `data_1min` `SOC_Batt_avg` (Stresszeit), `config/battery_control.json` `soc_grenzen` (Komfortband), SMTP-Passwort aus `credential_store`.
+- **Inputs:** `daily_data` (Tag + Monat-/Jahr-Summen, Counter-nah), `yearly_statistics` (historische Jahre für Gesamt), `heizpatrone_daily`/`wattpilot_daily` (Verbraucher), `data_1min` `SOC_Batt_avg` (Belastung), `config/battery_control.json` `soc_grenzen` (Komfortband 20–80 % + Stressband <10/>90 %, via `soc_bands.lade_soc_baender`), SMTP-Passwort aus `credential_store`. **Leser nutzt Tiered-RO** (`db_utils.get_db_connection_ro`) → Jahr/Gesamt sehen die volle `analysis.db`-Historie.
 - **Outputs:** E-Mail an `NOTIFICATION_EMAIL` (Betreff `[PV-System] Tagesbericht <Datum>`, **ohne** Severity-Suffix), Dedup-Marker, Log; nebenbei aktualisierte Status-Markdown.
 
 ## Invarianten

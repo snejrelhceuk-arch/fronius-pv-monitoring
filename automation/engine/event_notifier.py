@@ -40,6 +40,8 @@ from email.mime.text import MIMEText
 from typing import Optional
 
 import config as app_config
+import db_utils
+import soc_bands
 from automation.engine import credential_store
 from automation.engine.obs_state import ObsState
 from automation.engine.wattpilot_recovery import WattpilotRecoveryManager
@@ -272,8 +274,10 @@ class EventNotifier:
         lokal_gestern = datetime(gestern.year, gestern.month, gestern.day).timestamp()
 
         try:
-            conn = sqlite3.connect(
-                f'file:{app_config.DB_PATH}?mode=ro', uri=True, timeout=5)
+            # Tiered-RO: Shadow-Views unionieren RAM-DB (120-T-Fenster) mit
+            # analysis.db (volle Historie). Ohne diese Views lieferten Jahr/
+            # Gesamt nur das 120-Tage-Fenster → stiller Minderausweis.
+            conn = db_utils.get_db_connection_ro(timeout=5)
         except Exception as e:
             LOG.error(f"Tagesbericht: DB nicht erreichbar: {e}")
             return None
@@ -320,9 +324,10 @@ class EventNotifier:
             wtp_kwh = (wtp_wh / 1000.0) if wtp_wh else 0.0
             haushalt = max(0.0, tag['verbrauch'] - wp_kwh - hp_kwh - wtp_kwh)
 
-            # ── Stresszeit (nur Tag) ──
-            k_min, k_max = self._komfort_grenzen()
-            stress_pct = self._stresszeit_pct(conn, lokal_gestern, lokal_heute, k_min, k_max)
+            # ── Batterie-Belastung: außerhalb Komfort + Stress (nur Tag) ──
+            baender = self._soc_baender()
+            belastung = self._belastungszeit(
+                conn, lokal_gestern, lokal_heute, baender)
         finally:
             conn.close()
 
@@ -332,7 +337,7 @@ class EventNotifier:
             'fallback': fallback,
             'wp_kwh': wp_kwh, 'hp_kwh': hp_kwh,
             'wattpilot_kwh': wtp_kwh, 'haushalt_kwh': haushalt,
-            'stresszeit_pct': stress_pct, 'stress_low': k_min, 'stress_high': k_max,
+            'belastung': belastung, 'baender': baender,
         })
         monat['label'] = f'{MONATE[gestern.month - 1]} {gestern.year}'
         monat['bis'] = bis_str
@@ -348,17 +353,41 @@ class EventNotifier:
         return int(datetime(d.year, d.month, d.day, tzinfo=timezone.utc).timestamp())
 
     @staticmethod
-    def _komfort_grenzen() -> tuple:
-        """SOC-Komfortband (komfort_min/komfort_max) aus battery_control.json."""
-        path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-            'config', 'battery_control.json')
+    def _soc_baender() -> dict:
+        """Systemweite SOC-Bänder (Komfort/Stress) aus battery_control.json."""
+        return soc_bands.lade_soc_baender()
+
+    @staticmethod
+    def _belastungszeit(conn, start_ts, end_ts, b: dict):
+        """Minuten/Anteile außerhalb Komfort- bzw. Stressband über den Zeitraum.
+
+        Liefert ein dict mit absoluten Minuten und Prozentwerten für
+        ``komfort`` (SOC < komfort_min oder > komfort_max) und ``stress``
+        (SOC < stress_low oder > stress_high). Die Stresszeit ist eine Teilmenge
+        der Komfort-Außenzeit. Basis: 1-Minuten-SOC (data_1min) → 1 Zeile ≙ 1 min.
+        """
         try:
-            with open(path, encoding='utf-8') as f:
-                g = json.load(f).get('soc_grenzen', {})
-            return int(g.get('komfort_min', 25)), int(g.get('komfort_max', 75))
-        except Exception:
-            return 25, 75
+            row = conn.execute("""
+                SELECT COUNT(*),
+                       SUM(CASE WHEN SOC_Batt_avg < ? OR SOC_Batt_avg > ? THEN 1 ELSE 0 END),
+                       SUM(CASE WHEN SOC_Batt_avg < ? OR SOC_Batt_avg > ? THEN 1 ELSE 0 END)
+                FROM data_1min
+                WHERE ts >= ? AND ts < ? AND SOC_Batt_avg IS NOT NULL
+            """, (b['komfort_min'], b['komfort_max'],
+                  b['stress_low'], b['stress_high'], start_ts, end_ts)).fetchone()
+        except sqlite3.Error:
+            return None
+        if not row or not row[0]:
+            return None
+        gesamt = row[0]
+        komfort_min_ = row[1] or 0
+        stress_min_ = row[2] or 0
+        return {
+            'komfort_minuten': float(komfort_min_),
+            'stress_minuten': float(stress_min_),
+            'komfort_pct': 100.0 * komfort_min_ / gesamt,
+            'stress_pct': 100.0 * stress_min_ / gesamt,
+        }
 
     def _dd_bilanz(self, conn, where: str, params: tuple) -> dict:
         """Die 5 Energie-Kernwerte (kWh) aus daily_data für ein ts-Fenster."""
@@ -421,22 +450,6 @@ class EventNotifier:
             for i, k in enumerate(_DD_KEYS):
                 gesamt[k] = gesamt.get(k, 0) + (row[i] or 0)
         return gesamt
-
-    @staticmethod
-    def _stresszeit_pct(conn, start_ts, end_ts, k_min: int, k_max: int):
-        """Anteil der Tagesminuten mit SOC außerhalb des Komfortbands [k_min, k_max]."""
-        try:
-            row = conn.execute("""
-                SELECT COUNT(*),
-                       SUM(CASE WHEN SOC_Batt_avg < ? OR SOC_Batt_avg > ? THEN 1 ELSE 0 END)
-                FROM data_1min
-                WHERE ts >= ? AND ts < ? AND SOC_Batt_avg IS NOT NULL
-            """, (k_min, k_max, start_ts, end_ts)).fetchone()
-        except sqlite3.Error:
-            return None
-        if not row or not row[0]:
-            return None
-        return 100.0 * (row[1] or 0) / row[0]
 
     def _hole_diagnos_snapshot(self) -> Optional[dict]:
         """Lese einen kompakten read-only Diagnos-Snapshot zum Versandzeitpunkt."""
