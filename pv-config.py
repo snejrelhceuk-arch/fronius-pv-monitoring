@@ -87,6 +87,7 @@ def menu_scheduler():
             [
                 ('status', 'Aktuellen Status anzeigen'),
                 ('log', 'Letzte Aktionen (24h)'),
+                ('baender', 'Komfort/Stress-Grenzen bearbeiten'),
                 ('soc_min', 'SOC_MIN Override → 5%'),
                 ('soc_max', 'SOC_MAX Override → 100%'),
                 ('reset', 'SOC auf Komfortwerte zurücksetzen'),
@@ -101,6 +102,8 @@ def menu_scheduler():
             _zeige_scheduler_status()
         elif choice == 'log':
             _zeige_scheduler_log()
+        elif choice == 'baender':
+            _bearbeite_soc_baender()
         elif choice == 'soc_min':
             _soc_override('soc_min', 5)
         elif choice == 'soc_max':
@@ -140,7 +143,8 @@ def _zeige_scheduler_status():
         f'Ladestatus:      {cha_state}\n\n'
         f'SOC-Grenzen (Config):\n'
         f'  Komfort:       {grenzen.get("komfort_min", "?")}% – {grenzen.get("komfort_max", "?")}%\n'
-        f'  Stress:        {grenzen.get("stress_min", "?")}% – {grenzen.get("stress_max", "?")}%\n'
+        f'  Stress-Band:   <{grenzen.get("stress_low", "?")}% / >{grenzen.get("stress_high", "?")}% (Monitoring)\n'
+        f'  Extrem (Steuer): {grenzen.get("stress_min", "?")}% – {grenzen.get("stress_max", "?")}%\n'
         f'  Absolut Min:   {grenzen.get("absolutes_minimum", "?")}%\n\n'
         f'Zellausgleich:\n'
         f'  Modus:         {zellausg.get("modus", "?")}\n'
@@ -154,6 +158,76 @@ def _zeige_scheduler_status():
             text += f'  {k}: {v}\n'
 
     wt_msgbox(text)
+
+
+def _bearbeite_soc_baender():
+    """Editiert das systemweite Komfort-/Stressband in battery_control.json.
+
+    Eine Definition für Monitoring (Stresschart, Mail) UND die Steuer-Komfort-
+    Setpoints. Validierung: 0 < stress_low ≤ komfort_min < komfort_max ≤
+    stress_high < 100 (Stresszeit ist Teilmenge der Komfort-Außenzeit).
+    """
+    if not os.path.exists(BATTERY_CONFIG_PATH):
+        wt_msgbox('battery_control.json nicht gefunden.')
+        return
+    try:
+        with open(BATTERY_CONFIG_PATH, encoding='utf-8') as f:
+            bc = json.load(f)
+    except Exception as e:
+        wt_msgbox(f'Fehler beim Lesen: {e}')
+        return
+    g = bc.setdefault('soc_grenzen', {})
+    alt = {
+        'komfort_min': int(g.get('komfort_min', 20)),
+        'komfort_max': int(g.get('komfort_max', 80)),
+        'stress_low': int(g.get('stress_low', 10)),
+        'stress_high': int(g.get('stress_high', 90)),
+    }
+    felder = [
+        ('stress_low', 'Stress unten (<%) — Tief-Stress'),
+        ('komfort_min', 'Komfort unten (%) — unterer Komfortrand'),
+        ('komfort_max', 'Komfort oben (%) — oberer Komfortrand'),
+        ('stress_high', 'Stress oben (>%) — Hoch-Stress'),
+    ]
+    neu = dict(alt)
+    for key, label in felder:
+        eingabe = wt_inputbox(
+            f'{label}\n(aktuell {alt[key]} %)', str(alt[key]))
+        if eingabe is None:
+            return  # Abbruch
+        try:
+            neu[key] = int(eingabe.strip())
+        except ValueError:
+            wt_msgbox(f'Ungültige Zahl für {key}: {eingabe!r}')
+            return
+
+    if not (0 < neu['stress_low'] <= neu['komfort_min']
+            < neu['komfort_max'] <= neu['stress_high'] < 100):
+        wt_msgbox(
+            'Ungültige Reihenfolge. Es muss gelten:\n'
+            '0 < Stress-unten ≤ Komfort-unten < Komfort-oben ≤ '
+            'Stress-oben < 100\n\n'
+            f'Eingabe: {neu["stress_low"]} ≤ {neu["komfort_min"]} < '
+            f'{neu["komfort_max"]} ≤ {neu["stress_high"]}')
+        return
+
+    if not wt_yesno(
+        'Neue systemweite SOC-Bänder speichern?\n\n'
+        f'Komfort: {neu["komfort_min"]}–{neu["komfort_max"]} %\n'
+        f'Stress:  <{neu["stress_low"]} / >{neu["stress_high"]} %\n\n'
+        'Gilt für Monitoring (Stresschart, Mail). Die Steuer-Setpoints\n'
+        '(SOC_MIN/SOC_MAX-Komfort) stehen in der Parametermatrix.'):
+        return
+
+    g.update(neu)
+    try:
+        with open(BATTERY_CONFIG_PATH, 'w', encoding='utf-8') as f:
+            json.dump(bc, f, ensure_ascii=False, indent=2)
+            f.write('\n')
+    except Exception as e:
+        wt_msgbox(f'Fehler beim Speichern: {e}')
+        return
+    wt_msgbox('Gespeichert. Mail/Stresschart nutzen die neuen Bänder sofort.')
 
 
 def _zeige_scheduler_log():

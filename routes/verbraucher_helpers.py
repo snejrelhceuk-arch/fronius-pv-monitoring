@@ -216,9 +216,21 @@ def _load_wattpilot_daily(cursor, first_ts, last_ts):
     return data
 
 
-# SOC-Stress-Schwellen für die Akku-Stress-Analyse (LFP): dauerhafte Voll-/Tiefladung belastet die Zellen.
-SOC_STRESS_HIGH_PCT = 95   # Hoch-Stress: SOC oberhalb → Vollladungs-Belastung
+# SOC-Stress-Schwellen (Fallback): dauerhafte Voll-/Tiefladung belastet LFP-Zellen.
+# Maßgeblich sind die systemweiten Bänder aus battery_control.json (soc_bands);
+# diese Konstanten greifen nur, wenn die Config fehlt.
+SOC_STRESS_HIGH_PCT = 90   # Hoch-Stress: SOC oberhalb → Vollladungs-Belastung
 SOC_STRESS_LOW_PCT = 10    # Tief-Stress: SOC unterhalb → Tiefentladungs-Belastung
+
+
+def _load_bands():
+    """Systemweite SOC-Bänder (Komfort/Stress) read-only aus battery_control.json."""
+    try:
+        import soc_bands
+        return soc_bands.lade_soc_baender()
+    except Exception:
+        return {'komfort_min': 20, 'komfort_max': 80,
+                'stress_low': SOC_STRESS_LOW_PCT, 'stress_high': SOC_STRESS_HIGH_PCT}
 
 # SOC-Quellen mit Sub-Tages-Auflösung (feinste zuerst). daily_data/data_monthly
 # führen nur einen SOC-Wert je Periode und taugen NICHT für Stress-Dauern.
@@ -303,8 +315,17 @@ def _downsample_soc_points(points, bucket_s=300):
     return sampled
 
 
-def _summarize_soc_points(points, interval_s=None):
-    """SOC-Kennzahlen: Max/Min sowie Stress-Dauer über/unter den SOC-Schwellen."""
+def _summarize_soc_points(points, interval_s=None, bands=None):
+    """SOC-Kennzahlen: Max/Min, Stress-Dauer und Zeit außerhalb Komfort.
+
+    Stress = SOC < stress_low oder > stress_high (Haltbarkeits-Metrik).
+    Außerhalb Komfort = SOC < komfort_min oder > komfort_max; schließt die
+    Stresszeit ein. Bänder aus battery_control.json (soc_bands), editierbar.
+    """
+    if bands is None:
+        bands = _load_bands()
+    k_lo, k_hi = bands['komfort_min'], bands['komfort_max']
+    s_lo, s_hi = bands['stress_low'], bands['stress_high']
     values = [soc for _, soc in points if soc is not None]
     if not values:
         return {
@@ -313,6 +334,8 @@ def _summarize_soc_points(points, interval_s=None):
             'day_min': None,
             'high_stress_minutes': 0.0,
             'low_stress_minutes': 0.0,
+            'komfort_high_minutes': 0.0,
+            'komfort_low_minutes': 0.0,
         }
 
     if interval_s is None:
@@ -320,26 +343,41 @@ def _summarize_soc_points(points, interval_s=None):
 
     high_stress_minutes = 0.0
     low_stress_minutes = 0.0
+    komfort_high_minutes = 0.0
+    komfort_low_minutes = 0.0
     for _, soc in points:
         if soc is None:
             continue
-        if soc > SOC_STRESS_HIGH_PCT:
+        if soc > s_hi:
             high_stress_minutes += (interval_s / 60.0)
-        if soc < SOC_STRESS_LOW_PCT:
+        if soc < s_lo:
             low_stress_minutes += (interval_s / 60.0)
+        if soc > k_hi:
+            komfort_high_minutes += (interval_s / 60.0)
+        if soc < k_lo:
+            komfort_low_minutes += (interval_s / 60.0)
 
     available_minutes = len(values) * (interval_s / 60.0)
     stress_minutes = high_stress_minutes + low_stress_minutes
+    komfort_minutes = komfort_high_minutes + komfort_low_minutes
+
+    def _pct(m):
+        return round(m / available_minutes * 100.0, 1) if available_minutes else 0.0
+
     return {
         'current': round(values[-1], 1),
         'day_max': round(max(values), 1),
         'day_min': round(min(values), 1),
         'high_stress_minutes': round(high_stress_minutes, 1),
         'low_stress_minutes': round(low_stress_minutes, 1),
+        'komfort_high_minutes': round(komfort_high_minutes, 1),
+        'komfort_low_minutes': round(komfort_low_minutes, 1),
+        'komfort_outside_minutes': round(komfort_minutes, 1),
         'available_hours': round(available_minutes / 60.0, 1),
-        'stress_pct': round(stress_minutes / available_minutes * 100.0, 1) if available_minutes else 0.0,
-        'high_stress_pct': round(high_stress_minutes / available_minutes * 100.0, 1) if available_minutes else 0.0,
-        'low_stress_pct': round(low_stress_minutes / available_minutes * 100.0, 1) if available_minutes else 0.0,
+        'stress_pct': _pct(stress_minutes),
+        'high_stress_pct': _pct(high_stress_minutes),
+        'low_stress_pct': _pct(low_stress_minutes),
+        'komfort_outside_pct': _pct(komfort_minutes),
     }
 
 
@@ -418,8 +456,16 @@ def _period_full_cycles(cursor, period, start_ts, end_ts, year=None, month=None)
     return round(total, 2) if have else None
 
 
-def _aggregate_soc_buckets(points, key_fn, interval_s=None):
-    """Aggregiert SOC-Punkte je Bucket (key_fn(ts)) zu Max/Min + Stress-Dauer."""
+def _aggregate_soc_buckets(points, key_fn, interval_s=None, bands=None):
+    """Aggregiert SOC-Punkte je Bucket (key_fn(ts)) zu Max/Min + Belastungs-Dauern.
+
+    Je Bucket: Stress-Minuten (high/low) und Komfort-Außen-Minuten (high/low,
+    inkl. Stress). Bänder aus battery_control.json (soc_bands), editierbar.
+    """
+    if bands is None:
+        bands = _load_bands()
+    k_lo, k_hi = bands['komfort_min'], bands['komfort_max']
+    s_lo, s_hi = bands['stress_low'], bands['stress_high']
     if interval_s is None:
         interval_s = _infer_soc_interval_s(points)
     minutes = interval_s / 60.0
@@ -430,16 +476,21 @@ def _aggregate_soc_buckets(points, key_fn, interval_s=None):
         key = key_fn(ts)
         bucket = buckets.get(key)
         if bucket is None:
-            bucket = {'max': soc, 'min': soc, 'high_min': 0.0, 'low_min': 0.0}
+            bucket = {'max': soc, 'min': soc, 'high_min': 0.0, 'low_min': 0.0,
+                      'komfort_high_min': 0.0, 'komfort_low_min': 0.0}
             buckets[key] = bucket
         if soc > bucket['max']:
             bucket['max'] = soc
         if soc < bucket['min']:
             bucket['min'] = soc
-        if soc > SOC_STRESS_HIGH_PCT:
+        if soc > s_hi:
             bucket['high_min'] += minutes
-        if soc < SOC_STRESS_LOW_PCT:
+        if soc < s_lo:
             bucket['low_min'] += minutes
+        if soc > k_hi:
+            bucket['komfort_high_min'] += minutes
+        if soc < k_lo:
+            bucket['komfort_low_min'] += minutes
     return buckets
 
 

@@ -288,10 +288,10 @@ def _build_automation_phasen(now, result):
             _cfg_path = _REPO_ROOT / 'config' / 'battery_control.json'
             with open(_cfg_path, 'r') as _cf:
                 _bcfg = _json_cfg.load(_cf)
-            _k_min = _bcfg.get('soc_grenzen', {}).get('komfort_min', 25)
-            _k_max = _bcfg.get('soc_grenzen', {}).get('komfort_max', 75)
+            _k_min = _bcfg.get('soc_grenzen', {}).get('komfort_min', 20)
+            _k_max = _bcfg.get('soc_grenzen', {}).get('komfort_max', 80)
         except Exception:
-            _k_min, _k_max = 25, 75
+            _k_min, _k_max = 20, 80
 
         # Komfort-Phase: Abend + Reset zusammengelegt
         _sunset_zeit = _h_to_hhmm(_sunset_h) if _sunset_h else None

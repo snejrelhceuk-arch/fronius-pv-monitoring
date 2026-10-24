@@ -21,7 +21,7 @@ from routes.verbraucher_helpers import (
     _summarize_soc_points, _period_efficiency_pct, _period_full_cycles,
     _aggregate_soc_buckets, _load_fritz_device_daily, _sum_fritz_daily_kwh,
     _load_heizpatrone_daily, _get_heizpatrone_month_total_kwh,
-    _build_average_summary,
+    _build_average_summary, _load_bands,
     SOC_STRESS_HIGH_PCT, SOC_STRESS_LOW_PCT, FRITZ_BREAKDOWN_DEVICES,
 )
 
@@ -78,11 +78,15 @@ def api_verbraucher_batterie():
         full_cycles = _period_full_cycles(cursor, period, start_ts, end_ts, year, month)
         conn.close()
 
-        thresholds = {'high': SOC_STRESS_HIGH_PCT, 'low': SOC_STRESS_LOW_PCT}
+        bands = _load_bands()
+        thresholds = {
+            'high': bands['stress_high'], 'low': bands['stress_low'],
+            'komfort_min': bands['komfort_min'], 'komfort_max': bands['komfort_max'],
+        }
 
         # Tag: SOC-Verlauf als 5-Minuten-Linie + Tages-Stresskennzahlen
         if period == 'tag':
-            summary = _summarize_soc_points(points)
+            summary = _summarize_soc_points(points, bands=bands)
             summary['efficiency_pct'] = efficiency_pct
             summary['full_cycles'] = full_cycles
             tag_points = _downsample_soc_points(points, bucket_s=300)
@@ -113,7 +117,7 @@ def api_verbraucher_batterie():
             years = sorted({datetime.fromtimestamp(ts).year for ts, _ in points})
             labels = [(f'{y:04d}', f'{y:04d}') for y in years]
 
-        buckets = _aggregate_soc_buckets(points, key_fn, interval_s)
+        buckets = _aggregate_soc_buckets(points, key_fn, interval_s, bands=bands)
 
         chart_points = []
         for key, label in labels:
@@ -125,6 +129,8 @@ def api_verbraucher_batterie():
                     'soc_min': None,
                     'high_stress_minutes': 0.0,
                     'low_stress_minutes': 0.0,
+                    'komfort_high_minutes': 0.0,
+                    'komfort_low_minutes': 0.0,
                 })
             else:
                 chart_points.append({
@@ -133,24 +139,37 @@ def api_verbraucher_batterie():
                     'soc_min': round(bucket['min'], 1),
                     'high_stress_minutes': round(bucket['high_min'], 1),
                     'low_stress_minutes': round(bucket['low_min'], 1),
+                    'komfort_high_minutes': round(bucket['komfort_high_min'], 1),
+                    'komfort_low_minutes': round(bucket['komfort_low_min'], 1),
                 })
 
         soc_max_values = [cp['soc_max'] for cp in chart_points if cp['soc_max'] is not None]
         soc_min_values = [cp['soc_min'] for cp in chart_points if cp['soc_min'] is not None]
         high_stress_minutes = sum(cp['high_stress_minutes'] for cp in chart_points)
         low_stress_minutes = sum(cp['low_stress_minutes'] for cp in chart_points)
+        komfort_high_minutes = sum(cp['komfort_high_minutes'] for cp in chart_points)
+        komfort_low_minutes = sum(cp['komfort_low_minutes'] for cp in chart_points)
         available_minutes = len(points) * (interval_s / 60.0)
         stress_minutes = high_stress_minutes + low_stress_minutes
+        komfort_minutes = komfort_high_minutes + komfort_low_minutes
+
+        def _pct(m):
+            return round(m / available_minutes * 100.0, 1) if available_minutes else 0.0
+
         summary = {
             'current': round(points[-1][1], 1) if points else None,
             'day_max': round(max(soc_max_values), 1) if soc_max_values else None,
             'day_min': round(min(soc_min_values), 1) if soc_min_values else None,
             'high_stress_minutes': round(high_stress_minutes, 1),
             'low_stress_minutes': round(low_stress_minutes, 1),
+            'komfort_high_minutes': round(komfort_high_minutes, 1),
+            'komfort_low_minutes': round(komfort_low_minutes, 1),
+            'komfort_outside_minutes': round(komfort_minutes, 1),
             'available_hours': round(available_minutes / 60.0, 1),
-            'stress_pct': round(stress_minutes / available_minutes * 100.0, 1) if available_minutes else 0.0,
-            'high_stress_pct': round(high_stress_minutes / available_minutes * 100.0, 1) if available_minutes else 0.0,
-            'low_stress_pct': round(low_stress_minutes / available_minutes * 100.0, 1) if available_minutes else 0.0,
+            'stress_pct': _pct(stress_minutes),
+            'high_stress_pct': _pct(high_stress_minutes),
+            'low_stress_pct': _pct(low_stress_minutes),
+            'komfort_outside_pct': _pct(komfort_minutes),
             'efficiency_pct': efficiency_pct,
             'full_cycles': full_cycles,
         }

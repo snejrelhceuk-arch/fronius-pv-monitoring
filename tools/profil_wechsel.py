@@ -33,13 +33,13 @@ SOC_MATRIX = os.path.join(_PROJECT, 'config', 'soc_param_matrix.json')
 PROFILE = {
     'A': {
         'name': 'Vollbetrieb (Eigenverbrauch Max)',
-        'beschreibung': 'Volle Kapazität, SOC 25–75%',
+        'beschreibung': 'Volle Kapazität, SOC 20–80%',
         'battery_control': {
             'batterie.kapazitaet_kwh': 25.6,
             'batterie.max_lade_w': 12000,
             'batterie.max_entlade_w': 12000,
-            'soc_grenzen.komfort_min': 25,
-            'soc_grenzen.komfort_max': 75,
+            'soc_grenzen.komfort_min': 20,
+            'soc_grenzen.komfort_max': 80,
         },
     },
     'B': {

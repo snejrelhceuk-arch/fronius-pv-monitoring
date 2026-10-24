@@ -297,10 +297,10 @@
       "_doc": "Nachmittags SOC_MAX erhöhen: Mehr Kapazität vor Abend freigeben",
       "aktiv": true,
       "prioritaet": 2,
-      "beschreibung": "SOC_MAX von Komfort (75%) auf Stress (100%) anheben wenn PV-Fenster schließt",
+      "beschreibung": "SOC_MAX von Komfort (80%) auf Stress (100%) anheben wenn PV-Fenster schließt",
       "parameter": {
         "komfort_max_pct": {
-          "wert": 75,
+          "wert": 80,
           "bereich": [
             60,
             90
@@ -495,7 +495,7 @@
           "beschreibung": "Komfort-SOC_MIN (LFP-Schonung, Normalzustand)"
         },
         "komfort_max_pct": {
-          "wert": 75,
+          "wert": 80,
           "bereich": [
             60,
             90

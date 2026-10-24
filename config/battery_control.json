@@ -12,14 +12,18 @@
   },
   "soc_grenzen": {
     "_doc": "SOC-Bereiche — immer gleicher Algorithmus, keine Saisons",
-    "komfort_min": 25,
-    "komfort_max": 75,
+    "komfort_min": 20,
+    "komfort_max": 80,
+    "stress_low": 10,
+    "stress_high": 90,
     "stress_min": 5,
     "stress_max": 100,
     "absolutes_minimum": 5,
     "kritisch_soc": 7,
-    "_komfort_doc": "Komfort-Bereich 25–75%: Optimiert für LFP-Lebensdauer (BatteryUniversity: 75-25% SOC = ~3.000 Zyklen bis 90% Kapazität). Unterhalb 25% oder oberhalb 75% = Stress, nur wenn Prognose es rechtfertigt. Im Winter wird 25→5%/100% häufiger nötig, im Sommer 5%/75→100%.",
-    "_kritisch_doc": "Software-Notbremse: Entladesperre unterhalb 7%. Fängt Hysterese bei schneller Entladung ab (SOC sinkt nach 5%-Stopp noch weiter). Laden bleibt immer erlaubt (Fix 2026-02-27)."
+    "_komfort_doc": "Systemweites Komfortband 20–80%: optimiert für LFP-Lebensdauer. Gilt als EINE Definition für Steuerung (SOC_MIN/SOC_MAX-Komfort-Setpoints) UND Monitoring/Mail. Editierbar in pv-config.",
+    "_stress_doc": "Stressband (Haltbarkeits-Metrik): SOC < stress_low (10%) oder > stress_high (90%) = Zellstress. Reine Bewertungsgrenzen für Stresschart/Mail/Analysen — NICHT die Steuer-Setpoints. Zeit außerhalb Komfort (20–80%) schließt die Stresszeit ein.",
+    "_kritisch_doc": "Software-Notbremse: Entladesperre unterhalb 7%. Fängt Hysterese bei schneller Entladung ab (SOC sinkt nach 5%-Stopp noch weiter). Laden bleibt immer erlaubt.",
+    "_stress_min_max_doc": "stress_min/stress_max (5/100): absolute SOC-Extremgrenzen des Steueralgorithmus (Tier-1/Notbremse) — NICHT die Haltbarkeits-Metrik (stress_low/stress_high)."
   },
   "morgen_algorithmus": {
     "_doc": "SOC_MIN-Öffnung: Batterie entleeren bevor PV übernimmt",

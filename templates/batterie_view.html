@@ -75,7 +75,11 @@
     </div>
 
     <script>
-        const COLORS = { main: '#16a34a', high: '#ef4444', low: '#3b82f6', highArea: 'rgba(239,68,68,0.10)', lowArea: 'rgba(59,130,246,0.10)' };
+        const COLORS = {
+            main: '#16a34a', high: '#ef4444', low: '#ef4444',
+            highArea: 'rgba(239,68,68,0.10)', lowArea: 'rgba(239,68,68,0.10)',
+            komfort: '#9ca3af', komfortArea: 'rgba(156,163,175,0.14)'
+        };
         let currentView = 'tag';
         let currentDate = new Date();
         let currentYear = currentDate.getFullYear();
@@ -294,7 +298,9 @@
         }
 
         function renderTagChart(data) {
-            const thr = data.thresholds || { high: 95, low: 10 };
+            const thr = data.thresholds || { high: 90, low: 10, komfort_min: 20, komfort_max: 80 };
+            const kMin = thr.komfort_min != null ? thr.komfort_min : 20;
+            const kMax = thr.komfort_max != null ? thr.komfort_max : 80;
             const line = buildTagSeriesData(data.points || []);
             const start = new Date(currentDate); start.setHours(0, 0, 0, 0);
             const end = new Date(start); end.setDate(end.getDate() + 1);
@@ -318,9 +324,13 @@
                     markLine: { silent: true, symbol: 'none', lineStyle: { type: 'dashed', width: 1 }, data: [
                         { yAxis: thr.high, lineStyle: { color: COLORS.high }, label: { formatter: `>${thr.high}% Hoch-Stress`, color: COLORS.high, position: 'insideStartTop', fontSize: 10 } },
                         { yAxis: thr.low, lineStyle: { color: COLORS.low }, label: { formatter: `<${thr.low}% Tief-Stress`, color: COLORS.low, position: 'insideStartBottom', fontSize: 10 } },
+                        { yAxis: kMax, lineStyle: { color: COLORS.komfort }, label: { formatter: `Komfort ${kMax}%`, color: COLORS.komfort, position: 'insideEndTop', fontSize: 10 } },
+                        { yAxis: kMin, lineStyle: { color: COLORS.komfort }, label: { formatter: `Komfort ${kMin}%`, color: COLORS.komfort, position: 'insideEndBottom', fontSize: 10 } },
                     ] },
                     markArea: { silent: true, data: [
                         [{ yAxis: thr.high, itemStyle: { color: COLORS.highArea } }, { yAxis: 100 }],
+                        [{ yAxis: kMax, itemStyle: { color: COLORS.komfortArea } }, { yAxis: thr.high }],
+                        [{ yAxis: thr.low, itemStyle: { color: COLORS.komfortArea } }, { yAxis: kMin }],
                         [{ yAxis: 0, itemStyle: { color: COLORS.lowArea } }, { yAxis: thr.low }],
                     ] },
                 }],
@@ -330,36 +340,47 @@
         }
 
         function renderStressBars(data) {
-            const thr = data.thresholds || { high: 95, low: 10 };
+            const thr = data.thresholds || { high: 90, low: 10, komfort_min: 20, komfort_max: 80 };
+            const kMin = thr.komfort_min != null ? thr.komfort_min : 20;
+            const kMax = thr.komfort_max != null ? thr.komfort_max : 80;
             const summary = data.summary || {};
             const cps = data.chart_points || [];
             const labels = cps.map(c => c.label);
-            const highHours = cps.map(c => c.high_stress_minutes != null ? +(c.high_stress_minutes / 60).toFixed(2) : 0);
-            const lowHours = cps.map(c => c.low_stress_minutes != null ? +(c.low_stress_minutes / 60).toFixed(2) : 0);
-            const highName = `Hoch-Stress >${thr.high} %`;
-            const lowName = `Tief-Stress <${thr.low} %`;
-            const titleParts = `Stress-Anteil ${summary.stress_pct != null ? summary.stress_pct.toFixed(1) : '--'}% (${fmtDuration(summary.high_stress_minutes)}>${thr.high}% ${fmtDuration(summary.low_stress_minutes)}<${thr.low}%)`;
+            const toH = m => (m != null ? +(m / 60).toFixed(2) : 0);
+            // Stress (rot) = Hoch + Tief; Komfort-Außen ohne Stress (grau) = Rest.
+            const stressHours = cps.map(c => toH((c.high_stress_minutes || 0) + (c.low_stress_minutes || 0)));
+            const komfortOutMin = cps.map(c => (c.komfort_high_minutes || 0) + (c.komfort_low_minutes || 0));
+            const stressMin = cps.map(c => (c.high_stress_minutes || 0) + (c.low_stress_minutes || 0));
+            const grayHours = komfortOutMin.map((k, i) => toH(Math.max(0, k - stressMin[i])));
+            const stressName = `Stress <${thr.low} / >${thr.high} %`;
+            const grayName = `außerhalb Komfort ${kMin}\u2013${kMax} %`;
+            const outMin = summary.komfort_outside_minutes;
+            const strMin = (summary.high_stress_minutes || 0) + (summary.low_stress_minutes || 0);
+            const titleParts = `Außerhalb Komfort ${summary.komfort_outside_pct != null ? summary.komfort_outside_pct.toFixed(1) : '--'}% (${fmtDuration(outMin)}), `
+                + `davon Stress ${summary.stress_pct != null ? summary.stress_pct.toFixed(1) : '--'}% (${fmtDuration(strMin)})`;
             const cyc = formatCycles(summary.full_cycles);
             const titleText = titleParts + (cyc != null ? `  \u00b7  Vollzyklen: ${cyc}` : '');
             const option = {
                 tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: params => {
                     const rows = Array.isArray(params) ? params : [params];
                     const cp = cps[rows[0].dataIndex] || {};
+                    const kOut = (cp.komfort_high_minutes || 0) + (cp.komfort_low_minutes || 0);
+                    const str = (cp.high_stress_minutes || 0) + (cp.low_stress_minutes || 0);
                     const socLine = (cp.soc_max != null && cp.soc_min != null)
                         ? `<br/><span style="opacity:0.7;">SOC ${cp.soc_min.toFixed(1)}\u2013${cp.soc_max.toFixed(1)} %</span>` : '';
                     return `<b>${cp.label}</b>`
-                        + `<br/><span style="color:${COLORS.high}">\u25A0</span> Hoch-Stress &gt;${thr.high}&#8201;%: ${fmtDuration(cp.high_stress_minutes)}`
-                        + `<br/><span style="color:${COLORS.low}">\u25A0</span> Tief-Stress &lt;${thr.low}&#8201;%: ${fmtDuration(cp.low_stress_minutes)}`
+                        + `<br/><span style="color:${COLORS.komfort}">\u25A0</span> außerhalb Komfort ${kMin}\u2013${kMax}&#8201;%: ${fmtDuration(kOut)}`
+                        + `<br/><span style="color:${COLORS.high}">\u25A0</span> davon Stress &lt;${thr.low} / &gt;${thr.high}&#8201;%: ${fmtDuration(str)}`
                         + socLine;
                 } },
                 title: { text: titleText, left: 'center', top: 8, textStyle: { fontSize: 13, color: '#334155', fontWeight: 600 } },
-                legend: { bottom: 0, data: [highName, lowName] },
+                legend: { bottom: 0, data: [stressName, grayName] },
                 grid: { left: 48, right: 16, top: 40, bottom: 40, containLabel: true },
                 xAxis: { type: 'category', data: labels, axisLabel: { interval: 0, fontSize: labels.length > 16 ? 9 : 11 } },
                 yAxis: { type: 'value', name: 'Std.', min: 0, minInterval: 1 },
                 series: [
-                    { name: highName, type: 'bar', data: highHours, barMaxWidth: 14, itemStyle: { color: COLORS.high } },
-                    { name: lowName, type: 'bar', data: lowHours, barMaxWidth: 14, itemStyle: { color: COLORS.low } },
+                    { name: stressName, type: 'bar', stack: 'belastung', data: stressHours, barMaxWidth: 14, itemStyle: { color: COLORS.high } },
+                    { name: grayName, type: 'bar', stack: 'belastung', data: grayHours, barMaxWidth: 14, itemStyle: { color: COLORS.komfort } },
                 ],
             };
             if (window.PVChart) option.tooltip = PVChart.tooltipResponsive(option.tooltip);
