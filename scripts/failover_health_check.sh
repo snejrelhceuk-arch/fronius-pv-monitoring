@@ -98,14 +98,17 @@ if not to_addr or not smtp_host:
     print("SMTP nicht konfiguriert, keine Mail", file=sys.stderr)
     sys.exit(0)
 
-# Passwort aus credential_store (gleicher Pfad wie Primary)
+# Passwort aus credential_store (AES/Fernet, machine-id-gebunden — wie Primary/Automation)
 smtp_pass = None
-for p in ['/etc/pv-system/smtp_pass.key', os.path.join(base_dir, '.credentials', 'smtp_pass.key')]:
-    if os.path.isfile(p):
-        smtp_pass = open(p).read().strip()
-        break
+sys.path.insert(0, base_dir)
+try:
+    from automation.engine import credential_store
+    smtp_pass = credential_store.lade('smtp_pass')
+except Exception as e:
+    print(f"credential_store nicht verfügbar: {e}", file=sys.stderr)
 if not smtp_pass:
-    print("SMTP-Passwort nicht gefunden", file=sys.stderr)
+    print("SMTP-Passwort nicht gesetzt — auf diesem Host via "
+          "scripts/set_smtp_password.py setzen.", file=sys.stderr)
     sys.exit(1)
 
 hostname = socket.gethostname()

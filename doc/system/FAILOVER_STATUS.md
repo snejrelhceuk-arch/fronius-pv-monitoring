@@ -49,8 +49,12 @@ Die Aggregations-Cronjobs sind bereits (role-guarded) installiert und laufen ab
 
 ## Offene Punkte (siehe `doc/TODO.md`)
 
-1. **SMTP-Passwort** auf Pi5-FB provisionieren (Secret, durch Betreiber), damit
-   `pv-failover-health` Alarm-Mails senden kann.
+1. **SMTP-Passwort auf Pi5-FB setzen** (Betreiber, einmalig pro Host):
+   `sudo .venv/bin/python scripts/set_smtp_password.py`. Verzeichnis (`/etc/pv-system`),
+   Config (`.infra.local` PV_NOTIFICATION_*) und Credential-Store (machine-id-gebundene
+   Fernet-Verschlüsselung) sind vorbereitet und per Round-Trip getestet;
+   `failover_health_check.sh` lädt das Passwort jetzt korrekt via `credential_store`
+   (vorher Klartext-Lese-Bug → Alarm wäre gescheitert).
 2. **`data_stats.db`** in den Mirror-/Backup-Fluss aufnehmen (aktuell nur täglicher
    Direkt-Sync via `scripts/stats_archive_daily.sh`).
 3. **Promotion-Automatisierung (optional):** Ein `failover_promote.sh` könnte Stufe 1+2

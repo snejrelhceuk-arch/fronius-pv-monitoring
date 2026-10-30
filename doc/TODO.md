@@ -51,7 +51,7 @@
 
 ## Failover (Pi5-FB → Primary)
 
-- [ ] **SMTP-Passwort auf Pi5-FB provisionieren**, damit `pv-failover-health` bei Primary-Ausfall aktiv alarmieren kann (sonst nur lokales Log `/tmp/pv_failover_health.log` + `.state/failover_recommendation`). Aktiv-Alerting ist die wichtigste Lücke für den unbeaufsichtigten Ernstfall.
+- [ ] **SMTP-Passwort auf Pi5-FB setzen** (Betreiber): `sudo .venv/bin/python scripts/set_smtp_password.py`. Gerüst steht und ist getestet (Verzeichnis, Config, Credential-Store-Round-Trip, Daemon-Lesezugriff); `failover_health_check.sh` entschlüsselt jetzt korrekt via credential_store. Danach alarmiert `pv-failover-health` bei Primary-Ausfall aktiv per Mail. Ohne Passwort: nur lokales Log + `.state/failover_recommendation`.
 - [ ] Optionales `scripts/failover_promote.sh`: bündelt Stufe 1+2 inkl. `pv-automation`-Start zu einem Kommando (Runbook in `doc/system/FAILOVER_STATUS.md`). Bewusst ungetestet lassen, da echter Promotion-Test Datenverlust riskiert.
 - [ ] `pv-doc-drift` auf dem FB lief als **root** (→ `doc/llm` war root-owned, blockierte Code-Sync). Ownership korrigiert; Drift-Service-User/Perms prüfen, damit es nicht erneut root-owned anlegt.
 - [ ] `data_stats.db` in den Mirror-/Backup-Fluss aufnehmen (aktuell nur täglicher Direkt-Sync via `scripts/stats_archive_daily.sh`).
