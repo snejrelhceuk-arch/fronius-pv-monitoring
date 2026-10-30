@@ -5,7 +5,7 @@ role: B
 applyTo: "routes/**"
 tags: [web-api, blueprints, templates, formatting, read-only]
 status: stable
-last_review: 2026-10-24
+last_review: 2026-10-30
 ---
 
 # Web Display/API
@@ -26,6 +26,7 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 - **Read-only FritzDECT-Zugriff:** `fritzdect_read.py` fuer Live-Status; Web importiert keine Aktor-Module.
 - **DB-Zugriff:** `routes/helpers.py:get_db_connection` (read-only Standard), `get_forecast_write_connection` nur fuer Forecast-Persistenz
 - **Page-Routen:** `routes/pages.py` (z. B. `maschinenraum`, `netzqualitaet`)
+- **Flow-/Dashboard-Status:** `routes/system/battery.py:_build_flow_status_result` (`/api/flow_status`, 60-s-Cache) bündelt Batterie, Automation (`batt/hp/klima/wp_aktionen`, `klima_status`, `wp_status`), Temperaturen und **`wattpilot_status`** (read-only aus `wattpilot_readings` via `routes/system/_shared.py:_read_wattpilot_db_summary` → Zustand/Leistung/Session-kWh/Phasen/Ampere/Temp). Konsument: Maschinenraum-Infopanel (s. `web-flow-view.card.md`).
 - **Forecast-API + Persistierung:** `routes/forecast.py:api_forecast_tag`, `routes/helpers.py:store_forecast_daily`
 - **WP-Leistungsnachweis (Netzbetreiber):** `routes/verbraucher.py:api_verbraucher_wp_leistung` — Zeitreihe WP-Max + Netzbezug (`grid_draw_w`) je Punkt aus `logs/wp_netzbetreiber_leistung.csv`; View `templates/wp_leistung_view.html` (Tooltip belegt Eigenversorgung bei Ueberschreitung).
 - **Verbraucher-Read-Helfer:** `routes/verbraucher_helpers.py` (WP-Protokoll/Downsampling, SOC-Zeitreihe + Akku-Stress, Batterie-Wirkungsgrad/Vollzyklen, Fritz!DECT-/Heizpatrone-Tagesenergie) — read-only, re-exportiert über `routes/verbraucher.py` (Importpfade für Routen/Tests stabil).

@@ -175,6 +175,7 @@ def _build_flow_status_result(now, api):
     _fetch_temperatures(result)
     _fetch_hp_status(now, result)
     _fetch_wp_status(result)
+    _fetch_wattpilot_status(now, result)
 
     result['pv_forecast_emoji'] = '❓'
     result['pv_forecast_quality'] = None
@@ -1004,6 +1005,33 @@ def _fetch_wp_status(result):
     except Exception as _we:
         logging.debug(f"WP-Status (ObsState): {_we}")
         result['wp_status'] = {'error': str(_we)}
+
+
+def _fetch_wattpilot_status(now, result):
+    """Wattpilot (EV-Lader, Fronius) – kompakter Status aus der DB (Rolle B read-only).
+
+    Daten werden vom Wattpilot-Collector (A/C) in ``wattpilot_readings`` abgelegt;
+    hier nur read. Nicht mit der Wärmepumpe (``wp_status``) verwechseln.
+    """
+    try:
+        from routes.system._shared import _read_wattpilot_db_summary
+        wp = _read_wattpilot_db_summary(now)
+        result['wattpilot_status'] = {
+            'online': wp.get('online'),
+            'age_s': wp.get('age_s'),
+            'car_state': wp.get('car_state'),
+            'car_state_text': wp.get('car_state_text'),
+            'charging': wp.get('charging'),
+            'power_w': wp.get('power_w'),
+            'energy_session_kwh': wp.get('energy_session_kwh'),
+            'energy_total_kwh': wp.get('energy_total_kwh'),
+            'temperature_c': wp.get('temperature_c'),
+            'phase_mode': wp.get('phase_mode'),
+            'amp': wp.get('amp'),
+        }
+    except Exception as _wpe:
+        logging.debug(f"Wattpilot-Status: {_wpe}")
+        result['wattpilot_status'] = {'error': str(_wpe)}
 
 
 def _fetch_soh(result):
