@@ -24,6 +24,7 @@ Systemweite Betriebsleitplanken fuer Multi-Host-Betrieb: `.role`-basiertes Verha
 - **Browser-Autostart (Display-Host):** `scripts/pv_kiosk_browser.sh`, `scripts/install_kiosk_autostart.sh`
 - **GFS-Backup (Stufe 1, `data.db`/RAM-DB):** `scripts/backup_db_gfs.sh` (Sohn-Intervall auf **monatlich** entspannt, da Stufe 2+3 permanent & separat gesichert; `data.db` trägt nur noch rollierende Hot-Daten + 120-T-Tails).
 - **GFS-Backup (Stufe 2+3, `monitoring.db` + `analysis.db`):** `scripts/backup_tiered_dbs_gfs.sh` (gleiches Sohn/Vater/Großvater-Schema, Integritätscheck, Pi5-Sync; Cron `0 3 * * *` → `backup/tiered/{monitoring,analysis}/*`). Ersetzt das frühere `backup_stats_db_gfs.sh`. Täglicher Fortschreiber der Stufen 2+3: `scripts/sync_tiered_daily.sh` (Cron `35 0`).
+- **Longterm-Offload (Großvater monthly/yearly → Pi4-Küche):** `scripts/backup_longterm_offload.sh` + Installer `scripts/install_longterm_offload.sh` (Timer `pv-longterm-offload`, **nur FB**, 03:40). Append-only (`rsync --ignore-existing`, kein `--delete`), fail-safe bei offline-Küche. Details: `doc/system/BACKUP_STRATEGY.md`.
 - **Publish-Audit:** `scripts/publish_audit.sh`
 - **Service-Definitionen:** `config/systemd/pv-automation.service`, `config/systemd/pv-observer.service`, `config/systemd/pv-wattpilot.service`, `config/systemd/pv-steuerbox.service`; Installer pruefen `WorkingDirectory` vor dem Ausrollen.
 - **Optionaler HA-Adapter-Service:** `config/systemd/pv-ha-bridge.service`
@@ -72,6 +73,7 @@ Systemweite Betriebsleitplanken fuer Multi-Host-Betrieb: `.role`-basiertes Verha
 - [`collector-db-schema.card.md`](./collector-db-schema.card.md)
 
 ## Human-Doku
+- `doc/system/BACKUP_STRATEGY.md`
 - `doc/system/DUAL_HOST_ARCHITECTURE.md`
 - `doc/system/PUBLISH_GUARD.md`
 - `doc/system/GIT_WORKFLOW.md`

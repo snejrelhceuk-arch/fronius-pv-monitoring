@@ -39,3 +39,12 @@
 ## Architektur-Haertung
 
 - [ ] P3: Hotspot-Dateien nur risikogetrieben zerlegen; vor Aenderungen an grossen Regel-/Routenmodulen passende Charakterisierungstests ergaenzen.
+
+---
+
+## Backup / Datensicherung
+
+- [ ] Täglicher Primary↔FB-Wechsel der `data.db`-Persistierung (SD-Schreibpause je 1 Tag pro Karte) — Design steht (s. `doc/system/BACKUP_STRATEGY.md`), noch nicht umgesetzt; aktuell erzeugt der FB das `data.db`-GFS aus seinem tmpfs-Mirror.
+- [ ] Weekly-Stufe zusätzlich zur Küche spiegeln — erst mit größerer SD-Karte tragfähig (29-GB-Karte: weekly ~11,8 GB/Jahr füllt sie in ~1,2 Jahren). Bei Kartentausch: `TIERS=(weekly monthly yearly)` in `scripts/backup_longterm_offload.sh` + Weekly-Retention auf der Küche prüfen.
+- [ ] `doc/system/DUAL_HOST_ARCHITECTURE.md` §7 an IST angleichen: `backup_db_gfs.sh` läuft auf dem **FB** (nicht Primary), Header-Kommentar im Skript ist pre-REFORMATION.
+- [ ] Kontrollierter Code-Resync FB (Repo-Stand Feb 2026) und Küche (Juli 2026) auf Primary-Stand — betrifft u. a. veraltete Service-Skripte; Failover-Dienste vor/nach Sync prüfen.

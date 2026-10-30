@@ -5,7 +5,7 @@ role: meta
 applyTo: "scripts/**"
 tags: [hosts, deployment, rsync, sync, pi, tech, failover, kueche, rolle-n]
 status: stable
-last_review: 2026-10-09
+last_review: 2026-10-30
 ---
 
 # System Hosts + Deployment
@@ -20,7 +20,7 @@ verteilt (Verhalten steuert die gitignored `.role`-Datei, **nicht** divergenter 
 |---|---|---|---|
 | **Pi5-Primary** | 192.0.2.204 | admin | Produktion A–E + NQ-Primary (Aggregation/Analyse/Rollup). `.role=primary` |
 | **Pi5-FB** | 192.0.2.195 | admin | Failover (read-only), Backup-Empfänger, **Dashboard-Ticker** (`pv-ticker`, Port 8050). `.role=failover` |
-| **Pi4-Küche** | 192.0.2.105 | jk | Kiosk-Display + Longterm-GFS (monthly/yearly) |
+| **Pi4-Küche** | 192.0.2.105 | jk | Kiosk-Display + Longterm-Archiv (Empfang monthly/yearly) |
 | **Pi4-Tech** | 192.0.2.181 | admin | **NQ-Collector (Rolle N)**: `pv-nq-poller`, `pv-nq-energy`; WP/HW-Bridge (`pv-wp-bridge`, `WP_BACKEND_MODE=local`). RAM-first (tmpfs) |
 | Ubuntu-LLM | (extern) | — | Ollama-Host (Ticker-LLM). Zugriff via HTTP-API (`/api/pull`/`/api/generate`), kein SSH nötig. Repo-Teil: `ollama/` |
 
@@ -55,8 +55,8 @@ idempotent, `Restart=always`, ~0,5 s PAC-Lücke bei Neustart.)
   (`pv-nq-agg-transfer`, `pv-nq-aggregate`, `pv-nq-analysis(-hf-nf)`, `pv-nq-energy-rollup(-month/-year)`,
   `pv-nq-primary-cap`, `pv-nq-event-transfer`, `pv-nq-backup` (GFS tägl. 03:00)).
 - **Tech:** `pv-nq-poller`, `pv-nq-energy`, `pv-wp-bridge`.
-- **FB:** `pv-ticker`, Failover-/Backup-Empfang.
-- **Küche:** Kiosk, Longterm-GFS-Offload.
+- **FB:** `pv-ticker`, Failover-/Backup-Empfang, `backup_db_gfs.sh` (GFS-Erzeugung), `pv-longterm-offload` (monthly/yearly → Küche).
+- **Küche:** Kiosk; **Longterm-Archiv-Empfänger** (`pv-longterm-archive/{monthly,yearly}`, append-only). **Kein** Failover-Mirror.
 
 ## Workspace-Vollständigkeit
 Der Primary-Workspace ist die **vollständige Quelle**. Liegen auf anderen Hosts
@@ -69,6 +69,7 @@ pv-system-Programme/Skripte/Docs, die hier fehlen, werden sie **hierher integrie
 - **Tech-Sync + Poller-Restart-Hook:** `scripts/sync_code_to_tech.sh`
 - **NQ-Installer:** `scripts/install_nq_services.sh` (aus `scripts/install_services.sh` aufgerufen)
 - **Steuerbox-Restart (Backend + Proxy):** `scripts/restart_steuerbox.sh`
+- **Longterm-Offload FB→Küche:** `scripts/backup_longterm_offload.sh` + `scripts/install_longterm_offload.sh` (nur FB)
 - **Rollen-Logik:** `host_role.py`
 
 ## No-Gos
@@ -82,4 +83,5 @@ pv-system-Programme/Skripte/Docs, die hier fehlen, werden sie **hierher integrie
 
 ## Human-Doku
 - `AGENTS.md` (Hosts + Deployment-Policy)
+- `doc/system/BACKUP_STRATEGY.md` (verteilte GFS-Kette, Longterm-Archiv Küche)
 - `doc/system/WR_FERNSTEUERUNG.md`
