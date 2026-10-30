@@ -9,8 +9,8 @@
 #   - Vater/Großvater/Urgroßvater bleiben kalendarisch wie bisher
 #   - Jede neu erzeugte Backup-Datei wird zusätzlich nach Pi5/NVMe kopiert
 #
-# Cron (Primary Pi4):
-#   0 3 * * * /srv/pv-system/scripts/backup_db_gfs.sh
+# Cron (Pi5-FB):
+#   0 3 * * * <REPO>/scripts/backup_db_gfs.sh
 #
 # Hinweis:
 #   Die alternierende 2-Tage-Persistierung (data.db auf Pi5) bleibt unverändert.
