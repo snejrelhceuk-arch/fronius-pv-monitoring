@@ -4,7 +4,7 @@ domain: web
 role: B
 applyTo: "templates/flow_view.html,routes/flow_greetings.py"
 status: stable
-last_review: 2026-10-10
+last_review: 2026-10-30
 ---
 
 # Flow-Ansicht Rendering-Mechanik
@@ -64,6 +64,25 @@ Wirkung.
 - **Sub-Verbraucher** `.sub-consumers` (rechts): HP/Heizpatrone (565,50), Klima (660,80),
   Haushalt (665,190), WP/Wärmepumpe (500,340), Wattpilot (660,315).
 - Die **rechte Gruppe** (x≈565…665) liegt am rechten viewBox-Rand → auf schmalen Screens nur per Pan sichtbar.
+
+## Maschinenraum-Infopanel (`#maschinen-info-wrap`)
+- Toggle über den 60-s-Button; zeigt Live-Detailzeilen **linksbündig** (Einführung/Label links,
+  Timelines **neueste-zuerst** → älteste werden rechts abgeschnitten). Renderer:
+  `templates/flow_view.html:renderFlowStatusDetail` aus `/api/flow_status`.
+- Zeilen: **Batterie** (SOC/SOH/Lad/Status/Temp) · Batt-SOC-Schaltungen · **Heizpatrone** (HP) ·
+  **Klima** · **Wärmepumpe** (WP-Temps + Soll-Log) · **Wattpilot** (EV-Status aus
+  `wattpilot_status`: Zustand/Leistung/Session-kWh/Phasen/Ampere) · WR-/Batt-Temperaturen.
+- **Platzabhängige Label-Einführung:** Helper `mrLabel(full, short, color)` + CSS-Breakpoint
+  (`@media max-width:720px`): breit = ausgeschrieben (Batterie/Heizpatrone/Wärmepumpe/Klima/Wattpilot),
+  schmal = Kurzform (Batt/HP/WP/Kl./EV); die Batterie-Statuszeile (`.bd-intro`) blendet die Einführung
+  bei wenig Platz ganz aus (SOC/SOH sind bekannt). Links-Pin via `pinInfoRowsLeft` (scrollLeft=0).
+
+## Geräte-Farbkanon (Flow-Bubbles = Quelle)
+- **Bubble-Palette `C` ist maßgeblich**, Maschinenraum + Monitoring-Lasten (`templates/verbraucher_view.html:COLORS`)
+  richten sich danach, **Unterscheidbarkeit hat Vorrang**: Batterie `#10b981`, **Wärmepumpe `#14b8a6`** (Teal,
+  nicht Verbrauch-Blau), Heizpatrone `#ea580c`, Klima `#00bcd4`, Wattpilot `#93c5fd`, Verbrauch `#60a5fa`.
+- Lasten-Chart (heller Hintergrund) nutzt dieselben Farbtöne helligkeits-angepasst; Gefriertruhe `#7E57C2`,
+  um der Klima-Cyan-Nähe auszuweichen.
 
 ## Invarianten
 - Mobile-Portrait zeigt das **vollständige** Chart in angenehmer Größe und ist horizontal wischbar —

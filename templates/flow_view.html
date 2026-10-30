@@ -291,7 +291,7 @@
         /* ══════ Battery Detail Bar ══════ */
         .battery-detail {
             display: flex;
-            justify-content: flex-end;
+            justify-content: flex-start;
             align-items: center;
             gap: 20px;
             padding: 6px 0 2px 8px;
@@ -300,6 +300,10 @@
             font-weight: 500;
             white-space: nowrap;
             overflow: hidden;
+        }
+        .battery-detail .bd-intro {
+            color: #10b981;
+            font-weight: 700;
         }
         .battery-detail .bd-val {
             color: #10b981;
@@ -349,7 +353,7 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: clip;
-            text-align: right;
+            text-align: left;
         }
         .wp-auto-line.events {
             color: rgba(255,255,255,0.55);
@@ -363,7 +367,7 @@
             display: none;
         }
         .auto-section .auto-header.batt { color: #10b981; }
-        .auto-section .auto-header.hp   { color: #fb923c; border-bottom-color: rgba(251,146,60,0.2); }
+        .auto-section .auto-header.hp   { color: #ea580c; border-bottom-color: rgba(234,88,12,0.2); }
         .auto-section .auto-header.wp   { color: #14b8a6; border-bottom-color: rgba(20,184,166,0.3); }
         .auto-phase {
             display: flex;
@@ -415,10 +419,10 @@
         .auto-phase.skipped .ap-text  { color: rgba(255,255,255,0.25); }
         .auto-phase.skipped .ap-val   { color: rgba(255,255,255,0.3); }
         /* HP-spezifisch */
-        .auto-phase.hp-ein .ap-icon { color: #fb923c; }
-        .auto-phase.hp-ein .ap-val  { color: #fb923c; }
-        .auto-phase.hp-aus .ap-icon { color: #fb923c; }
-        .auto-phase.hp-aus .ap-val  { color: #fb923c; }
+        .auto-phase.hp-ein .ap-icon { color: #ea580c; }
+        .auto-phase.hp-ein .ap-val  { color: #ea580c; }
+        .auto-phase.hp-aus .ap-icon { color: #ea580c; }
+        .auto-phase.hp-aus .ap-val  { color: #ea580c; }
         .auto-phase.wp .ap-icon  { color: #0d9488; }
         .auto-phase.wp .ap-val   { color: #14b8a6; font-weight: 600; }
         .auto-phase.wp .ap-label { color: rgba(20,184,166,0.75); }
@@ -434,7 +438,7 @@
         .auto-oneliner {
             display: flex;
             align-items: baseline;
-            justify-content: flex-end;
+            justify-content: flex-start;
             gap: 6px;
             padding: 2px 8px 2px 8px;
             font-size: 11px;
@@ -455,7 +459,7 @@
             font-weight: 600;
         }
         .auto-oneliner .ap-hp-val {
-            color: #fb923c;
+            color: #ea580c;
             font-weight: 600;
         }
         .auto-oneliner .ap-wp-val {
@@ -501,7 +505,7 @@
         /* (HP styles moved into .auto-section / .auto-phase) */
         .inverter-temps {
             display: flex;
-            justify-content: flex-end;
+            justify-content: flex-start;
             align-items: center;
             gap: 16px;
             padding: 6px 0 4px 8px;
@@ -526,18 +530,35 @@
             font-size: 13px;
         }
 
+        /* ══════ Maschinenraum: platzabhängige Label-Einführungen (links) ══════ */
+        /* Breite Fenster: ausgeschriebene Begriffe; schmal/mobil: Kurzform bzw.
+           bei der Batterie-Statuszeile ganz ohne Einführung (SOC/SOH sind bekannt). */
+        .mr-lbl .mr-short { display: none; }
+        .mr-lbl .mr-full  { display: inline; }
+        /* Wattpilot-Statuszeile */
+        #wattpilotAutoSection {
+            border-bottom: 1px solid rgba(255,255,255,0.12);
+            padding: 2px 0;
+        }
+        .auto-oneliner .ap-ev-val  { color: #93c5fd; font-weight: 600; }
+        @media (max-width: 720px) {
+            .mr-lbl .mr-short { display: inline; }
+            .mr-lbl .mr-full  { display: none; }
+            .battery-detail .bd-intro { display: none; }
+        }
+
         @media (max-width: 768px) {
             .flow-chart { padding: 12px; }
             #flow-svg { height: 400px; aspect-ratio: auto; }
             /* Klein-Screen: Infos umbrechen statt abschneiden → nichts geht verloren. */
             .battery-detail {
                 gap: 6px 12px; font-size: 11px;
-                flex-wrap: wrap; justify-content: center;
+                flex-wrap: wrap; justify-content: flex-start;
                 white-space: normal; overflow: visible;
             }
             .inverter-temps {
                 gap: 6px 10px; font-size: 10px;
-                flex-wrap: wrap; justify-content: center;
+                flex-wrap: wrap; justify-content: flex-start;
                 white-space: normal; overflow: visible;
             }
             .battery-detail .bd-sep, .inverter-temps .it-sep { display: none; }
@@ -682,7 +703,7 @@
             transition: max-height 0.5s ease, opacity 0.35s ease;
         }
         #maschinen-info-wrap.visible {
-            max-height: 600px;
+            max-height: 720px;
             opacity: 1;
         }
         
@@ -1035,9 +1056,9 @@
                       id="sub-wattpilot"></text>
 
                                         <circle cx="500" cy="340" r="39" fill="none"
-                        stroke="#60a5fa" stroke-width="2" id="circle-heatpump" data-bubble="heatpump"/>
+                        stroke="#14b8a6" stroke-width="2" id="circle-heatpump" data-bubble="heatpump"/>
                                         <text x="500" y="333" text-anchor="middle"
-                      fill="#60a5fa" font-size="14" font-weight="600">WP</text>
+                      fill="#14b8a6" font-size="14" font-weight="600">WP</text>
                                         <text x="500" y="352" text-anchor="middle"
                       fill="rgba(255,255,255,0.7)" font-size="15"
                       font-weight="600" id="value-heatpump">0W</text>
@@ -1066,6 +1087,7 @@
             <div id="maschinen-info-wrap">
             <!-- Zeile 1: Batterie-Infos (einzeilig, kompakt) -->
             <div class="battery-detail" id="batteryDetail">
+                <span class="bd-intro">Batterie</span>
                 <span>Lad/Entlad: <span class="bd-val" id="bd-charge">--</span>/<span class="bd-val" id="bd-discharge">--</span> kWh</span>
                 <span class="bd-sep">|</span>
                 <span>SOH: <span class="bd-val" id="bd-soh">--</span>%<span id="bd-soh-source" style="font-size:9px;opacity:0.4;margin-left:2px"></span></span>
@@ -1100,7 +1122,13 @@
                     <div class="wp-auto-line events"><span class="ap-label" style="color:#14b8a6">Soll:</span> <span class="ap-text">—</span></div>
                 </div>
             </div>
-            <!-- Zeile 6: Temperaturen F1 + F2 + Batt -->
+            <!-- Zeile 6: Wattpilot (EV-Lader) Status (einzeilig) -->
+            <div class="auto-section" id="wattpilotAutoSection">
+                <div id="wattpilotAutoBody" class="auto-oneliner">
+                    <span class="ap-icon">○</span> <span class="ap-text">—</span>
+                </div>
+            </div>
+            <!-- Zeile 7: Temperaturen F1 + F2 + Batt -->
             <div class="inverter-temps" id="inverterTemps">
                 <span class="it-label">F1:</span>
                 <span><span class="it-val" id="it-intern">--</span>°</span>
@@ -1275,7 +1303,7 @@
     const C = {  // Farben
         netz:'#ef4444', pv:'#fbbf24', battery:'#10b981',
         consumption:'#60a5fa', producer:'#fcd34d',
-        household:'#dbeafe', wattpilot:'#93c5fd', heatpump:'#60a5fa',
+        household:'#dbeafe', wattpilot:'#93c5fd', heatpump:'#14b8a6',
         heizpatrone:'#ea580c', klima:'#00bcd4',
     };
 
@@ -1882,20 +1910,21 @@
         return 2;
     }
 
-    // ── Info-Zeilen rechtsbündig halten (Rechtsanschlag) ────────────────────
+    // ── Info-Zeilen linksbündig halten (Linksanschlag) ─────────────────────
     // Block-/Snapshot-Zeilen (WP, Batterie-Detail, WR-Temps) haben overflow:hidden;
-    // scrollLeft ans Ende schiebt die neuesten Werte an den rechten Rand und
-    // schneidet links ab — breitenunabhängig. (.auto-oneliner nutzt CSS flex-end.)
+    // scrollLeft=0 hält die Einführung + neuesten Werte am linken Rand sichtbar
+    // und schneidet rechts ab — breitenunabhängig. (.auto-oneliner nutzt CSS flex-start,
+    // Timelines werden neueste-zuerst gerendert → neueste stehen links.)
     let _pinRAF = 0;
-    function pinInfoRowsRight() {
+    function pinInfoRowsLeft() {
         const wrap = document.getElementById('maschinen-info-wrap');
         if (!wrap) return;
         wrap.querySelectorAll('.wp-auto-line, .battery-detail, .inverter-temps')
-            .forEach(el => { el.scrollLeft = el.scrollWidth; });
+            .forEach(el => { el.scrollLeft = 0; });
     }
     function scheduleInfoPin() {
         if (_pinRAF) return;
-        _pinRAF = requestAnimationFrame(() => { _pinRAF = 0; pinInfoRowsRight(); });
+        _pinRAF = requestAnimationFrame(() => { _pinRAF = 0; pinInfoRowsLeft(); });
     }
     function initInfoRowPinning() {
         const wrap = document.getElementById('maschinen-info-wrap');
@@ -1955,7 +1984,7 @@
         if (merged.length === 0) return 'keine Sollwert-Änderungen heute';
 
         const maxN = getWpMaxEvents();
-        const toShow = merged.slice(-maxN);  // neueste N
+        const toShow = merged.slice(-maxN).reverse();  // neueste N, neueste zuerst (linksbündig)
 
         return toShow.map(a => {
             const zeit = fmtSwitchTime(a.ts);
@@ -1977,8 +2006,9 @@
     function buildTimelineSnippet(items, maxEvents = null) {
         if (!items || items.length === 0) return '';
         const limit = Number.isInteger(maxEvents) ? maxEvents : getTimelineMaxEvents();
-        // items kommen älteste-zuerst → letzte maxEvents zeigen (neueste)
-        const displayed = items.slice(-limit);
+        // items kommen älteste-zuerst → letzte maxEvents (neueste) nehmen und
+        // neueste-zuerst anordnen, damit sie bei Linksbündigkeit links sichtbar bleiben.
+        const displayed = items.slice(-limit).reverse();
         return displayed.join(' <span class="ap-sep">\u2502</span> ');
     }
 
@@ -2127,6 +2157,14 @@
         el.textContent = txt;
     }
 
+    // Platzabhängige Label-Einführung für die Maschinenraum-Infozeilen:
+    // breite Fenster zeigen den ausgeschriebenen Begriff, schmale/mobile die Kurzform.
+    function mrLabel(full, short, color) {
+        return `<span class="ap-label mr-lbl" style="color:${color}">`
+             + `<span class="mr-full">${full}</span>`
+             + `<span class="mr-short">${short}</span></span>`;
+    }
+
     function renderFlowStatusDetail(d) {
         if (!d) return;
         try {
@@ -2226,9 +2264,9 @@
                     battItems,
                     getBattTimelineMaxEvents(hasReasonBadges)
                 );
-                battBody.innerHTML = `<span class="ap-icon">⚡</span><span class="ap-label" style="color:#10b981">Batt:</span> ${battTimeline}`;
+                battBody.innerHTML = `<span class="ap-icon">⚡</span>${mrLabel('Batterie', 'Batt', '#10b981')} ${battTimeline}`;
             } else {
-                battBody.innerHTML = `<span class="ap-icon">⚡</span><span class="ap-label" style="color:#10b981">Batt:</span> <span class="ap-text">keine SOC-Schaltungen</span>`;
+                battBody.innerHTML = `<span class="ap-icon">⚡</span>${mrLabel('Batterie', 'Batt', '#10b981')} <span class="ap-text">keine SOC-Schaltungen</span>`;
             }
 
             // ── Zeile 3: HP-Schaltzeiten (24h, einzeilig) ───────
@@ -2241,7 +2279,7 @@
                     const isExtern = String(a.quelle || '').toLowerCase() === 'extern';
                     const isFehler = a.ergebnis === 'FEHLER';
                     // Farbpaar HP: auto=orange / extern=rot (warmer Verwandter)
-                    let color = isExtern ? '#dc2626' : '#fb923c';
+                    let color = isExtern ? '#dc2626' : '#ea580c';
                     if (isFehler) color = '#6b7280';
                     const symbol  = aIsEin ? '\u25b2' : '\u25bc';
                     const suffix = isFehler ? '✖' : '';
@@ -2250,9 +2288,9 @@
                     return `<span style="color:${color}" title="${titleAttr}">${zeit}${symbol}${suffix}</span>`;
                 });
                 const hpTimeline = buildTimelineSnippet(hpItems);
-                hpBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#fb923c">HP:</span> ${hpTimeline}`;
+                hpBody.innerHTML = `<span class="ap-icon"></span>${mrLabel('Heizpatrone', 'HP', '#ea580c')} ${hpTimeline}`;
             } else {
-                hpBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#fb923c">HP:</span> <span class="ap-text">keine Schaltungen</span>`;
+                hpBody.innerHTML = `<span class="ap-icon"></span>${mrLabel('Heizpatrone', 'HP', '#ea580c')} <span class="ap-text">keine Schaltungen</span>`;
             }
 
             // ── Zeile 4: Klima-Schaltzeiten (24h, einzeilig) ─────────────────
@@ -2263,7 +2301,7 @@
             const kZustand = klimaStatus.zustand || '?';
             const kPow = klimaStatus.power_w != null ? klimaStatus.power_w : null;
             const kPowText = (kZustand === 'EIN' && kPow != null) ? ` ${kPow}W` : '';
-            const kStateColor = kZustand === 'EIN' ? '#06b6d4' : (kZustand === 'AUS' ? '#475569' : '#9ca3af');
+            const kStateColor = kZustand === 'EIN' ? '#00bcd4' : (kZustand === 'AUS' ? '#475569' : '#9ca3af');
             const kPrefix = `<span style="color:${kStateColor};font-weight:600" title="Live (klima_w)">${kZustand}${kPowText}</span>`;
             // Schaltfrequenz-Cooldown anzeigen
             const kCooldown = klimaStatus.cooldown_aktiv;
@@ -2282,7 +2320,7 @@
                     const isExtern = String(a.quelle || '').toLowerCase() === 'extern';
                     const isFehler = a.ergebnis === 'FEHLER';
                     // Farbpaar Klima: auto=cyan / extern=blau (kühler Verwandter)
-                    let color = isExtern ? '#3b82f6' : '#06b6d4';
+                    let color = isExtern ? '#3b82f6' : '#00bcd4';
                     if (isFehler) color = '#6b7280';
                     const symbol  = aIsEin ? '\u25b2' : '\u25bc';
                     const suffix = isFehler ? '✖' : '';
@@ -2291,9 +2329,9 @@
                     return `<span style="color:${color}" title="${titleAttr}">${zeit}${symbol}${suffix}</span>`;
                 });
                 const klimaTimeline = buildTimelineSnippet(klimaItems);
-                klimaBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#06b6d4">Klima:</span> ${kPrefix}${kCooldownBadge} <span class="ap-sep">·</span> ${klimaTimeline}`;
+                klimaBody.innerHTML = `<span class="ap-icon"></span>${mrLabel('Klima', 'Kl.', '#00bcd4')} ${kPrefix}${kCooldownBadge} <span class="ap-sep">·</span> ${klimaTimeline}`;
             } else {
-                klimaBody.innerHTML = `<span class="ap-icon"></span><span class="ap-label" style="color:#06b6d4">Klima:</span> ${kPrefix}${kCooldownBadge} <span class="ap-sep">·</span> <span class="ap-text">keine Schaltungen</span>`;
+                klimaBody.innerHTML = `<span class="ap-icon"></span>${mrLabel('Klima', 'Kl.', '#00bcd4')} ${kPrefix}${kCooldownBadge} <span class="ap-sep">·</span> <span class="ap-text">keine Schaltungen</span>`;
             }
 
             // ── Zeile 5: WP Wärmepumpe (zweizeilig) ─────────────────
@@ -2315,12 +2353,40 @@
                 const wpAktNeuesteZuerst = wpAkt.slice().reverse();
                 const wpSollTimeline = buildWpSollEventSnippet(wpAktNeuesteZuerst);
 
-                wpBody.innerHTML = `<div class="wp-auto-line"><span class="ap-icon"></span><span class="ap-label" style="color:#14b8a6">WP:</span> VL <span class="ap-wp-val">${wv}°</span> <span class="ap-sep">·</span> RL <span class="ap-wp-val">${wr}°</span>/<span class="ap-wp-val">${wrs}°</span> <span class="ap-sep">·</span> WW <span class="ap-wp-val">${wwi}°</span>/<span class="ap-wp-val">${wws}°</span> <span class="ap-sep">·</span> Heiz <span class="ap-wp-val">${whs}°</span> <span class="ap-sep">·</span> Quelle <span class="ap-wp-val">${wqe}°</span>/<span class="ap-wp-val">${wqa}°</span></div><div class="wp-auto-line events"><span class="ap-icon"></span><span class="ap-label" style="color:#14b8a6">Soll:</span> ${wpSollTimeline}</div>`;
+                wpBody.innerHTML = `<div class="wp-auto-line"><span class="ap-icon"></span>${mrLabel('Wärmepumpe', 'WP', '#14b8a6')} VL <span class="ap-wp-val">${wv}°</span> <span class="ap-sep">·</span> RL <span class="ap-wp-val">${wr}°</span>/<span class="ap-wp-val">${wrs}°</span> <span class="ap-sep">·</span> WW <span class="ap-wp-val">${wwi}°</span>/<span class="ap-wp-val">${wws}°</span> <span class="ap-sep">·</span> Heiz <span class="ap-wp-val">${whs}°</span> <span class="ap-sep">·</span> Quelle <span class="ap-wp-val">${wqe}°</span>/<span class="ap-wp-val">${wqa}°</span></div><div class="wp-auto-line events"><span class="ap-icon"></span><span class="ap-label" style="color:#14b8a6">Soll:</span> ${wpSollTimeline}</div>`;
             } else if (wpBody) {
-                wpBody.innerHTML = `<div class="wp-auto-line"><span class="ap-label" style="color:#14b8a6">WP:</span> <span class="ap-text">nicht verfügbar</span></div><div class="wp-auto-line events"><span class="ap-label" style="color:#14b8a6">Soll:</span> <span class="ap-text">—</span></div>`;
+                wpBody.innerHTML = `<div class="wp-auto-line">${mrLabel('Wärmepumpe', 'WP', '#14b8a6')} <span class="ap-text">nicht verfügbar</span></div><div class="wp-auto-line events"><span class="ap-label" style="color:#14b8a6">Soll:</span> <span class="ap-text">—</span></div>`;
             }
 
-            // ── Zeile 6: Temperaturen (Batt-Temp bereits im HTML integriert) ──
+            // ── Zeile 6: Wattpilot (EV-Lader) ────────────────────────
+            const ev = d.wattpilot_status || {};
+            const evBody = document.getElementById('wattpilotAutoBody');
+            if (evBody) {
+                if (ev.error || ev.online === false) {
+                    const off = ev.error ? 'nicht verfügbar' : 'offline';
+                    evBody.innerHTML = `<span class="ap-icon"></span>${mrLabel('Wattpilot', 'EV', '#93c5fd')} <span class="ap-text" style="color:#64748b">${off}</span>`;
+                } else {
+                    // Zustands-Farbe: Lädt=grün, Warten=gelb, Vollständig=blau, Bereit=grau, Fehler=rot
+                    const stColor = { 2: '#4ade80', 3: '#fbbf24', 4: '#60a5fa', 1: '#94a3b8', 5: '#f87171' }[ev.car_state] || '#94a3b8';
+                    const stText = ev.car_state_text || '—';
+                    const parts = [`<span style="color:${stColor};font-weight:600">${stText}</span>`];
+                    if (ev.charging && ev.power_w != null) {
+                        parts.push(`<span class="ap-ev-val">${Math.round(ev.power_w)} W</span>`);
+                    }
+                    if (ev.energy_session_kwh != null && ev.energy_session_kwh > 0) {
+                        parts.push(`Session <span class="ap-ev-val">${String(ev.energy_session_kwh).replace('.', ',')}</span> kWh`);
+                    }
+                    if (ev.phase_mode) parts.push(`${ev.phase_mode}`);
+                    if (ev.amp != null && ev.amp > 0) parts.push(`<span class="ap-ev-val">${ev.amp}</span> A`);
+                    if (ev.temperature_c != null && ev.temperature_c > 0) {
+                        parts.push(`<span class="ap-ev-val">${Math.round(ev.temperature_c)}</span>°C`);
+                    }
+                    const body = parts.join(' <span class="ap-sep">·</span> ');
+                    evBody.innerHTML = `<span class="ap-icon"></span>${mrLabel('Wattpilot', 'EV', '#93c5fd')} ${body}`;
+                }
+            }
+
+            // ── Zeile 7: Temperaturen (Batt-Temp bereits im HTML integriert) ──
             document.getElementById('bd-temp').textContent = d.battery_temp != null ? d.battery_temp : '--';
         } catch(e) { console.warn('renderFlowStatusDetail:', e); }
     }
