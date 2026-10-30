@@ -5,7 +5,7 @@ role: meta
 applyTo: "scripts/**"
 tags: [role-guard, failover, backup, publish-guard, sync]
 status: stable
-last_review: 2026-10-18
+last_review: 2026-10-30
 ---
 
 # System Ops-Guards
@@ -64,6 +64,7 @@ Systemweite Betriebsleitplanken fuer Multi-Host-Betrieb: `.role`-basiertes Verha
 - `scripts/install_nq_services.sh` blockt Unit-Dateien, deren `WorkingDirectory` nicht existiert oder nicht auf den aktuellen Workspace zeigt; Diagnos meldet installierte `pv-*.service` mit fehlendem `WorkingDirectory`.
 - Pfadwechsel trifft auch die **User-Crontab** (`crontab -l`): Aggregations-Jobs (`min1`/`fifteen`/`daily`/`monthly`) laufen `cd <alt-pfad> && python3 -m collector.aggregate.*` und scheitern still mit `ModuleNotFoundError: No module named 'collector'`. Symptom: `raw_data` frisch, aber `data_1min`/`data_15min`/`hourly_data` stehen -> Monitoring-Chart endet abrupt. Fix: `crontab -l | sed 's#alt#neu#g' | crontab -`. Lücke per `min1._aggregate_1min_impl(conn,cur,bucket_ts)` aus `raw_data` nachfüllen (nur soweit Retention reicht).
 - Failover-DB-Mirror (`failover_sync_db.sh`) braucht Key-Auth Failover->Primary; nach SD-Reflash fehlt der Host-Key (`ssh-keyscan`) und der Pull-Key in `authorized_keys` des Primary.
+- `pv-mirror-sync.timer` nutzt `OnCalendar=*:0/10` + `Persistent=true` (nicht `OnUnitActiveSec`): ein rein monotoner Timer verlor nach Reboot still seinen nächsten Trigger (`Trigger: n/a`), wenn der erste Lauf am Boot ausblieb -> Backup-Pull stand bis zum manuellen `restart`. Symptom: frische `*.service`, aber `data.db`/tmpfs-Mirror veralten unbemerkt.
 
 ## Verwandte Cards
 - [`diagnos-health.card.md`](./diagnos-health.card.md)

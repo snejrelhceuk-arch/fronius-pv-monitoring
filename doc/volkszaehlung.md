@@ -1,11 +1,11 @@
 # Volkszählung — PV-System Workspace
 
-> Stand: 2026-10-24 · auto-generiert von `tools/generate_volkszaehlung.py` (pre-commit).
+> Stand: 2026-10-30 · auto-generiert von `tools/generate_volkszaehlung.py` (pre-commit).
 
 ## Übersicht
 
-**Gesamtgröße (Textdateien gezählt):** 5186 MB
-**Gesamtzeilen (Code/Doku/Daten):** 414.028 Zeilen
+**Gesamtgröße (Textdateien gezählt):** 5492 MB
+**Gesamtzeilen (Code/Doku/Daten):** 423.046 Zeilen
 **Gezählte Dateien:** 914
 **Ausgeschlossene Verzeichnisse:** 29 (.venv, __pycache__, node_modules, .git …)
 
@@ -13,13 +13,13 @@
 
 | Sprache/Typ | Dateien | Zeilen | Anteil |
 |---|---|---|---|
-| **CSV** | 76 | 283.727 | 68.5% |
-| **Python** | 224 | 65.094 | 15.7% |
-| **Markdown** | 149 | 24.667 | 6.0% |
-| **HTML** | 28 | 16.662 | 4.0% |
-| **TXT** | 4 | 6.433 | 1.6% |
+| **CSV** | 76 | 292.359 | 69.1% |
+| **Python** | 224 | 65.094 | 15.4% |
+| **Markdown** | 149 | 24.668 | 5.8% |
+| **HTML** | 28 | 16.662 | 3.9% |
+| **TXT** | 4 | 6.788 | 1.6% |
 | **Shell** | 73 | 5.995 | 1.4% |
-| **JSON** | 298 | 5.393 | 1.3% |
+| **JSON** | 298 | 5.423 | 1.3% |
 | **JavaScript** | 6 | 1.728 | 0.4% |
 | **CSS** | 6 | 1.680 | 0.4% |
 | **SQL** | 10 | 1.427 | 0.3% |
@@ -27,7 +27,7 @@
 | **YAML** | 3 | 562 | 0.1% |
 | **CONF** | 3 | 70 | 0.0% |
 | **TOML** | 1 | 22 | 0.0% |
-| **Total** | 914 | 414.028 | 100% |
+| **Total** | 914 | 423.046 | 100% |
 
 ## Python-Code nach ABCDEN-Rollen
 
