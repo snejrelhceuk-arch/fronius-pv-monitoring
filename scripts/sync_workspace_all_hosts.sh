@@ -69,7 +69,7 @@ if [ -z "$FORCE" ] && [ -z "$DRY_RUN" ]; then
 fi
 
 RSYNC_EXCLUDES=(
-    --exclude='.role' --exclude='.state/' --exclude='.secrets'
+    --exclude='.role' --exclude='.infra.local' --exclude='.state/' --exclude='.secrets'
     --exclude='*.db' --exclude='*.db-shm' --exclude='*.db-wal'
     --exclude='*.db.bak_*' --exclude='*.db.before_restore_*' --exclude='data_backup_*.db'
     --exclude='*.log' --exclude='*.pid'

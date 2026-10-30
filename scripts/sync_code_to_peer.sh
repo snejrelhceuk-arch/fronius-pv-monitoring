@@ -126,6 +126,7 @@ echo ""
 rsync -avz --delete \
     $DRY_RUN \
     --exclude='.role' \
+    --exclude='.infra.local' \
     --exclude='.state/' \
     --exclude='.secrets' \
     --exclude='*.db' \

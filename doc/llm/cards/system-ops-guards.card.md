@@ -18,7 +18,8 @@ Systemweite Betriebsleitplanken fuer Multi-Host-Betrieb: `.role`-basiertes Verha
 - **Shell-Rollencheck:** `scripts/role_guard.sh` (`require_primary`, `require_role`; Default beim Sourcen = Primary-only)
 - **Cron-Monitore:** `scripts/monitor_collector.sh`, `scripts/monitor_wattpilot.sh`, `scripts/monitor_steuerbox.sh`
 - **Terminal-Safe-Runner:** `scripts/terminal_safe_run.sh`
-- **Code-Sync Primary->Failover:** `scripts/sync_code_to_peer.sh`
+- **Code-Sync Primary->Failover:** `scripts/sync_code_to_peer.sh` (git-tracked Code + `config/*.json`; host-spezifische Dateien inkl. `.infra.local` ausgeschlossen)
+- **Wöchentlicher Failover-Code-Sync (Timer):** `scripts/install_failover_codesync_timer.sh` (Unit `pv-failover-codesync`, Mo 04:30 → `sync_code_to_peer.sh --force`)
 - **Workspace-Redundanz-Sync Primary->alle Pi:** `scripts/sync_workspace_all_hosts.sh` (Hosts aus `.infra.local:PV_SYNC_HOSTS`)
 - **Failover-Quickstart (64bit-Rebuild):** `scripts/failover_postswap_quickstart.sh`, `scripts/install_failover_services.sh`, `scripts/failover_sync_db.sh`
 - **Browser-Autostart (Display-Host):** `scripts/pv_kiosk_browser.sh`, `scripts/install_kiosk_autostart.sh`

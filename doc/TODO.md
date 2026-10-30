@@ -48,3 +48,10 @@
 - [ ] Weekly-Stufe zusätzlich zur Küche spiegeln — erst mit größerer SD-Karte tragfähig (29-GB-Karte: weekly ~11,8 GB/Jahr füllt sie in ~1,2 Jahren). Bei Kartentausch: `TIERS=(weekly monthly yearly)` in `scripts/backup_longterm_offload.sh` + Weekly-Retention auf der Küche prüfen.
 - [ ] `doc/system/DUAL_HOST_ARCHITECTURE.md` §7 an IST angleichen: `backup_db_gfs.sh` läuft auf dem **FB** (nicht Primary), Header-Kommentar im Skript ist pre-REFORMATION.
 - [ ] Kontrollierter Code-Resync FB (Repo-Stand Feb 2026) und Küche (Juli 2026) auf Primary-Stand — betrifft u. a. veraltete Service-Skripte; Failover-Dienste vor/nach Sync prüfen.
+
+## Failover (Pi5-FB → Primary)
+
+- [ ] **SMTP-Passwort auf Pi5-FB provisionieren**, damit `pv-failover-health` bei Primary-Ausfall aktiv alarmieren kann (sonst nur lokales Log `/tmp/pv_failover_health.log` + `.state/failover_recommendation`). Aktiv-Alerting ist die wichtigste Lücke für den unbeaufsichtigten Ernstfall.
+- [ ] Optionales `scripts/failover_promote.sh`: bündelt Stufe 1+2 inkl. `pv-automation`-Start zu einem Kommando (Runbook in `doc/system/FAILOVER_STATUS.md`). Bewusst ungetestet lassen, da echter Promotion-Test Datenverlust riskiert.
+- [ ] `pv-doc-drift` auf dem FB lief als **root** (→ `doc/llm` war root-owned, blockierte Code-Sync). Ownership korrigiert; Drift-Service-User/Perms prüfen, damit es nicht erneut root-owned anlegt.
+- [ ] `data_stats.db` in den Mirror-/Backup-Fluss aufnehmen (aktuell nur täglicher Direkt-Sync via `scripts/stats_archive_daily.sh`).
