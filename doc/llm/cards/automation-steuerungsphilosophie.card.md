@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/engine.py"
 tags: [philosophie, prioritaet, matrix, external-respect]
 status: stable
-last_review: 2026-10-24
+last_review: 2026-10-31
 ---
 
 # Steuerungsphilosophie
@@ -70,3 +70,5 @@ last_review: 2026-10-24
 ## Human-Doku
 - `doc/automation/AUTOMATION_ARCHITEKTUR.md`
 - `doc/automation/PV_CONFIG_HANDBUCH.md`
+- `doc/automation/STRATEGIEN.md`
+- `doc/system/PARAMETER_MATRIZEN.md`

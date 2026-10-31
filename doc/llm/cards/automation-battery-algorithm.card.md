@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/aktoren/aktor_batterie.py"
 tags: [batterie, soc, fronius, modbus]
 status: stable
-last_review: 2026-10-24
+last_review: 2026-10-31
 ---
 # Battery-Algorithm
 
@@ -58,3 +58,4 @@ Setzt SOC-Grenzen (`soc_min`, `soc_max`) und Lademodus an der Fronius GEN24 — 
 ## Human-Doku
 - `doc/automation/FRONIUS_SOC_MODUS.md`
 - `doc/automation/AUTOMATION_ARCHITEKTUR.md`
+- `doc/automation/BATTERY_ALGORITHM.md`

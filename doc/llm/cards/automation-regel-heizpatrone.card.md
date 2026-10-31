@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/regeln/geraete_heizpatrone.py"
 tags: [heizpatrone, fritzdect, ww-speicher, prognose]
 status: stable
-last_review: 2026-10-21
+last_review: 2026-10-31
 ---
 
 # Regel Heizpatrone
@@ -91,3 +91,4 @@ Zusätzlich pausiert die Regel bei aktivem `afternoon_charge_request` den HP-Bet
 ## Human-Doku
 - `doc/automation/AUTOMATION_ARCHITEKTUR.md`
 - `doc/automation/HP_TOGGLE_OVERRIDE_FLOW.md`
+- `doc/automation/WP_INTEGRATION.md` (WP-Koordination: Dimplex SIK 11 TES, Temp-Caps)

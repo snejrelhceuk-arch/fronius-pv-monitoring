@@ -5,7 +5,7 @@ role: meta
 applyTo: "scripts/**"
 tags: [hosts, deployment, rsync, sync, pi, tech, failover, kueche, rolle-n]
 status: stable
-last_review: 2026-10-30
+last_review: 2026-10-31
 ---
 
 # System Hosts + Deployment
@@ -85,3 +85,5 @@ pv-system-Programme/Skripte/Docs, die hier fehlen, werden sie **hierher integrie
 - `AGENTS.md` (Hosts + Deployment-Policy)
 - `doc/system/BACKUP_STRATEGY.md` (verteilte GFS-Kette, Longterm-Archiv Küche)
 - `doc/system/WR_FERNSTEUERUNG.md`
+- `doc/system/FAILOVER_STATUS.md`
+- `doc/system/PI4_TECH_BRIDGE_HANDBUCH.md` (Tech-Host WP-Bridge + NQ-Collector)

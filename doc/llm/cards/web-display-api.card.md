@@ -85,4 +85,5 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 - `doc/web/DISPLAY_CONVENTIONS.md`
 - `doc/web/HA_INTEGRATION.md`
 - `doc/web/AKKU_STRESS_ANALYSE.md`
+- `doc/web/TICKER.md` (Dashboard-Ticker, Pi5-FB Port 8050)
 - `AGENTS.md` (Architektur-Skelett)
