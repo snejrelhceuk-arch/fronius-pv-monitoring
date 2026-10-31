@@ -53,7 +53,7 @@ flowchart LR
 ### 3.1 Randbedingungen
 
 Pi4-Tech hat **4 GB RAM**. Darauf laufen Debian 13, die WP/HW-Bridge (RS485,
-`WP_BACKEND_MODE=local`) und künftig der NQ-Collector. Reserviert für
+`WP_BACKEND_MODE=local`) und der NQ-Collector (Rolle N). Reserviert für
 OS + Bridge + Collector-Prozess + Page-Cache: **~2 GB**. Damit steht ein
 **tmpfs von 1,5 GB** sicher zur Verfügung (bewährt aus der Pi5-Vorlage, hier
 konservativer wegen der schwächeren Pi4-Plattform).
