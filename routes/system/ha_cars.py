@@ -23,22 +23,25 @@ LOG = logging.getLogger('routes.ha_cars')
 
 _CACHE: dict[str, Any] = {'ts': 0.0, 'value': None}
 
-# (entity_id, erwarteter_state (lowercase), Anzeigename) — Prio-Reihenfolge.
-# Quelle: HA-Fahrzeug-Integrationen auf dem HA-Host (X400).
-_DEFAULT_CAR_ENTITIES: list[tuple[str, str, str]] = [
-    ('sensor.zoe1_ladezustand', 'wird geladen', 'Zoe-jk'),
-    ('sensor.zoe2_ladezustand', 'wird geladen', 'Zoe-X'),
-    ('binary_sensor.chris_citroen_batterie_ladt', 'on', 'Citroën'),
+# (entity_id, aktive_states (lowercase, set), Anzeigename) — Prio-Reihenfolge.
+# Quelle: HA-Fahrzeug-Integrationen auf dem HA-Host (X400). Die Renault-ZOE-
+# Integration meldet den Roh-State `charge_in_progress` (nicht den lokalisierten
+# Anzeigetext); der Stellantis-Binary-Sensor `on`.
+_DEFAULT_CAR_ENTITIES: list[tuple[str, frozenset[str], str]] = [
+    ('sensor.zoe1_ladezustand', frozenset({'charge_in_progress'}), 'Zoe-jk'),
+    ('sensor.zoe2_ladezustand', frozenset({'charge_in_progress'}), 'Zoe-X'),
+    ('binary_sensor.chris_citroen_batterie_ladt', frozenset({'on'}), 'Citroën'),
 ]
 
 
-def _parse_car_entities(raw: str) -> list[tuple[str, str, str]]:
-    """'entity|state|Name, entity|state|Name' -> [(entity, state_lower, name), ...].
+def _parse_car_entities(raw: str) -> list[tuple[str, frozenset[str], str]]:
+    """'entity|state[/state2]|Name, ...' -> [(entity, {states}, name), ...].
 
-    Leere/ungueltige Eintraege werden ignoriert. Ist nichts konfiguriert,
-    nutzt ``_car_entities()`` die eingebauten Defaults.
+    Mehrere aktive Zustaende je Entity mit '/' trennen. Leere/ungueltige
+    Eintraege werden ignoriert. Ist nichts konfiguriert, nutzt ``_car_entities()``
+    die eingebauten Defaults.
     """
-    out: list[tuple[str, str, str]] = []
+    out: list[tuple[str, frozenset[str], str]] = []
     for part in (raw or '').split(','):
         part = part.strip()
         if not part:
@@ -46,12 +49,15 @@ def _parse_car_entities(raw: str) -> list[tuple[str, str, str]]:
         fields = [f.strip() for f in part.split('|')]
         if len(fields) != 3 or not all(fields):
             continue
-        entity, state, name = fields
-        out.append((entity, state.lower(), name))
+        entity, states, name = fields
+        state_set = frozenset(s.strip().lower() for s in states.split('/') if s.strip())
+        if not state_set:
+            continue
+        out.append((entity, state_set, name))
     return out
 
 
-def _car_entities() -> list[tuple[str, str, str]]:
+def _car_entities() -> list[tuple[str, frozenset[str], str]]:
     configured = _parse_car_entities(getattr(config, 'HA_READ_CAR_ENTITIES', ''))
     return configured or _DEFAULT_CAR_ENTITIES
 
@@ -81,11 +87,11 @@ def _resolve_uncached() -> str | None:
         return None
 
     session = requests.Session()
-    for entity_id, expected, name in _car_entities():
+    for entity_id, active_states, name in _car_entities():
         value = _fetch_state(session, entity_id)
         if value is None or value in {'unavailable', 'unknown', ''}:
             continue
-        if value == expected:
+        if value in active_states:
             return name
     return None
 

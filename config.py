@@ -207,9 +207,10 @@ HA_READ_TOKEN = (
 HA_READ_HTTP_TIMEOUT_S = int(load_local_setting('PV_HA_READ_HTTP_TIMEOUT_S', '5'))
 HA_READ_CACHE_TTL_S = int(load_local_setting('PV_HA_READ_CACHE_TTL_S', '20'))
 # Entities, die das aktuell ladende E-Auto identifizieren (komma-separiert,
-# hoechste Prioritaet zuerst). Format je Eintrag: '<entity_id>|<state>|<Name>'.
-# Leer -> eingebaute Defaults (zoe1/zoe2/citroen). Beispiel:
-# 'sensor.zoe1_ladezustand|Wird geladen|Zoe-jk,sensor.zoe2_ladezustand|Wird geladen|Zoe-X'
+# hoechste Prioritaet zuerst). Format je Eintrag: '<entity_id>|<state[/state2]>|<Name>'.
+# Mehrere aktive Zustaende mit '/' trennen. Leer -> eingebaute Defaults
+# (zoe1/zoe2 -> charge_in_progress, citroen-binary -> on). Beispiel:
+# 'sensor.zoe1_ladezustand|charge_in_progress|Zoe-jk,sensor.zoe2_ladezustand|charge_in_progress|Zoe-X'
 HA_READ_CAR_ENTITIES = load_local_setting('PV_HA_READ_CAR_ENTITIES', '')
 
 # --- Failover-Host ---

@@ -61,16 +61,16 @@ def test_nicht_ladend_fragt_ha_nicht(monkeypatch):
 
 def test_zoe_x_laedt(monkeypatch):
     ha = _patch(monkeypatch, {
-        'sensor.zoe1_ladezustand': 'Nicht in Ladung',
-        'sensor.zoe2_ladezustand': 'Wird geladen',
+        'sensor.zoe1_ladezustand': 'not_in_charge',
+        'sensor.zoe2_ladezustand': 'charge_in_progress',
     })
     assert ha.resolve_charging_car({'charging': True}) == 'Zoe-X'
 
 
 def test_zoe_jk_hat_prioritaet(monkeypatch):
     ha = _patch(monkeypatch, {
-        'sensor.zoe1_ladezustand': 'Wird geladen',
-        'sensor.zoe2_ladezustand': 'Wird geladen',
+        'sensor.zoe1_ladezustand': 'charge_in_progress',
+        'sensor.zoe2_ladezustand': 'charge_in_progress',
     })
     assert ha.resolve_charging_car({'charging': True}) == 'Zoe-jk'
 
@@ -78,7 +78,7 @@ def test_zoe_jk_hat_prioritaet(monkeypatch):
 def test_citroen_binary(monkeypatch):
     ha = _patch(monkeypatch, {
         'sensor.zoe1_ladezustand': 'unavailable',
-        'sensor.zoe2_ladezustand': 'unknown',
+        'sensor.zoe2_ladezustand': 'not_in_charge',
         'binary_sensor.chris_citroen_batterie_ladt': 'on',
     })
     assert ha.resolve_charging_car({'charging': True}) == 'Citroën'
@@ -87,7 +87,7 @@ def test_citroen_binary(monkeypatch):
 def test_kein_auto_erkannt(monkeypatch):
     ha = _patch(monkeypatch, {
         'sensor.zoe1_ladezustand': 'unavailable',
-        'sensor.zoe2_ladezustand': 'Nicht in Ladung',
+        'sensor.zoe2_ladezustand': 'not_in_charge',
         'binary_sensor.chris_citroen_batterie_ladt': 'off',
     })
     assert ha.resolve_charging_car({'charging': True}) is None
@@ -98,6 +98,14 @@ def test_config_override(monkeypatch):
     ha = _patch(monkeypatch, {'sensor.custom_car': 'laedt'})
     monkeypatch.setattr(config, 'HA_READ_CAR_ENTITIES',
                         'sensor.custom_car|laedt|MeinAuto', raising=False)
+    assert ha.resolve_charging_car({'charging': True}) == 'MeinAuto'
+
+
+def test_config_override_multi_state(monkeypatch):
+    import config
+    ha = _patch(monkeypatch, {'sensor.custom_car': 'charge_in_progress'})
+    monkeypatch.setattr(config, 'HA_READ_CAR_ENTITIES',
+                        'sensor.custom_car|laedt/charge_in_progress|MeinAuto', raising=False)
     assert ha.resolve_charging_car({'charging': True}) == 'MeinAuto'
 
 
