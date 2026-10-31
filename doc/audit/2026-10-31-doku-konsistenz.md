@@ -88,6 +88,59 @@ Der **versionierte** Doc-Satz ist nach den Fixes frei von den gefundenen Fehlern
 veröffentlichten Doku intern und gegenseitig konsistent; die Live-Hardware deckt
 sich mit der Doku. Info-Overlay in allen Kategorien gegen IST abgeglichen.
 
+## Nachtrag: Human-Docs ↔ LLM-Cards (zweites Audit-System)
+
+Auf Nachfrage wurden die **zwei Doku-Systeme** (Human-Docs vs. LLM-Cards) zusätzlich
+auf gegenseitige Konsistenz geprüft.
+
+### Befunde und sofort behobene Fehler
+
+**WP-Hersteller-Widerspruch (kardinal, Cards vs. Human-Docs):**
+- `collector-feldnamen-referenz.card.md:32` und `automation-regel-wattpilot.card.md:50`
+  nannten die Wärmepumpe „Stiebel Eltron" — alle anderen Quellen (AGENTS.md, Overlay,
+  `doc/meta/PV_REFERENZSYSTEM_DOKUMENTATION.md`, `doc/automation/WP_INTEGRATION.md`,
+  `config/soc_param_matrix.json`, `doc/automation/STRATEGIEN.md`) sagen einheitlich
+  **„Dimplex SIK 11 TES"**. Korrigiert in beiden Cards.
+
+**Fehlende Human-Doku-Links (LLM-Cards ohne Verweis auf existierende tracked Human-Docs):**
+
+| Card | fehlender Link |
+|---|---|
+| `automation-battery-algorithm.card.md` | `doc/automation/BATTERY_ALGORITHM.md` |
+| `automation-regel-heizpatrone.card.md` | `doc/automation/WP_INTEGRATION.md` (Dimplex-WP-Koordination) |
+| `automation-steuerungsphilosophie.card.md` | `doc/automation/STRATEGIEN.md`, `doc/system/PARAMETER_MATRIZEN.md` |
+| `system-hosts.card.md` | `doc/system/FAILOVER_STATUS.md`, `doc/system/PI4_TECH_BRIDGE_HANDBUCH.md` |
+| `web-display-api.card.md` | `doc/web/TICKER.md` (Pi5-FB Ticker) |
+
+Alle ergänzt.
+
+### Strukturbefund: Broken-Refs = keine
+
+Alle 36 von Cards referenzierten Human-Doc-Pfade existieren (live geprüft).
+
+### Weitere NOCARD-Human-Docs (tracked, aber keine Card referenziert sie)
+
+Folgende tracked Docs sind inhaltlich deckend durch übergeordnete Cards (kein
+eigenständiges LLM-Einstiegsmuster erforderlich) oder durch AGENTS/INDEX ausreichend
+adressiert:
+`doc/automation/BEOBACHTUNGSKONZEPT.md`, `doc/automation/WP_REGISTER.md`
+(von WP_INTEGRATION abgedeckt), `doc/collector/COLLECTOR_HARDENING.md`,
+`doc/collector/SOLAR_FORECAST_SCAFFOLD.md` (kein produktiver Collector),
+`doc/netzqualitaet/NQ_SPEICHER.md`, `doc/netzqualitaet/NQ_TESTS_UND_DB.md`,
+`doc/netzqualitaet/ENERGIE_ABLESEMETHODE.md`, `doc/system/ABCDEN_ROLLENMODELL.md`
+(durch AGENTS.md abgedeckt), `doc/system/FILESYSTEM.md`,
+`doc/system/PARAMETER_MATRIZEN.md` (jetzt in steuerungsphilosophie verlinkt),
+`doc/system/SINGLE_INSTANCE_PROTECTION.md`, `doc/system/REFORMATION_RUNBOOK.md`.
+
+Gitignored (bewusst lokal): `doc/automation/SCHUTZREGELN.md`,
+`doc/automation/HARDWARE_SETUP.md`, `doc/collector/WATTPILOT_ARCHITECTURE.md`.
+
+
+- **Dateiname `DUAL_HOST_ARCHITECTURE.md`** ist historisch (Inhalt/Titel sind
+  bereits „Multi-Host / Vier Hosts"). Da die Datei gitignored ist und 8 Verweise
+  bestehen, lohnt eine Umbenennung nur zusammen mit einem Verweis-Sweep — bewusst
+  offen gelassen.
+
 ## Rest-Empfehlung (nicht sofort umgesetzt)
 
 - **Dateiname `DUAL_HOST_ARCHITECTURE.md`** ist historisch (Inhalt/Titel sind
