@@ -27,10 +27,10 @@ Vermischung der Schemata.
 flowchart LR
     PAC["Siemens PAC4200<br/>am PCC"] -->|Modbus TCP read| TECH
     subgraph TECH["Pi4-Tech 192.0.2.181 · 4 GB · RAM-first"]
-      POLL["nq/collector<br/>Block-Poller"] --> RAMDB[("tmpfs<br/>/dev/shm/nq_cache.db<br/>RAW 72h Ring + 3-10s")]
+      POLL["nq/collector<br/>Block-Poller"] --> RAMDB[("tmpfs<br/>/dev/shm/nq_cache.db<br/>RAW 12h Ring + nq_5min")]
       POLL --> EVT["Event-Vorfilter"]
     end
-    RAMDB -->|"täglich: 3-10s-Tabelle<br/>+ Event-RAW-Segmente"| INGEST
+    RAMDB -->|"täglich: nq_5min<br/>+ Event-RAW-Segmente"| INGEST
     subgraph PRIM["Pi5-Primary 192.0.2.204 · Aggregation/Analyse"]
       INGEST["nq/transfer<br/>Ingest"] --> NQDB[("nq/db/nq_YYYY-MM.db<br/>SD, aggregiert")]
       NQDB --> AGG["nq/aggregate<br/>3-10s → 5min → hourly → daily"]
@@ -72,29 +72,13 @@ konservativer wegen der schwächeren Pi4-Plattform).
 | **2 Balanciert (gewählt)** | **500 ms / 1 s / 5 s** | **~180 MB/Tag** |
 | 3 Konservativ | 1 s / 5 s / 10 s | ~90 MB/Tag |
 
-### 3.3 Entscheidung: 72 h (3 Tage) RAW im tmpfs
+### 3.3 Entscheidung: 12 h RAW im tmpfs
 
-Bei **Profil 2 (balanciert)**:
+RAW-Retention (`retention.raw_hours`) ist auf **12 h** gesetzt (`config/nq_config.json`).
+Die 5-min-Aggregate (`nq_5min`) entstehen lokal auf Tech und werden täglich zu Primary
+transferiert; lückenlose Rekonstruktionsbasis ist durch `nq_5min` + `nq_events` gegeben.
 
-$$ 3\ \text{Tage} \times 180\ \text{MB/Tag} = 540\ \text{MB} $$
-
-Das sind **~36 %** des 1,5-GB-tmpfs. Zusammen mit der 3–10 s-Aggregattabelle,
-Event-RAW-Markierungen, Indizes und WAL bleibt die Belegung deutlich unter
-**~1,0 GB** — mit klarer Sicherheitsreserve zum tmpfs-Limit und zum
-Gesamt-RAM des Pi4.
-
-**Festlegung:**
-
-- **`NQ_RAW_RETENTION_H = 72`** (3 Tage RAW im tmpfs; deckt exakt die
-  „72 h-Basis" der feinsten Aggregatstufe ab).
-- **`NQ_TMPFS_BUDGET_MB = 1500`**, harte Kappung greift bereits bei
-  **`NQ_TMPFS_CAP_MB = 1200`** (Ring-Buffer, s. §5).
-- Poll-Default = **Profil 2**; die Slow-Block-Rate wird nach dem **48 h-Feldtest**
-  (§7) auf die reale interne Refresh-Rate des PAC4200 nachgezogen.
-
-> Selbst bei versehentlichem Profil 1 (550 MB/Tag) blieben 3 Tage = 1,65 GB
-> unter dem Gesamt-RAM; die Kappung bei 1,2 GB verhindert ein tmpfs-Überlaufen
-> in jedem Fall.
+**`NQ_TMPFS_BUDGET_MB = 1500`**, harte Kappung bei **`NQ_TMPFS_CAP_MB = 1200`** (§5).
 
 ---
 
@@ -109,7 +93,7 @@ Block mit eigener Poll-Rate und eigener Tabelle.
 | **Fast** | RMS U je Phase, I je Phase, P/Q/S, cos φ, f | ~20 | 500 ms | `nq_raw_fast` |
 | **Medium** | THD U je Phase, THD I je Phase, ggf. Unsymmetrie | ~6–9 | 1 s | `nq_raw_medium` |
 | **Slow** | Harmonische 2..64 (U + I, je Phase) | 378 | 5 s | `nq_raw_slow` |
-| **Aggregat** | min/avg/max je Größe auf 3–10 s-Raster | alle | abgeleitet | `nq_agg_10s` |
+| **Aggregat** | min/avg/max je Größe auf 5-min-Raster | alle | abgeleitet | `nq_5min` |
 
 - PK jeweils `ts` (Unix-Sekunden, ms-Anteil bei Fast als separate Spalte oder
   Sub-Sekunden-`ts_ms`).
@@ -128,7 +112,7 @@ Block mit eigener Poll-Rate und eigener Tabelle.
 
 Damit der tmpfs nie überläuft, greifen **zwei** Sicherungen:
 
-1. **Zeit-Ring:** periodischer `DELETE FROM nq_raw_* WHERE ts < now-72h`
+1. **Zeit-Ring:** periodischer `DELETE FROM nq_raw_* WHERE ts < now-12h`
    (bzw. Event-RAW ausgenommen — markierte Segmente bleiben bis zum
    bestätigten Transfer).
 2. **Größen-Kappung:** vor jedem Flush prüft der Collector die tmpfs-Belegung
@@ -146,19 +130,16 @@ damit Datenlücken auditierbar bleiben (analog „echte Lücken sichtbar lassen"
 
 ### 6.1 Transfer (täglich, 1×)
 
-- Tech exportiert **nur**: (a) die `nq_agg_10s`-Tabelle des Vortags und
+- Tech transferiert täglich: (a) die `nq_5min`-Tabelle (5-min-Skalaraggregate, letzten 5 h, at-least-once) und
   (b) die als **Event** markierten RAW-Segmente (`nq_raw_*` mit Event-Flag).
-- Transport über LAN (Batch klein: ~1–2 MB/Tag für Aggregat, Events selten).
-- Löschung aus dem tmpfs **erst nach quittiertem Transfer** (At-least-once).
-- SD-Schonung: Non-Event-RAW verlässt Tech nie und landet nie auf SD.
+- `nq_transient_5min` (Netzereignis-Transienten) wird auf Tech berechnet und ebenfalls übertragen.
+- Transport über LAN (Batch klein). Löschung aus dem tmpfs **erst nach quittiertem Transfer** (At-least-once).
 
 ### 6.2 Aggregationskaskade auf Primary (Vorbild Produktions-Pipeline)
 
 ```
-nq_agg_10s (3–10 s, 72 h auf Primary)         ← Transfer von Tech
+nq_5min (5-min-Skalare, Retention ~90 d)       ← Transfer von Tech
    ↓ nq/aggregate  (täglich)
-nq_5min      (Retention ~90 d)
-   ↓
 nq_hourly    (Retention ~365 d)
    ↓
 nq_daily     (Retention ~10 a)  + nq_events (Event-RAW-Verweise)
