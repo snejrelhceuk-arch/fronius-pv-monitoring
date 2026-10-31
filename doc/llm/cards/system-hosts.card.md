@@ -20,8 +20,8 @@ verteilt (Verhalten steuert die gitignored `.role`-Datei, **nicht** divergenter 
 |---|---|---|---|
 | **Pi5-Primary** | 192.0.2.204 | admin | Produktion A–E + NQ-Primary (Aggregation/Analyse/Rollup). `.role=primary` |
 | **Pi5-FB** | 192.0.2.195 | admin | Failover (read-only), Backup-Empfänger, **Dashboard-Ticker** (`pv-ticker`, Port 8050). `.role=failover` |
-| **Pi4-Küche** | 192.0.2.105 | jk | Kiosk-Display + Longterm-Archiv (Empfang monthly/yearly) |
-| **Pi4-Tech** | 192.0.2.181 | admin | **NQ-Collector (Rolle N)**: `pv-nq-poller`, `pv-nq-energy`; WP/HW-Bridge (`pv-wp-bridge`, `WP_BACKEND_MODE=local`). RAM-first (tmpfs) |
+| **Pi4-Küche** | 192.0.2.105 | jk | Kiosk-Display + Longterm-Archiv (Empfang monthly/yearly). `.role=kiosk` (kein Writer) |
+| **Pi4-Tech** | 192.0.2.181 | admin | **NQ-Collector (Rolle N)**: `pv-nq-poller`, `pv-nq-energy`; WP/HW-Bridge (`pv-wp-bridge`, `WP_BACKEND_MODE=local`). RAM-first (tmpfs). `.role=tech` |
 | Ubuntu-LLM | (extern) | — | Ollama-Host (Ticker-LLM). Zugriff via HTTP-API (`/api/pull`/`/api/generate`), kein SSH nötig. Repo-Teil: `ollama/` |
 
 ## Deployment (autorisiert für alle integrierten Pi's)
