@@ -147,3 +147,37 @@ Gitignored (bewusst lokal): `doc/automation/SCHUTZREGELN.md`,
   bereits „Multi-Host / Vier Hosts"). Da die Datei gitignored ist und 8 Verweise
   bestehen, lohnt eine Umbenennung nur zusammen mit einem Verweis-Sweep — bewusst
   offen gelassen.
+
+## Nachtrag 2: Tiefe Human↔LLM-Inhaltsprüfung (Explore-Agent)
+
+### Kritische Widersprüche — behoben
+
+**D1 — NQ RAW-Retention: `NQ_MODUL.md` 72 h vs. Card + Code 12 h**
+`doc/netzqualitaet/NQ_MODUL.md` §3.3 (Stand 2026-08-08) beschrieb die
+initiale Design-Entscheidung „72 h RAW im tmpfs". Das produktive System
+(`config/nq_config.json:raw_hours=12`, Capping-Code default=12,
+Schema-Kommentar „12 h Ring-Buffer") läuft auf 12 h. Die Card war korrekt,
+das Human-Doc veraltet. Korrigiert: §3.3, Zeit-Ring-Löschung, Mermaid-Diagramm.
+
+**D2 — NQ Transfer-Tabelle: `NQ_MODUL.md` `nq_agg_10s` vs. Card/Code `nq_5min`**
+`NQ_MODUL.md` §6.1 + Aggregationskaskade beschrieben `nq_agg_10s` als
+Transfer-Objekt von Tech → Primary. `nq_agg_10s` existiert **nicht** im
+produktiven Schema (`nq/schema/nq_tech_schema.sql`) und nicht in der
+Live-DB auf Tech. Der produktive Transfer (`nq/transfer/nq_agg_transfer.py`)
+überträgt `nq_5min` + `nq_transient_5min`. Human-Doc auf IST gebracht.
+
+**C2 — Pi4-Tech `.role=tech` (nicht `failover`)**
+Live verifiziert: Tech-Host hat `.role=tech`. Gitignorierte Arch-Docs sagten
+`failover*`, `system-hosts.card.md` trug keinen Wert — beides korrigiert
+(Card: `.role=tech`; Arch-Docs lokal). Küche live: `.role=kiosk` (in Card ergänzt).
+
+**C1 — `pv-nq-backup` in Primary-Dienstliste fehlend**
+`SYSTEM_ARCHITECTURE.md` Primary-Dienste enthielten den NQ-GFS-Backup-Timer
+nicht (`BACKUP_STRATEGY.md` und systemd-Timer-Liste kennen ihn). Lokal ergänzt.
+
+### Strukturelle Stale-Human-Docs (gitignored, lokal korrigiert)
+
+`WATTPILOT_ARCHITECTURE.md`: 10 s Polling (real 30 s) + 4 fehlende
+Schema-Spalten (`amp`, `trx`, `lmo`, `frc`). Da gitignored und Cards
+korrekt, ist das kein LLM-Risiko — aber für künftige manuelle Arbeit
+mit dem Doc irreführend.
