@@ -2,10 +2,10 @@
 title: Web Display/API (Blueprints, Read-only Zugriff, Formatierung)
 domain: web
 role: B
-applyTo: "routes/**"
+applyTo: "routes/**,web_api.py"
 tags: [web-api, blueprints, templates, formatting, read-only]
 status: stable
-last_review: 2026-10-30
+last_review: 2026-10-31
 ---
 
 # Web Display/API

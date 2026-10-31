@@ -2,10 +2,10 @@
 title: Regel Wattpilot (SOC-Schutz, WS-Kommandos, rbt-Reset)
 domain: automation
 role: C
-applyTo: "automation/engine/aktoren/aktor_wattpilot.py"
+applyTo: "automation/engine/aktoren/aktor_wattpilot.py,automation/engine/regeln/geraete_wattpilot_schutz.py,automation/engine/wattpilot_recovery.py"
 tags: [wattpilot, ev-lader, websocket, soc-schutz]
 status: stable
-last_review: 2026-09-28
+last_review: 2026-10-31
 ---
 
 # Regel Wattpilot
