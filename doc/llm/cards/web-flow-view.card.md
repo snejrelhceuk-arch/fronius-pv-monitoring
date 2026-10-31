@@ -80,12 +80,14 @@ Wirkung.
   `routes/system/ha_cars.py:resolve_charging_car` (read-only HA-REST, config-gated via `HA_READ_*`;
   ohne Token/Config `null` → keine Auto-Anzeige).
 - **Session-Latch Auto-Name:** Die Fahrzeug-Identität ist nur **während** des Ladens auslesbar
-  (Renault-State `charge_in_progress`). Der erkannte Name wird daher — analog zur Session-Energie, die
-  der Wattpilot bis zum nächsten Anstecken hält — persistiert (`config/wattpilot_session_car.json`,
-  gitignored, atomic write für Multi-Worker) und bleibt in der Bubble stehen, **bis eine neue Session
-  beginnt** (erkannt am Rücksprung von `session_wh` → anderes Auto angesteckt). Die Bubble-Zeile zeigt
-  `charging_car` daher auch bei Ladepause/-ende; die Maschinenraum-Zeile „Lädt &lt;Auto&gt;" nur während
-  des aktiven Ladens.
+  (Renault-State `charge_in_progress`). Der zuletzt **positiv identifizierte** Name wird persistiert
+  (`config/wattpilot_session_car.json`, gitignored, atomic write für Multi-Worker) und bleibt in der
+  Bubble stehen, **bis ein anderes Auto beim Laden erkannt wird**. Der Wattpilot setzt `session_wh` beim
+  **Abstecken** auf 0 zurück — in dieser Lücke ist keine Identifikation möglich, daher **löscht** der
+  `session_wh`-Rücksprung den Namen **nicht**, sondern löst nur eine sofortige HA-Neuabfrage aus
+  (force-refresh); ersetzt wird erst bei positiver Neu-Identifikation. Die Bubble-Zeile zeigt
+  `charging_car` daher auch bei Ladepause/-ende/abgesteckt; die Maschinenraum-Zeile „Lädt &lt;Auto&gt;"
+  nur während des aktiven Ladens.
 - **Platzabhängige Label-Einführung:** Helper `mrLabel(full, short, color)` + CSS-Breakpoint
   (`@media max-width:720px`): breit = ausgeschrieben (Batterie/Heizpatrone/Wärmepumpe/Klima/Wattpilot),
   schmal = Kurzform (Batt/HP/WP/Kl./EV); die Batterie-Statuszeile (`.bd-intro`) blendet die Einführung

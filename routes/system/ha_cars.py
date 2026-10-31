@@ -9,10 +9,13 @@ Der Wattpilot selbst kennt das Auto nicht (RFID ``trx`` i.d.R. leer); die
 Identitaet stammt aus den Fahrzeug-Integrationen in HA (Renault/Stellantis) und
 ist nur waehrend des aktiven Ladens auslesbar (`charge_in_progress`).
 
-Session-Latch: Der einmal erkannte Name wird — analog zur Session-Energie, die
-der Wattpilot bis zum naechsten Anstecken haelt — persistiert, bis eine **neue**
-Session beginnt (erkannt am Ruecksprung der Session-Energie `session_wh`). So
-bleibt der Name in der Flow-Bubble stehen, bis ein anderes Auto angesteckt wird.
+Session-Latch: Der einmal **positiv identifizierte** Name wird persistiert und
+bleibt in der Flow-Bubble stehen, bis ein **anderes Auto beim Laden erkannt**
+wird. Die Fahrzeug-Integration ist nur waehrend des Ladens auslesbar; zwischen
+Abstecken und naechstem Laden (Wattpilot setzt `session_wh` beim Abstecken auf 0
+zurueck) ist keine Identifikation moeglich — der Name darf dort **nicht**
+verschwinden. Der `session_wh`-Ruecksprung loest daher nur eine sofortige
+Neuabfrage aus, ersetzt den Namen aber erst bei positiver Neu-Identifikation.
 Persistenz als kleine JSON-Datei (multi-worker-sicher via atomic replace),
 Muster wie ``config/battery_bms_checkpoints.json``.
 """
@@ -145,8 +148,13 @@ def _write_latch(data: dict) -> None:
 def resolve_charging_car(wattpilot: dict | None = None) -> str | None:
     """Liefert den Anzeigenamen des Autos der aktuellen Wattpilot-Session.
 
-    Haelt den zuletzt erkannten Namen ueber Ladepausen/-ende hinweg, bis eine
-    neue Session beginnt (``session_wh`` springt zurueck → anderes Auto). Ohne
+    Haelt den zuletzt **positiv identifizierten** Namen ueber Ladepausen/-ende
+    und Abstecken hinweg und ersetzt ihn erst, wenn ein neues Auto beim Laden
+    erkannt wird. Der Ruecksprung der Session-Energie (``session_wh`` → neue
+    Session) loest lediglich eine sofortige Neuabfrage aus (force-refresh), damit
+    das neue Auto schnell erkannt wird — er **loescht den Namen nicht** (sonst
+    verschwaende er in der Luecke zwischen Abstecken und naechstem Laden, da die
+    Fahrzeug-Integration nur waehrend des Ladens identifizierbar ist). Ohne
     HA-Konfiguration inaktiv (``None``).
     """
     if not getattr(config, 'HA_READ_ENABLED', False):
@@ -162,17 +170,17 @@ def resolve_charging_car(wattpilot: dict | None = None) -> str | None:
     car = latch.get('car')
     last_swh = latch.get('session_wh')
 
+    # Neue Session (Energie springt zurueck = anderes/neues Auto angesteckt):
+    # nur HA-Cache umgehen, damit das neue Auto sofort aufgeloest wird.
     new_session = (
         last_swh is not None
         and cur_swh + _SESSION_RESET_EPS_WH < float(last_swh)
     )
-    if new_session:
-        car = None  # anderes Auto angesteckt → alten Namen verwerfen
 
     if charging:
         live = _resolve_live(force_refresh=new_session)
         if live:
-            car = live
+            car = live  # positive Neu-Identifikation ersetzt den Latch
 
     if car != latch.get('car') or last_swh != cur_swh:
         _write_latch({'car': car, 'session_wh': cur_swh})

@@ -124,17 +124,21 @@ def test_neues_auto_setzt_latch_zurueck(monkeypatch, tmp_path):
     assert ha2.resolve_charging_car(_wp(session_wh=50, charging=True)) == 'Citroën'
 
 
-def test_neues_auto_noch_nicht_identifizierbar(monkeypatch, tmp_path):
-    """Neues Auto angesteckt, aber noch nicht ladend -> alter Name verworfen,
-    kein neuer bekannt -> None (kein falscher alter Name)."""
+def test_neue_session_haelt_alten_namen_bis_neu_identifiziert(monkeypatch, tmp_path):
+    """Neues Auto angesteckt (session_wh-Reset), aber noch nicht ladend/
+    identifizierbar -> alter Name bleibt bestehen (verschwindet NICHT), bis ein
+    neues Auto beim Laden positiv erkannt wird."""
     ha = _patch(monkeypatch, tmp_path, {
         'sensor.zoe2_ladezustand': 'charge_in_progress',
     })
     assert ha.resolve_charging_car(_wp(session_wh=6900, charging=True)) == 'Zoe-X'
+    # session_wh faellt zurueck (abgesteckt/neue Session), nichts identifizierbar
     ha2 = _patch(monkeypatch, tmp_path, {
         'sensor.zoe2_ladezustand': 'not_in_charge',
     })
-    assert ha2.resolve_charging_car(_wp(session_wh=0, charging=False, car_state=3)) is None
+    assert ha2.resolve_charging_car(_wp(session_wh=0, charging=False, car_state=3)) == 'Zoe-X'
+    # Ladeende/Abstecken mit Reset, aber weiterhin nicht identifizierbar -> haelt
+    assert ha2.resolve_charging_car(_wp(session_wh=0, charging=False, car_state=1)) == 'Zoe-X'
 
 
 def test_config_override_multi_state(monkeypatch, tmp_path):
