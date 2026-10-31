@@ -52,6 +52,12 @@ def _read_wattpilot_db_summary(now: float) -> dict:
     age_s = round(now - float(ts))
     car_state = int(car_state or 0)
     phase_mode = int(phase_mode or 0)
+    lmo_i = int(lmo or 0)
+    mode_name = {
+        3: 'Standard',
+        4: 'Eco (PV)',
+        5: 'Next Trip',
+    }.get(lmo_i, '—')
     return {
         'online': age_s <= 180,
         'source': 'db',
@@ -63,6 +69,7 @@ def _read_wattpilot_db_summary(now: float) -> dict:
         'energy_session_wh': session_wh or 0,
         'energy_session_kwh': round((session_wh or 0) / 1000.0, 3),
         'power_w': float(power_w or 0),
+        'power_kw': round(float(power_w or 0) / 1000.0, 2),
         'car_state': car_state,
         'car_state_text': {
             0: 'Unbekannt',
@@ -74,10 +81,12 @@ def _read_wattpilot_db_summary(now: float) -> dict:
         }.get(car_state, f'Unbekannt ({car_state})'),
         'charging': car_state == 2,
         'temperature_c': float(temperature_c or 0),
+        # phase_mode wird vom Wattpilot nicht zuverlässig gemeldet (fast immer 0,
+        # nie 3-phasig trotz >9 kW) → nicht als belastbare Info anzeigen.
         'phase_mode_raw': phase_mode,
-        'phase_mode': '3-phasig' if phase_mode == 2 else '1-phasig',
         'amp': int(amp or 0),
+        'lmo': lmo_i,
+        'mode_name': mode_name,
         'trx': trx,
-        'lmo': int(lmo or 0),
         'frc': int(frc or 0),
     }

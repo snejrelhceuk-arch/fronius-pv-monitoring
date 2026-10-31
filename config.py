@@ -190,6 +190,28 @@ HA_BRIDGE_MQTT_PASSWORD = (
 )
 HA_BRIDGE_MQTT_KEEPALIVE_S = int(load_local_setting('PV_HA_BRIDGE_MQTT_KEEPALIVE_S', '60'))
 
+# --- Optionaler HA-Lesezugriff (REST, read-only) ---
+# Nur fuer Telemetrie-Reads aus Home Assistant (z.B. welches E-Auto gerade am
+# Wattpilot laedt). Kein Schreibpfad. Ohne Token bleibt das Feature inaktiv und
+# der Resolver liefert None (keine Auto-Anzeige).
+HA_READ_ENABLED = _as_bool(load_local_setting('PV_HA_READ_ENABLED', '0'))
+# Default-Host = HA-Bridge-MQTT-Host (beide laufen auf demselben HA-Host); kein
+# IP-Literal im Quellcode, der echte Wert kommt aus .infra.local.
+HA_READ_BASE_URL = load_local_setting(
+    'PV_HA_READ_BASE_URL', f'http://{HA_BRIDGE_MQTT_HOST}:8123'
+).rstrip('/')
+HA_READ_TOKEN = (
+    load_secret('PV_HA_READ_TOKEN')
+    or load_local_setting('PV_HA_READ_TOKEN', '')
+)
+HA_READ_HTTP_TIMEOUT_S = int(load_local_setting('PV_HA_READ_HTTP_TIMEOUT_S', '5'))
+HA_READ_CACHE_TTL_S = int(load_local_setting('PV_HA_READ_CACHE_TTL_S', '20'))
+# Entities, die das aktuell ladende E-Auto identifizieren (komma-separiert,
+# hoechste Prioritaet zuerst). Format je Eintrag: '<entity_id>|<state>|<Name>'.
+# Leer -> eingebaute Defaults (zoe1/zoe2/citroen). Beispiel:
+# 'sensor.zoe1_ladezustand|Wird geladen|Zoe-jk,sensor.zoe2_ladezustand|Wird geladen|Zoe-X'
+HA_READ_CAR_ENTITIES = load_local_setting('PV_HA_READ_CAR_ENTITIES', '')
+
 # --- Failover-Host ---
 FAILOVER_IP = load_local_setting('PV_FAILOVER_IP', '192.0.2.195')
 FAILOVER_USER = load_local_setting('PV_FAILOVER_USER', 'failover-user')

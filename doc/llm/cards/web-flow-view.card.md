@@ -4,7 +4,7 @@ domain: web
 role: B
 applyTo: "templates/flow_view.html,routes/flow_greetings.py"
 status: stable
-last_review: 2026-10-30
+last_review: 2026-10-31
 ---
 
 # Flow-Ansicht Rendering-Mechanik
@@ -71,7 +71,14 @@ Wirkung.
   `templates/flow_view.html:renderFlowStatusDetail` aus `/api/flow_status`.
 - Zeilen: **Batterie** (SOC/SOH/Lad/Status/Temp) · Batt-SOC-Schaltungen · **Heizpatrone** (HP) ·
   **Klima** · **Wärmepumpe** (WP-Temps + Soll-Log) · **Wattpilot** (EV-Status aus
-  `wattpilot_status`: Zustand/Leistung/Session-kWh/Phasen/Ampere) · WR-/Batt-Temperaturen.
+  `wattpilot_status`: Zustand/Leistung **in kW**/Modus/Session-kWh/Ampere) · WR-/Batt-Temperaturen.
+- **Wattpilot-Status (`routes/system/_shared.py:_read_wattpilot_db_summary`):** Ladeleistung als `power_kw`,
+  `mode_name` aus `lmo` (3→Standard, 4→Eco (PV), 5→Next Trip). Die frühere **Phasen-Anzeige entfällt** —
+  der Wattpilot meldet `phase_mode` nicht zuverlässig (fast immer 0, nie 3-phasig trotz >9 kW). Lädt ein
+  bekanntes E-Auto, zeigt der Zustand **„Lädt &lt;Auto&gt;"** (z. B. „Lädt Zoe-X"); die Wattpilot-Bubble
+  bekommt zusätzlich eine 4. Zeile (`#car-wattpilot`) mit dem Auto-Namen. Quelle:
+  `routes/system/ha_cars.py:resolve_charging_car` (read-only HA-REST, config-gated via `HA_READ_*`;
+  ohne Token/Config `null` → keine Auto-Anzeige).
 - **Platzabhängige Label-Einführung:** Helper `mrLabel(full, short, color)` + CSS-Breakpoint
   (`@media max-width:720px`): breit = ausgeschrieben (Batterie/Heizpatrone/Wärmepumpe/Klima/Wattpilot),
   schmal = Kurzform (Batt/HP/WP/Kl./EV); die Batterie-Statuszeile (`.bd-intro`) blendet die Einführung

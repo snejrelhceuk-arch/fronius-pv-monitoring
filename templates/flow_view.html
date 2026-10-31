@@ -1054,6 +1054,9 @@
                                         <text x="660" y="335" text-anchor="middle"
                       fill="rgba(255,255,255,0.7)" font-size="14"
                       id="sub-wattpilot"></text>
+                                        <text x="660" y="351" text-anchor="middle"
+                      fill="#93c5fd" font-size="11"
+                      id="car-wattpilot"></text>
 
                                         <circle cx="500" cy="340" r="39" fill="none"
                         stroke="#14b8a6" stroke-width="2" id="circle-heatpump" data-bubble="heatpump"/>
@@ -2368,15 +2371,20 @@
                 } else {
                     // Zustands-Farbe: Lädt=grün, Warten=gelb, Vollständig=blau, Bereit=grau, Fehler=rot
                     const stColor = { 2: '#4ade80', 3: '#fbbf24', 4: '#60a5fa', 1: '#94a3b8', 5: '#f87171' }[ev.car_state] || '#94a3b8';
-                    const stText = ev.car_state_text || '—';
+                    let stText = ev.car_state_text || '—';
+                    // Welches Auto lädt (aus HA), falls bekannt: "Lädt Zoe-X"
+                    if (ev.charging && ev.charging_car) stText = `Lädt ${ev.charging_car}`;
                     const parts = [`<span style="color:${stColor};font-weight:600">${stText}</span>`];
-                    if (ev.charging && ev.power_w != null) {
-                        parts.push(`<span class="ap-ev-val">${Math.round(ev.power_w)} W</span>`);
+                    if (ev.charging && (ev.power_kw != null || ev.power_w != null)) {
+                        const kw = ev.power_kw != null ? ev.power_kw : ev.power_w / 1000;
+                        parts.push(`<span class="ap-ev-val">${kw.toFixed(1).replace('.', ',')} kW</span>`);
+                    }
+                    if (ev.mode_name && ev.mode_name !== '—') {
+                        parts.push(`Modus <span class="ap-ev-val">${ev.mode_name}</span>`);
                     }
                     if (ev.energy_session_kwh != null && ev.energy_session_kwh > 0) {
                         parts.push(`Session <span class="ap-ev-val">${String(ev.energy_session_kwh).replace('.', ',')}</span> kWh`);
                     }
-                    if (ev.phase_mode) parts.push(`${ev.phase_mode}`);
                     if (ev.amp != null && ev.amp > 0) parts.push(`<span class="ap-ev-val">${ev.amp}</span> A`);
                     if (ev.temperature_c != null && ev.temperature_c > 0) {
                         parts.push(`<span class="ap-ev-val">${Math.round(ev.temperature_c)}</span>°C`);
@@ -2384,6 +2392,11 @@
                     const body = parts.join(' <span class="ap-sep">·</span> ');
                     evBody.innerHTML = `<span class="ap-icon"></span>${mrLabel('Wattpilot', 'EV', '#93c5fd')} ${body}`;
                 }
+            }
+            // Wattpilot-Bubble: 4. Zeile mit ladendem Auto (aus HA), falls bekannt
+            const carEl = document.getElementById('car-wattpilot');
+            if (carEl) {
+                carEl.textContent = (ev && ev.charging && ev.charging_car) ? ev.charging_car : '';
             }
 
             // ── Zeile 7: Temperaturen (Batt-Temp bereits im HTML integriert) ──

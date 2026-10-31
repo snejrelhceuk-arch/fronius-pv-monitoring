@@ -1016,6 +1016,12 @@ def _fetch_wattpilot_status(now, result):
     try:
         from routes.system._shared import _read_wattpilot_db_summary
         wp = _read_wattpilot_db_summary(now)
+        try:
+            from routes.system.ha_cars import resolve_charging_car
+            charging_car = resolve_charging_car(wp)
+        except Exception as _ce:
+            logging.debug(f"Lade-Auto-Resolver: {_ce}")
+            charging_car = None
         result['wattpilot_status'] = {
             'online': wp.get('online'),
             'age_s': wp.get('age_s'),
@@ -1023,11 +1029,15 @@ def _fetch_wattpilot_status(now, result):
             'car_state_text': wp.get('car_state_text'),
             'charging': wp.get('charging'),
             'power_w': wp.get('power_w'),
+            'power_kw': wp.get('power_kw'),
             'energy_session_kwh': wp.get('energy_session_kwh'),
             'energy_total_kwh': wp.get('energy_total_kwh'),
             'temperature_c': wp.get('temperature_c'),
-            'phase_mode': wp.get('phase_mode'),
+            'lmo': wp.get('lmo'),
+            'mode_name': wp.get('mode_name'),
+            'frc': wp.get('frc'),
             'amp': wp.get('amp'),
+            'charging_car': charging_car,
         }
     except Exception as _wpe:
         logging.debug(f"Wattpilot-Status: {_wpe}")
