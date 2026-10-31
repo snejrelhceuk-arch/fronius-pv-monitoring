@@ -1,25 +1,25 @@
 # Volkszählung — PV-System Workspace
 
-> Stand: 2026-10-30 · auto-generiert von `tools/generate_volkszaehlung.py` (pre-commit).
+> Stand: 2026-10-31 · auto-generiert von `tools/generate_volkszaehlung.py` (pre-commit).
 
 ## Übersicht
 
-**Gesamtgröße (Textdateien gezählt):** 5492 MB
-**Gesamtzeilen (Code/Doku/Daten):** 423.565 Zeilen
-**Gezählte Dateien:** 917
+**Gesamtgröße (Textdateien gezählt):** 5544 MB
+**Gesamtzeilen (Code/Doku/Daten):** 424.821 Zeilen
+**Gezählte Dateien:** 920
 **Ausgeschlossene Verzeichnisse:** 29 (.venv, __pycache__, node_modules, .git …)
 
 ## Nach Sprache/Typ
 
 | Sprache/Typ | Dateien | Zeilen | Anteil |
 |---|---|---|---|
-| **CSV** | 76 | 292.511 | 69.1% |
-| **Python** | 225 | 65.171 | 15.4% |
-| **Markdown** | 150 | 24.830 | 5.9% |
-| **HTML** | 28 | 16.728 | 3.9% |
-| **TXT** | 4 | 6.789 | 1.6% |
+| **CSV** | 76 | 293.250 | 69.0% |
+| **Python** | 228 | 65.646 | 15.5% |
+| **Markdown** | 150 | 24.840 | 5.8% |
+| **HTML** | 28 | 16.741 | 3.9% |
+| **TXT** | 4 | 6.803 | 1.6% |
 | **Shell** | 74 | 6.056 | 1.4% |
-| **JSON** | 298 | 5.423 | 1.3% |
+| **JSON** | 298 | 5.428 | 1.3% |
 | **JavaScript** | 6 | 1.728 | 0.4% |
 | **CSS** | 6 | 1.680 | 0.4% |
 | **SQL** | 10 | 1.427 | 0.3% |
@@ -27,15 +27,15 @@
 | **YAML** | 3 | 562 | 0.1% |
 | **CONF** | 3 | 70 | 0.0% |
 | **TOML** | 1 | 22 | 0.0% |
-| **Total** | 917 | 423.565 | 100% |
+| **Total** | 920 | 424.821 | 100% |
 
 ## Python-Code nach ABCDEN-Rollen
 
 | Rolle | Verzeichnis | .py-Dateien | Zeilen |
 |---|---|---|---|
-| **C** Automation | `automation/` | 46 | 14.386 |
+| **C** Automation | `automation/` | 46 | 14.475 |
 | **A** Collector | `collector/` | 19 | 5.058 |
-| **B** Web-API | `routes/` | 28 | 11.854 |
+| **B** Web-API | `routes/` | 29 | 11.984 |
 | **D** Diagnos | `diagnos/` | 11 | 2.746 |
 | **E** Steuerbox | `steuerbox/` | 5 | 1.316 |
 | **N** Netzqualität | `nq/` | 37 | 9.143 |
@@ -48,7 +48,7 @@
 1. `automation/engine/regeln/waermepumpe.py` — 1.132 Zeilen
 1. `routes/realtime.py` — 1.080 Zeilen
 1. `automation/engine/regeln/soc_steuerung.py` — 1.067 Zeilen
-1. `routes/system/battery.py` — 1.051 Zeilen
+1. `routes/system/battery.py` — 1.061 Zeilen
 1. `routes/visualization.py` — 955 Zeilen
 1. `routes/verbraucher.py` — 924 Zeilen
 1. `routes/pages.py` — 908 Zeilen

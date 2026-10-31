@@ -5,7 +5,7 @@ role: C
 applyTo: "automation/engine/**"
 tags: [engine, tick-loop, regeln, registry]
 status: stable
-last_review: 2026-10-24
+last_review: 2026-10-31
 ---
 
 # Automation-Engine
@@ -38,6 +38,7 @@ Zentrale Steuerschleife (Rolle C). Sammelt Beobachtungen, ruft Schutz-Checks, da
 - **Wiederhol-Sicherung SOC:** SOC-Setpoint-Schreibpfade schalten nur bei echter Abweichung (`obs.soc_min != ziel`) — auch der nachmittägliche Früh-Reset (`automation/engine/regeln/soc_steuerung.py`, `RegelKomfortReset`); zusätzlich No-Op-Schutz im Aktor (Soll==Ist → kein HTTP).
 - **ExternalRespect:** Nach erfolgreichem Aktor-Schreibvorgang muss der Engine-Zielwert via `_registriere_erfolgreiche_soc_aktionen()` registriert werden, sonst falsch-positive Extern-Erkennung.
 - **Globaler SOC-Not-Aus:** Top-Level-Flag `soc_automation_aktiv` in `config/soc_param_matrix.json` (Default `true`). Ist es `false`, überspringt `Engine.zyklus` **jede** Regel mit `aktor == 'batterie'` (Morgen-/Nachmittags-SOC, Komfort-Reset, Einspeise-/WattPilot-/Zellausgleich-Schutz, Forecast-Plausi) → SOC_MIN/SOC_MAX/SOC_MODE bleiben unangetastet (Batterie-Formatierung von Hand). Tier-1-Hardware-Alarm bleibt wirksam. Helfer `param_matrix.py:soc_automation_aktiv`; gesetzt über Steuerbox `/api/ops/soc-automation-aktiv` (s. `steuerbox-intents.card.md`), Live-Reload via mtime.
+- **WP-Operator-Hold:** Ist ein Steuerbox-`wp_mode`-Hold aktiv (`operator_intents.read_active_wp_mode_intent`, Status `open/active`, Rest-Respekt > 0, Modus ≠ neutral), überspringt `Engine.zyklus` analog **jede** Regel mit `aktor == 'waermepumpe'` (ww/heiz-Absenkung, Verschiebung, Boost, Pflichtlauf, `heiz_bedarf`, `fbh_nacht`). Sonst würde der vom Bediener gewählte Heiz-/WW-Soll binnen ~1 min (nächster fast-Zyklus) wieder auf Standard gezogen. Nach Respekt-Ablauf / `neutral` greift die WP-Automatik wieder (s. `steuerbox-intents.card.md`).
 
 ## No-Gos
 - **Keine Software-Ratenlimits an die Batterie** (GEN24 DC-DC = 22 A HW-Limit). Entfernt 2026-03-07: `RegelSocSchutz`, `RegelTempSchutz`, `RegelAbendEntladerate`, `RegelLaderateDynamisch`, Modbus-`InWRte`/`OutWRte`-Manipulation.

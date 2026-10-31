@@ -29,6 +29,7 @@ from automation.engine.param_matrix import (
 )
 from automation.engine.regeln.soc_extern import soc_extern_tracker
 from automation.engine.regeln.waermepumpe import reset_wp_extern_tracking
+from automation.engine.operator_intents import read_active_wp_mode_intent
 
 from automation.engine.regeln import Regel  # noqa: E402  (Typ-Annotation)
 from automation.engine.registry import lade_regeln
@@ -207,11 +208,21 @@ class Engine:
         if not soc_aut:
             LOG.info("SOC-Automation deaktiviert (Formatierungsmodus) — "
                      "Batterie-Regeln werden übersprungen")
+        # WP-Operator-Hold: Solange ein Steuerbox-wp_mode-Hold aktiv ist,
+        # treten die zeitgesteuerten WP-Sollwertregeln (aktor=='waermepumpe')
+        # zurück — sonst überschreibt z.B. heiz_bedarf den vom Bediener
+        # gewählten Soll binnen ~1 min wieder auf Standard.
+        wp_hold = read_active_wp_mode_intent() is not None
+        if wp_hold:
+            LOG.info("WP-Operator-Hold aktiv (Steuerbox wp_mode) — "
+                     "Wärmepumpen-Sollwertregeln werden übersprungen")
         scores: list[tuple[int, Regel]] = []
         for regel in self._regeln:
             if zyklus_typ == 'fast' and regel.engine_zyklus == 'strategic':
                 continue
             if not soc_aut and regel.aktor == 'batterie':
+                continue
+            if wp_hold and regel.aktor == 'waermepumpe':
                 continue
             try:
                 score = regel.bewerte(obs, self._matrix)

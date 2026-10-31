@@ -366,6 +366,12 @@ class OperatorOverrideProcessor:
                 return True
         if action == 'afternoon_charge_request':
             return False   # Reiner Policy-Hold — RegelNachmittagSocMax schreibt SOC.
+        if action == 'wp_mode':
+            # Kein per-Zyklus-Reapply: Der Sollwert wurde beim Hold-Start einmal
+            # geschrieben; das Engine-Gate unterdrückt die WP-Sollwertregeln,
+            # solange der Hold aktiv ist. Rewrites würden nur unnötige
+            # Bridge-/Modbus-Schreibvorgänge erzeugen.
+            return False
         # Für andere Actions konservativ: Reapply erlaubt.
         return True
 
@@ -457,6 +463,11 @@ class OperatorOverrideProcessor:
             return params.get('state') in {'on', 'off'}
         if action == 'battery_mode':
             return params.get('mode') in {'komfort', 'auto'}
+        if action == 'wp_mode':
+            # max/std/min halten den Operator-Sollwert über das Respekt-Fenster;
+            # das Engine-Gate (read_active_wp_mode_intent) unterdrückt derweil die
+            # WP-Sollwertregeln, daher ist kein per-Zyklus-Reapply nötig.
+            return params.get('mode') in {'max', 'std', 'min'}
         if action == 'afternoon_charge_request':
             return True
         return False

@@ -15,6 +15,10 @@ _CACHE: dict[str, Any] = {
     'ts': 0.0,
     'value': None,
 }
+_WP_MODE_CACHE: dict[str, Any] = {
+    'ts': 0.0,
+    'value': None,
+}
 
 
 def _parse_bool(value: Any, default: bool = False) -> bool:
@@ -121,5 +125,68 @@ def read_active_afternoon_charge_intent(
     value = _read_afternoon_charge_intent(db_path)
     _CACHE['ts'] = now
     _CACHE['value'] = value
+    return value
+
+
+def _read_wp_mode_intent(db_path: str) -> dict[str, Any] | None:
+    """Liest den aktiven WP-Mode-Operator-Hold (max/std/min) aus der RAM-DB.
+
+    `neutral` ist kein Hold (gibt die Automatik frei) und liefert None.
+    """
+    try:
+        conn = sqlite3.connect(db_path, timeout=2.0)
+        conn.execute('PRAGMA journal_mode=WAL')
+        row = conn.execute(
+            "SELECT id, params_json, created_at, respekt_s, status "
+            "FROM operator_overrides "
+            "WHERE action='wp_mode' "
+            "AND status IN ('open','active') "
+            "ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        conn.close()
+    except Exception:
+        return None
+
+    if not row:
+        return None
+
+    try:
+        params = json.loads(row[1] or '{}')
+    except Exception:
+        params = {}
+
+    mode = params.get('mode')
+    if mode not in {'max', 'std', 'min'}:
+        return None
+
+    remaining_s = _remaining_respekt_s(str(row[2]), int(row[3] or 0))
+    if remaining_s <= 0:
+        return None
+
+    return {
+        'override_id': int(row[0]),
+        'status': str(row[4]),
+        'mode': mode,
+        'respekt_remaining_s': remaining_s,
+    }
+
+
+def read_active_wp_mode_intent(
+    db_path: str = RAM_DB_PATH,
+    force_refresh: bool = False,
+) -> dict[str, Any] | None:
+    """Liefert aktiven WP-Mode-Operator-Hold (falls vorhanden).
+
+    Solange ein solcher Hold aktiv ist, treten die zeitgesteuerten
+    WP-Sollwertregeln zurueck (s. ``engine.zyklus``), damit der vom
+    Bediener gewaehlte Sollwert nicht binnen Minuten ueberschrieben wird.
+    """
+    now = time.time()
+    if not force_refresh and (now - float(_WP_MODE_CACHE['ts'])) <= _CACHE_TTL_S:
+        return _WP_MODE_CACHE['value']
+
+    value = _read_wp_mode_intent(db_path)
+    _WP_MODE_CACHE['ts'] = now
+    _WP_MODE_CACHE['value'] = value
     return value
 
