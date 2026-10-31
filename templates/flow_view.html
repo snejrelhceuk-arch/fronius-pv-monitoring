@@ -2393,10 +2393,11 @@
                     evBody.innerHTML = `<span class="ap-icon"></span>${mrLabel('Wattpilot', 'EV', '#93c5fd')} ${body}`;
                 }
             }
-            // Wattpilot-Bubble: 4. Zeile mit ladendem Auto (aus HA), falls bekannt
+            // Wattpilot-Bubble: 4. Zeile mit Auto der aktuellen Session (aus HA).
+            // Persistiert über Ladepausen/-ende hinweg, bis ein anderes Auto angesteckt wird.
             const carEl = document.getElementById('car-wattpilot');
             if (carEl) {
-                carEl.textContent = (ev && ev.charging && ev.charging_car) ? ev.charging_car : '';
+                carEl.textContent = (ev && ev.charging_car) ? ev.charging_car : '';
             }
 
             // ── Zeile 7: Temperaturen (Batt-Temp bereits im HTML integriert) ──

@@ -1,27 +1,34 @@
-"""Read-only Resolver: welches E-Auto laedt gerade am Wattpilot?
+"""Read-only Resolver: welches E-Auto gehoert zur aktuellen Wattpilot-Session?
 
-Rolle B (read-only). Liest ausschliesslich Telemetrie aus Home Assistant
-(REST, Long-Lived-Token) und schreibt nichts zurueck. Ohne Konfiguration
-(``HA_READ_ENABLED``/Token) bleibt der Resolver inaktiv und liefert ``None`` —
-die Wattpilot-Anzeige zeigt dann nur ``Lädt`` ohne Auto-Namen.
+Rolle B (read-only ggü. Produktionsdaten/Hardware). Liest Telemetrie aus Home
+Assistant (REST, Long-Lived-Token) und schreibt nichts in `data.db`/Aktoren.
+Ohne Konfiguration (``HA_READ_ENABLED``/Token) bleibt der Resolver inaktiv und
+liefert ``None`` — die Wattpilot-Anzeige zeigt dann keinen Auto-Namen.
 
 Der Wattpilot selbst kennt das Auto nicht (RFID ``trx`` i.d.R. leer); die
-Identitaet stammt aus den Fahrzeug-Integrationen in HA (Renault/Stellantis).
+Identitaet stammt aus den Fahrzeug-Integrationen in HA (Renault/Stellantis) und
+ist nur waehrend des aktiven Ladens auslesbar (`charge_in_progress`).
 
-Identifizierungslogik (nach HA-``automations.yaml``): das erste Fahrzeug, dessen
-Lade-Entity den erwarteten Zustand meldet, gewinnt (Prioritaet = Reihenfolge).
+Session-Latch: Der einmal erkannte Name wird — analog zur Session-Energie, die
+der Wattpilot bis zum naechsten Anstecken haelt — persistiert, bis eine **neue**
+Session beginnt (erkannt am Ruecksprung der Session-Energie `session_wh`). So
+bleibt der Name in der Flow-Bubble stehen, bis ein anderes Auto angesteckt wird.
+Persistenz als kleine JSON-Datei (multi-worker-sicher via atomic replace),
+Muster wie ``config/battery_bms_checkpoints.json``.
 """
 from __future__ import annotations
 
+import json
 import logging
+import os
+import tempfile
 import time
+from pathlib import Path
 from typing import Any
 
 import config
 
 LOG = logging.getLogger('routes.ha_cars')
-
-_CACHE: dict[str, Any] = {'ts': 0.0, 'value': None}
 
 # (entity_id, aktive_states (lowercase, set), Anzeigename) — Prio-Reihenfolge.
 # Quelle: HA-Fahrzeug-Integrationen auf dem HA-Host (X400). Die Renault-ZOE-
@@ -32,6 +39,14 @@ _DEFAULT_CAR_ENTITIES: list[tuple[str, frozenset[str], str]] = [
     ('sensor.zoe2_ladezustand', frozenset({'charge_in_progress'}), 'Zoe-X'),
     ('binary_sensor.chris_citroen_batterie_ladt', frozenset({'on'}), 'Citroën'),
 ]
+
+# Session gilt als neu, wenn die Session-Energie um mehr als EPS zurueckspringt.
+_SESSION_RESET_EPS_WH = 100.0
+
+_LATCH_PATH = Path(__file__).resolve().parents[2] / 'config' / 'wattpilot_session_car.json'
+
+# Kurz-Cache nur fuer die HA-REST-Abfrage (nicht fuer den Latch).
+_HA_CACHE: dict[str, Any] = {'ts': 0.0, 'value': None}
 
 
 def _parse_car_entities(raw: str) -> list[tuple[str, frozenset[str], str]]:
@@ -75,12 +90,12 @@ def _fetch_state(session, entity_id: str) -> str | None:
         return None
 
 
-def _resolve_uncached() -> str | None:
+def _resolve_live_ha() -> str | None:
+    """Fragt HA ab, welches Auto gerade laedt (ungecacht)."""
     if not getattr(config, 'HA_READ_ENABLED', False):
         return None
     if not getattr(config, 'HA_READ_TOKEN', ''):
         return None
-
     try:
         import requests
     except Exception:
@@ -96,21 +111,70 @@ def _resolve_uncached() -> str | None:
     return None
 
 
-def resolve_charging_car(wattpilot: dict | None = None) -> str | None:
-    """Liefert den Anzeigenamen des gerade ladenden Autos (oder None).
-
-    Nur wenn der Wattpilot tatsaechlich laedt wird HA abgefragt. Ergebnis wird
-    kurz gecacht (``HA_READ_CACHE_TTL_S``), um HA nicht pro Request zu treffen.
-    """
-    if wattpilot is not None and not wattpilot.get('charging'):
-        return None
-
+def _resolve_live(force_refresh: bool = False) -> str | None:
     now = time.time()
     ttl = getattr(config, 'HA_READ_CACHE_TTL_S', 20)
-    if (now - float(_CACHE['ts'])) <= ttl:
-        return _CACHE['value']
-
-    value = _resolve_uncached()
-    _CACHE['ts'] = now
-    _CACHE['value'] = value
+    if not force_refresh and (now - float(_HA_CACHE['ts'])) <= ttl:
+        return _HA_CACHE['value']
+    value = _resolve_live_ha()
+    _HA_CACHE['ts'] = now
+    _HA_CACHE['value'] = value
     return value
+
+
+def _read_latch() -> dict:
+    try:
+        with open(_LATCH_PATH, encoding='utf-8') as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _write_latch(data: dict) -> None:
+    try:
+        _LATCH_PATH.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=str(_LATCH_PATH.parent), suffix='.tmp')
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            json.dump(data, f)
+        os.replace(tmp, _LATCH_PATH)
+    except Exception as exc:  # pragma: no cover
+        LOG.debug('Wattpilot-Session-Latch nicht schreibbar: %s', exc)
+
+
+def resolve_charging_car(wattpilot: dict | None = None) -> str | None:
+    """Liefert den Anzeigenamen des Autos der aktuellen Wattpilot-Session.
+
+    Haelt den zuletzt erkannten Namen ueber Ladepausen/-ende hinweg, bis eine
+    neue Session beginnt (``session_wh`` springt zurueck → anderes Auto). Ohne
+    HA-Konfiguration inaktiv (``None``).
+    """
+    if not getattr(config, 'HA_READ_ENABLED', False):
+        return None
+    if not getattr(config, 'HA_READ_TOKEN', ''):
+        return None
+
+    wp = wattpilot or {}
+    cur_swh = float(wp.get('energy_session_wh') or 0.0)
+    charging = bool(wp.get('charging'))
+
+    latch = _read_latch()
+    car = latch.get('car')
+    last_swh = latch.get('session_wh')
+
+    new_session = (
+        last_swh is not None
+        and cur_swh + _SESSION_RESET_EPS_WH < float(last_swh)
+    )
+    if new_session:
+        car = None  # anderes Auto angesteckt → alten Namen verwerfen
+
+    if charging:
+        live = _resolve_live(force_refresh=new_session)
+        if live:
+            car = live
+
+    if car != latch.get('car') or last_swh != cur_swh:
+        _write_latch({'car': car, 'session_wh': cur_swh})
+
+    return car
