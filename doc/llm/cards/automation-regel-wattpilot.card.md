@@ -47,7 +47,7 @@ Schützt die Hausbatterie vor EV-Ladung via Wattpilot (Fronius/go-e Wallbox). He
 ## Bekannte Fallstricke
 - WS-Konflikt mit Fronius/go-e App: bis zu 3 Retries, danach Cooldown — schwer reproduzierbar bei mehreren parallelen Clients.
 - `eto`-Counter (Gesamt-Wh) ist Quelle für `wattpilot_daily.energy_wh` — Aktor verändert ihn nicht, aber Reset/Tausch der Hardware kann Sprünge erzeugen (siehe `collector-wattpilot-collector.card.md`).
-- Bezeichnung: **Wattpilot ≠ WP**. WP=Wärmepumpe (Stiebel Eltron), Wattpilot=Wallbox (Fronius/go-e). Felder z. T. doppelt benannt.
+- Bezeichnung: **Wattpilot ≠ WP**. WP=Wärmepumpe (Dimplex SIK 11 TES), Wattpilot=Wallbox (Fronius/go-e). Felder z. T. doppelt benannt.
 
 ## Verwandte Cards
 - [`automation-battery-algorithm.card.md`](./automation-battery-algorithm.card.md) — SOC-Min-Anhebung

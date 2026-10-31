@@ -5,7 +5,7 @@ role: A
 applyTo: "collector/aggregate/**"
 tags: [feldnamen, semantik, dupletten]
 status: stable
-last_review: 2026-06-06
+last_review: 2026-10-31
 ---
 
 # Feldnamen-Referenz
@@ -29,7 +29,7 @@ Die wichtigsten Feldnamen mit ihrer Bedeutung, ihren Einheiten und ihren häufig
 
 ## Kritische Dupletten / Verwechslungen
 - **`W_AC_Inv` ≠ PV-Erzeugung.** Inkludiert Batterie-Durchfluss. **Echte PV** = `W_DC1 + W_DC2 + W_Exp_F2 + W_Exp_F3` (siehe `collector/aggregate/min1.py`).
-- **`W_WP` (Wärmepumpe) ≠ Wattpilot.** WP=Stiebel-Eltron, Wattpilot=Fronius/go-e Wallbox.
+- **`W_WP` (Wärmepumpe) ≠ Wattpilot.** WP=Dimplex SIK 11 TES, Wattpilot=Fronius/go-e Wallbox.
 - **`P_Netz`:** positiv = Bezug, negativ = Einspeisung.
 - **`W_Exp_Netz`:** negativ → mit `abs()` zu Einspeisung machen.
 - **Wattpilot-Solarweb:** zeigt nur PV-Direkt-Anteil; Netzbezug-Anteil unsichtbar — eigene `wattpilot_daily`-Quelle nutzen.
