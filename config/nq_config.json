@@ -1,20 +1,17 @@
 {
   "_comment": "NQ-Modul (Rolle N) — PAC4200. Poll-Raten nach 48h-Feldtest nachziehen. Basis-Messwertblock (Adr. 1..73) + Max-Werte (75..144) + Energie (801) + Einzelharmonische (A.3.10): U L-N @9001..@9095, I @11001..@11095, U L-L @22001..@22095 — je 96 Register, ungerade H3..H31. slow_ms kann für Harmonik-Polling genutzt werden. Reale PAC-IP in .infra.local als PV_PAC_IP (host hier anonymisierter Default).",
-
   "pac": {
     "host": "192.0.2.111",
     "port": 502,
     "unit_id": 1,
     "timeout_s": 2.0
   },
-
   "tmpfs": {
     "db_path": "/dev/shm/nq_cache.db",
     "budget_mb": 1500,
     "cap_mb": 1200,
     "warn_free_mb": 200
   },
-
   "retention": {
     "raw_hours": 12,
     "primary_rawslow_hours": 12,
@@ -24,7 +21,6 @@
     "event_keep_days": 90,
     "event_max_count": 10000
   },
-
   "polling": {
     "profile": "dual-rate",
     "fast_ms": 200,
@@ -35,18 +31,17 @@
     "buffer_maxlen": 5000,
     "_comment": "NQ2-Tier-Benennung: fast(200ms)=Block-A/B-Skalare (U,I,P,Q,S,cos phi,THD); medium(1000ms)=Harmonische @9001/@11001/@22001 + Netzfrequenz (real ~10s Refresh); slow=Energiezaehler im energy_s-Takt (300s). slow_ms=Alias fuer medium_ms (Rueckwaertskompatibilitaet Harm-Loop). Feldtest 2026-07-12: A/B <=250ms, Harm ~1s, FREQ 10s."
   },
-
   "aggregate": {
     "grid_s": 300
   },
-
   "energy": {
     "boundary_margin_s": 7200,
     "boundary_max_gap_s": 1800,
     "min_samples_ok": 200,
-    "_comment": "Randwert-Interpolation der kumulativen PAC-Energiezaehler auf exakte Mitternacht (energieerhaltend, luecken-robust). boundary_margin_s = Fetch-Fenster ueber [t0,t1] hinaus fuers Rand-Bracketing; boundary_max_gap_s = max. Stuetzstellen-Abstand fuer lineare Interpolation, sonst naechster Randwert (estimated); min_samples_ok = Tagesdeckung fuer 'clean'-Konfidenz."
+    "_comment": "Randwert-Interpolation der kumulativen PAC-Energiezaehler auf exakte Mitternacht (energieerhaltend, luecken-robust). boundary_margin_s = Fetch-Fenster ueber [t0,t1] hinaus fuers Rand-Bracketing; boundary_max_gap_s = max. Stuetzstellen-Abstand fuer lineare Interpolation, sonst naechster Randwert (estimated); min_samples_ok = Tagesdeckung fuer 'clean'-Konfidenz.",
+    "dimplex_kwh_offset": 630.0,
+    "_dimplex_offset_comment": "Offset fuer elektrische WP-Energie [kWh]: Zaehler wurde erst nach Inbetriebnahme installiert, ca. 630 kWh entgangene Messung. Addiert auf Dimplex-Ablese-Stand (nq_ims_reading.dimplex_kwh) fuer Lifetime-COP. Editierbar in pv-config (0–1200 kWh)."
   },
-
   "event_filter": {
     "enabled": true,
     "du_step_v": 3.0,
@@ -67,13 +62,11 @@
     "event_stale_cap_s": 3600,
     "_comment": "NQ2: max_duration_s=300 harte Obergrenze; Aehnlichkeits-Dedup (dedup_*): gleicher Trigger + Amplitude +/-30% + Zeit +/-10% + min 24h Abstand -> nur Beschreibung, kein Schnipsel. trans_*: Transienten-Schwellen fuer 5min-Fensteranalyse."
   },
-
   "transfer": {
     "mode": "daily",
     "primary_db_dir": "nq/db",
     "_transfer_note": "Pull-Modell: Primary laedt read-only via SSH von Tech (nq/transfer/nq_agg_transfer.py, nq_energy_rollup.py). Es gibt KEIN primary_host-Feld mehr (frueher CHANGE_ME_PRIMARY, ungenutzt). Tech-Host kommt aus PV_TECH_IP / config.NQ_TECH_IP."
   },
-
   "analysis": {
     "_comment": "Schwellen für HF/NF/VLF-Detektoren. Alle Werte kalibrierbar ohne Code-Änderung.",
     "thd_u_spike_pct": 5.0,
@@ -94,7 +87,6 @@
     "limit_mail_cooldown_s": 300,
     "_limit_comment": "Software-Grenzwertueberwachung (WP1): der Poller vergleicht die verifiziert gelesenen Skalare (U/I/FREQ/THD) gegen 'grenzwerte'. Bei >90% dauerhaft (>limit_window_s) -> Sofort-Alarm-Mail, danach limit_mail_cooldown_s Sperre. KEINE erfundenen PAC-Status-Register (No-Go: Adressen nicht erfinden); Auswertung aus gemessenen Werten."
   },
-
   "reflection": {
     "_comment": "Reflexions-/Laufwellen-Analyse (nq/analysis/nq_reflection.py). v_em = elektromechanische Ausbreitungsgeschwindigkeit im Verbundnetz (Literatur 200..1400 km/s, Thorp/Seyler/Phadke 1998); Distanz d=v*Δt/2. Band = Nutzeranforderung 1 mHz..1 Hz. echo_* = Autokorrelations-Echoerkennung im Event-Schnipsel (Spannung 200 ms).",
     "v_em_km_s": 500.0,
@@ -110,7 +102,6 @@
     "packet_min_len": 4,
     "dist_tol_km": 250.0
   },
-
   "grenzwerte": {
     "_comment": "Normgrenzen fuer Software-Ueberwachung + Chart-Warnstufen. Spannung/Frequenz/THD nutzen warning_levels (50/70/90% der Spanne zum Endwert). Strom + Leistung (Anschlussgroessen) nutzen warning_levels_load (80/100/120% des Anschlusswerts: warn=Annaeherung, high=am Anschlusswert, crit=Ueberlast). i_max_a aus pv-config (SLS-Grenze), p_max_w = Anschlussleistung (3-phasig ~35A).",
     "u_ln_min_v": 207.0,
@@ -122,26 +113,63 @@
     "freq_min_hz": 47.0,
     "freq_max_hz": 52.0,
     "thd_u_max_pct": 8.0,
-    "warning_levels": { "warn_pct": 50, "high_pct": 70, "crit_pct": 90 },
-    "warning_levels_load": { "warn_pct": 80, "high_pct": 100, "crit_pct": 120 }
+    "warning_levels": {
+      "warn_pct": 50,
+      "high_pct": 70,
+      "crit_pct": 90
+    },
+    "warning_levels_load": {
+      "warn_pct": 80,
+      "high_pct": 100,
+      "crit_pct": 120
+    }
   },
-
   "monitoring_filter": {
     "_comment": "Display-seitige Jitter-/Extrema-Bereinigung fuer Monitoring/Analyse (Netzkriterien). ROHDATEN in der NQ-DB bleiben UNBERUEHRT. Aus PV-DB-Methode uebernommen: harte Plausibilitaetskorridore (bewusst WEITER als 'grenzwerte' -> nur physikalisch unmoegliche Muell-/Jitter-Werte, NICHT echte Norm-Verletzungen). Zusaetzlich Nachbar-Faktor-Filter (jitter_factor) NUR fuer stabile Groessen (U/FREQ/THD/PF/UNBAL) -> Wert > factor*|Median der Nachbarn| = Jitter-Muell. P/Q/S/I schwingen breit -> nur Korridor. Ausreisser werden durch das Mittel gueltiger Nachbarn ersetzt und in 'marks' markiert.",
     "enabled": true,
     "jitter_factor": 100.0,
     "neighbor_window": 3,
     "corridors": {
-      "FREQ": [47.0, 53.0],
-      "U_LN": [150.0, 300.0],
-      "U_LL": [280.0, 520.0],
-      "I": [-3000.0, 3000.0],
-      "P": [-200000.0, 200000.0],
-      "Q": [-200000.0, 200000.0],
-      "S": [0.0, 250000.0],
-      "THD": [0.0, 100.0],
-      "PF": [-1.5, 1.5],
-      "UNBAL": [0.0, 300.0]
+      "FREQ": [
+        47.0,
+        53.0
+      ],
+      "U_LN": [
+        150.0,
+        300.0
+      ],
+      "U_LL": [
+        280.0,
+        520.0
+      ],
+      "I": [
+        -3000.0,
+        3000.0
+      ],
+      "P": [
+        -200000.0,
+        200000.0
+      ],
+      "Q": [
+        -200000.0,
+        200000.0
+      ],
+      "S": [
+        0.0,
+        250000.0
+      ],
+      "THD": [
+        0.0,
+        100.0
+      ],
+      "PF": [
+        -1.5,
+        1.5
+      ],
+      "UNBAL": [
+        0.0,
+        300.0
+      ]
     }
   }
 }

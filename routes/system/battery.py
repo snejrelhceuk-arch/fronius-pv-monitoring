@@ -1054,13 +1054,23 @@ def _fetch_wp_cop(result):
 
 
 def _fetch_wp_cop_lifetime():
-    """Lifetime-COP: Σ thermisch (Modbus) / Dimplex-WP-Zähler (neueste manuelle Ablesung).
+    """Lifetime-COP: Σ thermisch (Modbus) / (Dimplex-Ablese-Stand + Offset).
 
-    Liest dimplex_kwh aus nq_ims_reading (neuester Eintrag mit dimplex_kwh IS NOT NULL)
-    und thermal_kwh_end aus wp_thermal_daily (neuester Eintrag) — beide kumulativ.
+    Liest dimplex_kwh aus nq_ims_reading (neuester Eintrag mit dimplex_kwh IS NOT NULL),
+    addiert den Offset (nq_config.energy.dimplex_kwh_offset, Default 0) für nicht
+    erfasste Betriebsstunden vor Zähler-Installation, und teilt durch thermal_kwh_end.
     Fail-safe → None.
     """
     try:
+        import json as _json
+        _nqcfg_path = os.path.join(config.BASE_DIR, 'config', 'nq_config.json')
+        try:
+            with open(_nqcfg_path, encoding='utf-8') as _nf:
+                _nqcfg = _json.load(_nf)
+            _offset = float(_nqcfg.get('energy', {}).get('dimplex_kwh_offset', 0.0))
+        except Exception:
+            _offset = 0.0
+
         nq_dir = os.path.join(config.BASE_DIR, 'nq', 'db')
         dimplex_kwh = None
         for db_path in sorted(glob(os.path.join(nq_dir, 'nq_*.db')), reverse=True):
@@ -1084,9 +1094,12 @@ def _fetch_wp_cop_lifetime():
         if not _tr or not _tr[0]:
             return None
         thermal_total = _tr[0]
-        return {'cop': round(thermal_total / dimplex_kwh, 2),
+        dimplex_total = dimplex_kwh + _offset
+        return {'cop': round(thermal_total / dimplex_total, 2),
                 'thermal_kwh': round(thermal_total, 0),
-                'dimplex_kwh': round(dimplex_kwh, 2)}
+                'dimplex_kwh': round(dimplex_kwh, 2),
+                'dimplex_offset_kwh': round(_offset, 1),
+                'dimplex_total_kwh': round(dimplex_total, 2)}
     except Exception as _le:
         logging.debug(f"WP-COP-Lifetime: {_le}")
         return None

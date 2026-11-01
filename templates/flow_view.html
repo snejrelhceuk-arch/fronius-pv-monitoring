@@ -2363,9 +2363,11 @@
                 const scop12 = wpcop.scop12 ? _cf(wpcop.scop12.scop) : '–';
                 const copLife = wpcop.cop_lifetime;
                 const copLifeVal = copLife ? _cf(copLife.cop) : '–';
-                // Tooltip für COP gesamt: thermisch / elektrisch
+                // Tooltip für COP gesamt: thermisch / (abgelesen + offset)
                 const copLifeTitle = copLife
-                    ? `Σ thermisch ${Math.round(copLife.thermal_kwh)} kWh / Dimplex-Zähler ${copLife.dimplex_kwh.toFixed(2).replace('.',',')} kWh`
+                    ? `Σ thermisch ${Math.round(copLife.thermal_kwh)} kWh`
+                      + ` / Dimplex-Zähler ${copLife.dimplex_kwh.toFixed(2).replace('.',',')} kWh`
+                      + (copLife.dimplex_offset_kwh ? ` + Offset ${copLife.dimplex_offset_kwh.toFixed(0)} kWh = ${copLife.dimplex_total_kwh.toFixed(2).replace('.',',')} kWh` : '')
                     : '';
                 const copSnippet = ` <span class="ap-sep">·</span> COP <span class="ap-wp-val">${cop24}</span> <span class="ap-sep">·</span> SCOP <span class="ap-wp-val">${scop12}</span> <span class="ap-sep">·</span> <span title="${copLifeTitle}" style="cursor:default">COPges <span class="ap-wp-val">${copLifeVal}</span></span>`;
 

@@ -63,8 +63,7 @@ from tools.pv_config.matrix_editor import (
 )
 from tools.pv_config.heizpatrone import menu_heizpatrone
 from tools.pv_config.benachrichtigung import menu_benachrichtigung
-from tools.pv_config.netzkriterien import menu_netzkriterien, menu_imsys_ablesung
-
+from tools.pv_config.netzkriterien import menu_netzkriterien, menu_imsys_ablesung, menu_dimplex
 
 # ═══════════════════════════════════════════════════════════════
 # Ausgelagert (Architektur-Refactor 2026-06-29) → tools/pv_config/:
@@ -631,6 +630,7 @@ def hauptmenu():
             ('9', 'Handbuch anzeigen'),
             ('n', 'Netzkriterien-Grenzwerte (NQ/PAC4200)'),
             ('i', 'iMSys-Ablesung erfassen (Energievergleich)'),
+            ('d', 'Dimplex-WP-Zähler: Ablesung + Offset (COPges)'),
             ('q', 'Beenden'),
         ]:
             args.extend([tag, desc])
@@ -662,6 +662,8 @@ def hauptmenu():
             menu_netzkriterien()
         elif choice == 'i':
             menu_imsys_ablesung()
+        elif choice == 'd':
+            menu_dimplex()
 
 
 # ═══════════════════════════════════════════════════════════════

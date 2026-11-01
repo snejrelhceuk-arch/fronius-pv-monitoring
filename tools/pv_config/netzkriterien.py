@@ -244,3 +244,213 @@ def menu_imsys_ablesung():
         f'  DB: nq/db/nq_{month}.db\n\n'
         f'Sichtbar unter Netzqualität → Energievergleich (Umschalter „iMSys").'
     )
+
+
+# ═══════════════════════════════════════════════════════════════
+# Menü d: Dimplex-WP-Zähler-Ablesung + Offset
+# ═══════════════════════════════════════════════════════════════
+
+def _dimplex_last_reading() -> Optional[tuple]:
+    """Letzte Dimplex-Ablesung (ts, day, dimplex_kwh) über alle NQ-Monats-DBs."""
+    import glob as _glob
+    import sqlite3 as _sql
+    latest = None
+    for db_path in sorted(_glob.glob(os.path.join(_nq_primary_dir(), 'nq_*.db'))):
+        try:
+            conn = _sql.connect(f'file:{db_path}?mode=ro', uri=True, timeout=5.0)
+            row = conn.execute(
+                'SELECT ts, day, dimplex_kwh FROM nq_ims_reading '
+                'WHERE dimplex_kwh IS NOT NULL ORDER BY ts DESC LIMIT 1'
+            ).fetchone()
+            conn.close()
+        except Exception:
+            continue
+        if row and (latest is None or row[0] > latest[0]):
+            latest = row
+    return latest
+
+
+def _dimplex_offset_kwh() -> float:
+    """Aktuellen Offset aus nq_config.json lesen (Default 0.0)."""
+    import json as _j
+    path = os.path.join(config.BASE_DIR, 'config', 'nq_config.json')
+    try:
+        with open(path, encoding='utf-8') as f:
+            return float(_j.load(f).get('energy', {}).get('dimplex_kwh_offset', 0.0))
+    except Exception:
+        return 0.0
+
+
+def _save_dimplex_offset(offset: float) -> None:
+    import json as _j
+    path = os.path.join(config.BASE_DIR, 'config', 'nq_config.json')
+    with open(path, encoding='utf-8') as f:
+        cfg = _j.load(f)
+    cfg.setdefault('energy', {})['dimplex_kwh_offset'] = offset
+    with open(path, 'w', encoding='utf-8') as f:
+        _j.dump(cfg, f, indent=2, ensure_ascii=False)
+        f.write('\n')
+
+
+def menu_dimplex():
+    """Dimplex-WP-Zähler: Ablesung erfassen + Offset konfigurieren.
+
+    Erfasst kumulative elektrische Energie vom Dimplex-Display (Einzel-Wert,
+    kein Export). Schreibt dimplex_kwh in nq_ims_reading (zusammen mit der
+    regulären iMSys-Ablesung oder als eigenständiger Eintrag – ts-basiert).
+    Offset: nicht erfasste kWh vor Zähler-Einbau; addiert auf Ablesewert
+    für den Lifetime-COP (Flow → Maschinenraum → WP → COPges).
+    """
+    from nq.nq_common import open_db, PRIMARY_SCHEMA
+
+    while True:
+        last = _dimplex_last_reading()
+        offset = _dimplex_offset_kwh()
+        if last:
+            last_dt = datetime.fromtimestamp(last[0]).strftime('%Y-%m-%d %H:%M')
+            info = (f'Letzte Ablesung: {last[1]} ({last_dt}) = {last[2]:.2f} kWh\n'
+                    f'  + Offset {offset:.0f} kWh = ges. {last[2]+offset:.2f} kWh el.\n')
+        else:
+            info = 'Noch keine Dimplex-Ablesung vorhanden.\n'
+        info += f'\nAktueller Offset: {offset:.1f} kWh (Basis: Zähler-Einbau nach IBN)\n'
+
+        choice = wt_menu(
+            f'Dimplex-WP-Zähler (kumulativer el. Verbrauch)\n\n{info}',
+            [('a', 'Neue Ablesung erfassen'),
+             ('o', f'Offset bearbeiten  [{offset:.0f} kWh]'),
+             ('b', 'Zurück')],
+        )
+        if not choice or choice == 'b':
+            return
+        if choice == 'o':
+            _menu_dimplex_offset(offset)
+        elif choice == 'a':
+            _menu_dimplex_ablesung(last)
+
+
+def _menu_dimplex_offset(current: float) -> None:
+    """Dimplex-Offset (nicht erfasste kWh vor Zähler-Einbau) bearbeiten."""
+    val = wt_inputbox(
+        f'Dimplex-Zähler-Offset [kWh]  (0–1200)\n\n'
+        f'Nicht erfasste elektrische WP-Energie vor Zähler-Einbau.\n'
+        f'Wird auf den abgelesenen Zählerstand addiert für Lifetime-COP.\n'
+        f'Aktuell: {current:.1f} kWh',
+        str(int(current)),
+    )
+    if val is None:
+        return
+    try:
+        num = float(val.strip().replace(',', '.'))
+    except ValueError:
+        wt_msgbox('Ungültige Zahl.')
+        return
+    if not 0.0 <= num <= 1200.0:
+        wt_msgbox('Offset muss zwischen 0 und 1200 kWh liegen.')
+        return
+    if not wt_yesno(f'Offset auf {num:.1f} kWh setzen?\n\n'
+                    f'(bisherig: {current:.1f} kWh)'):
+        return
+    try:
+        _save_dimplex_offset(num)
+    except Exception as e:
+        wt_msgbox(f'Speichern fehlgeschlagen:\n{str(e)[:200]}')
+        return
+    wt_msgbox(f'Offset gespeichert: {num:.1f} kWh\n\nAktiviert sofort bei nächstem API-Abruf.')
+
+
+def _menu_dimplex_ablesung(last: Optional[tuple]) -> None:
+    """Dimplex-Zähler-Ablesung in nq_ims_reading speichern."""
+    head = ''
+    if last:
+        head = f'Letzte Ablesung: {last[1]} = {last[2]:.2f} kWh\n\n'
+
+    day = wt_inputbox(head + 'Ablese-Datum (YYYY-MM-DD):', date.today().isoformat())
+    if day is None:
+        return
+    day = day.strip()
+    try:
+        dt = datetime.strptime(day, '%Y-%m-%d')
+    except ValueError:
+        wt_msgbox('Ungültiges Datum (Format YYYY-MM-DD).')
+        return
+
+    hm = wt_inputbox('Ablese-Uhrzeit (HH:MM):', datetime.now().strftime('%H:%M'))
+    if hm is None:
+        return
+    try:
+        t = datetime.strptime(hm.strip(), '%H:%M')
+    except ValueError:
+        wt_msgbox('Ungültige Uhrzeit (Format HH:MM).')
+        return
+    reading_dt = dt.replace(hour=t.hour, minute=t.minute)
+    ts = int(reading_dt.timestamp())
+
+    kwh_s = wt_inputbox('Dimplex-Zähler [kWh] (kumulativer Gesamtstand vom Display):', '')
+    if kwh_s is None:
+        return
+    try:
+        dimplex_kwh = float(kwh_s.strip().replace(',', '.'))
+    except ValueError:
+        wt_msgbox('Ungültige Zahl.')
+        return
+    if dimplex_kwh < 0:
+        wt_msgbox('Zählerstand darf nicht negativ sein.')
+        return
+
+    # Plausibilität: monoton + Zuwachs-Sanity
+    if last:
+        last_ts, last_day, last_kwh = last
+        if ts <= last_ts:
+            wt_msgbox(f'Ablesezeit muss nach der letzten Ablesung liegen ({last_day}).')
+            return
+        if dimplex_kwh < last_kwh:
+            wt_msgbox(f'{dimplex_kwh:.2f} < letzter Stand {last_kwh:.2f} kWh — Zähler kann nicht fallen.')
+            return
+        span_d = max(1.0, (ts - last_ts) / 86400.0)
+        d_kwh = dimplex_kwh - last_kwh
+        if d_kwh / span_d > 150.0:  # WP max ~11 kWh/Tag × Sicherheitsfaktor
+            if not wt_yesno(f'Großer Zuwachs seit {last_day}:\n'
+                            f'  +{d_kwh:.0f} kWh in {span_d:.0f} Tagen\n\nTrotzdem speichern?'):
+                return
+
+    offset = _dimplex_offset_kwh()
+    total = dimplex_kwh + offset
+    if not wt_yesno(
+        f'Dimplex-Ablesung speichern?\n\n'
+        f'  Datum:   {day} {hm.strip()}\n'
+        f'  Zähler:  {dimplex_kwh:.2f} kWh\n'
+        f'  Offset:  +{offset:.0f} kWh\n'
+        f'  Gesamt:  {total:.2f} kWh el.\n'
+        f'  ─────────────────────────────────'
+        + (f'\n  COP ges ≈ {round(55000/total,2) if total>0 else "—"} (Richtwert, Modbus-Therm. ~55 MWh)'
+           if total > 0 else '')):
+        return
+
+    month = reading_dt.strftime('%Y-%m')
+    db_path = os.path.join(_nq_primary_dir(), f'nq_{month}.db')
+    try:
+        conn = open_db(db_path, PRIMARY_SCHEMA)
+        # Eintrag als standalone Dimplex-Ablesung (imp/exp=NULL, nur dimplex_kwh)
+        conn.execute(
+            'INSERT OR REPLACE INTO nq_ims_reading '
+            '(ts, day, imp_kwh, exp_kwh, source, note, dimplex_kwh) '
+            'VALUES (?, ?, NULL, NULL, ?, ?, ?)',
+            (ts, day, 'manual', f'Dimplex-Zähler-Ablesung', dimplex_kwh),
+        )
+        conn.commit()
+        try:
+            conn.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+        except Exception:
+            pass
+        conn.close()
+    except Exception as e:
+        wt_msgbox(f'Speichern fehlgeschlagen:\n{str(e)[:200]}')
+        return
+
+    _fix_ownership(db_path)
+    wt_msgbox(
+        f'Dimplex-Ablesung gespeichert.\n\n'
+        f'  {day}: {dimplex_kwh:.2f} kWh (Zähler) + {offset:.0f} kWh (Offset)\n'
+        f'  = {total:.2f} kWh elektrisch gesamt\n\n'
+        f'Sichtbar als COPges in Flow → Maschinenraum → WP.'
+    )
