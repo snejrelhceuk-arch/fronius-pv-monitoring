@@ -9,7 +9,6 @@
 
 - [ ] **Stichproben-Alarm SM-LCD vs. DB** — monatlicher Vergleich enwitec-LCD-Ablesung gegen `raw_data.W_Imp_Netz` zum selben Zeitstempel; Alarm bei Δ > 1 kWh.
 - [ ] **Stichproben-Alarm Dimplex WP-Zähler vs. DB** — periodischer Vergleich Dimplex-kumulativ gegen `SUM(energy_wh) FROM heizpatrone_daily` ab Startdatum; Alarm bei Δ > 5 %. Startdatum festzulegen sobald DB-Gegenwert belastbar.
-- [ ] **PAC-Abweichungsdarstellung gewichten** — in der NQ-Energievergleichs-Ansicht Abweichungen bei kleinen Energiedurchsätzen (< 50 kWh Periode) visuell dämpfen (Graustufe / reduzierte Opazität oder Tooltip-Hinweis), damit systembedingte hohe %-Abweichungen bei kleinen Einspeisemengen nicht beunruhigen.
 
 ---
 

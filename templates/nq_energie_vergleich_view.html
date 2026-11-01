@@ -54,6 +54,7 @@
         table.cmp td.ref { color: #64748b; font-style: italic; }
         table.cmp td.warn { color: #fbbf24; }
         table.cmp td.bad { color: #f87171; font-weight: 600; }
+        table.cmp td.muted { color: #64748b; opacity: .6; font-weight: 400; cursor: help; }
         .gb-sub { display: flex; align-items: center; gap: 10px; margin-left: 14px; padding-left: 14px; border-left: 1px solid rgba(255,255,255,0.12); }
 
         /* Erklär-Box: die drei Messsysteme und wie der Vergleich zu lesen ist. */
@@ -86,6 +87,7 @@
         <div class="sys"><span class="nm sm">SM</span><span>Fronius <b>Smart Meter</b> am PCC — kontinuierlich, speist die Produktions-Statistik. Autoritativ für die Tageswerte des PV-Systems.</span></div>
         <div class="sys"><span class="nm pac">PAC</span><span>PAC4200 (Rolle N) — eigener, <b>batteriegepufferter</b> Zähler (revenue-grade). Zählt <b>unabhängig</b> vom PV-System korrekt; Tageswerte entstehen aus Zählerständen an den Tagesgrenzen.</span></div>
         <div class="hint">Lesehilfe: Weicht ein <b>einzelner</b> PAC-Tag stark ab, liegt es fast immer an der <b>Abdeckung</b> (Spalte „Quelle“): Bei einem Tech-Collector-Ausfall (z. B. Reboot) fehlen Snapshots → <span class="src-warn">Teil-Tag</span>. Solche Tage werden auf den SM-Wert gesetzt (<span class="src-sub">SM-Ersatz</span>), damit Monats-/Jahressummen stimmen — der PAC-<b>Zähler</b> selbst bleibt korrekt. Systematische Abweichungen zeigen sich erst über viele <span class="src-ok">PAC ✓</span>-Tage bzw. die iMSys-Intervalle.</div>
+        <div class="hint"><b>Gewichtung:</b> Eine hohe %-Abweichung bei <b>sehr kleinem absolutem Durchsatz</b> (Δ &lt; 1&nbsp;kWh, z.&nbsp;B. 40&nbsp;% auf 0,3&nbsp;kWh Einspeisung) ist messtechnisch Rauschen und wird <span class="muted" style="opacity:1">ausgegraut</span> dargestellt — nicht als Alarm. So beunruhigen kleine Einspeise-/Bezugsmengen nicht unnötig; echte systematische Offsets (große absolute Δ) bleiben farbig markiert.</div>
     </div>
     <div class="globalbar">
         <span class="gb-label">Aggregation</span>
@@ -114,7 +116,19 @@ function setAgg(a, btn){ S.agg=a; markActive('.agg-btn', btn); $('daysBar').styl
 function setDays(d, btn){ S.days=d; markActive('.days-btn', btn); load(); }
 
 function num(v,dec){ return (v===null||v===undefined)?'—':Number(v).toFixed(dec===undefined?3:dec); }
-function pct(v){ if(v===null||v===undefined) return '<td>—</td>'; const a=Math.abs(v); const cls=a>15?'bad':a>5?'warn':''; return `<td class="${cls}">${num(v,1)} %</td>`; }
+// Gewichtung: ein hoher %-Wert bei winzigem absolutem Durchsatz (Δ-kWh) ist
+// messtechnisch Rauschen (z. B. 40 % auf 0,3 kWh = 0,12 kWh). Solche Fälle werden
+// gedämpft dargestellt (grau/transparent) statt als Alarm (rot), damit kleine
+// Einspeise-/Bezugsmengen nicht unnötig beunruhigen.
+const LOW_ABS_KWH = 1.0;
+function pct(v, dkwh){
+    if(v===null||v===undefined) return '<td>—</td>';
+    const a=Math.abs(v); let cls = a>15?'bad':a>5?'warn':'';
+    if(cls && dkwh!=null && Math.abs(dkwh) < LOW_ABS_KWH){
+        return `<td class="muted" title="geringer absoluter Durchsatz (Δ ${num(dkwh,2)} kWh) — hohe %-Abweichung wenig aussagekräftig">${num(v,1)} %</td>`;
+    }
+    return `<td class="${cls}">${num(v,1)} %</td>`;
+}
 function srcBadge(src, n){
     if(!src) return '—';
     const cov = (n!=null) ? `<span class="src-cov">${n}/288</span>` : '';
@@ -146,8 +160,8 @@ function renderPeriod(d, label){
         const qcell = isDay ? `<td class="q">${srcBadge(i.pac_src, i.pac_n)}</td>` : '';
         return `<tr>
             <td>${i.label}${cov}</td>
-            <td>${num(i.pac_imp_kwh)}</td><td>${num(i.sm_imp_kwh)}</td><td>${num(i.d_imp_kwh)}</td>${pct(i.d_imp_pct)}
-            <td>${num(i.pac_exp_kwh)}</td><td>${num(i.sm_exp_kwh)}</td><td>${num(i.d_exp_kwh)}</td>${pct(i.d_exp_pct)}
+            <td>${num(i.pac_imp_kwh)}</td><td>${num(i.sm_imp_kwh)}</td><td>${num(i.d_imp_kwh)}</td>${pct(i.d_imp_pct, i.d_imp_kwh)}
+            <td>${num(i.pac_exp_kwh)}</td><td>${num(i.sm_exp_kwh)}</td><td>${num(i.d_exp_kwh)}</td>${pct(i.d_exp_pct, i.d_exp_kwh)}
             ${qcell}
         </tr>`;
     }).join('');
@@ -172,8 +186,8 @@ function renderIms(d){
         irows += `<tr>
             <td rowspan="3" style="text-align:left">${v.from} →<br>${v.to}<br><span class="cov">${v.n_pac}/${v.n_days} T PAC · ${v.n_sm} T SM</span></td>
             <td>iMSys</td><td>${num(v.ims_imp_kwh)}</td><td>${num(v.ims_exp_kwh)}</td><td class="ref">Referenz</td><td class="ref">Referenz</td></tr>
-            <tr><td>SM</td><td>${num(v.sm_imp_kwh)}</td><td>${num(v.sm_exp_kwh)}</td>${pct(v.d_sm_imp_pct)}${pct(v.d_sm_exp_pct)}</tr>
-            <tr><td>PAC</td><td>${num(v.pac_imp_kwh)}</td><td>${num(v.pac_exp_kwh)}</td>${pct(v.d_pac_imp_pct)}${pct(v.d_pac_exp_pct)}</tr>`;
+            <tr><td>SM</td><td>${num(v.sm_imp_kwh)}</td><td>${num(v.sm_exp_kwh)}</td>${pct(v.d_sm_imp_pct, (v.sm_imp_kwh!=null&&v.ims_imp_kwh!=null)?v.sm_imp_kwh-v.ims_imp_kwh:null)}${pct(v.d_sm_exp_pct, (v.sm_exp_kwh!=null&&v.ims_exp_kwh!=null)?v.sm_exp_kwh-v.ims_exp_kwh:null)}</tr>
+            <tr><td>PAC</td><td>${num(v.pac_imp_kwh)}</td><td>${num(v.pac_exp_kwh)}</td>${pct(v.d_pac_imp_pct, (v.pac_imp_kwh!=null&&v.ims_imp_kwh!=null)?v.pac_imp_kwh-v.ims_imp_kwh:null)}${pct(v.d_pac_exp_pct, (v.pac_exp_kwh!=null&&v.ims_exp_kwh!=null)?v.pac_exp_kwh-v.ims_exp_kwh:null)}</tr>`;
     });
     if (!iv.length) irows = '<tr><td colspan="6" class="loading-msg">Mind. zwei iMSys-Ablesungen nötig.</td></tr>';
     const tblI = `<table class="cmp"><thead><tr><th>Intervall</th><th>System</th><th>Δ Import</th><th>Δ Export</th>
