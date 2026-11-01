@@ -12,6 +12,7 @@ import os
 import sqlite3
 import time
 from datetime import date, datetime, timedelta
+from glob import glob
 from pathlib import Path
 
 from flask import jsonify
@@ -1045,10 +1046,50 @@ def _fetch_wp_cop(result):
                     'el_kwh': round(_s[1], 1),
                     'days': _s[2],
                 }
-            result['wp_cop'] = {'cop24': cop24, 'scop12': scop}
+            result['wp_cop'] = {'cop24': cop24, 'scop12': scop,
+                               'cop_lifetime': _fetch_wp_cop_lifetime()}
     except Exception as _ce:
         logging.debug(f"WP-COP: {_ce}")
-        result['wp_cop'] = {'cop24': None, 'scop12': None}
+        result['wp_cop'] = {'cop24': None, 'scop12': None, 'cop_lifetime': None}
+
+
+def _fetch_wp_cop_lifetime():
+    """Lifetime-COP: Σ thermisch (Modbus) / Dimplex-WP-Zähler (neueste manuelle Ablesung).
+
+    Liest dimplex_kwh aus nq_ims_reading (neuester Eintrag mit dimplex_kwh IS NOT NULL)
+    und thermal_kwh_end aus wp_thermal_daily (neuester Eintrag) — beide kumulativ.
+    Fail-safe → None.
+    """
+    try:
+        nq_dir = os.path.join(config.BASE_DIR, 'nq', 'db')
+        dimplex_kwh = None
+        for db_path in sorted(glob(os.path.join(nq_dir, 'nq_*.db')), reverse=True):
+            try:
+                with sqlite3.connect(f'file:{db_path}?mode=ro', uri=True, timeout=2) as _nc:
+                    _nr = _nc.execute(
+                        "SELECT dimplex_kwh FROM nq_ims_reading "
+                        "WHERE dimplex_kwh IS NOT NULL ORDER BY ts DESC LIMIT 1"
+                    ).fetchone()
+                    if _nr and _nr[0]:
+                        dimplex_kwh = _nr[0]
+                        break
+            except Exception:
+                continue
+        if not dimplex_kwh:
+            return None
+        with sqlite3.connect(f'file:{config.DB_PATH}?mode=ro', uri=True, timeout=2) as _c:
+            _tr = _c.execute(
+                "SELECT thermal_kwh_end FROM wp_thermal_daily ORDER BY day DESC LIMIT 1"
+            ).fetchone()
+        if not _tr or not _tr[0]:
+            return None
+        thermal_total = _tr[0]
+        return {'cop': round(thermal_total / dimplex_kwh, 2),
+                'thermal_kwh': round(thermal_total, 0),
+                'dimplex_kwh': round(dimplex_kwh, 2)}
+    except Exception as _le:
+        logging.debug(f"WP-COP-Lifetime: {_le}")
+        return None
 
 
 def _fetch_wattpilot_status(now, result):

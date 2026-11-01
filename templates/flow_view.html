@@ -2356,12 +2356,18 @@
                 const wpAktNeuesteZuerst = wpAkt.slice().reverse();
                 const wpSollTimeline = buildWpSollEventSnippet(wpAktNeuesteZuerst);
 
-                // COP (24h) + SCOP (12 Mon.) aus wp_thermal_daily (Modbus-Wärmemengen).
+                // COP (24h) + SCOP (12 Mon.) + COP gesamt aus wp_thermal_daily (Modbus-Wärmemengen).
                 const wpcop = d.wp_cop || {};
                 const _cf = (v) => (v != null ? Number(v).toFixed(2).replace('.', ',') : '–');
                 const cop24 = wpcop.cop24 ? _cf(wpcop.cop24.cop) : '–';
                 const scop12 = wpcop.scop12 ? _cf(wpcop.scop12.scop) : '–';
-                const copSnippet = ` <span class="ap-sep">·</span> COP <span class="ap-wp-val">${cop24}</span> <span class="ap-sep">·</span> SCOP <span class="ap-wp-val">${scop12}</span>`;
+                const copLife = wpcop.cop_lifetime;
+                const copLifeVal = copLife ? _cf(copLife.cop) : '–';
+                // Tooltip für COP gesamt: thermisch / elektrisch
+                const copLifeTitle = copLife
+                    ? `Σ thermisch ${Math.round(copLife.thermal_kwh)} kWh / Dimplex-Zähler ${copLife.dimplex_kwh.toFixed(2).replace('.',',')} kWh`
+                    : '';
+                const copSnippet = ` <span class="ap-sep">·</span> COP <span class="ap-wp-val">${cop24}</span> <span class="ap-sep">·</span> SCOP <span class="ap-wp-val">${scop12}</span> <span class="ap-sep">·</span> <span title="${copLifeTitle}" style="cursor:default">COPges <span class="ap-wp-val">${copLifeVal}</span></span>`;
 
                 wpBody.innerHTML = `<div class="wp-auto-line"><span class="ap-icon"></span>${mrLabel('Wärmepumpe', 'WP', '#14b8a6')} VL <span class="ap-wp-val">${wv}°</span> <span class="ap-sep">·</span> RL <span class="ap-wp-val">${wr}°</span>/<span class="ap-wp-val">${wrs}°</span> <span class="ap-sep">·</span> WW <span class="ap-wp-val">${wwi}°</span>/<span class="ap-wp-val">${wws}°</span> <span class="ap-sep">·</span> Heiz <span class="ap-wp-val">${whs}°</span> <span class="ap-sep">·</span> Quelle <span class="ap-wp-val">${wqe}°</span>/<span class="ap-wp-val">${wqa}°</span>${copSnippet}</div><div class="wp-auto-line events"><span class="ap-icon"></span><span class="ap-label" style="color:#14b8a6">Soll:</span> ${wpSollTimeline}</div>`;
             } else if (wpBody) {

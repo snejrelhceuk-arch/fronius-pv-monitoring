@@ -213,13 +213,16 @@ CREATE TABLE IF NOT EXISTS nq_transient_5min (
 
 -- iMS-Ablesungen des Netzbetreibers (kumulative Zählerstände, manuell/Portal).
 -- Basis für den Vergleich gegen PAC4200 + Master-SM.
+-- dimplex_kwh: WP-Zähler (Dimplex-Display, kumulativ seit Inbetriebnahme) —
+-- Basis für Lifetime-COP (Σ thermisch Modbus / dimplex_kwh).
 CREATE TABLE IF NOT EXISTS nq_ims_reading (
-    ts        INTEGER PRIMARY KEY,   -- Ablese-Zeitpunkt
-    day       TEXT    NOT NULL,
-    imp_kwh   REAL,                  -- Bezug (Zählerstand kumulativ)
-    exp_kwh   REAL,                  -- Lieferung (Zählerstand kumulativ)
-    source    TEXT,                  -- 'manual' | 'portal' | 'foto'
-    note      TEXT
+    ts          INTEGER PRIMARY KEY,   -- Ablese-Zeitpunkt
+    day         TEXT    NOT NULL,
+    imp_kwh     REAL,                  -- Bezug (Zählerstand kumulativ)
+    exp_kwh     REAL,                  -- Lieferung (Zählerstand kumulativ)
+    source      TEXT,                  -- 'manual' | 'portal' | 'foto'
+    note        TEXT,
+    dimplex_kwh REAL                   -- WP-Zähler Display kumulativ [kWh], NULL wenn nicht abgelesen
 );
 
 -- Tages-Vergleich PAC4200 vs Master-SM (Fronius Primär-SM, read-only aus
