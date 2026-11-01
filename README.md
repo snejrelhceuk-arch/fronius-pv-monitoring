@@ -1,6 +1,6 @@
 # Fronius PV-Monitoring System
 
-Production-ready Monitoring für Fronius Gen24 Hybrid PV-Anlage (37,59 kWp) mit BYD Battery Storage.
+Production-ready Monitoring und Automatisierung für Fronius Gen24 Hybrid PV-Anlage (37,59 kWp) mit BYD Battery Storage und Dimplex Wärmepumpe.
 
 > Interne Betriebs- und Infrastrukturdokumentation wird lokal gehalten und ist im öffentlichen Repo bewusst nicht enthalten.
 
@@ -9,99 +9,194 @@ Production-ready Monitoring für Fronius Gen24 Hybrid PV-Anlage (37,59 kWp) mit 
 ## Produktionsstart
 Produktivbetrieb seit **01.01.2026 00:00 Uhr**
 
+## Rollen-Architektur (ABCDEN)
+
+| Rolle | Modul | Aufgabe |
+|---|---|---|
+| **A** Collector | `collector/` | Modbus-Read + Aggregation, RAM-Buffer, Persist |
+| **B** Web-API | `web_api.py`, `routes/` | Lesende Flask-API + Visualisierung (Port 8000) |
+| **C** Automation | `automation/` | Schreibzugriff: Inverter, WP, Wattpilot, Fritz!DECT |
+| **D** Diagnos | `diagnos/` | Monitoring, Integritätsprüfung, Tagesmail |
+| **E** Steuerbox | `steuerbox/` | Operator-Intent-API (eigener Port), Intents an C |
+| **N** Netzqualität | `nq/` | PAC4200 Modbus read-only, eigene NQ-DBs |
+
+Rollentrennung ist die oberste Architekturpriorität. Code-Dupletten zum Absichern der Trennung sind gewollt.
+
 ## Schnellstart
 
-System läuft als systemd-Services (pv-collector, pv-web). Kein manueller Start nötig.
+System läuft vollständig über systemd-Services. Kein manueller Start nötig.
 
 ```bash
 # Status prüfen
-sudo systemctl status pv-collector pv-web
+sudo systemctl status pv-collector pv-web pv-automation pv-steuerbox pv-wattpilot
 
-# Browser
+# Web-Interface
 http://localhost:8000
 
-# Logs
-tail -f /tmp/modbus_v3.log
-tail -f /tmp/aggregate_1min.log
+# Logs (journald)
+journalctl -u pv-collector -f
+journalctl -u pv-web -f
+journalctl -u pv-automation -f
 ```
 
 ## Komponenten
 
-- **collector/** — Modbus-Collector als Package (3s Polling, RAM-Buffer, Persist-Thread)
+### Collector (Rolle A)
+- **collector/** — Modbus-Collector als Package (3 s Polling, RAM-Buffer, Persist-Thread)
 - **collector/aggregate/** — 5-stufige Aggregations-Pipeline (`min1`, `fifteen`, `daily`, `monthly`, `statistics`)
-- **collector/quellen.py** — SunSpec Register-Definitionen
-- **collector/wattpilot.py** — Wattpilot-Collector (WebSocket)
-- **collector/fritzdect.py** — FritzDECT-Collector (AHA-HTTP)
-- **collector.py** — Thin Wrapper, startet `poller_loop()` aus dem Package
-- **web_api.py** — Flask/Gunicorn Web-API (Port 8000)
-- **config.py** — Alle Konfiguration
+- **collector/wattpilot.py** — Wattpilot-Collector (WebSocket, `wattpilot_daily`)
+- **collector/fritzdect.py** — FritzDECT-Collector (AHA-HTTP, Schaltstatus)
+- **collector/aggregate/wp_thermal.py** — Dimplex-Wärmemengenzähler → COP/SCOP (`wp_thermal_daily`)
 
-## Architektur
+### Web-API (Rolle B)
+- **web_api.py** — Flask/Gunicorn App mit Blueprint-Registration (Port 8000)
+- **routes/** — Blueprints: `pages`, `data`, `realtime`, `visualization`, `verbraucher`, `erzeuger`, `system`, `forecast`, `netzqualitaet`, `pac4200`, `analyse_speicher`
+
+### Automation (Rolle C)
+- **automation/engine/** — Tick-Loop, Regel-Registry, Observer→Engine→Actuator
+- **automation/battery_control.py** — SOC_MIN/SOC_MAX via Fronius HTTP-API
+
+### Diagnos (Rolle D)
+- **diagnos/health.py** — Host-Health, Service-Freshness, Mirror/Backup-Alter
+- **diagnos/integrity.py** — Energiebilanz-Rollups, Gap-Scan
+- **diagnos/status_report.py** — Tagesbericht + Alarm-Mails (SMTP)
+
+### Steuerbox (Rolle E)
+- **steuerbox/** — Operator-Intent-API, zeitlich begrenzte Overrides, validiert, kein Hardware-Zugriff
+
+### Netzqualität (Rolle N)
+- **nq/collector/** — PAC4200 Modbus TCP read-only (RAM-first auf Pi4-Tech, tmpfs)
+- **nq/aggregate/** — Transfer + Aggregation auf Pi5-Primary
+- **nq/analysis/** — Spektralanalyse, Netzereignisse, Harmonische (HF/NF/VLF)
+
+### Querschnitt
+- **config.py** — Zentrale Konfiguration
+- **scripts/** — GFS-Backup, monatlicher PDF-Versand, Install-Skripte
+
+## Architektur (Vier-Host-Topologie)
 
 ```
- Fronius Gen24 (Modbus TCP)            Monitoring-Host
- ┌─────────────────────────┐           ┌──────────────────────────┐
- │ Unit 1: Inverter F1     │  Modbus   │ collector/ (Package)     │
- │ Unit 2: SM Netz         │◄────────► │   → RAM-Buffer           │
- │ Unit 3: SM F2           │   TCP     │   → /dev/shm/data.db     │
- │ Unit 4: SM WP (Wärmepumpe)│           │   → Persist → SD-Card    │
- │ Unit 6: SM F3           │           ├──────────────────────────┤
- └─────────────────────────┘           │ Cron: 5 Aggregations-    │
-                                       │   Scripts (1min→yearly)  │
-                                       ├──────────────────────────┤
-                                       │ web_api.py (Port 8000)   │
-                                       └──────────────────────────┘
+ Feldgeräte                    Pi5-Primary (192.0.2.204)
+ ┌──────────────────┐          ┌─────────────────────────────────┐
+ │ Fronius GEN24    │ Modbus   │ Rolle A: pv-collector           │
+ │ (Inv + 3× SM)   │◄────────►│ Rolle B: pv-web (Port 8000)     │
+ └──────────────────┘   TCP   │ Rolle C: pv-automation          │
+                               │ Rolle D: diagnos (Cron)         │
+ ┌──────────────────┐          │ Rolle E: pv-steuerbox           │
+ │ Fronius Wattpilot│   WS    │ Rolle N: NQ-Aggregation/Analyse  │
+ │ (EV-Lader)       │◄────────►└─────────────────────────────────┘
+ └──────────────────┘               │ rsync + Dienst-Sync
+                                    │
+ ┌──────────────────┐          ┌────┴────────────┬──────────────────┐
+ │ Dimplex WP       │ Modbus   │ Pi4-Tech        │ Pi5-FB           │
+ │ (Wärmepumpe)     │◄────────►│ WP/HW-Bridge    │ Failover +       │
+ └──────────────────┘   RS485  │ NQ-Collector    │ Backup-Empfänger │
+                               │ (pv-nq-*)       │ (read-only)      │
+ ┌──────────────────┐          └─────────────────┴──────────────────┘
+ │ PAC4200          │ Modbus        Pi4-Küche: Kiosk-Display + Longterm-GFS
+ │ (Netzqualität)   │◄────────► Pi4-Tech
+ └──────────────────┘
 ```
 
 ### ⚠️ Wichtig: W_AC_Inv ≠ PV-Erzeugung
 
 W_AC_Inv ist der AC-Zähler des Hybrid-WR und inkludiert Batterie-Lade/Entladung.
 Reine PV-Erzeugung = W_DC1 + W_DC2 + W_Exp_F2 + W_Exp_F3.
-Siehe [doc/SYSTEM_ARCHITECTURE.md](doc/SYSTEM_ARCHITECTURE.md) Abschnitt 2.
 
 ## Datenfluss
 
-1. **Polling:** Alle 3s Modbus-Read → RAM-Buffer → raw_data (Flush 60s)
-2. **Aggregation:** 5 Stufen via Cron (1min / 15min / hourly / daily / monthly)
-3. **Persist:** tmpfs-DB → SD-Card (stündlich) + periodischer externer Backup-Host
-4. **GFS-Backup:** `backup_db_gfs.sh` (03:00 täglich via systemd, Sohn intern alle 3 Tage aus RAM)
-5. **Cleanup:** raw_data 7d, data_1min 90d, hourly 365d, daily 10y
+1. **Polling:** Alle 3 s Modbus-Read → RAM-Buffer → `raw_data` (Flush 60 s)
+2. **Aggregation:** 5 Stufen via Cron (1 min / 15 min / hourly / daily / monthly)
+3. **Persist:** tmpfs-DB → SD-Card (stündlich) + GFS-Backup-Host (täglich 03:00)
+4. **NQ:** PAC4200-RAM-Collector (Pi4-Tech) → Transfer alle 4 h → Aggregation + Analyse (Pi5-Primary)
+5. **Cleanup:** raw_data 7 d, data_1min/15min 90 d, hourly 365 d, daily/monthly 10 y
 
 ## Technische Spezifikation
 
 - **Polling-Intervall:** 3 Sekunden
-- **DB:** SQLite 3.45.1 WAL-Mode in tmpfs (/dev/shm/)
-- **Retention:** 7d raw, 90d 1min/15min, 365d hourly, 10y daily/monthly
+- **DB:** SQLite WAL-Mode in tmpfs (`/dev/shm/`)
+- **Retention:** 7 d raw, 90 d 1 min/15 min, 365 d hourly, 10 y daily/monthly
 - **Spalten:** ~96 (raw_data)
-- **Namenskonvention:** P_ (W), W_ (Wh), U_ (V), I_ (A), f_ (Hz)
-- **Battery:** P_Batt = P_DC_Inv - (P_DC1 + P_DC2), kein Modbus-Register
+- **Namenskonvention:** `P_` (W), `W_` (Wh), `U_` (V), `I_` (A), `f_` (Hz)
+- **Battery:** `P_Batt = P_DC_Inv - (P_DC1 + P_DC2)`, kein eigenes Modbus-Register
 
 ### ⚠️ WP ≠ Wattpilot — Namenskonvention
 
 | Kürzel | Bedeutung | Quelle |
 |--------|-----------|--------|
-| **WP**, P_WP, W_Imp_WP | **Wärmepumpe** (Heat Pump) | SmartMeter Unit 4 (Modbus) |
-| **Wattpilot** | **Wallbox / E-Auto-Lader** | Fronius Wattpilot WebSocket API |
+| **WP**, `P_WP`, `W_Imp_WP` | **Wärmepumpe** (Dimplex Heat Pump) | SmartMeter Unit 4 (Modbus) + Wärmemengenzähler |
+| **Wattpilot** | **Wallbox / E-Auto-Lader** (Fronius) | Wattpilot WebSocket API |
 
-**WP steht IMMER für Wärmepumpe, NIE für Wattpilot!**
-Variablen: `wp_` → Wärmepumpe, `wattpilot_` → Wallbox.
-Die Trennung ist im Code und in der öffentlichen API strikt beibehalten.
+`wp_` → Wärmepumpe, `wattpilot_` → Wallbox. Die Trennung ist im Code strikt eingehalten.
+
+## Aggregations-Pipeline (Cron, Pi5-Primary)
+
+```cron
+* * * * *        python3 -m collector.aggregate.min1       # raw → 1min
+0,15,30,45 * * * python3 -m collector.aggregate.fifteen    # raw → 15min → hourly
+2,17,32,47 * * * python3 -m collector.aggregate.daily      # hourly → daily
+6,21,36,51 * * * python3 -m collector.aggregate.monthly    # 15min → monthly
+8,23,38,53 * * * python3 -m collector.aggregate.statistics # daily → monthly_stats → yearly
+```
+
+NQ-Aggregation, -Analyse und GFS-Backups laufen via systemd-Timer (`pv-nq-*.timer`, `pv-backup-gfs.timer`).
+
+## API-Endpunkte (Auswahl)
+
+**Seiten (HTML)**
+- `GET /` — Flow-Dashboard
+- `GET /monitoring` — Maschinenraum / Echtzeit
+- `GET /verbraucher` — Verbraucher-Analyse
+- `GET /erzeuger` — Erzeuger-Analyse
+- `GET /netzqualitaet` — NQ-Dashboard
+- `GET /analyse/batterie` — Batterie-Analyse
+- `GET /analyse/pv` — PV-Analyse
+
+**JSON-API**
+- `GET /api/flow_realtime` — Live-Leistungsfluss (Flow-View)
+- `GET /api/realtime_smart` — Zoom/Zeitreihen-Daten
+- `GET /api/verbraucher` — Verbraucher-Tagesübersicht
+- `GET /api/battery_status` — SOC + Automation-State
+- `GET /api/wattpilot/status` — Wattpilot Live-State
+- `GET /api/nq/energy/<period_type>/<period_key>` — NQ-Energiedaten
+- `GET /api/system_info` — Host-Info + Service-Status
+- `GET /api/failover_status` — Failover/Mirror-Status
+
+## Monatlicher PDF-Bericht
+
+`scripts/monthly_pdf_report.py` erzeugt und versendet automatisch einen PDF-Monatsbericht:
+
+```bash
+# Timer installieren
+./scripts/install_monthly_pdf_timer.sh
+
+# Manueller Test (kein Versand)
+python3 scripts/monthly_pdf_report.py --dry-run --verbose
+```
+
+## Hardware
+
+- **Inverter:** Fronius GEN24 12.0 (Modbus TCP, SunSpec + Fronius HTTP-API)
+- **PV:** 37,59 kWp (3 Strings: S1 Süd 30°, S2 Nord 15°, S3 Süd 10°)
+- **Battery:** BYD HVS 2×12,8 kWh parallel (25,6 kWh netto, LFP, 10 Module à 2,56 kWh)
+- **Wärmepumpe:** Dimplex WP (Modbus RS485 via Pi4-Tech-Bridge, Wärmemengenzähler aktiv)
+- **EV-Lader:** Fronius Wattpilot 22 kW (WebSocket)
+- **Schaltsteckdosen:** Fritz!DECT (AHA-HTTP, Heizpatrone 2 kW, Klimaanlage)
+- **Netzqualität:** Siemens PAC4200 (Modbus TCP, Pi4-Tech, Rolle N)
 
 ## Monitoring
 
 ```bash
-# Prozess-Status
-ps aux | grep collector
+# Service-Status
+sudo systemctl status pv-collector pv-web pv-automation pv-steuerbox pv-wattpilot
 
-# Logs pruefen
-tail -f /tmp/collector.log
-tail -f /tmp/aggregate.log
+# Logs
+journalctl -u pv-collector -f
+journalctl -u pv-automation -f
 
-# Datenbank-Größe
-ls -lh data.db
-
-# Zeilen-Count
-sqlite3 data.db "SELECT COUNT(*) FROM raw_data;"
+# Datenbank
+ls -lh /dev/shm/data.db
+sqlite3 /dev/shm/data.db "SELECT COUNT(*) FROM raw_data;"
 ```
 
 ## Wartung
@@ -110,65 +205,11 @@ sqlite3 data.db "SELECT COUNT(*) FROM raw_data;"
 # Single-Branch Workflow (nur main)
 git pull origin main
 
-# Datenbank-Backup
-cp data.db data_backup_$(date +%Y%m%d_%H%M).db
+# Datenbank-Backup (manuell)
+cp /dev/shm/data.db data_backup_$(date +%Y%m%d_%H%M).db
 
 # Multi-Host-Sync und Betriebsabläufe werden lokal dokumentiert.
 ```
-
-## Cron-Jobs
-
-```cron
-# === PV-System Aggregation (Pi4 Produktion) ===
-* * * * *        python3 -m collector.aggregate.min1       # raw → 1min
-0,15,30,45 * * * python3 -m collector.aggregate.fifteen    # raw → 15min → hourly
-2,17,32,47 * * * python3 -m collector.aggregate.daily      # hourly → daily
-6,21,36,51 * * * python3 -m collector.aggregate.monthly    # 15min → monthly
-8,23,38,53 * * * python3 -m collector.aggregate.statistics # daily → monthly_stats → yearly
-# Optional/Legacy statt systemd-Timer:
-# 0 3 * * * /srv/pv-system/scripts/backup_db_gfs.sh
-```
-
-## Systemd-Timer
-
-```bash
-# GFS-Backup (Primary): täglich 03:00, Sohn-Intervall intern 3 Tage
-systemctl status pv-backup-gfs.timer
-systemctl list-timers pv-backup-gfs.timer
-```
-
-## Monatlicher PDF-Versand per E-Mail
-
-Neuer Versandjob: `scripts/monthly_pdf_report.py`
-
-- erzeugt ein PDF via `tools/generate_anlagendoku_pdf.py`
-- versendet es an `config.NOTIFICATION_EMAIL`
-- ist **stale-prozess-sicher** via `flock`-Lockdatei
-- ist **neustartsicher** via systemd-Timer mit `Persistent=true`
-- dedupliziert pro Berichtsmonat via `.state/monthly_pdf_report_state.json`
-
-Installation des Timers:
-
-```bash
-./scripts/install_monthly_pdf_timer.sh
-```
-
-Manueller Test ohne Versand:
-
-```bash
-python3 scripts/monthly_pdf_report.py --dry-run --verbose
-```
-
-## API-Endpunkte
-
-- `GET /` - Dashboard (HTML)
-- `GET /aggregates` - Min/Max-Ansicht (HTML)
-- `GET /api/dashboard` - Summary (JSON)
-- `GET /api/live` - Rohdaten (JSON)
-- `GET /api/energy` - Energie-Akkumulatoren (JSON)
-- `GET /api/15min` - 15min-Aggregate (JSON)
-- `GET /api/hourly` - Stunden-Aggregate (JSON)
-- `GET /api/daily` - Tages-Aggregate (JSON)
 
 ## Recht & Compliance
 
@@ -177,25 +218,22 @@ Darstellung gedacht und dürfen keine kopierten Hersteller-Originalinhalte entha
 Vor externer Veröffentlichung gilt die Checkliste in
 [doc/VEROEFFENTLICHUNGSRICHTLINIE.md](doc/VEROEFFENTLICHUNGSRICHTLINIE.md).
 
-## Hardware
-
-- **Inverter:** Fronius GEN24 12.0 (Modbus TCP)
-- **PV:** 37.59 kWp (3 Strings: S1 Süd30°, S2 Nord15°, S3 Süd10°)
-- **Battery:** BYD HVS 2×12,8 kWh parallel (25,6 kWh netto, LFP, 10 Module à 2,56 kWh)
-- **Protokoll:** SunSpec Modbus TCP + Fronius HTTP-API
-- **Verbraucher:** WattPilot 22 kW, Heizpatrone 2 kW (Fritz!DECT), Dimplex WP (geplant)
-
 ## Troubleshooting
 
 **Problem:** Port 8000 bereits belegt
 ```bash
 lsof -i :8000
-pkill -f modbus_v3
+sudo systemctl restart pv-web
 ```
 
-**Problem:** Keine Daten
+**Problem:** Keine Daten / Collector hängt
 ```bash
-# Modbus-/HTTP-Connection testen
+journalctl -u pv-collector --since "5 min ago"
+sudo systemctl restart pv-collector
+```
+
+**Problem:** Modbus-Verbindung prüfen
+```bash
 curl -s http://<inverter-host>/solar_api/v1/GetInverterRealtimeData.cgi
 ```
 
