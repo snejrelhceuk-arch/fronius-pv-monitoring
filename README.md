@@ -216,7 +216,7 @@ cp /dev/shm/data.db data_backup_$(date +%Y%m%d_%H%M).db
 Dokumentation und Schnittstellenbeschreibungen im Repo sind als eigene technische
 Darstellung gedacht und dürfen keine kopierten Hersteller-Originalinhalte enthalten.
 Vor externer Veröffentlichung gilt die Checkliste in
-[doc/VEROEFFENTLICHUNGSRICHTLINIE.md](doc/VEROEFFENTLICHUNGSRICHTLINIE.md).
+[doc/meta/VEROEFFENTLICHUNGSRICHTLINIE.md](doc/meta/VEROEFFENTLICHUNGSRICHTLINIE.md).
 
 ## Troubleshooting
 
