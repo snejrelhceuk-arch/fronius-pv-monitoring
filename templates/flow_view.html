@@ -2356,7 +2356,14 @@
                 const wpAktNeuesteZuerst = wpAkt.slice().reverse();
                 const wpSollTimeline = buildWpSollEventSnippet(wpAktNeuesteZuerst);
 
-                wpBody.innerHTML = `<div class="wp-auto-line"><span class="ap-icon"></span>${mrLabel('Wärmepumpe', 'WP', '#14b8a6')} VL <span class="ap-wp-val">${wv}°</span> <span class="ap-sep">·</span> RL <span class="ap-wp-val">${wr}°</span>/<span class="ap-wp-val">${wrs}°</span> <span class="ap-sep">·</span> WW <span class="ap-wp-val">${wwi}°</span>/<span class="ap-wp-val">${wws}°</span> <span class="ap-sep">·</span> Heiz <span class="ap-wp-val">${whs}°</span> <span class="ap-sep">·</span> Quelle <span class="ap-wp-val">${wqe}°</span>/<span class="ap-wp-val">${wqa}°</span></div><div class="wp-auto-line events"><span class="ap-icon"></span><span class="ap-label" style="color:#14b8a6">Soll:</span> ${wpSollTimeline}</div>`;
+                // COP (24h) + SCOP (12 Mon.) aus wp_thermal_daily (Modbus-Wärmemengen).
+                const wpcop = d.wp_cop || {};
+                const _cf = (v) => (v != null ? Number(v).toFixed(2).replace('.', ',') : '–');
+                const cop24 = wpcop.cop24 ? _cf(wpcop.cop24.cop) : '–';
+                const scop12 = wpcop.scop12 ? _cf(wpcop.scop12.scop) : '–';
+                const copSnippet = ` <span class="ap-sep">·</span> COP <span class="ap-wp-val">${cop24}</span> <span class="ap-sep">·</span> SCOP <span class="ap-wp-val">${scop12}</span>`;
+
+                wpBody.innerHTML = `<div class="wp-auto-line"><span class="ap-icon"></span>${mrLabel('Wärmepumpe', 'WP', '#14b8a6')} VL <span class="ap-wp-val">${wv}°</span> <span class="ap-sep">·</span> RL <span class="ap-wp-val">${wr}°</span>/<span class="ap-wp-val">${wrs}°</span> <span class="ap-sep">·</span> WW <span class="ap-wp-val">${wwi}°</span>/<span class="ap-wp-val">${wws}°</span> <span class="ap-sep">·</span> Heiz <span class="ap-wp-val">${whs}°</span> <span class="ap-sep">·</span> Quelle <span class="ap-wp-val">${wqe}°</span>/<span class="ap-wp-val">${wqa}°</span>${copSnippet}</div><div class="wp-auto-line events"><span class="ap-icon"></span><span class="ap-label" style="color:#14b8a6">Soll:</span> ${wpSollTimeline}</div>`;
             } else if (wpBody) {
                 wpBody.innerHTML = `<div class="wp-auto-line">${mrLabel('Wärmepumpe', 'WP', '#14b8a6')} <span class="ap-text">nicht verfügbar</span></div><div class="wp-auto-line events"><span class="ap-label" style="color:#14b8a6">Soll:</span> <span class="ap-text">—</span></div>`;
             }

@@ -26,6 +26,7 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 | **collector: Aggregat-Pipeline, raw → 1min → daily → monthly** | [`collector-aggregation-pipeline.card.md`](./cards/collector-aggregation-pipeline.card.md) | stable |
 | **collector: Fronius-Modbus, Solar-API, raw_data-Schreiber** | [`collector-fronius-collector.card.md`](./cards/collector-fronius-collector.card.md) | stable |
 | **collector: Wattpilot-Polling, `eto`, `wattpilot_daily`** | [`collector-wattpilot-collector.card.md`](./cards/collector-wattpilot-collector.card.md) | stable |
+| **collector: WP-Wärmemenge/COP/SCOP, Dimplex-Modbus-Zähler, `wp_thermal_daily`** | [`collector-wp-thermal.card.md`](./cards/collector-wp-thermal.card.md) | stable |
 | **collector: FritzDECT, AIN-Mapping, Steckdosen-Polling** | [`collector-fritzdect-collector.card.md`](./cards/collector-fritzdect-collector.card.md) | stable |
 | **diagnos: Host-Health, Services, Freshness, Mirror/Backup-Alter** | [`diagnos-health.card.md`](./cards/diagnos-health.card.md) | stable |
 | **diagnos: Energiebilanz, Rollups, Gap-Scan, Config-Parse** | [`diagnos-integrity.card.md`](./cards/diagnos-integrity.card.md) | stable |
@@ -63,6 +64,7 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 - [`collector-aggregation-pipeline.card.md`](./cards/collector-aggregation-pipeline.card.md) — raw → daily → monthly
 - [`collector-fronius-collector.card.md`](./cards/collector-fronius-collector.card.md) — Modbus + Solar-API
 - [`collector-wattpilot-collector.card.md`](./cards/collector-wattpilot-collector.card.md) — WS-Polling, `eto`
+- [`collector-wp-thermal.card.md`](./cards/collector-wp-thermal.card.md) — WP-Wärmemenge/COP/SCOP (Dimplex-Modbus)
 - [`collector-fritzdect-collector.card.md`](./cards/collector-fritzdect-collector.card.md) — AHA-API, AIN-Mapping
 
 ### diagnos (Schicht D)

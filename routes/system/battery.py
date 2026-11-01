@@ -175,6 +175,7 @@ def _build_flow_status_result(now, api):
     _fetch_temperatures(result)
     _fetch_hp_status(now, result)
     _fetch_wp_status(result)
+    _fetch_wp_cop(result)
     _fetch_wattpilot_status(now, result)
 
     result['pv_forecast_emoji'] = '❓'
@@ -1005,6 +1006,49 @@ def _fetch_wp_status(result):
     except Exception as _we:
         logging.debug(f"WP-Status (ObsState): {_we}")
         result['wp_status'] = {'error': str(_we)}
+
+
+def _fetch_wp_cop(result):
+    """WP-COP (24h) + SCOP (12 Monate) aus wp_thermal_daily (Rolle B: nur DB-Read).
+
+    Die Zähler-Deltas + COP befüllt die A-Rolle (collector.aggregate.wp_thermal).
+    Hier wird ausschließlich gelesen und gerechnet — kein Modbus/Hardware-Zugriff.
+    """
+    try:
+        with sqlite3.connect(f'file:{config.DB_PATH}?mode=ro', uri=True, timeout=2) as _c:
+            # COP 24h: jüngster Tag mit belastbarem COP.
+            _r = _c.execute("""
+                SELECT day, cop, thermal_delta_kwh, el_kwh, verdichter1_h_delta
+                FROM wp_thermal_daily
+                WHERE cop IS NOT NULL
+                ORDER BY day DESC LIMIT 1
+            """).fetchone()
+            cop24 = None
+            if _r:
+                cop24 = {
+                    'day': _r[0], 'cop': _r[1],
+                    'thermal_kwh': _r[2], 'el_kwh': _r[3],
+                    'verdichter_h': _r[4],
+                }
+            # SCOP 12 Monate: Σ thermisch / Σ elektrisch über die letzten 365 Tage.
+            _s = _c.execute("""
+                SELECT SUM(thermal_delta_kwh), SUM(el_kwh), COUNT(*)
+                FROM wp_thermal_daily
+                WHERE cop IS NOT NULL
+                  AND day >= date('now', '-365 days')
+            """).fetchone()
+            scop = None
+            if _s and _s[0] is not None and _s[1] and _s[1] >= 1.0:
+                scop = {
+                    'scop': round(_s[0] / _s[1], 2),
+                    'thermal_kwh': round(_s[0], 1),
+                    'el_kwh': round(_s[1], 1),
+                    'days': _s[2],
+                }
+            result['wp_cop'] = {'cop24': cop24, 'scop12': scop}
+    except Exception as _ce:
+        logging.debug(f"WP-COP: {_ce}")
+        result['wp_cop'] = {'cop24': None, 'scop12': None}
 
 
 def _fetch_wattpilot_status(now, result):

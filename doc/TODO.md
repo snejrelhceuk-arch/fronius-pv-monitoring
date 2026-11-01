@@ -15,13 +15,13 @@
 
 ---
 
-## Wärmepumpe COP/SCOP (geplant)
+## Wärmepumpe COP/SCOP
 
-- [ ] **Thermische Erfassung WP** — Vorlauf-/Rücklauf-Temperatursensor (Typ klären: F2-Frage, s. Hardware-Abschnitt). Voraussetzung für COP-Berechnung. Abhängig von MEGA-BAS-HAT Phase 1.
-- [ ] **COP-Tracking (24h)** — nach Thermosensor-Integration: COP = Q_th / P_el im 24h-Fenster. Q_th aus (T_VL − T_RL) × Volumenstrom. P_el aus `heizpatrone_daily.energy_wh`.
-- [ ] **SCOP (12 Monate rollierend)** — Seasonal COP über gleitende 12-Monats-Summe.
-- [ ] **Anzeige in Flow → Maschinenraum → WP** — COP (24h) und SCOP (12 Monate) tagesaktuell. Referenz: Nenn-COP laut Datenblatt Dimplex SIK 11 TES (A7/W35).
+**Realisiert 2026-11-01:** COP (24h) + SCOP (12 Mon.) aus Dimplex-Modbus-Wärmemengen­zählern (Reg 5096–5101) + Verdichter-Laufstunden (72/73), gegen `daily_data.W_WP_total`. Leseschicht `wp_modbus.get_wp_energy()`, Bridge `/api/wp/energy`, Aggregation `collector/aggregate/wp_thermal.py` (cron :13) → `wp_thermal_daily`, Anzeige Flow→Maschinenraum→WP. Keine Zusatzsensorik nötig. Card: `collector-wp-thermal.card.md`.
 
+- [ ] **SCOP-Aufbau beobachten** — SCOP (12-Mon.-Fenster) baut sich ab 2026-11-01 auf; erst nach ~1 Jahr voll aussagekräftig. Kein Handlungsbedarf, nur Hinweis.
+- [ ] **Optionale thermische Zusatzsensorik (MEGA-BAS-HAT)** — nur noch für Feingranular-Analysen (Spreizung, Volumenstrom) relevant; für COP/SCOP **nicht mehr nötig** (Modbus-Wärmemenge deckt es ab). Abhängig von MEGA-BAS-HAT Phase 1.
+- [ ] **Laufzeit-/Pumpen-Auswertung** — `wp_thermal_daily` führt zusätzlich Primärpumpe/Heizpumpe/WW-Pumpe/2.WE-Laufstunden; optionale Verschleiß-/Takt-Analyse (Verdichter-Starts) planen.
 ---
 
 ## Solarweb-Abkopplung (Deadline 26.11.2026)

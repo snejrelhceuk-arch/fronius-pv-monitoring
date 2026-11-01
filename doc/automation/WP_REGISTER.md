@@ -72,6 +72,21 @@ Wichtig:
 Hinweis zur Berechnung laut Doku:
 Waermemenge = (9-12 * 100000000) + (5-8 * 10000) + (1-4)
 
+### 5.1 Integration im PV-System (COP/SCOP)
+
+Seit 2026-11-01 werden die Wärmemengen- (5096–5101) und Verdichter-Laufstunden-
+Register (72/73) aktiv gelesen — Leseschicht `wp_modbus.py:get_wp_energy()`
+(local/remote wie `get_wp_status()`), Bridge-Endpunkt `GET /api/wp/energy`.
+Die Tagesaggregation `collector/aggregate/wp_thermal.py` bildet aus den
+kumulativen Zählern das Tagesdelta (thermische kWh) und rechnet es gegen die
+elektrische WP-Tagesenergie (`daily_data.W_WP_total`, sekundärer SM):
+
+- **COP (24h)** = thermal_delta / el_kwh des Tages
+- **SCOP (12 Mon.)** = Σ thermal_delta / Σ el_kwh über 365 Tage
+
+Decode verifiziert (Feldwerte 2026-11-01): Heizen `[5612,3,0]`=35612 kWh,
+WW `[9823,1,0]`=19823 kWh. Details: LLM-Card `collector-wp-thermal.card.md`.
+
 ## 6. Einstellungen (5.3)
 
 ### 6.1 Modus

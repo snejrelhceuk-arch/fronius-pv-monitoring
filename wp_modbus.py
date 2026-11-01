@@ -49,6 +49,24 @@ WP_REGISTERS = {
 _REGS_TENTH = {k: v['addr'] for k, v in WP_REGISTERS.items() if v['scale'] == 0.1}
 _REGS_INT = {k: v['addr'] for k, v in WP_REGISTERS.items() if v['scale'] == 1.0}
 
+# ── Energie-/Laufzeit-Zählerregister (Historie 5.2, read-only, langsam) ──
+# Wärmemengen sind als 3 uint16-Register im Dezimal-Split kodiert
+# (Dimplex-Doku): Gesamt = reg_9_12 * 1e8 + reg_5_8 * 1e4 + reg_1_4 [kWh].
+# Laufstunden sind einfache uint16 [h]. Getrennt von WP_REGISTERS, da eigener
+# Decode + langsamer Poll (Monitoring, nicht Steuerung).
+WP_WAERMEMENGE_REGS = {
+    'waerme_heizen_kwh': (5096, 5097, 5098),  # (1-4, 5-8, 9-12)
+    'waerme_ww_kwh':     (5099, 5100, 5101),
+}
+WP_LAUFSTUNDEN_REGS = {
+    'verdichter1_h':   72,
+    'verdichter2_h':   73,
+    'primaerpumpe_h':  74,
+    'zweiterwe_h':     75,
+    'heizpumpe_h':     76,
+    'wwpumpe_h':       77,
+}
+
 
 def _signed16(raw):
     return raw - 0x10000 if raw >= 0x8000 else raw
@@ -162,6 +180,108 @@ def get_wp_status():
             _WP_CACHE['data'] = data
             _WP_CACHE['ts'] = now
         return dict(_WP_CACHE['data']) if _WP_CACHE['data'] else None
+
+
+# ── Energie-/Laufzeit-Zähler (Monitoring, langsam, read-only) ──────────────
+_WP_ENERGY_CACHE = {'ts': 0, 'data': None}
+_WP_ENERGY_CACHE_TTL = 300  # Zähler ändern sich stündlich → 5-min-Cache genügt
+
+
+def _combine_waermemenge(reg_1_4, reg_5_8, reg_9_12):
+    """Dimplex-Dezimal-Split dekodieren → kWh (Gesamtzähler)."""
+    if reg_1_4 is None or reg_5_8 is None or reg_9_12 is None:
+        return None
+    return reg_9_12 * 100_000_000 + reg_5_8 * 10_000 + reg_1_4
+
+
+def _poll_energy_local():
+    """Wärmemengen- + Laufstunden-Zähler über RS485/tty lesen (read-only)."""
+    try:
+        from pymodbus.client import ModbusSerialClient
+    except ImportError:
+        logging.error("WP Modbus: pymodbus nicht installiert")
+        return None
+
+    client = ModbusSerialClient(
+        port=SERIAL_PORT, baudrate=BAUD_RATE, bytesize=8,
+        parity='N', stopbits=1, timeout=1.5,
+    )
+    if not client.connect():
+        logging.warning("WP Modbus (energy): Verbindung zu %s fehlgeschlagen", SERIAL_PORT)
+        return None
+
+    def _rd(addr):
+        rr = client.read_holding_registers(address=addr, count=1, slave=SLAVE_ID)
+        return None if rr.isError() else rr.registers[0]
+
+    try:
+        data = {}
+        for key, (a1, a2, a3) in WP_WAERMEMENGE_REGS.items():
+            data[key] = _combine_waermemenge(_rd(a1), _rd(a2), _rd(a3))
+        for key, addr in WP_LAUFSTUNDEN_REGS.items():
+            data[key] = _rd(addr)
+        data['ts'] = time.strftime('%H:%M:%S')
+        return data
+    except Exception as e:
+        logging.warning("WP Modbus (energy) Lesefehler: %s", e)
+        return None
+    finally:
+        client.close()
+
+
+def _poll_energy_remote():
+    """Energie-/Laufzeit-Zähler über die Pi4-Tech Bridge (HTTP) lesen. Fail-safe → None."""
+    if not config.WP_REMOTE_BASE_URL:
+        logging.error("WP remote (energy): PV_WP_REMOTE_BASE_URL nicht gesetzt")
+        return None
+    try:
+        import requests
+    except ImportError:
+        logging.error("WP remote (energy): requests nicht installiert")
+        return None
+    url = f"{config.WP_REMOTE_BASE_URL}/api/wp/energy"
+    try:
+        resp = requests.get(url, headers=_remote_headers(),
+                            timeout=config.WP_REMOTE_TIMEOUT_S)
+    except Exception as e:
+        logging.warning("WP remote energy Verbindungsfehler: %s", e)
+        return None
+    if resp.status_code != 200:
+        logging.warning("WP remote energy HTTP %s", resp.status_code)
+        return None
+    try:
+        payload = resp.json()
+    except Exception as e:
+        logging.warning("WP remote energy JSON-Fehler: %s", e)
+        return None
+    if isinstance(payload, dict) and 'data' in payload:
+        return payload['data']
+    return payload
+
+
+def get_wp_energy():
+    """Gecachte WP-Energie-/Laufzeit-Zähler (max. 5 min alt). Thread-safe.
+
+    Liefert dict mit kumulativen Zählern:
+      waerme_heizen_kwh, waerme_ww_kwh [kWh],
+      verdichter1_h … wwpumpe_h [h].
+    Fail-safe → None. Nutzt denselben local/remote-Transport wie get_wp_status().
+    """
+    now = time.time()
+    with _WP_LOCK:
+        if _WP_ENERGY_CACHE['data'] and (now - _WP_ENERGY_CACHE['ts']) < _WP_ENERGY_CACHE_TTL:
+            return dict(_WP_ENERGY_CACHE['data'])
+
+    if config.WP_BACKEND_MODE == 'remote':
+        data = _poll_energy_remote()
+    else:
+        data = _poll_energy_local()
+
+    with _WP_LOCK:
+        if data:
+            _WP_ENERGY_CACHE['data'] = data
+            _WP_ENERGY_CACHE['ts'] = now
+        return dict(_WP_ENERGY_CACHE['data']) if _WP_ENERGY_CACHE['data'] else None
 
 
 # ── Schreib-Funktionen (ABCD: nur C-Rolle) ──────────────────

@@ -64,6 +64,23 @@ Vollständiger, strukturierter Registerkatalog aus der Herstellerdoku:
 | **Sole-Delta** | `quelle_ein − quelle_aus` | Entzugsleistung der Erdsondenanlage |
 | **COP-Näherung** | `(vorlauf + 273) / (vorlauf − quelle_ein)` | Carnot-Schätzung als Plausibilitätscheck |
 
+### 2.2a Gemessener COP/SCOP (Wärmemengen-Zähler, produktiv seit 2026-11-01)
+
+Zusätzlich zur Carnot-Näherung liefert die WP **echte** kumulative Wärmemengen-
+Zähler (Modbus-Historie, Reg 5096–5101: Heizen + WW, kWh) und Verdichter-
+Laufstunden (72/73). Daraus wird der reale COP bestimmt — **ohne** Zusatzsensorik:
+
+| Kennzahl | Berechnung | Darstellung |
+|---|---|---|
+| **COP (24h)** | thermal_delta (Modbus) / `W_WP_total` (sek. SM) je Tag | Flow→Maschinenraum→WP |
+| **SCOP (12 Mon.)** | Σ thermal_delta / Σ el_kwh über 365 Tage | Flow→Maschinenraum→WP |
+
+Leseschicht `wp_modbus.py:get_wp_energy()`, Aggregation
+`collector/aggregate/wp_thermal.py` → Tabelle `wp_thermal_daily`, Serving
+`routes/system/battery.py:_fetch_wp_cop`. Lifetime-Plausibilität:
+Σ thermisch ≈ 55.435 kWh / Dimplex-el. ≈ 13.962 kWh ≈ **3,97**.
+Details: LLM-Card `collector-wp-thermal.card.md`.
+
 ### 2.3 WP-Leistungsdaten (SmartMeter, produktiv)
 
 Unabhängig von Modbus RTU liefert der Fronius SmartMeter (Unit 4) bereits:

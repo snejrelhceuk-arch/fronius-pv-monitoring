@@ -4,6 +4,7 @@
 Endpunkte:
   GET  /health          — Liveness (ohne Auth, minimal).
   GET  /api/wp/status   — WP-Status lesen (Bearer-Token).
+  GET  /api/wp/energy   — WP-Wärmemengen-/Laufzeit-Zähler lesen (Bearer-Token).
   POST /api/wp/write     — Whitelist-Register schreiben (Bearer-Token).
 
 Sicherheit:
@@ -99,6 +100,15 @@ def wp_status():
     data = wp_modbus.get_wp_status()
     if data is None:
         return jsonify(ok=False, error='wp_read_failed'), 502
+    return jsonify(ok=True, data=data)
+
+
+@app.get('/api/wp/energy')
+@require_token
+def wp_energy():
+    data = wp_modbus.get_wp_energy()
+    if data is None:
+        return jsonify(ok=False, error='wp_energy_read_failed'), 502
     return jsonify(ok=True, data=data)
 
 

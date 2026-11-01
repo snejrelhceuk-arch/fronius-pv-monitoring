@@ -689,7 +689,35 @@ def ensure_forecast_table():
                 updated_ts INTEGER DEFAULT (strftime('%s','now'))
             )
         """)
-        
+
+        # WP-Thermik (Tagesintervall): Wärmemengen- + Laufzeit-Zähler der Dimplex
+        # (Modbus-Historie 5.2) als kumulative End-Stände + Tagesdelta, plus COP.
+        # Thermisch (Zähler, kWh) aus wp_modbus.get_wp_energy(); elektrisch aus
+        # daily_data.W_WP_total (sekundärer SM). cop = thermal_delta / el_kwh.
+        # Zähler haben 1-kWh/1-h-Auflösung → Tagesdelta deterministisch.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS wp_thermal_daily (
+                day TEXT PRIMARY KEY,
+                heizen_kwh_end REAL,
+                ww_kwh_end REAL,
+                thermal_kwh_end REAL,
+                heizen_delta_kwh REAL,
+                ww_delta_kwh REAL,
+                thermal_delta_kwh REAL,
+                verdichter1_h_end REAL,
+                verdichter1_h_delta REAL,
+                verdichter2_h_end REAL,
+                primaerpumpe_h_end REAL,
+                heizpumpe_h_end REAL,
+                wwpumpe_h_end REAL,
+                zweiterwe_h_end REAL,
+                el_kwh REAL,
+                cop REAL,
+                src TEXT DEFAULT 'counter',
+                created_ts INTEGER DEFAULT (strftime('%s','now'))
+            )
+        """)
+
         # Fritz!DECT Echtzeitdaten (10s Polling): HP + Klimaanlage
         conn.execute("""
             CREATE TABLE IF NOT EXISTS fritzdect_readings (
