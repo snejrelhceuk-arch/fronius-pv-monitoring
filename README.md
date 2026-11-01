@@ -245,23 +245,11 @@ crontab -l
 python3 -m collector.aggregate.fifteen
 ```
 
-## Version
-
-Siehe [CHANGELOG.md](CHANGELOG.md) für die vollständige Versionshistorie.
-
 ## Urheberschaft & KI-Einsatz
 
-Dieses Projekt wurde als **Mensch-KI-Kollaboration** entwickelt. Der überwiegende Teil
-des Codes (~85%) wurde von KI-Modellen generiert, gesteuert und validiert durch den Projektleiter.
-
-| Phase | Modell | Beitrag |
-|-------|--------|---------|
-| Dez 2025 | **Google Gemini 2.0 Flash** | Basis-Modbus, erste DB-Schemata, Grundstruktur |
-| Jan 2026 | **Anthropic Claude 3.5 Sonnet** | Aggregation-Pipeline, Web-API, UI-Grundlagen |
-| Feb 2026 | **Anthropic Claude Opus 4** | Solar-Forecast/Geometry-Engine, Wattpilot, Architektur-Refactoring |
-| Durchgehend | **GitHub Copilot** (Agent-Modus) | IDE-Integration, Multi-File-Edits, Git-Workflow |
+Dieses Projekt wurde als **Mensch-KI-Kollaboration** entwickelt.
 
 **Projektleiter (Mensch):** System-Architektur, Hardware-Integration, Domänenwissen PV/Elektrotechnik,
 Datenmodell-Design, Batterie-Strategien, UI/UX-Konzept, Qualitätssicherung, Betrieb.
 
-> Detaillierte Beitragsanalyse (gepflegt): [doc/meta/KI_BEITRAGSANALYSE.md](doc/meta/KI_BEITRAGSANALYSE.md)
+> Gepflegte Beitragsanalyse (Modellphasen, Mengen, Anteile): [doc/meta/KI_BEITRAGSANALYSE.md](doc/meta/KI_BEITRAGSANALYSE.md)
