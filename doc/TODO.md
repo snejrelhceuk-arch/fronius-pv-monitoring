@@ -1,7 +1,35 @@
 # Zentrale TODO-Liste — PV-System
 
-**Stand:** 2026-10-30  
+**Stand:** 2026-11-01  
 **Regel:** Alle offenen Aufgaben gehoeren in DIESE Datei. Keine verteilten TODOs in Subdirectories. Ausschliesslich offene `- [ ]` ToDos — keine Audit-/Entwicklungsnotizen.
+
+---
+
+## Monitoring & Messkette
+
+- [ ] **Erzeugungsview: Zwangsnachladung sichtbar machen** — `P_inBatt_Grid` als separate Kategorie „Netzladen/Schutzladung" im Tag-Ansicht-Chart einblenden. Daten liegen fertig in `data_1min.P_inBatt_Grid`. Farblich von PV-Ladung abheben.
+- [ ] **Stichproben-Alarm SM-LCD vs. DB** — monatlicher Vergleich enwitec-LCD-Ablesung gegen `raw_data.W_Imp_Netz` zum selben Zeitstempel; Alarm bei Δ > 1 kWh.
+- [ ] **Stichproben-Alarm Dimplex WP-Zähler vs. DB** — periodischer Vergleich Dimplex-kumulativ gegen `SUM(energy_wh) FROM heizpatrone_daily` ab Startdatum; Alarm bei Δ > 5 %. Startdatum festzulegen sobald DB-Gegenwert belastbar.
+- [ ] **PAC-Abweichungsdarstellung gewichten** — in der NQ-Energievergleichs-Ansicht Abweichungen bei kleinen Energiedurchsätzen (< 50 kWh Periode) visuell dämpfen (Graustufe / reduzierte Opazität oder Tooltip-Hinweis), damit systembedingte hohe %-Abweichungen bei kleinen Einspeisemengen nicht beunruhigen.
+- [ ] **Tages-CSV-Export** `tools/export_daily_csv.py` anlegen: exportiert `daily_data` als tagegenaue CSV für das gesamte System-Lebensalter. Felder: date, pv, bezug, einsp, batt_in, batt_out, verbr, direktverbr, wp, wattpilot. Manuell oder jährlich automatisiert. Ziel: `doc/csv/daily_YYYY.csv`.
+
+---
+
+## Wärmepumpe COP/SCOP (geplant)
+
+- [ ] **Thermische Erfassung WP** — Vorlauf-/Rücklauf-Temperatursensor (Typ klären: F2-Frage, s. Hardware-Abschnitt). Voraussetzung für COP-Berechnung. Abhängig von MEGA-BAS-HAT Phase 1.
+- [ ] **COP-Tracking (24h)** — nach Thermosensor-Integration: COP = Q_th / P_el im 24h-Fenster. Q_th aus (T_VL − T_RL) × Volumenstrom. P_el aus `heizpatrone_daily.energy_wh`.
+- [ ] **SCOP (12 Monate rollierend)** — Seasonal COP über gleitende 12-Monats-Summe.
+- [ ] **Anzeige in Flow → Maschinenraum → WP** — COP (24h) und SCOP (12 Monate) tagesaktuell. Referenz: Nenn-COP laut Datenblatt Dimplex SIK 11 TES (A7/W35).
+
+---
+
+## Solarweb-Abkopplung (Deadline 26.11.2026)
+
+- [ ] **Solarweb November 2026 sichern** — nach Monatswechsel: `python3 scripts/fetch_solarweb_daily.py --year 2026 --month 11`
+- [ ] **Solarweb Jahressummen 2026 sichern** — Januar 2027 (falls noch zugänglich): `solarweb_yearly_2021-26_working.csv` aktualisieren
+- [ ] **Solarweb-Credentials aus `.secrets` entfernen** — nach abgeschlossener Sicherung und nach dem 26.11.2026
+- [ ] **Abgleich-Matrix Nov 2026** (`abgleich_2026-11_daily_vs_pvsystem.csv`) nach Monatswechsel
 
 ---
 

@@ -5,7 +5,7 @@ role: A
 applyTo: "collector/aggregate/**"
 tags: [feldnamen, semantik, dupletten]
 status: stable
-last_review: 2026-10-31
+last_review: 2026-11-01
 ---
 
 # Feldnamen-Referenz
@@ -32,6 +32,7 @@ Die wichtigsten Feldnamen mit ihrer Bedeutung, ihren Einheiten und ihren häufig
 - **`W_WP` (Wärmepumpe) ≠ Wattpilot.** WP=Dimplex SIK 11 TES, Wattpilot=Fronius/go-e Wallbox.
 - **`P_Netz`:** positiv = Bezug, negativ = Einspeisung.
 - **`W_Exp_Netz`:** negativ → mit `abs()` zu Einspeisung machen.
+- **`W_inBatt` vs. `W_inBatt_PV` vs. `W_inBatt_Grid`:** `W_inBatt` = Gesamtladung (PV + Netz). `W_inBatt_PV` = PV-Anteil. `W_inBatt_Grid` = Netz-Anteil (Zwangsnachladung/Schutzladung). Die Erzeugungsansicht zeigt nur `P_inBatt_PV` — bei Zwangsnachladung (SOC_MIN-Ereignis, P_AC_Inv < 0) ist `P_inBatt_PV = 0`, obwohl SOC steigt.
 - **Wattpilot-Solarweb:** zeigt nur PV-Direkt-Anteil; Netzbezug-Anteil unsichtbar — eigene `wattpilot_daily`-Quelle nutzen.
 
 ## Top-Felder (gekürzt)

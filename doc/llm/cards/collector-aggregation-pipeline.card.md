@@ -5,7 +5,7 @@ role: A
 applyTo: "collector/aggregate/**"
 tags: [aggregation, pipeline, cron, retention]
 status: stable
-last_review: 2026-10-24
+last_review: 2026-11-01
 ---
 
 # Aggregation-Pipeline
@@ -71,6 +71,7 @@ _Konkrete Cron-Minuten liegen in der User-Crontab (nicht im Repo)._
 - **Statistics-Corrections** (`statistics_corrections.py`): Quellen sind `daily_data` (WP/Heizpatrone) und `wattpilot_daily` (Wallbox); falsche Schreibweise/Spaltennamen führen stillschweigend zu fehlenden Korrekturen (`statistics-corrections-note`).
 - Backfill nur über die letzten 10 min — größere Lücken brauchen dedizierte Backfill-Skripte (`tools/`/`scripts/`).
 - Sunrise/Sunset-Forecast saisonal: ForecastCollector nutzt einen festen Bezug, der saisonal driften kann (offene Tech-Debt, `doc/TODO.md`).
+- **Zwangsnachladung (Fronius-Schutzladung):** Wenn SOC_MIN im GEN24 unterschritten wird, lädt der WR aus dem Netz — `P_AC_Inv < 0`, SOC steigt ohne PV-Erzeugung. In `data_1min` korrekt als `P_inBatt_Grid` / `W_inBatt_Grid` erfasst; `W_Batt_Charge_total` in `daily_data` enthält diese Energie. Die Erzeugungsansicht zeigt dies jedoch NICHT (zeigt nur `P_inBatt_PV`). Fix: `P_inBatt_Grid` im Display als „Netzladen" einblenden (s. `doc/TODO.md`). Solarweb zählt Grid-Charging in `in_batt_kwh` **nicht**, daher lokaler Wert systematisch höher.
 
 ## Verwandte Cards
 - [`collector-db-schema.card.md`](./collector-db-schema.card.md)

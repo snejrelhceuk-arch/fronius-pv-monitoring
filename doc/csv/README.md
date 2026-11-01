@@ -88,6 +88,11 @@ Detailliertes Audit: siehe [SOLARWEB_ABGLEICH.md § 6](../audit/SOLARWEB_ABGLEIC
 | Apr 2026 | ✅ | ✅ | ✅ Vollständig (Δ -0,3%) |
 | Mai 2026 | ✅ | ✅ | ✅ Vollständig (Δ -0,2%) |
 | Jun 2026 | ✅ | ✅ | ✅ Vollständig (Δ -0,2%) |
+| Jul 2026 | ✅ | ✅ | Abgleich-Matrix fehlt noch |
+| Aug 2026 | ✅ | ✅ | Abgleich-Matrix fehlt noch |
+| Sep 2026 | ✅ | ✅ | Abgleich-Matrix fehlt noch |
+| Okt 2026 | ✅ | ✅ | ✅ `abgleich_2026-10_daily_vs_pvsystem.csv` (Δ PV -0,38%) |
+| Nov 2026 | lfd. | ⏳ nach 01.12. | — Solarweb-Zugang endet 26.11.2026 |
 
 **Legende:** ✅ verfügbar/gut | 🟡 unvollständig | Δ = PV-Abweichung lokal vs. Solarweb
 
@@ -99,10 +104,10 @@ Detailliertes Audit: siehe [SOLARWEB_ABGLEICH.md § 6](../audit/SOLARWEB_ABGLEIC
 | Kategorie | Anzahl | Größe |
 |---|---:|---|
 | Jahres-Backups | 4 | 3,7 KB |
-| Solarweb-Tagesdaten | 2 | 3,5 KB |
+| Solarweb-Tagesdaten | 14 (2021-11 – 2026-10) | ~120 KB |
 | Validierungsdaten | 3 | 2,9 KB |
-| Vergleichsmatrizen | 2 | 3,7 KB |
-| **Gesamt** | **11 Dateien** | **~14 KB** |
+| Vergleichsmatrizen | 3 (Jan, Feb, Okt 2026) | ~8 KB |
+| **Gesamt** | | |
 
 ---
 
