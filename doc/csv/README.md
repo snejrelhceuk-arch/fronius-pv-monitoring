@@ -1,22 +1,35 @@
 # CSV-Archiv — Datenverwaltung & Monitoring
 
-Stand: 01.10.2026
-Quelle: Pi5-Backup-Archiv
+Stand: 01.11.2026
+Quelle: Pi5-Backup-Archiv + lokaler Tages-Export
 
 ---
 
 ## 📋 Verzeichnisinhalt
 
+### Tagegenaues Lokal-Archiv (Solarweb-unabhängig)
+
+`daily_YYYY.csv` — tagegenaue Energiebilanz aus `daily_data` (eigenes Monitoring,
+volle Historie 2021-11 bis laufend). **Ersetzt die Solarweb-Abhängigkeit** (s.
+`doc/transition/SOLARWEB_ABKOPPLUNG.md`).
+
+**Erzeugung:** `tools/export_daily_csv.py` (liest Shadow-Views → volle Historie).
+Laufendes Jahr wird täglich 06:40 per Cron regeneriert; abgeschlossene Jahre sind stabil.
+
+**Trennzeichen:** `;` · **Einheit:** kWh
+**Felder:** date, pv, bezug, einsp, batt_in, batt_out, verbrauch, direktverbrauch, wp, wattpilot
+
 ### Historische Jahres-Backups (2022–2025)
 
 | Datei | Größe | Beschreibung |
 |---|---:|---|
-| data_2022.csv | 884 B | Jahresarchiv 2022 (komprimiert) |
-| data_2023.csv | 919 B | Jahresarchiv 2023 (komprimiert) |
-| data_2024.csv | 949 B | Jahresarchiv 2024 (komprimiert) |
-| data_2025.csv | 968 B | Jahresarchiv 2025 (komprimiert) |
+| data_2022.csv | 884 B | Jahresarchiv 2022 (Monats-Aggregat) |
+| data_2023.csv | 919 B | Jahresarchiv 2023 (Monats-Aggregat) |
+| data_2024.csv | 949 B | Jahresarchiv 2024 (Monats-Aggregat) |
+| data_2025.csv | 968 B | Jahresarchiv 2025 (Monats-Aggregat) |
 
-**Zweck:** Langzeitarchiv für Aggregat-Statistiken
+**Zweck:** Langzeitarchiv für Aggregat-Statistiken (Monatsgranularität; die
+tagegenauen `daily_YYYY.csv` sind der feinere, aktuelle Pool).
 
 ---
 

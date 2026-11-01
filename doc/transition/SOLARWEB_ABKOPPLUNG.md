@@ -104,7 +104,7 @@ raw_data (3s)          data_1min (1min)          Web-UI (Flow, Tag, Monat, Jahr)
 
 CSVs sind das menschenlesbare Langzeit-Format. Strategie:
 
-- **Tages-CSVs:** Bei Bedarf exportierbar via `tools/export_daily_csv.py` (noch anzulegen)
+- **Tages-CSVs:** `tools/export_daily_csv.py` → `doc/csv/daily_YYYY.csv` (volle Historie; laufendes Jahr täglich per Cron)
 - **Monats-CSVs:** Monatlich als `abgleich_YYYY-MM_daily_vs_pvsystem.csv` in `doc/csv/`
 - **Jahres-CSVs:** `data_YYYY.csv` aus `yearly_statistics` (4 Jahreswerte bereits vorhanden)
 - **Solarweb-CSVs:** Weiterführung bis Nov 2026, dann einfrieren
@@ -119,9 +119,9 @@ nicht täglich automatisch laufen (DB-Backup ist zuverlässiger als CSV-Redundan
 
 - [x] Solarweb-Tagesdaten 2021-11 bis 2026-10 in `doc/csv/` gesichert
 - [x] Abgleich-Matrizen H1 + Oktober 2026 abgeschlossen
+- [x] Tages-Export-Script `tools/export_daily_csv.py` angelegt (→ `doc/csv/daily_YYYY.csv`, täglicher Cron fürs laufende Jahr)
 - [ ] November 2026 Solarweb-Daten fetchen (nach Monatswechsel)
 - [ ] Jahres-Abschluss 2026 sichern (Januar 2027)
-- [ ] Tages-Export-Script `tools/export_daily_csv.py` anlegen (s. TODO.md)
 - [ ] Solarweb-Credentials nach Abkopplung aus `.secrets` entfernen
 
 ---
