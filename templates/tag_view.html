@@ -1547,6 +1547,7 @@
             const legendData = [
                 {name: 'Direktverbrauch PV', itemStyle: {color: 'rgba(255, 193, 7, 1)'}},
                 {name: 'Batterieladung (PV)', itemStyle: {color: 'rgba(76, 175, 80, 1)'}},
+                {name: 'Batterieladung (Netz)', itemStyle: {color: 'rgba(239, 83, 80, 1)'}},
                 {name: 'Einspeisung', itemStyle: {color: 'rgba(128, 128, 128, 1)'}},
                 {name: 'Verbrauch', itemStyle: {color: 'rgba(33, 150, 243, 1)'}},
                 {name: 'SOC (%)', itemStyle: {color: 'rgba(76, 175, 80, 1)'}}
@@ -1678,6 +1679,22 @@
                     areaStyle: { color: 'rgba(76, 175, 80, 0.7)' },
                     lineStyle: { color: 'rgba(76, 175, 80, 1)', width: 1 },
                     data: td('p_inbatt_pv')
+                },
+                {
+                    // Zwangsnachladung/Schutzladung: Batterie wird aus dem Netz geladen
+                    // (P_AC_Inv < 0, SOC steigt ohne PV). NICHT im Produktions-Stack —
+                    // eigene, nicht-gestackte Fläche, damit die Produktionssumme stimmt
+                    // und das Netzladen (rot) als eigenes Band sichtbar wird.
+                    name: 'Batterieladung (Netz)',
+                    type: 'line',
+                    smooth: true,
+                    symbol: 'none',
+                    legendHoverLink: true,
+                    z: 4,
+                    itemStyle: { color: 'rgba(239, 83, 80, 1)' },
+                    areaStyle: { color: 'rgba(239, 83, 80, 0.55)' },
+                    lineStyle: { color: 'rgba(239, 83, 80, 1)', width: 1 },
+                    data: td('p_inbatt_grid')
                 },
                 {
                     name: 'Einspeisung',
