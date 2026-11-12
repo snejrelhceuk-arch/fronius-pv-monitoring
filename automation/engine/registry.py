@@ -56,6 +56,7 @@ DEFAULT_REGELN_SPEC: list[tuple[str, str, bool]] = [
     ('heiz_bedarf',          'automation.engine.regeln.waermepumpe.RegelHeizBedarf', True),
     ('ww_absenkung',         'automation.engine.regeln.waermepumpe.RegelWwAbsenkung', True),
     ('heiz_absenkung',       'automation.engine.regeln.waermepumpe.RegelHeizAbsenkung', True),
+    ('wp_hysterese',         'automation.engine.regeln.waermepumpe.RegelWpHysterese', True),
 ]
 
 DEFAULT_AKTOREN_SPEC: list[tuple[str, str, bool]] = [

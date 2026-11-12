@@ -5,7 +5,7 @@ role: A
 applyTo: "collector/aggregate/wp_thermal.py"
 tags: [waermepumpe, wp, cop, scop, modbus, waermemenge, thermisch]
 status: stable
-last_review: 2026-11-01
+last_review: 2026-11-12
 ---
 
 # WP-Thermik & COP/SCOP

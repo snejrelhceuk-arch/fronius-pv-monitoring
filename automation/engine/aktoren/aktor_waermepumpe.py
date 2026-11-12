@@ -5,8 +5,10 @@ Kapselt WP-Modbus-Schreibbefehle hinter dem AktorBase-Interface.
 Nutzt wp_modbus.write_register() (Whitelist-geschützt).
 
 Unterstützte Kommandos:
-  set_ww_soll    — WW-Solltemperatur (Register 5047, 10–85°C)
-  set_heiz_soll  — Heizungs-Festwert (Register 5037, 18–60°C)
+  set_ww_soll       — WW-Solltemperatur (Register 5047, 10–85°C)
+  set_heiz_soll     — Heizungs-Festwert (Register 5037, 18–60°C)
+  set_ww_hysterese  — WW-Hysterese (Register 5045, 2–15 K, 1 K/Schritt)
+  set_hz_hysterese  — HZ-Hysterese (Register 47, 0.5–5.0 K, 0.1 K/Schritt)
 
 ABCD: Nur in C (Automation Engine) — D (Hardware) via Modbus RTU.
 Siehe: doc/automation/WP_REGISTER.md §6.2, §6.3
@@ -31,6 +33,13 @@ class AktorWaermepumpe(AktorBase):
     _CMD_MAP = {
         'set_ww_soll': 'ww_soll',
         'set_heiz_soll': 'heiz_soll',
+        'set_ww_hysterese': 'ww_hysterese',
+        'set_hz_hysterese': 'hz_hysterese',
+    }
+    # Kommandos bei denen der K-Wert (float) vor dem Schreiben in raw-Einheiten
+    # umgerechnet werden muss. hz_hysterese: 0.1 K/LSB → ×10.
+    _CMD_WRITE_SCALE = {
+        'set_hz_hysterese': 10,
     }
 
     def ausfuehren(self, aktion: dict) -> dict:
@@ -50,7 +59,9 @@ class AktorWaermepumpe(AktorBase):
             return {'ok': False, 'kommando': kommando,
                     'detail': f'Unbekanntes Kommando: {kommando}'}
 
-        ok = self._write_with_retry(reg_name, int(wert))
+        scale = self._CMD_WRITE_SCALE.get(kommando, 1)
+        raw_wert = int(round(float(wert) * scale))
+        ok = self._write_with_retry(reg_name, raw_wert)
         return {
             'ok': ok,
             'kommando': kommando,
@@ -88,6 +99,13 @@ class AktorWaermepumpe(AktorBase):
             if kommando == 'set_heiz_soll':
                 ist = wp.get('heiz_soll')
                 return {'ok': ist == int(wert), 'soll': wert, 'ist': ist}
+            if kommando == 'set_ww_hysterese':
+                ist = wp.get('ww_hysterese')
+                return {'ok': ist is not None and int(ist) == int(wert), 'soll': wert, 'ist': ist}
+            if kommando == 'set_hz_hysterese':
+                ist = wp.get('hz_hysterese')
+                return {'ok': ist is not None and abs(float(ist) - float(wert)) < 0.05,
+                        'soll': wert, 'ist': ist}
             return {'ok': True, 'grund': f'Keine Rücklese-Verifikation für {kommando}'}
         except Exception as e:
             LOG.warning(f"WP Verifikation fehlgeschlagen: {e}")

@@ -20,7 +20,8 @@
     { "name": "wp_pflichtlauf",       "klasse": "automation.engine.regeln.waermepumpe.RegelWpPflichtlauf",        "aktiv": true },
     { "name": "heiz_bedarf",          "klasse": "automation.engine.regeln.waermepumpe.RegelHeizBedarf",           "aktiv": true },
     { "name": "ww_absenkung",         "klasse": "automation.engine.regeln.waermepumpe.RegelWwAbsenkung",          "aktiv": true },
-    { "name": "heiz_absenkung",       "klasse": "automation.engine.regeln.waermepumpe.RegelHeizAbsenkung",        "aktiv": true }
+    { "name": "heiz_absenkung",       "klasse": "automation.engine.regeln.waermepumpe.RegelHeizAbsenkung",        "aktiv": true },
+    { "name": "wp_hysterese",         "klasse": "automation.engine.regeln.waermepumpe.RegelWpHysterese",          "aktiv": true }
   ],
   "aktoren": [
     { "name": "batterie",    "klasse": "automation.engine.aktoren.aktor_batterie.AktorBatterie",     "aktiv": true },

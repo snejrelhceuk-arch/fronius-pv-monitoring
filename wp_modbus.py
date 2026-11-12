@@ -41,7 +41,9 @@ WP_REGISTERS = {
     'quelle_ein':     {'addr': 6,    'scale': 0.1, 'writable': False, 'einheit': '°C'},
     'quelle_aus':     {'addr': 7,    'scale': 0.1, 'writable': False, 'einheit': '°C'},
     'ruecklauf_soll': {'addr': 53,   'scale': 0.1, 'writable': False, 'einheit': '°C'},
+    'hz_hysterese':   {'addr': 47,   'scale': 0.1, 'writable': True,  'min': 5,  'max': 50, 'einheit': 'K'},
     'heiz_soll':      {'addr': 5037, 'scale': 1.0, 'writable': True,  'min': 18, 'max': 60, 'einheit': '°C'},
+    'ww_hysterese':   {'addr': 5045, 'scale': 1.0, 'writable': True,  'min': 2,  'max': 15, 'einheit': 'K'},
     'ww_soll':        {'addr': 5047, 'scale': 1.0, 'writable': True,  'min': 10, 'max': 85, 'einheit': '°C'},
 }
 

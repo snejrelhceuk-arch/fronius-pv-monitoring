@@ -98,6 +98,8 @@ class ObsState:
     wp_quelle_aus_c: Optional[float] = None  # WP Quelle Austritt [°C] (WP Modbus Reg 7)
     wp_ww_soll_c: Optional[int] = None   # WP WW-Solltemperatur [°C] (WP Modbus Reg 5047)
     wp_heiz_soll_c: Optional[int] = None  # WP Heiz-Festwertsoll [°C] (WP Modbus Reg 5037)
+    wp_ww_hysterese_k: Optional[float] = None  # WW-Hysterese [K] (WP Modbus Reg 5045, 1 K/Schritt)
+    wp_hz_hysterese_k: Optional[float] = None  # HZ-Hysterese [K] (WP Modbus Reg 47, 0.1 K/Schritt)
     wp_aussen_temp_c: Optional[float] = None  # WP Außentemperatur [°C] (WP Modbus Reg 1)
     
     # ── Heizpatrone (Fritz!DECT Steckdose) ────────────────────

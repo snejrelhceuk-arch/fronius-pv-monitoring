@@ -1129,3 +1129,66 @@ class RegelHeizBedarf(Regel):
                 'wert': standard,
                 'grund': (f'HeizBedarf beendet: {aktuell}°C → {standard}°C'),
             }]
+
+
+# ── WP Hysterese-Synchronisation (P2, strategic-Zyklus) ─────────────────────
+class RegelWpHysterese(Regel):
+    """WP-Hysteresewerte mit Config-Zielvorgaben synchronisieren.
+
+    Liest ww_hysterese_k und hz_hysterese_k aus der Matrix, vergleicht mit
+    den aktuell gemessenen ObsState-Werten und schreibt bei Abweichung.
+    Läuft im strategic-Zyklus (15 min) — für einmalige Erstkonfiguration
+    und Rückkorrektur nach manuellen Änderungen am WP-Display.
+
+    WW-Hysterese (Reg 5045): 1 K/Schritt, Bereich 2–15 K
+    HZ-Hysterese (Reg 47):   0.1 K/Schritt, Bereich 0.5–5.0 K
+    """
+
+    name = 'wp_hysterese'
+    regelkreis = 'wp_hysterese'
+    aktor = 'waermepumpe'
+    engine_zyklus = 'strategic'
+
+    def bewerte(self, obs: ObsState, matrix: dict) -> int:
+        if not ist_aktiv(matrix, self.regelkreis):
+            return 0
+
+        ww_soll = float(get_param(matrix, self.regelkreis, 'ww_hysterese_k', 3))
+        hz_soll = float(get_param(matrix, self.regelkreis, 'hz_hysterese_k', 3.0))
+
+        ww_ist = obs.wp_ww_hysterese_k
+        hz_ist = obs.wp_hz_hysterese_k
+
+        ww_abw = ww_ist is not None and abs(ww_ist - ww_soll) >= 0.5
+        hz_abw = hz_ist is not None and abs(hz_ist - hz_soll) >= 0.05
+
+        if ww_abw or hz_abw:
+            return get_score_gewicht(matrix, self.regelkreis, 30)
+        return 0
+
+    def erzeuge_aktionen(self, obs: ObsState, matrix: dict) -> list[dict]:
+        ww_soll = float(get_param(matrix, self.regelkreis, 'ww_hysterese_k', 3))
+        hz_soll = float(get_param(matrix, self.regelkreis, 'hz_hysterese_k', 3.0))
+        result = []
+
+        ww_ist = obs.wp_ww_hysterese_k
+        if ww_ist is None or abs(ww_ist - ww_soll) >= 0.5:
+            result.append({
+                'tier': 2,
+                'aktor': 'waermepumpe',
+                'kommando': 'set_ww_hysterese',
+                'wert': int(ww_soll),
+                'grund': f'WW-Hysterese Ist={ww_ist}K → Soll={int(ww_soll)}K (Reg 5045)',
+            })
+
+        hz_ist = obs.wp_hz_hysterese_k
+        if hz_ist is None or abs(hz_ist - hz_soll) >= 0.05:
+            result.append({
+                'tier': 2,
+                'aktor': 'waermepumpe',
+                'kommando': 'set_hz_hysterese',
+                'wert': hz_soll,
+                'grund': f'HZ-Hysterese Ist={hz_ist}K → Soll={hz_soll}K (Reg 47)',
+            })
+
+        return result

@@ -109,7 +109,7 @@ Betriebsmodus-Codierung:
 
 | Datenpunkt | Adresse J/L/M | Adresse H | Typ | R/W | Bereich | Lokaler Status |
 |---|---:|---:|---|---|---|---|
-| WW-Hysterese | 5045 | 5004 | uint16 | R/W | 2..15 K | ungetestet |
+| WW-Hysterese | 5045 | 5004 | uint16 | R/W | 2..15 K | Lesen ok, Schreiben in Arbeit |
 | WW-Solltemperatur | 5047 | 5022 | uint16 | R/W | Solltemp.Min..85 degC | Lesen/Schreiben ok |
 | WW-Solltemperatur Minimal | 5145 | - | uint16 | R/W | 10..Solltemp | ungetestet |
 | WW-Solltemperatur Maximal | 5048 | - | uint16 | R/W | Solltemp..85 degC | ungetestet |
@@ -122,7 +122,7 @@ Betriebsmodus-Codierung:
 | Raumtemperatur | 46 | 21 | uint16 | R/W | 15.0..30.0 degC |
 | Festwertsolltemperatur | 5037 | 5003 | uint16 | R/W | 18..60 degC |
 | Heizkurvenendpunkt | 5038 | 5015 | uint16 | R/W | 20..70 degC |
-| Hysterese | 47 | 22 | uint16 | R/W | 0.5..5.0 K |
+| Hysterese | 47 | 22 | uint16 | R/W | 0.5..5.0 K | Lesen ok, Schreiben in Arbeit |
 | Solltemp. dyn. Kuehlung | 5043 | 5024 | uint16 | R/W | 10..35 degC |
 
 ## 7. Smart Grid / SG Ready (6.2)
@@ -200,17 +200,22 @@ Hinweis: Laut Hersteller nicht beschreibbar (nur Zustand lesen).
 ## 10. Lokale Verifikation (PV-System)
 
 Sicher verifiziert am System:
-- Lesen: 2, 3, 5, 6, 7, 53, 5047
+- Lesen: 2, 3, 5, 6, 7, 47, 53, 5045, 5047
 - Lesen/Schreiben: 5037 erfolgreich (37 -> 38 -> 37)
 - Schreiben: 5047 erfolgreich
 - Schreiben: 53 nicht angenommen
 - Reset-Test erfolgreich: 5037=37 und 5047=55 wiederhergestellt
+- Lesen Hysterese (2026-11-12): Reg 47 = 30 (3.0 K), Reg 5045 = 3 (3.0 K)
 
 Beobachtung aus Test:
 - Schreiben auf 5037 aendert Register 5037, aber nicht den Live-Lesewert in 53.
 - 53 ist damit im Betrieb mindestens als Anzeige-/Betriebswert zu betrachten,
   nicht als direktes Spiegelregister von 5037.
 - Bei Sollwertwechsel kann die Uebernahme in API/Anzeige verzoegert erscheinen.
+- Reg 47 (HZ-Hysterese): Auflösung 0.1 K/LSB (raw=30 → 3.0 K); liegt damit
+  in der Zehntelgrad-Gruppe (Register 1–100). Write noch zu verifizieren.
+- Reg 5045 (WW-Hysterese): 1 K/LSB (raw=3 → 3 K); wie Sollwert-Register 5000+.
+  Write noch zu verifizieren.
 
 Empfehlung fuer Integration:
 - Setting Heizung: Register 5037 schreiben.
@@ -220,7 +225,7 @@ Empfehlung fuer Integration:
 Noch offen im Systemtest:
 - 5015 (Betriebsmodus)
 - SG-Ready (Coil 3/4 bzw. 5167 je nach WPM-Stand)
-- WW-Hysterese 5045
+- Schreibzugriff Hysterese 47 + 5045 (Lesen verifiziert)
 
 ## 11. WW-Nachtabsenkung (Automation)
 
@@ -299,3 +304,43 @@ Hinweis:
   - doc/automation/TODO.md
   - wp_modbus.py
   - tools/wp_test_sollwerte.py
+  - tools/wp_test_hysterese.py
+
+## 14. Hysterese-Integration (Automation)
+
+Die Regel `wp_hysterese` synchronisiert die Hysteresewerte mit Config-Zielvorgaben
+im strategic-Zyklus (15 min). Schreibt nur bei Abweichung Ist ≠ Soll.
+
+### 14.1 Register-Details
+
+| Register | Name | Einheit | Auflösung | Lesen | Schreiben |
+|---|---|---|---|---|---|
+| 47 | HZ-Hysterese (1. Heizkreis) | K | 0.1 K/LSB | ✅ raw=30 → 3.0 K | in Arbeit |
+| 5045 | WW-Hysterese | K | 1 K/LSB | ✅ raw=3 → 3 K | in Arbeit |
+
+Schreib-Enkodierung:
+- Reg 47: `raw = int(round(wert_k * 10))` → 3.5 K = raw 35 (FC=06)
+- Reg 5045: `raw = int(wert_k)` → 4 K = raw 4 (FC=06)
+
+### 14.2 Parameter (soc_param_matrix.json)
+
+| Parameter | Wert | Bereich | Einheit | Beschreibung |
+|---|---:|---|---|---|
+| ww_hysterese_k | 4 | 2..15 K | K | WW-Hysterese (Reg 5045, 1 K-Schritte) |
+| hz_hysterese_k | 3.5 | 1.0..5.0 K | K | HZ-Hysterese (Reg 47, 0.1 K-Schritte) |
+
+Hinweis: Vor Erstintegration gemessene Ist-Werte (2026-11-12):
+  ww_hysterese_k = 3 K (raw 3), hz_hysterese_k = 3.0 K (raw 30).
+
+### 14.3 Dateien
+
+| Datei | Rolle |
+|---|---|
+| automation/engine/regeln/waermepumpe.py | RegelWpHysterese (Bewertung + Aktionen) |
+| automation/engine/aktoren/aktor_waermepumpe.py | set_ww/hz_hysterese + K→raw-Skalierung |
+| automation/engine/obs_state.py | Felder `wp_ww_hysterese_k`, `wp_hz_hysterese_k` |
+| automation/engine/collectors/data_collector.py | Übernahme Hysterese in ObsState |
+| wp_modbus.py | Register 47 + 5045 in WP_REGISTERS (writable) |
+| config/soc_param_matrix.json | Regelkreis wp_hysterese (Parameter) |
+| config/engine_registry.json | Regel-Eintrag wp_hysterese |
+| tools/wp_test_hysterese.py | Standalone-Lese-/Schreibtest auf Pi4-Tech |

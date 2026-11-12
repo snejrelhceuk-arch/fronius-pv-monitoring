@@ -1557,6 +1557,30 @@
       "score_gewicht": 44,
       "engine_zyklus": "fast"
     },
+    "wp_hysterese": {
+      "_doc": "WP Hysterese-Synchronisation: Schreibt WW-Hysterese (Reg 5045) und HZ-Hysterese (Reg 47) einmalig auf die Zielwerte wenn Ist ≠ Soll. Läuft im strategic-Zyklus (15 min). Rückkorrekturregel bei manuellen Änderungen am WP-Display.",
+      "aktiv": true,
+      "prioritaet": 2,
+      "beschreibung": "WP-Hysteresewerte (WW + HZ) mit Config-Zielvorgaben synchronisieren",
+      "parameter": {
+        "ww_hysterese_k": {
+          "wert": 4,
+          "bereich": [2, 15],
+          "einheit": "K",
+          "obs_feld": "wp_ww_hysterese_k",
+          "beschreibung": "WW-Hysterese (Reg 5045): WP startet WW-Bereitung wenn WW-Ist um diesen Wert unter WW-Soll fällt. 1 K/Schritt, Bereich 2–15 K. Hardware-Default war 3 K, seit 2026-11-12: 4 K."
+        },
+        "hz_hysterese_k": {
+          "wert": 3.5,
+          "bereich": [1.0, 5.0],
+          "einheit": "K",
+          "obs_feld": "wp_hz_hysterese_k",
+          "beschreibung": "HZ-Hysterese (Reg 47): Heizkreis-Hysterese. 0.1 K/Schritt, Bereich 0.5–5.0 K. Hardware-Default war 3.0 K, seit 2026-11-12: 3.5 K."
+        }
+      },
+      "score_gewicht": 30,
+      "engine_zyklus": "strategic"
+    },
     "ww_verschiebung": {
       "_doc": "WW-Bereitung verschieben bei ungünstiger Energiebilanz: SOC niedrig + PV gering + Forecast gut → WW-Soll absenken, WP pausiert WW-Bereitung. Sunset-Sperre: <2h vor Sonnenuntergang keine neue Verschiebung. Automatische Rücknahme bei PV-Erholung, SOC-Erholung, WW zu kalt oder Timeout.",
       "aktiv": true,
@@ -1999,6 +2023,8 @@
       "ww_temp_c": "WW-Ist-Temperatur [°C] (WP Modbus Reg 3) — ww_absenkung",
       "wp_ww_soll_c": "WW-Soll aktuell [°C] (WP Modbus Reg 5047) — ww_absenkung",
       "wp_heiz_soll_c": "Heiz-Festwertsoll [°C] (WP Modbus Reg 5037) — heiz_absenkung",
+      "wp_ww_hysterese_k": "WW-Hysterese [K] (WP Modbus Reg 5045) — wp_hysterese",
+      "wp_hz_hysterese_k": "HZ-Hysterese [K] (WP Modbus Reg 47, 0.1K) — wp_hysterese",
       "wp_aussen_temp_c": "WP Außentemperatur [°C] (WP Modbus Reg 1) — heiz_bedarf",
       "fbh_aktiv": "Fußbodenheizung aktiv (Fritz!DECT state=1) — heiz_bedarf"
     },

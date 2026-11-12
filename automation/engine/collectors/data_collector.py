@@ -604,6 +604,10 @@ class DataCollector:
                 obs.wp_ww_soll_c = wp['ww_soll']
             if wp.get('heiz_soll') is not None:
                 obs.wp_heiz_soll_c = wp['heiz_soll']
+            if wp.get('ww_hysterese') is not None:
+                obs.wp_ww_hysterese_k = float(wp['ww_hysterese'])
+            if wp.get('hz_hysterese') is not None:
+                obs.wp_hz_hysterese_k = float(wp['hz_hysterese'])
             if wp.get('aussen_temp') is not None:
                 obs.wp_aussen_temp_c = wp['aussen_temp']
 
