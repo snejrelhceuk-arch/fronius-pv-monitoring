@@ -53,8 +53,8 @@ Vollständiger, strukturierter Registerkatalog aus der Herstellerdoku:
 | `quelle_ein` | 6 | °C | 0.1 | ✅ | - | Sole-Eintritt (Erdwärme rein) |
 | `quelle_aus` | 7 | °C | 0.1 | ✅ | - | Sole-Austritt (nach WP) |
 | `ww_soll` | 5047 | °C | 1 | ✅ | ✅ | WW-Solltemperatur (ganzzahlig), Schreibtest erfolgreich |
-| `hz_hysterese` | 47 | K | 0.1 | ✅ | 🔄 | HZ-Hysterese (Heizkreis), Ist 3.0 K → Soll 3.5 K |
-| `ww_hysterese` | 5045 | K | 1 | ✅ | 🔄 | WW-Hysterese, Ist 3 K → Soll 4 K |
+| `hz_hysterese` | 47 | K | 0.1 | ✅ | ✅ | HZ-Hysterese (Heizkreis), Ist 3.0 K → Soll 3.5 K |
+| `ww_hysterese` | 5045 | K | 1 | ✅ | ✅ | WW-Hysterese, Ist 3 K → Soll 4 K |
 
 ### 2.2 Abgeleitete Signale
 

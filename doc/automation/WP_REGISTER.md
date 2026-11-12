@@ -109,7 +109,7 @@ Betriebsmodus-Codierung:
 
 | Datenpunkt | Adresse J/L/M | Adresse H | Typ | R/W | Bereich | Lokaler Status |
 |---|---:|---:|---|---|---|---|
-| WW-Hysterese | 5045 | 5004 | uint16 | R/W | 2..15 K | Lesen ok, Schreiben in Arbeit |
+| WW-Hysterese | 5045 | 5004 | uint16 | R/W | 2..15 K | Lesen ok, Schreiben ok |
 | WW-Solltemperatur | 5047 | 5022 | uint16 | R/W | Solltemp.Min..85 degC | Lesen/Schreiben ok |
 | WW-Solltemperatur Minimal | 5145 | - | uint16 | R/W | 10..Solltemp | ungetestet |
 | WW-Solltemperatur Maximal | 5048 | - | uint16 | R/W | Solltemp..85 degC | ungetestet |
@@ -122,7 +122,7 @@ Betriebsmodus-Codierung:
 | Raumtemperatur | 46 | 21 | uint16 | R/W | 15.0..30.0 degC |
 | Festwertsolltemperatur | 5037 | 5003 | uint16 | R/W | 18..60 degC |
 | Heizkurvenendpunkt | 5038 | 5015 | uint16 | R/W | 20..70 degC |
-| Hysterese | 47 | 22 | uint16 | R/W | 0.5..5.0 K | Lesen ok, Schreiben in Arbeit |
+| Hysterese | 47 | 22 | uint16 | R/W | 0.5..5.0 K | Lesen ok, Schreiben ok |
 | Solltemp. dyn. Kuehlung | 5043 | 5024 | uint16 | R/W | 10..35 degC |
 
 ## 7. Smart Grid / SG Ready (6.2)
@@ -206,6 +206,7 @@ Sicher verifiziert am System:
 - Schreiben: 53 nicht angenommen
 - Reset-Test erfolgreich: 5037=37 und 5047=55 wiederhergestellt
 - Lesen Hysterese (2026-11-12): Reg 47 = 30 (3.0 K), Reg 5045 = 3 (3.0 K)
+- Schreiben Hysterese (2026-11-12): Reg 47 = 35 (3.5 K) ✓, Reg 5045 = 4 (4 K) ✓
 
 Beobachtung aus Test:
 - Schreiben auf 5037 aendert Register 5037, aber nicht den Live-Lesewert in 53.
@@ -225,7 +226,6 @@ Empfehlung fuer Integration:
 Noch offen im Systemtest:
 - 5015 (Betriebsmodus)
 - SG-Ready (Coil 3/4 bzw. 5167 je nach WPM-Stand)
-- Schreibzugriff Hysterese 47 + 5045 (Lesen verifiziert)
 
 ## 11. WW-Nachtabsenkung (Automation)
 
@@ -315,8 +315,8 @@ im strategic-Zyklus (15 min). Schreibt nur bei Abweichung Ist ≠ Soll.
 
 | Register | Name | Einheit | Auflösung | Lesen | Schreiben |
 |---|---|---|---|---|---|
-| 47 | HZ-Hysterese (1. Heizkreis) | K | 0.1 K/LSB | ✅ raw=30 → 3.0 K | in Arbeit |
-| 5045 | WW-Hysterese | K | 1 K/LSB | ✅ raw=3 → 3 K | in Arbeit |
+| 47 | HZ-Hysterese (1. Heizkreis) | K | 0.1 K/LSB | ✅ raw=30 → 3.0 K | ✅ raw=35 → 3.5 K |
+| 5045 | WW-Hysterese | K | 1 K/LSB | ✅ raw=3 → 3 K | ✅ raw=4 → 4 K |
 
 Schreib-Enkodierung:
 - Reg 47: `raw = int(round(wert_k * 10))` → 3.5 K = raw 35 (FC=06)
