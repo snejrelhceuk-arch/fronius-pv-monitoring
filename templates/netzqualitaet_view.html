@@ -374,6 +374,19 @@
             loadData();
         }
 
+        function bindSwipeNavigation() {
+            const target = document.getElementById('mainChart') || document.querySelector('.chart-box') || document.body;
+            if (!target || !window.PVNavContext || !PVNavContext.attachSwipeNavigation) return;
+
+            PVNavContext.attachSwipeNavigation({
+                target,
+                onPrev: () => navigateStep(-1),
+                onNext: () => navigateStep(1),
+                enabled: () => currentPeriod === 'tag',
+                thresholdPx: 70,
+            });
+        }
+
         function navigateToToday() {
             if (currentPeriod === 'gesamt') return;
             currentDate = normalizeDateForPeriod(new Date(), currentPeriod);
@@ -404,6 +417,7 @@
             const statusEl = document.getElementById('statusInfo');
             statusEl.textContent = 'Lädt...';
             document.getElementById('loadingMain').style.display = 'block';
+            document.getElementById('mainChart').style.display = 'block';
 
             try {
                 const resp = await fetch(`/api/nq/netzkriterien?period=${currentPeriod}&date=${dateStr}`);
@@ -825,6 +839,7 @@
         updatePeriodButtons();
         updateAnalysisButtonState();
         updateDateDisplay();
+        bindSwipeNavigation();
         loadData();
     </script>
 </body>

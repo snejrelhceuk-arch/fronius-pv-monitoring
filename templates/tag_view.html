@@ -471,6 +471,7 @@
 
             updateContextLinks();
             navigateToView(currentPeriod, true);
+            bindDaySwipeNavigation();
 
             // Seiten-Schublade + Kalender-Picker (Zeit-Navi bleibt oben)
             if (window.PVNavUI && !isEmbedMode) {
@@ -519,6 +520,19 @@
             updateSummaryDisplay();
         }
         
+        function bindDaySwipeNavigation() {
+            const target = document.getElementById('mainChart') || document.querySelector('.chart-container') || document.body;
+            if (!target || !window.PVNavContext || !PVNavContext.attachSwipeNavigation) return;
+
+            PVNavContext.attachSwipeNavigation({
+                target,
+                onPrev: () => navigateDay(-1),
+                onNext: () => navigateDay(1),
+                enabled: () => currentPeriod === 'tag',
+                thresholdPx: 70,
+            });
+        }
+
         function navigateDay(offset) {
             currentDate.setDate(currentDate.getDate() + offset);
             syncAnchors('date');
@@ -1000,7 +1014,7 @@
                 scheduleAutoRefresh();
                 document.getElementById('loading').style.display = 'block';
                 document.getElementById('error').style.display = 'none';
-                document.getElementById('mainChart').style.display = 'none';
+                document.getElementById('mainChart').style.display = 'block';
                 
                 const dateStr = formatDateISO(currentDate);
                 

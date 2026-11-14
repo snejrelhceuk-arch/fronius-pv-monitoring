@@ -309,6 +309,19 @@
             loadData();
         }
 
+        function bindDaySwipeNavigation() {
+            const target = document.getElementById('erzeugerChart') || document.querySelector('.chart-area') || document.body;
+            if (!target || !window.PVNavContext || !PVNavContext.attachSwipeNavigation) return;
+
+            PVNavContext.attachSwipeNavigation({
+                target,
+                onPrev: () => navigate(-1),
+                onNext: () => navigate(1),
+                enabled: () => currentView === 'tag',
+                thresholdPx: 70,
+            });
+        }
+
         function navigateToday() {
             const now = new Date();
             currentDate = new Date(now);
@@ -329,8 +342,8 @@
             scheduleAutoRefresh();
             document.getElementById('chartLoading').style.display = 'block';
             document.getElementById('chartError').style.display = 'none';
-            document.getElementById('erzeugerChart').style.display = 'none';
-            document.getElementById('summaryGrid').style.display = 'none';
+            document.getElementById('erzeugerChart').style.display = 'block';
+            document.getElementById('summaryGrid').style.display = 'flex';
 
             let url;
             if (currentView === 'tag') {
@@ -837,6 +850,7 @@
         // ═══════════════════════════════════════
         applyStateFromUrl();
         updateNavUI();
+        bindDaySwipeNavigation();
         loadData();
 
         // Seiten-Schublade + Kalender-Picker (Zeit-Navi bleibt oben)

@@ -190,6 +190,76 @@
         return st ? buildQuery(st.context, nowMs) : '';
     }
 
+    function attachSwipeNavigation({ target, onPrev, onNext, enabled = () => true, thresholdPx = 72, hysteresisPx = 8, ignoreSelector = 'button, a, input, textarea, select, .pv-interactive, [data-swipe-ignore="true"]' }) {
+        const node = target || document.body;
+        if (!node || typeof onPrev !== 'function' || typeof onNext !== 'function') {
+            return null;
+        }
+
+        let startX = null;
+        let startY = null;
+        let pointerActive = false;
+
+        function isInteractiveTarget(ev) {
+            const t = ev.target;
+            if (!t || typeof t.closest !== 'function') return false;
+            return !!t.closest(ignoreSelector);
+        }
+
+        function resetGesture() {
+            startX = null;
+            startY = null;
+            pointerActive = false;
+        }
+
+        function beginGesture(ev) {
+            if (!enabled() || isInteractiveTarget(ev)) {
+                resetGesture();
+                return;
+            }
+            ev.preventDefault();
+            startX = ev.clientX;
+            startY = ev.clientY;
+            pointerActive = true;
+            if (node.setPointerCapture && typeof ev.pointerId === 'number') {
+                try { node.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+            }
+        }
+
+        function endGesture(ev) {
+            if (!pointerActive || startX == null || startY == null) return;
+            const dx = ev.clientX - startX;
+            const dy = ev.clientY - startY;
+            const absX = Math.abs(dx);
+            const absY = Math.abs(dy);
+            resetGesture();
+            if (node.releasePointerCapture && typeof ev.pointerId === 'number') {
+                try { node.releasePointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+            }
+
+            if (absX < thresholdPx || absY > absX + hysteresisPx || !enabled()) {
+                return;
+            }
+            ev.preventDefault();
+
+            if (dx < 0) {
+                onNext();
+            } else {
+                onPrev();
+            }
+        }
+
+        node.addEventListener('pointerdown', beginGesture, { passive: false });
+        node.addEventListener('pointerup', endGesture, { passive: false });
+        node.addEventListener('pointercancel', resetGesture, { passive: false });
+
+        return function dispose() {
+            node.removeEventListener('pointerdown', beginGesture);
+            node.removeEventListener('pointerup', endGesture);
+            node.removeEventListener('pointercancel', resetGesture);
+        };
+    }
+
     window.PVNavContext = {
         MAX_AGE_MS,
         buildQuery,
@@ -203,6 +273,7 @@
         commit,
         getState,
         currentQuery,
+        attachSwipeNavigation,
         contextKeys: CONTEXT_KEYS.slice(),
     };
 })();

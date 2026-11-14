@@ -232,6 +232,19 @@
             loadData();
         }
 
+        function bindDaySwipeNavigation() {
+            const target = document.getElementById('batteryChart') || document.querySelector('.chart-area') || document.body;
+            if (!target || !window.PVNavContext || !PVNavContext.attachSwipeNavigation) return;
+
+            PVNavContext.attachSwipeNavigation({
+                target,
+                onPrev: () => navigate(-1),
+                onNext: () => navigate(1),
+                enabled: () => currentView === 'tag',
+                thresholdPx: 70,
+            });
+        }
+
         function navigateToday() {
             const now = new Date();
             currentDate = new Date(now);
@@ -402,7 +415,7 @@
             scheduleAutoRefresh();
             document.getElementById('chartLoading').style.display = 'block';
             document.getElementById('chartError').style.display = 'none';
-            document.getElementById('batteryChart').style.display = 'none';
+            document.getElementById('batteryChart').style.display = 'block';
 
             let url = `/api/verbraucher/batterie?period=${currentView}`;
             if (currentView === 'tag') {
@@ -473,6 +486,7 @@
         window.addEventListener('load', () => {
             applyStateFromUrl();
             updateNavUI();
+            bindDaySwipeNavigation();
             loadData();
             fetchHeader();
             if (_headerTimer) clearInterval(_headerTimer);

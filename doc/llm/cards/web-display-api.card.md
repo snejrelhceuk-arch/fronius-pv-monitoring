@@ -5,7 +5,7 @@ role: B
 applyTo: "routes/**,web_api.py"
 tags: [web-api, blueprints, templates, formatting, read-only]
 status: stable
-last_review: 2026-10-31
+last_review: 2026-11-14
 ---
 
 # Web Display/API
@@ -49,6 +49,8 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 - Route-Logik bleibt in Blueprints; gemeinsame DB-/API-Helfer in `routes/helpers.py`.
 - Standard-DB-Verbindungen in Web-Routen sind read-only; Forecast-Persistenz ist die explizit benannte Write-Ausnahme.
 - Mirror-Modus darf Anzeige beeinflussen, aber keine Aktorik ausloesen.
+- Tage-Views in den Monitoring-/Netzqualitäts-Templates nutzen einheitliche Tages-Navigation per Pointer-Wisch: `pointerdown/up` mit Richtungsprüfung, Mindestschwelle ca. 70 px (~1–2 cm), nur in der Tagesansicht aktiv; für Touch/Mouse gleichwertig.
+- Beim Datumswechsel bleiben die bestehende Chart-Struktur und Übersichtszeile sichtbar; eine reine Lade-Overlay-Statuszeile erscheint auf dem aktuellen Grundgerüst, statt die gesamte Ansicht zu löschen. So bleibt die Oberfläche sofort stabil und wird erst nach dem Fetch mit neuen Daten aktualisiert.
 
 ## No-Gos
 - Keine Nutzung von `fronius_api.BatteryConfig` in Web-Routen.
@@ -58,6 +60,7 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 ## Häufige Aufgaben
 - Neue API-Route -> passendes Blueprint-Modul in `routes/` erweitern und in `web_api.py` registrieren.
 - Einheitendarstellung korrigieren -> Formatter in `templates/tag_view.html` und Konventionen in `doc/web/DISPLAY_CONVENTIONS.md` synchron halten.
+- Tagesnavigation per Wisch-/Drag-Geste ergänzen -> `static/js/nav-context.js:attachSwipeNavigation` und die aktiven Tag-Templates (`tag_view.html`, `verbraucher_view.html`, `erzeuger_view.html`, `batterie_view.html`, `netzqualitaet_view.html`) parallel halten.
 - Forecast-Fehler analysieren -> `routes/forecast.py` und `routes/helpers.py:store_forecast_daily` gemeinsam debuggen.
 - HA-Entitäten erweitern -> `routes/system/ha.py` im Abschnitt `/api/ha/*` anpassen und den Katalog in `/api/ha/entities` aktualisieren.
 - Lokaler Smoke-Test von Web-Routen -> immer `http://127.0.0.1:8000/...` verwenden (Produktionsport), nicht `:5000`.
