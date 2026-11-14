@@ -1,11 +1,13 @@
 #!/bin/bash
 # ============================================================
 # scripts/install_maintenance_timers.sh
-# Installiert die Wartungs-/Drift-/Abgleich-Automatik-Timer (nur Primary):
-#   pv-auto-update.{service,timer}       taeglich  — 72h-Gate + Rollout
+# Installiert die Drift-/Abgleich-Automatik-Timer (nur Primary):
 #   pv-repo-drift.{service,timer}        ~10 Tage  — Repo-Drift-Remediation
 #   pv-doc-drift-report.{service,timer}  ~20 Tage  — Doku-Drift-Report (Mail)
 #   pv-solarweb-compare.{service,timer}  monatlich — Solarweb-Abgleich
+#
+# Die Update/Upgrade-Strategie (pv-auto-update) gehoert zu Rolle R und wird von
+# recovery/install_recovery.sh installiert.
 #
 # Idempotent (install -m 0644 + daemon-reload + enable --now), spiegelt die
 # Konvention von install_nq_services.sh. Alle Timer Persistent=true -> Catch-up
@@ -47,7 +49,6 @@ install_unit() {
 
 TIMERS=()
 for u in \
-  pv-auto-update.service       pv-auto-update.timer \
   pv-repo-drift.service        pv-repo-drift.timer \
   pv-doc-drift-report.service  pv-doc-drift-report.timer \
   pv-solarweb-compare.service  pv-solarweb-compare.timer; do
@@ -63,8 +64,8 @@ done
 
 echo ""
 echo "=== Status ==="
-systemctl list-timers 'pv-auto-update*' 'pv-repo-drift*' 'pv-doc-drift-report*' 'pv-solarweb-compare*' --no-pager || true
+systemctl list-timers 'pv-repo-drift*' 'pv-doc-drift-report*' 'pv-solarweb-compare*' --no-pager || true
 echo ""
-echo "Selbstpruefung (dry-run) des Auto-Update-Guards:"
-"$BASE/.venv/bin/python" "$BASE/scripts/pv_auto_update_guard.py" --status || true
+echo "Hinweis: pv-auto-update (Update/Upgrade-Strategie) wird von Rolle R installiert:"
+echo "  bash recovery/install_recovery.sh"
 echo "=== fertig ==="

@@ -3,7 +3,7 @@
 > **Du arbeitest am PV-System.** Lies diese Datei vollständig, bevor du irgendetwas tust.
 > Nach diesem Dokument lädst du je nach Aufgabe gezielt weiter — die Lade-Hierarchie steht unten.
 
-## ABCDEN-Rollenmodell (Sicherheits-Anker)
+## ABCDENR-Rollenmodell (Sicherheits-Anker)
 
 | Rolle | Schreibt | Hardware | Bemerkung |
 |---|---|---|---|
@@ -13,6 +13,7 @@
 | **D** Diagnos | DB read + Mail | — | Phase 1+2 produktiv |
 | **E** Steuerbox | `operator_overrides` (Intent-DB) | **nichts** (Intents an C) | eigener Port, validiert, zeitlich begrenzt |
 | **N** Netzqualität | eigene NQ-DBs (`nq/db/`, tmpfs auf Tech) | PAC4200 Modbus TCP **read** | Tech = RAM-first-Collector, Primary = Aggregation/Analyse; kein Produktions-Write |
+| **R** Recovery | OS/Software auf **Ziel**-Hosts, Pakete (gitignored) | **keine Produktions-HW** | Repo-Modul `recovery/`, keine `.role`; Rebuild/Paket/USB/Update; Owner Backup/DR; nie Auto-Writer |
 
 **Architektur-Regel:** DRY < ABCDE-Reinheit. Code-Dupletten (z. B. `FroniusReadOnly` vs. `BatteryConfig`) sind erforderlich, wenn sie die Rollentrennung absichern.
 

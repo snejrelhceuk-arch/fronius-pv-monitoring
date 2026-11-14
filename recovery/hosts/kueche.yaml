@@ -1,0 +1,39 @@
+id: kueche
+role: kueche
+user: jk
+ip_env: PV_KUECHE_IP
+repo_subpath: Dokumente/PVAnlage/pv-system
+os: Debian 13
+python: "3.13"
+hardware: Pi 4 / Cortex-A72 4x1.8GHz / 8 GB LPDDR4 / microSD 32 GB
+engine: false                    # keine Engine; Kiosk + Longterm-Archiv
+wp_backend_mode: none
+
+services:
+  - pv-kiosk (labwc Autostart)   # Touch-Dashboard, zeigt Primary :8000
+
+timers: []
+
+cron: []
+
+config_files:
+  - .role
+  - .infra.local
+
+secret_keys: []
+
+tmpfs: []
+
+kiosk: true
+ufw: true
+
+provisioning:
+  venv: optional                 # Kiosk braucht i. d. R. kein venv
+  data_restore: none             # haelt Longterm-Archiv (monthly/yearly), Empfaenger
+  rebuild_from: primary
+
+notes: >
+  Kiosk-Autostart: scripts/install_kiosk_autostart.sh. Empfaengt Longterm-GFS
+  (monthly/yearly) vom FB (append-only, getrennter Standort im Haus). Dieses
+  Archiv ist die aelteste Kopie der Produktionsdaten -> bei Kueche-Ersatz zuerst
+  das Archiv sichern (Longterm-GFS ist sonst nur noch auf FB).

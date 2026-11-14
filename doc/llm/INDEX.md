@@ -40,8 +40,10 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 | **netzqualitaet: Transfer, Aggregation, Energie-Fixpunkte, Event-Schnipsel** | [`netzqualitaet-nq-aggregation.card.md`](./cards/netzqualitaet-nq-aggregation.card.md) | stable |
 | **netzqualitaet: Spektralanalyse, Netzereignisse, Harmonische, HF/NF/VLF** | [`netzqualitaet-nq-analysis-events.card.md`](./cards/netzqualitaet-nq-analysis-events.card.md) | stable |
 | **netzqualitaet: Web/API Chart, Drill-down, /api/nq/energy|event|aggregates** | [`web-display-api.card.md`](./cards/web-display-api.card.md) | stable |
-| **system: .role-Guards, Failover, Publish-Audit, Backup-GFS** | [`system-ops-guards.card.md`](./cards/system-ops-guards.card.md) | stable |
-| **system: Hosts/Pi-Topologie, Deployment, rsync-Sync, Dienst→Host-Map** | [`system-hosts.card.md`](./cards/system-hosts.card.md) | stable |
+| **recovery: Host ersetzen, Rebuild, Manifeste, Integrations-Drift, Tagging** | [`recovery-rebuild.card.md`](./cards/recovery-rebuild.card.md) | stable |
+| **recovery: Rolle R, Disaster-Szenarien, Backup-Ownership (DR)** | [`recovery-overview.card.md`](./cards/recovery-overview.card.md) | stable |
+| **recovery: Gesamtpaket, USB, portable Secrets, Selfcheck, Update/Upgrade-Strategie** | [`recovery-package.card.md`](./cards/recovery-package.card.md) | stable |
+| **system: .role-Guards, Failover, Publish-Audit, Backup-GFS** | [`system-ops-guards.card.md`](./cards/system-ops-guards.card.md) | stable || **system: Hosts/Pi-Topologie, Deployment, rsync-Sync, Dienst→Host-Map** | [`system-hosts.card.md`](./cards/system-hosts.card.md) | stable |
 | **web: Blueprints, FroniusReadOnly, Display-Formatierung** | [`web-display-api.card.md`](./cards/web-display-api.card.md) | stable |
 | **web: Speicherausbau/PV-Zubau, vermeidbarer Netzbezug, Amortisation, Abregelungs-Rekonstruktion** | [`web-analyse-speicherausbau.card.md`](./cards/web-analyse-speicherausbau.card.md) | stable |
 | **web: Flow-Ansicht, SVG-Skalierung, Mobile-Pan, Bubble-Koordinaten** | [`web-flow-view.card.md`](./cards/web-flow-view.card.md) | stable |
@@ -88,6 +90,11 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 ### system
 - [`system-hosts.card.md`](./cards/system-hosts.card.md) — Pi-Topologie, Deployment, Sync, Dienst→Host-Map
 - [`system-ops-guards.card.md`](./cards/system-ops-guards.card.md) — Rollen, Sync, Backup, Publish
+
+### recovery (Schicht R)
+- [`recovery-overview.card.md`](./cards/recovery-overview.card.md) — Rolle R, Szenarien, Artefakte, Backup-Ownership (DR)
+- [`recovery-rebuild.card.md`](./cards/recovery-rebuild.card.md) — Host-Rebuild, Manifeste, Integrations-Verifier/Tagging
+- [`recovery-package.card.md`](./cards/recovery-package.card.md) — Gesamtpaket, USB, Secrets, Selfcheck, Update/Upgrade
 
 ### web
 - [`web-display-api.card.md`](./cards/web-display-api.card.md) — Blueprints, Read-only API, Formatierung

@@ -1,0 +1,48 @@
+id: failover
+role: failover
+user: admin
+ip_env: PV_FAILOVER_IP
+repo_subpath: Dokumente/PVAnlage/pv-system
+os: Debian 12
+python: "3.11"
+hardware: Pi 5 Rev 1.0 / Cortex-A76 4x2.4GHz / 8 GB LPDDR4X / NVMe 512 GB
+engine: false                    # read-only, KEINE Writer
+wp_backend_mode: remote
+
+services:
+  - pv-web.service               # read-only Dashboard :8000
+  - pv-ticker.service
+
+timers:
+  - pv-mirror-sync.timer         # zieht data.db vom Primary (10 min)
+  - pv-failover-health.timer     # Primary-Erreichbarkeit (nur Empfehlung)
+  - pv-failover-codesync.timer   # Code-Sync Primary->FB (Mo 04:30)
+  - pv-longterm-offload.timer    # monthly/yearly -> Kueche
+  - pv-backup-gfs.timer          # GFS-Erzeuger aus tmpfs-Mirror
+
+cron:
+  - backup_db_gfs.sh (03:00)     # Sohn/Vater/Grossvater aus tmpfs-Mirror
+
+config_files:
+  - .role
+  - .infra.local
+  - .secrets
+
+secret_keys:
+  - smtp_pass
+
+tmpfs:
+  - /dev/shm/fronius_data.db      # Live-Mirror (10 min), kein SD-Write im Normalbetrieb
+
+kiosk: false
+ufw: true
+
+provisioning:
+  venv: native
+  data_restore: mirror           # erhaelt data.db ohnehin per Mirror vom Primary
+  rebuild_from: primary          # instantan vom Primary
+
+notes: >
+  Zentraler Backup-Empfaenger (GFS daily/weekly/monthly/yearly auf NVMe) und
+  Promotion-Kandidat. Aggregations-Cron vorgestaged (role-guarded, aktiviert sich
+  erst bei .role=primary). Promotion-Runbook: doc/system/FAILOVER_STATUS.md.

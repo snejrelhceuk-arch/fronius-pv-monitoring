@@ -1,0 +1,63 @@
+# recovery/manifests/system_files.yaml
+# ------------------------------------------------------------
+# Register aller SYSTEMINTEGRIERTEN Dateien AUSSERHALB des Git-Repos,
+# die zum PV-System gehoeren ("Integrationsmanagement" der Rolle R).
+# Repo-Dateien sind durch git bereits eindeutig getaggt; hier geht es um
+# Fremddateien (systemd, /etc, cron, Autostart, fstab, Host-Identitaet).
+#
+# Publish-sicher: keine Literal-IPs/Pfade mit /home/... — nur Muster/relative
+# Angaben. Konkrete Werte loest verify_integration.sh zur Laufzeit auf.
+#
+# marker: Editierbare Fremddateien tragen in der Kopfzeile diesen Marker, damit
+#         sie zweifelsfrei als R-verwaltet erkennbar sind. Nicht-markerfaehige
+#         Dateien (Format-/Binaer-sensibel) werden nur ueber Pfad+Checksum gefuehrt.
+
+marker: "PV-SYSTEM-MANAGED"          # Inline-Kopfzeilen-Marker (als Kommentar)
+
+categories:
+
+  systemd_units:
+    location: /etc/systemd/system
+    glob: ["pv-*.service", "pv-*.timer"]
+    managed_by: recovery/install_recovery.sh + scripts/install_*.sh
+    source_of_truth: recovery/hosts/<role>.yaml (services/timers)
+    marker_applicable: false          # generiert von Installern; Abgleich ueber Manifest
+    drift_check: "installierte pv-* Units <-> Manifest(role) vergleichen"
+
+  secret_store_dir:
+    location: /etc/pv-system
+    contents: ["credential_store (machine-id-gebundene Fernet-Keys)"]
+    marker_applicable: false
+    portable: false                   # machine-id-gebunden! Restore via recovery/secrets_bundle.sh
+    note: "Auf Ersatz-HW NICHT uebertragbar -> portables Secrets-Bundle (gpg) nutzen."
+
+  host_identity:
+    location: <repo_root>
+    files: [".role", ".infra.local", ".secrets"]
+    marker_applicable: false
+    gitignored: true
+    note: "Host-spezifisch, kommt aus dem Recovery-Bundle, nicht aus git."
+
+  crontab:
+    owner: user-crontab
+    entries: ["aggregation", "wp_thermal", "backup_tiered_dbs_gfs.sh"]
+    marker_applicable: true           # Kommentarzeile mit Marker vor PV-Bloecken
+    drift_check: "pv-relevante Cron-Zeilen vorhanden & role-passend"
+
+  kiosk_autostart:
+    hosts: [kueche]
+    location: labwc-Autostart (~/.config)
+    marker_applicable: true
+    installer: scripts/install_kiosk_autostart.sh
+
+  tmpfs_fstab:
+    location: /etc/fstab
+    entries: ["/dev/shm-nutzung (RAM-first DB)"]
+    marker_applicable: true           # Kommentarzeile mit Marker vor PV-Mount-Zeile
+    hosts: [primary, failover, tech]
+
+  ufw_rules:
+    tool: ufw
+    marker_applicable: false
+    installer: scripts/safe_ufw_apply.sh
+    drift_check: "ufw aktiv"

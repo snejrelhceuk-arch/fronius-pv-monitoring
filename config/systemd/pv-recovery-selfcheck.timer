@@ -1,0 +1,11 @@
+[Unit]
+Description=PV Recovery-Selfcheck — woechentlicher Trigger (Catch-up)
+
+[Timer]
+OnCalendar=Sun *-*-* 07:00:00
+RandomizedDelaySec=1800
+Persistent=true
+Unit=pv-recovery-selfcheck.service
+
+[Install]
+WantedBy=timers.target

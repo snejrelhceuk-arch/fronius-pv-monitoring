@@ -1,0 +1,66 @@
+id: primary
+role: primary
+user: admin
+ip_env: PV_PRIMARY_IP
+repo_subpath: Dokumente/PVAnlage/pv-system
+os: Debian 12
+python: "3.11"
+hardware: Pi 5 Rev 1.0 / Cortex-A76 4x2.4GHz / 4 GB LPDDR4X / microSD 64 GB
+engine: true
+wp_backend_mode: remote          # WP via Pi4-Tech-Bridge
+
+services:
+  - pv-collector.service
+  - pv-web.service
+  - pv-wattpilot.service
+  - pv-steuerbox.service
+  - pv-automation.service        # NICHT role-guarded -> nur auf echtem Primary starten
+  - pv-ha-bridge.service
+
+timers:
+  - pv-auto-update.timer
+  - pv-repo-drift.timer
+  - pv-doc-drift-report.timer
+  - pv-solarweb-compare.timer
+  - pv-doc-drift.timer
+  - pv-nq-aggregate.timer
+  - pv-nq-agg-transfer.timer
+  - pv-nq-event-transfer.timer
+  - pv-nq-energy-rollup.timer
+  - pv-nq-energy-rollup-month.timer
+  - pv-nq-energy-rollup-year.timer
+  - pv-nq-analysis.timer
+  - pv-nq-analysis-hf-nf.timer
+  - pv-nq-primary-cap.timer
+  - pv-nq-backup.timer
+
+cron:
+  - aggregation (min1/fifteen/daily/monthly/statistics)  # role-guarded
+  - wp_thermal (:13)                                     # role-guarded
+  - backup_tiered_dbs_gfs.sh (03:00)
+
+config_files:
+  - .role
+  - .infra.local
+  - .secrets
+  - config/*.json                # versionierte + Laufzeit-States (teils gitignored)
+
+secret_keys:
+  - smtp_pass
+
+tmpfs:
+  - /dev/shm/fronius_data.db      # Live-DB (RAM-first), stuendliche .backup -> data.db (SD)
+
+kiosk: false
+ufw: true
+
+provisioning:
+  venv: native                   # Pi5 + Internet -> native venv
+  data_restore: gfs              # DB aus GFS/Mirror wiederherstellen
+  rebuild_from: failover         # bevorzugt vom FB (Mirror+Backup), sonst tech/kueche
+
+notes: >
+  Einziger Writer-Host. Installer: scripts/install_services.sh,
+  scripts/install_nq_services.sh, scripts/install_maintenance_timers.sh,
+  recovery/install_recovery.sh. WP nur ueber Bridge (Pi4-Tech). Nach Rebuild:
+  .role=primary zuletzt setzen und Writer scharfschalten (Split-Brain-Schutz).

@@ -37,6 +37,7 @@ ALLOWED_DOMAIN = {
     "diagnos",
     "steuerbox",
     "netzqualitaet",
+    "recovery",
     "system",
     "web",
     "meta",

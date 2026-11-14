@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# scripts/pv_update_all_hosts.sh
+# recovery/pv_update_all_hosts.sh
 # Koordinierter Voll-Upgrade-Rollout ueber ALLE erreichbaren PV-Hosts.
 #
 # Fuehrt auf jedem Host `scripts/pv_maintenance_upgrade.sh --yes` aus (persistiert
@@ -8,9 +8,9 @@
 # Lokaler Host (Primary) direkt; Peers via SSH + `sudo -n`.
 #
 # Nutzung:
-#   sudo bash scripts/pv_update_all_hosts.sh            # alle Hosts live
-#   sudo bash scripts/pv_update_all_hosts.sh --dry-run  # nur anzeigen, nichts tun
-#   sudo bash scripts/pv_update_all_hosts.sh --hosts "primary fb"   # Teilmenge
+#   sudo bash recovery/pv_update_all_hosts.sh            # alle Hosts live
+#   sudo bash recovery/pv_update_all_hosts.sh --dry-run  # nur anzeigen, nichts tun
+#   sudo bash recovery/pv_update_all_hosts.sh --hosts "primary fb"   # Teilmenge
 #
 # Nur auf Primary sinnvoll (Quelle der Wahrheit). Reboot-Hinweise werden je Host
 # gemeldet, NIE automatisch ausgefuehrt. Exit 0 auch bei Teilfehlern — die

@@ -14,25 +14,28 @@ scripts/install_maintenance_timers.sh
 
 | Unit | Intervall | Skript | Zweck | Mail |
 |---|---|---|---|---|
-| `pv-auto-update` | täglich 08:00 | `scripts/pv_auto_update_guard.py` | Bewachtes apt-Voll-Upgrade über alle Pis | Warn- + Erfolgs-Mail |
 | `pv-repo-drift` | ~10 Tage (1./11./21.) | `scripts/pv_repo_drift_remediate.sh` | Repo-Drift Primary↔Pis beseitigen | Report-Mail |
 | `pv-doc-drift-report` | ~20 Tage (1./21.) | `scripts/pv_doc_drift_report.py` | Doku-Drift erkennen/aufräumen | Report-Mail |
 | `pv-solarweb-compare` | monatlich (5.) | `scripts/solarweb_compare.py` | Solarweb vs. `daily_data` abgleichen | Auffälligkeits-Mail |
 
+> `pv-auto-update` (bewachtes apt-Voll-Upgrade, 72h-Gate) gehört zur **Rolle R**
+> und wird über `recovery/install_recovery.sh` installiert — siehe unten und
+> [RECOVERY.md](./RECOVERY.md).
+
 Mail-Versand einheitlich über `scripts/pv_notify.py` (Produktiv-SMTP-Pfad
 `config.NOTIFICATION_*` + `credential_store`).
 
-## Auto-Update-Guard (72h-Inaktivitäts-Gate)
+## Auto-Update-Guard (72h-Inaktivitäts-Gate) — Rolle R
 
-Zustandsmaschine in `.state/auto_update_state.json` (fehlt/korrupt →
-Neu-Initialisierung):
+Installiert via `recovery/install_recovery.sh`. Zustandsmaschine in
+`.state/auto_update_state.json` (fehlt/korrupt → Neu-Initialisierung):
 
 1. **idle → armed:** Stehen apt-Updates an, geht eine **Warn-Mail** raus
    („Rollout in 72 h ohne Aktivität"), Zustand `armed`, `warn_epoch`/`warn_head`
    gesetzt.
 2. **Aktivität = neuer git-Commit auf Primary HEAD.** Der Auslöser liegt bei
    `max(warn_epoch, letzter-Commit) + 72 h`; jeder Commit verschiebt ihn.
-3. **armed → Rollout:** Nach 72 h Inaktivität läuft `pv_update_all_hosts.sh`
+3. **armed → Rollout:** Nach 72 h Inaktivität läuft `recovery/pv_update_all_hosts.sh`
    (apt full-upgrade auf allen erreichbaren Pis, tmpfs-DB wird zuerst
    persistiert, **kein** Auto-Reboot) und es folgt eine **Erfolgs-Mail** mit
    Pro-Host-Status.
@@ -42,10 +45,10 @@ Neu-Initialisierung):
 Manuell/Ops:
 
 ```bash
-scripts/pv_auto_update_guard.py --status        # Zustand anzeigen
-scripts/pv_auto_update_guard.py --reset         # auf idle
-sudo bash scripts/pv_update_all_hosts.sh        # sofort alle Pis upgraden
-sudo bash scripts/pv_update_all_hosts.sh --dry-run
+recovery/pv_auto_update_guard.py --status        # Zustand anzeigen
+recovery/pv_auto_update_guard.py --reset         # auf idle
+sudo bash recovery/pv_update_all_hosts.sh        # sofort alle Pis upgraden
+sudo bash recovery/pv_update_all_hosts.sh --dry-run
 ```
 
 ## Repo-Drift-Remediation

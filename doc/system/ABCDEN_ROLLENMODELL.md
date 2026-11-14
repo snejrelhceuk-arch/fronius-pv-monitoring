@@ -17,6 +17,9 @@ Das Rollenmodell beschreibt die sechs Systembereiche mit ihren klaren Grenzen:
 - **E Steuerbox** — Operator-Intent-API, eingeschraenkte Aktorik nur via C
 - **N Netzqualität** — dedizierte PAC4200-Messkette am PCC, eigene RAM-first-Erfassung
   (Tech) + Aggregation/Analyse (Primary), read-only gegenüber der Produktionskette
+- **R Recovery** — Meta-Rolle für Installation, Rekonstruktion und Aktualität des
+  Systems (host-übergreifend). Keine Dauer-Engine/keine `.role`; Repo-Modul
+  `recovery/`, auf allen Hosts präsent. Owner des Backup-/Disaster-Recovery-Themas.
 
 Die gemeinsame SQLite-Landschaft ist dabei **Plattform unterhalb** der Rollen,
 kein eigener Buchstabe. Rolle **N** hat bewusst eine **eigene DB-Landschaft**
@@ -53,6 +56,7 @@ kein eigener Buchstabe. Rolle **N** hat bewusst eine **eigene DB-Landschaft**
 | **D Diagnos** | Health, Integritaet, Parity, Kapazitaet, Alarmierung | lesen, vergleichen, klassifizieren, melden | technische Messwerte interpolieren oder kalenderbasiert den Collector neu starten |
 | **E Steuerbox** | Operator-Intents, zeitlich begrenzte Overrides, Safety Enforcer | Intents validieren, operator_overrides schreiben, Audit fuehren, Normparameter-Reset bei Timeout | Aktoren direkt ansprechen, Overrides ohne Timeout setzen, Hardware-Zugriff |
 | **N Netzqualität** | PAC4200-Rohdaten am PCC, RAM-first-Erfassung, NQ-Aggregate, Netzereignis-Analyse | PAC4200 read-only via Modbus TCP lesen, eigene NQ-DBs (tmpfs/SD) schreiben, Aggregate rechnen, Ereignisse klassifizieren | Produktions-`data.db` schreiben, Aktoren (WR/Batterie/HP/Wattpilot/Fritz!DECT) ansprechen, Polling der Produktions-Modbus-Kette verschärfen |
+| **R Recovery** | Installation/Rekonstruktion/Aktualität des Systems, Host-Manifeste, Gesamtpaket, Disaster-Recovery, Update/Upgrade-Strategie | OS-/Software-Installation auf **Ziel**-Hosts, Rebuild, Paket/USB/Secrets-Bundle, Integrations-Verifier, Off-site-Mahnung | Writer/Automation automatisch scharfschalten, eigenen Host rekonstruieren, Secrets/Pakete ins git, Auto-Reboot |
 
 ---
 
@@ -124,6 +128,30 @@ Nicht-Ziel:
 
 Die Planungsdokumente fuer N liegen gesammelt in `doc/netzqualitaet/`
 (Modulbeschreibung: `doc/netzqualitaet/NQ_MODUL.md`).
+
+---
+
+## 5c. R als Recovery-/Provisioning-Schicht
+
+**R Recovery** ist orthogonal zu A–E/N: keine Dauer-Engine, keine `.role`, sondern
+das Repo-Modul `recovery/`, das auf **allen** Hosts vorliegt und ruht, bis es
+gebraucht wird. R rekonstruiert Hosts (`recovery/rebuild_host.sh`), hält Host-
+Manifeste (`recovery/hosts/*.yaml`), baut das Gesamtpaket/USB, sichert Secrets
+portabel (gpg) und verwaltet Integrations-Tagging sowie die Update/Upgrade- und
+Off-site-Strategie. R ist **Owner des Backup-Themas** (Disaster-Recovery-Sicht);
+die laufende GFS-Datenkette bleibt funktional unverändert.
+
+Ziel:
+- Jeden Pi (inkl. Primary) nach Hardware-Schaden umfassend und wiederholbar
+  wiederherstellen; Totalverlust über ein räumlich getrenntes USB-Paket + Off-site-
+  Datensicherung überstehen.
+
+Nicht-Ziel:
+- Automatisches Scharfschalten von Writern/Automation (Split-Brain-Schutz).
+- Secrets/Pakete ins git; Rekonstruktion des eigenen Hosts.
+
+Die Dokumentation für R liegt in `doc/system/RECOVERY.md` und den Cards
+`doc/llm/cards/recovery-*.card.md`.
 
 Bei jeder neuen Funktion zuerst pruefen:
 

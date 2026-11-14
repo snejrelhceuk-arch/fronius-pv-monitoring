@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""scripts/pv_auto_update_guard.py — Bewachter Auto-Update-Ausloeser.
+"""recovery/pv_auto_update_guard.py — Bewachter Auto-Update-Ausloeser.
 
 Laeuft taeglich als systemd-Timer (``pv-auto-update.timer``) und setzt die
 gewuenschte Logik um:
@@ -48,7 +48,7 @@ for _s in (sys.stdout, sys.stderr):
 
 STATE_DIR = os.path.join(REPO_ROOT, ".state")
 STATE_FILE = os.path.join(STATE_DIR, "auto_update_state.json")
-ROLLOUT = os.path.join(REPO_ROOT, "scripts", "pv_update_all_hosts.sh")
+ROLLOUT = os.path.join(REPO_ROOT, "recovery", "pv_update_all_hosts.sh")
 INACTIVITY_SECONDS = 72 * 3600
 
 _DEFAULT_STATE = {
@@ -181,11 +181,11 @@ def main() -> int:
                 f"Zeit: {_fmt(now)}\n\n"
                 f"{len(pending)} Paket-Update(s) stehen an. Sofern in den naechsten "
                 f"72 Stunden KEIN neuer git-Commit auf Primary erfolgt (= Inaktivitaet), "
-                f"wird automatisch `scripts/pv_update_all_hosts.sh` ausgefuehrt "
+                f"wird automatisch `recovery/pv_update_all_hosts.sh` ausgefuehrt "
                 f"(apt full-upgrade auf allen erreichbaren Pis). Jeder Commit verschiebt "
                 f"den Lauf um weitere 72 h.\n\n"
                 f"Jetzt selbst upgraden:\n  cd {REPO_ROOT}\n"
-                f"  sudo bash scripts/pv_update_all_hosts.sh\n\n"
+                f"  sudo bash recovery/pv_update_all_hosts.sh\n\n"
                 "Betroffene Pakete (max. 40):\n  " + "\n  ".join(pending[:40])
             )
             print(msg)

@@ -1,0 +1,13 @@
+[Unit]
+Description=PV Off-site-Datensicherungs-Mahnung (monatlich, Mail)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=admin
+WorkingDirectory=%h/Dokumente/PVAnlage/pv-system
+ExecStart=%h/Dokumente/PVAnlage/pv-system/.venv/bin/python %h/Dokumente/PVAnlage/pv-system/recovery/offsite_data_reminder.py
+StandardOutput=journal
+StandardError=journal
+Nice=18

@@ -1,0 +1,42 @@
+id: tech
+role: tech
+user: admin
+ip_env: PV_TECH_IP
+repo_subpath: Dokumente/PVAnlage/pv-system
+os: Debian 13
+python: "3.13"
+hardware: Pi 4 Rev 1.5 / Cortex-A72 4x1.8GHz / 4 GB LPDDR4 / microSD 64 GB
+engine: false                    # keine Engine; nur Bridge + NQ-Collector
+wp_backend_mode: local           # RS485 -> Dimplex WP direkt
+
+services:
+  - pv-wp-bridge.service         # RS485->WP, HTTP :8091 (ignoriert .role)
+  - pv-nq-poller.service         # PAC4200-RAM-Collector (Rolle N)
+  - pv-nq-energy.service
+
+timers: []
+
+cron: []                         # bewusst keine (role-guard blockt Writer)
+
+config_files:
+  - .role
+  - .infra.local
+  - .secrets                     # ggf. PAC/WP-relevante Zugaenge
+
+secret_keys: []
+
+tmpfs:
+  - nq tmpfs Ring-Buffer (72 h)   # RAM-first, SD nur selten
+
+kiosk: false
+ufw: true
+
+provisioning:
+  venv: native                   # Py 3.13; keine Py-Paritaet noetig (keine Engine)
+  data_restore: none             # keine Produktions-DB; NQ-Daten tmpfs/transient
+  rebuild_from: primary
+
+notes: >
+  Installer: scripts/install_nq_services.sh (role=tech -> poller+energy),
+  Bridge separat. Serial-Contention beachten: nie gleichzeitig Engine + Bridge
+  auf derselben RS485-Leitung. Handbuch: doc/system/PI4_TECH_BRIDGE_HANDBUCH.md.

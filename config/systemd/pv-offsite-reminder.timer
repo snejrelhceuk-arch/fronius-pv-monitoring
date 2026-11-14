@@ -1,0 +1,11 @@
+[Unit]
+Description=PV Off-site-Datensicherung — monatlicher Trigger (1., Catch-up)
+
+[Timer]
+OnCalendar=*-*-01 09:30:00
+RandomizedDelaySec=3600
+Persistent=true
+Unit=pv-offsite-reminder.service
+
+[Install]
+WantedBy=timers.target
