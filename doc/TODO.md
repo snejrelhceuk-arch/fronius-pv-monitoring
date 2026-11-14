@@ -61,7 +61,13 @@
 
 ---
 
-## Architektur-Haertung
+## Netzqualität (NQ, Rolle N)
+
+- [ ] **NQ-Snippets-Management überarbeiten** — `nq_event_fast/medium/slow`-Transfer (`pv-nq-event-transfer`) war 52 Tage außer Betrieb (%h→/root-Bug, 23.09.–14.11.2026); Snippets flüchtig auf Tech-tmpfs → unwiederbringlich verloren. Überarbeitung: (1) Persistenz-Strategie für Event-Snippets auf Tech (flush auf SD vor Reboot, nicht nur in tmpfs), (2) Selfcheck in `diagnos/nq_health.py:check_nq_events_recent` auf WARN hochstufen wenn > N Tage keine Events, statt nur Info. Kontext: `nq/transfer/nq_event_transfer.py`, `config/systemd/pv-nq-event-transfer.service`, `diagnos/config.py:NQ_TIMERS`.
+
+---
+
+
 
 - [ ] P3: Hotspot-Dateien nur risikogetrieben zerlegen; vor Aenderungen an grossen Regel-/Routenmodulen passende Charakterisierungstests ergaenzen.
 
