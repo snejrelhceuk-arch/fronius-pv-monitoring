@@ -16,7 +16,7 @@
 
 **Realisiert 2026-11-01:** COP (24h) + SCOP (12 Mon.) aus Dimplex-Modbus-Wärmemengen­zählern (Reg 5096–5101) + Verdichter-Laufstunden (72/73), gegen `daily_data.W_WP_total`. Leseschicht `wp_modbus.get_wp_energy()`, Bridge `/api/wp/energy`, Aggregation `collector/aggregate/wp_thermal.py` (cron :13) → `wp_thermal_daily`, Anzeige Flow→Maschinenraum→WP. Keine Zusatzsensorik nötig. Card: `collector-wp-thermal.card.md`.
 
-- [ ] **SCOP-Aufbau beobachten** — SCOP (12-Mon.-Fenster) baut sich ab 2026-11-01 auf; erst nach ~1 Jahr voll aussagekräftig. Kein Handlungsbedarf, nur Hinweis.
+- [ ] **SCOP-Aufbau beobachten** — SCOP (12-Mon.-Fenster) baut sich ab 2026-11-01 auf; erst nach ~1 Jahr voll aussagekräftig. Kein Handlungsbedarf, nur Hinweis. **Ist-Stand-Prüfung:** `wp_thermal_daily` füllt lückenlos (Zähler-`src`), laufendes Fenster-SCOP = Σ`thermal_delta_kwh` / Σ`el_kwh`; Tages-COP plausibel ~3,5–4,0. Prüfen via `SELECT ROUND(SUM(thermal_delta_kwh)/SUM(el_kwh),2) FROM wp_thermal_daily;`.
 - [ ] **Optionale thermische Zusatzsensorik (MEGA-BAS-HAT)** — nur noch für Feingranular-Analysen (Spreizung, Volumenstrom) relevant; für COP/SCOP **nicht mehr nötig** (Modbus-Wärmemenge deckt es ab). Abhängig von MEGA-BAS-HAT Phase 1.
 - [ ] **Laufzeit-/Pumpen-Auswertung** — `wp_thermal_daily` führt zusätzlich Primärpumpe/Heizpumpe/WW-Pumpe/2.WE-Laufstunden; optionale Verschleiß-/Takt-Analyse (Verdichter-Starts) planen.
 ---
