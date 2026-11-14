@@ -113,6 +113,8 @@
         .chart-box {
             flex: 1;
             min-height: 0;
+            display: flex;
+            flex-direction: column;
             background: rgba(30, 41, 59, 0.6);
             border-radius: 8px;
             position: relative;
@@ -127,6 +129,15 @@
             pointer-events: none;
         }
         /* Min/Max info removed to avoid overlapping the legend; markers + tooltips provide this info */
+        /* chart-shell (Progressive-Load-Wrapper) wird hier lokal dimensioniert,
+           da dieses Template monitoring.css nicht einbindet. Ohne diese Regel
+           kollabiert der Wrapper auf Höhe 0 und das Chart bleibt unsichtbar. */
+        .chart-shell {
+            flex: 1;
+            min-height: 0;
+            width: 100%;
+            position: relative;
+        }
         #mainChart {
             width: 100%;
             height: 100%;
