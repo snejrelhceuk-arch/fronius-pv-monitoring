@@ -40,7 +40,9 @@ install_unit() {
   local unit="$1"
   [ -f "$SRC/$unit" ] || { echo "  ✗ $unit fehlt in $SRC"; return 1; }
   validate_working_directory "$unit"
-  sudo install -m 0644 "$SRC/$unit" "$DST/$unit"
+  # %h → echtes Home substituieren: systemd expandiert %h in system-units zu
+  # /root (auch mit User=admin) → sonst EXEC/CHDIR-Fehler.
+  sudo bash -c "sed 's|%h|${HOME}|g' '${SRC}/${unit}' > '${DST}/${unit}'; chmod 0644 '${DST}/${unit}'"
   echo "  ✓ $unit installiert"
 }
 
