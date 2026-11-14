@@ -12,6 +12,8 @@ wp_backend_mode: none
 services:
   - pv-kiosk (labwc Autostart)   # Touch-Dashboard, zeigt Primary :8000
 
+autologin: true                  # Desktop-Autologin, passwortloses Hochfahren
+
 timers: []
 
 cron: []
@@ -33,7 +35,11 @@ provisioning:
   rebuild_from: primary
 
 notes: >
-  Kiosk-Autostart: scripts/install_kiosk_autostart.sh. Empfaengt Longterm-GFS
-  (monthly/yearly) vom FB (append-only, getrennter Standort im Haus). Dieses
-  Archiv ist die aelteste Kopie der Produktionsdaten -> bei Kueche-Ersatz zuerst
-  das Archiv sichern (Longterm-GFS ist sonst nur noch auf FB).
+  Kiosk-Setup zweistufig: scripts/install_kiosk_autologin.sh (SYSTEM: Desktop-
+  Autologin ohne Passwort + Bildschirm-Blanking aus, sudo) und
+  scripts/install_kiosk_autostart.sh (USER: Browser-/Onboard-Autostart in der
+  labwc-Session). Ohne Autologin bleibt der Host am Login-Greeter stehen und der
+  Browser startet nie. Empfaengt Longterm-GFS (monthly/yearly) vom FB
+  (append-only, getrennter Standort im Haus). Dieses Archiv ist die aelteste
+  Kopie der Produktionsdaten -> bei Kueche-Ersatz zuerst das Archiv sichern
+  (Longterm-GFS ist sonst nur noch auf FB).

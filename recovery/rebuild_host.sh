@@ -142,7 +142,8 @@ case "$TARGET_ROLE" in
     echo "  Bridge (pv-wp-bridge) separat gemaess PI4_TECH_BRIDGE_HANDBUCH."
     ;;
   kueche)
-    do_or_echo "r_ssh '$TARGET' 'cd $TARGET_SUB && bash scripts/install_kiosk_autostart.sh'"
+    do_or_echo "r_ssh '$TARGET' 'cd $TARGET_SUB && bash scripts/install_kiosk_autologin.sh && bash scripts/install_kiosk_autostart.sh'"
+    echo "  Autologin (System) + Browser-Autostart (User); wirksam nach Reboot."
     ;;
 esac
 

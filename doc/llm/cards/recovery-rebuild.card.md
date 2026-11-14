@@ -24,8 +24,8 @@ Ablauf (je Stufe nur mit `--apply`): 0) Key-Push (einmalig, Passwort) ·
 1) Code-rsync (Working-Tree + `.git`, ohne Runtime) · 2) `.role` setzen +
 `.infra.local`/`.secrets` aus Secrets-Bundle (`--with-secrets`) · 3) venv nativ ·
 4) Installer je Rolle (`scripts/install_services.sh`, `scripts/install_nq_services.sh`,
-`scripts/install_failover_services.sh`, `scripts/install_kiosk_autostart.sh`,
-`recovery/install_recovery.sh`) · 5) Daten-Restore-Hinweis + Smoke.
+`scripts/install_failover_services.sh`, `scripts/install_kiosk_autologin.sh` +
+`scripts/install_kiosk_autostart.sh`, `recovery/install_recovery.sh`) · 5) Daten-Restore-Hinweis + Smoke.
 
 ## Invarianten
 - **DRY-RUN ist Default.** Echte Änderungen nur mit `--apply`.
