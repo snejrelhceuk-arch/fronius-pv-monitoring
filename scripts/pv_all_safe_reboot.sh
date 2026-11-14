@@ -93,9 +93,9 @@ else
     log "[dry-run] sudo systemctl reboot auf Küche."
   else
     KUECHE="${PV_KUECHE_HOST:?PV_KUECHE_HOST nicht gesetzt (.infra.local)}"
-    reboot_remote_host "Küche" "$KUECHE" \
-      pv-failover-init.service pv-backup-2d.timer pv-failover-health.timer
-    log "Küche: Kiosk-Anzeige (Touch) + passwortloses Autologin visuell prüfen."
+    reboot_remote_host "Küche" "$KUECHE"
+    # Küche ist reiner Kiosk — keine pv-systemd-Services vorhanden (kein Install)
+    log "Küche: Kiosk-Anzeige (Touch) visuell prüfen; Browser-Autostart läuft im Wayland-Desktop."
   fi
 fi
 
