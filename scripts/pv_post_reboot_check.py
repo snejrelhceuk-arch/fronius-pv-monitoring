@@ -163,7 +163,8 @@ def main():
     check_remote("Tech", tech, [
         "pv-nq-poller.service", "pv-nq-energy.service", "pv-wp-bridge.service"])
     check_remote("Küche", kueche, [
-        "pv-failover-init.service"])
+        "pv-failover-init.service", "pv-backup-2d.timer",
+        "pv-failover-health.timer"])
     check_remote("FB", fb, [
         "pv-web.service", "pv-ticker.service",
         "pv-mirror-sync.timer", "pv-failover-init.service"])

@@ -94,8 +94,8 @@ else
   else
     KUECHE="${PV_KUECHE_HOST:?PV_KUECHE_HOST nicht gesetzt (.infra.local)}"
     reboot_remote_host "Küche" "$KUECHE" \
-      pv-failover-init.service
-    log "Küche: Kiosk-Anzeige nach Reboot bitte visuell prüfen."
+      pv-failover-init.service pv-backup-2d.timer pv-failover-health.timer
+    log "Küche: Kiosk-Anzeige (Touch) + passwortloses Autologin visuell prüfen."
   fi
 fi
 
