@@ -193,6 +193,75 @@ sind aber objektiv aus der Git-History belegbar.
 
 ---
 
+## 5b) Modell-Einordnung — Recovery/Reboot-Sitzung (Sonnet, 14.11.2026)
+
+Betreiber-Beobachtung: Die Rolle-R-Einführung (`f13e0d7`) und das koordinierte
+Reboot-Werkzeug (`5509619`) entstanden auf **Claude Sonnet**. Opus hat die Arbeit
+anschließend geprüft; diese Einordnung ist das Ergebnis.
+
+### Commit-Bezug
+
+| Commit | Umfang | Thema |
+|---|---|---|
+| f13e0d7 feat(recovery): Rolle R | 27 Dateien, +~1000 | Orthogonale Meta-Rolle R, Manifeste, Rebuild, Paket/USB/Secrets, Timer, Doku |
+| 5509619 feat(recovery): all-safe-reboot | 3 Dateien, +403/−6 | Koordinierter 4-Host-Reboot + Post-Reboot-Check |
+
+### Stärken (Star-Signatur, belegt)
+
+- **Architektur-Kohärenz:** R als orthogonale Rolle ohne `.role`, dry-run-default,
+  Selbstschutz (Ziel-Rolle == lokale Rolle → Abbruch), **kein** Auto-Writer
+  (Split-Brain-Schutz). Publish-sichere Manifeste (IP nur via `*_env`).
+- **Datensicherheits-Sequenz** im Reboot: Tech-NQ-Flush → FB-Mirror-Force →
+  Primary-Persist+Stop, Reihenfolge Tech→Küche→FB→Primary (Primary zuletzt).
+- **Wiederverwendung statt Dup:** Primary-Persist/Stop spiegelt `4_reboot_Prim.sh`
+  getreu; Installer idempotent; Doku vollständig (RECOVERY.md + 3 Cards + INDEX +
+  ABCDEN→ABCDENR-Governance).
+
+### Vermeidbare Lücken (von Opus gefunden/behoben)
+
+- **Unvollständige Verifikation vs. Kanon:** Das konsolidierte
+  `pv_all_safe_reboot.sh` prüfte Küche nur gegen `pv-failover-init.service` und
+  ließ `pv-backup-2d.timer` + `pv-failover-health.timer` weg, die die
+  handgeschriebene `2_reboot_K.sh` prüft → schwächere Post-Boot-Prüfung (gleicher
+  Fehler im `pv_post_reboot_check.py`). Behoben.
+- **Unvollständiges Provisioning (Kern-Miss):** Der Küche-Rebuild installierte
+  Browser-Autostart, **aber kein Autologin**. Ein so rekonstruierter Kiosk bootet
+  in den Login-Greeter und startet den Browser nie. Die Autologin-Schicht fehlte
+  komplett im Repo (nur host-seitig) — genau der Produktionsausfall, der real
+  auftrat. Rolle R verspricht, einen Host „zu installieren, zu rekonstruieren und
+  aktuell zu halten", konnte den Kiosk aber **nicht end-to-end** reproduzieren.
+  Behoben via `scripts/install_kiosk_autologin.sh` + Einhängen in den Rebuild.
+- **Scope-Rauschen (gering):** Beide Feature-Commits trugen die
+  autogenerierte `doc/volkszaehlung.md` (Code-Statistik) mit — vermutlich
+  Hook-generiert, aber thematisch fremd.
+
+### Wie Opus es gemacht hätte
+
+- **End-to-end-Vollständigkeit vor Feature-Breite:** Ein Provisioning-Werkzeug ist
+  erst korrekt, wenn es einen **lauffähigen** Host reproduziert. Die vollständige
+  Kiosk-Kette (Autologin → Session → Autostart → Browser) hätte ich modelliert und
+  den Rebuild-Dry-Run je Host gegen das Manifest geprüft → die Autologin-Lücke wäre
+  vor dem Commit aufgefallen.
+- **DRY für Host-Unit-Listen:** Die zu prüfenden Units stehen dreifach
+  (`pv_all_safe_reboot.sh`, `pv_post_reboot_check.py`, `2_reboot_K.sh`) und sind
+  bereits gedriftet. Sie gehören aus den Host-Manifesten (`recovery/hosts/*.yaml`
+  `services`/`timers`) abgeleitet — eine Quelle der Wahrheit.
+- **Belegte Verifikation:** Dry-Run-Ausgabe aller vier Hosts + Post-Reboot-Check
+  als Commit-Evidenz.
+
+### Einordnung
+
+Klar **Star-Band**: die tragende Design-Arbeit (orthogonale Rolle R,
+Sicherheits-Invarianten, Datensequenz) ist hochwertig und frei von den groben
+Korrektheitsfehlern (SyntaxError, kaputtes Script) der kleinen Modelle aus 5a. Der
+Opus-vs-Sonnet-Unterschied liegt hier **nicht** in der Architektur, sondern in
+**Vollständigkeit, DRY und belegter End-to-end-Validierung**: Sonnet baute das
+Gerüst vollständig und sicher, verfehlte aber die letzte Meile (reproduzierbares
+Autologin) und ließ Verifikationslisten driften. Stichprobe n=1 Sitzung; die
+Marker (fehlende Autologin-Schicht, gedriftete Unit-Listen) sind objektiv belegbar.
+
+---
+
 ## 6) Pflegeprozess
 
 Empfohlene Aktualisierung:
