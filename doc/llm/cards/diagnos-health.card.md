@@ -5,7 +5,7 @@ role: D
 applyTo: "diagnos/health.py,diagnos/log_health.py"
 tags: [health, services, freshness, mirror, backup, notification, logs]
 status: stable
-last_review: 2026-09-29
+last_review: 2026-11-14
 ---
 
 # Diagnos Health
@@ -17,7 +17,7 @@ Read-only Zustandspruefung fuer Host, Services und Datenfrische. Liefert eine sc
 - **Hauptlauf:** `diagnos/health.py:run_all`
 - **Host-Checks:** `diagnos/health.py:check_cpu_temp`, `check_throttle`, `check_ram`, `check_disk`, `check_load`, `check_uptime`
 - **Service-Checks:** `diagnos/health.py:check_all_services`
-- **Systemd-Pfade:** `diagnos/health.py:check_pv_unit_working_directories` (installierte `pv-*.service` Units mit fehlendem `WorkingDirectory` melden)
+- **Sofortpfad:** `automation/engine/event_notifier.py:pruefe_health_alarme` — CRIT/FAIL aus `cpu_temp`, `throttle`, `disk_root`, `auxiliary_hosts`, **`systemd_pv_working_directories`** und `service:*` lösen sofort eine Mail aus (1×/Tag, persistent dedup). WARN → Sunset-Mail.
 - **Freshness:** `diagnos/health.py:check_freshness`
 - **Mirror/Backup:** `diagnos/health.py:check_mirror_sync_age`, `check_local_gfs_backup_age`
 - **Auxiliary-Hosts:** `diagnos/health.py:check_auxiliary_hosts` (nur Primary; Kueche/Tech per TCP-Connect auf SSH-Port erreichbar? → CRIT bei down)

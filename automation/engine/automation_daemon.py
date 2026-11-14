@@ -400,6 +400,13 @@ class AutomationDaemon:
                         LOG.warning(f"Health-Alarm: {', '.join(health_alarme)}")
                 except Exception as e:
                     LOG.error(f"Health-Alarm Fehler: {e}")
+                # NQ-Sofortalarme (tote Core-Timer, stale Pipeline) — CRIT only.
+                try:
+                    nq_alarme = self._notifier.pruefe_nq_alarme()
+                    if nq_alarme:
+                        LOG.warning(f"NQ-Alarm: {', '.join(nq_alarme)}")
+                except Exception as e:
+                    LOG.error(f"NQ-Alarm Fehler: {e}")
 
         # 5. Matrix-Reload bei SIGHUP oder Dateiänderung
         reload_needed = self._reload_requested

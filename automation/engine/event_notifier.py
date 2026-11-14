@@ -589,9 +589,11 @@ class EventNotifier:
                 continue
 
             # Whitelist: nur die Checks, deren Sofortpfad fachlich
-            # gerechtfertigt ist (Hardware-/Hostprobleme, tote Services).
+            # gerechtfertigt ist (Hardware-/Hostprobleme, tote Services,
+            # Pfad-Drift in systemd-Units).
             if not (
-                name in ('cpu_temp', 'throttle', 'disk_root', 'auxiliary_hosts')
+                name in ('cpu_temp', 'throttle', 'disk_root', 'auxiliary_hosts',
+                         'systemd_pv_working_directories')
                 or name.startswith('service:')
             ):
                 continue
@@ -601,6 +603,42 @@ class EventNotifier:
             if self._sende_diagnos_alarm(alarm_key, text, details, kategorie='HEALTH'):
                 ausgeloest.append(alarm_key)
 
+        return ausgeloest
+
+    def pruefe_nq_alarme(self) -> list[str]:
+        """NQ-Sofortalarme: CRIT-Checks aus diagnos.nq_health (tote Core-Timer,
+        stale Pipeline). WARN-NQ-Checks landen weiter im Sunset-Bericht.
+
+        Returns: Liste ausgelöster Alarm-Keys.
+        """
+        if not self._email:
+            return []
+        try:
+            nq = run_diagnos_nq()
+        except Exception as exc:
+            LOG.debug(f"NQ-Alarm-Check fehlgeschlagen: {exc}")
+            return []
+
+        checks = nq.get('checks', []) or []
+        if any(c.get('skipped') for c in checks):
+            return []  # nicht auf primary oder keine NQ-DB
+
+        ausgeloest: list[str] = []
+        for check in checks:
+            name = check.get('check') or ''
+            sev = (check.get('severity') or '').lower()
+            if sev not in ('crit', 'fail'):
+                continue
+            # Nur die Checks, die zeitkritisch sind (Core-Timer, Pipeline-Frische).
+            # nq:events_recent ist Info-only → kein Sofortalarm.
+            if name not in ('nq:services', 'nq:pipeline_freshness'):
+                continue
+            alarm_key = f'nq:{name}:{sev}'
+            error = check.get('error') or f'{name} {sev.upper()}'
+            details = {k: v for k, v in check.items()
+                       if k not in ('check', 'severity') and not isinstance(v, (dict, list))}
+            if self._sende_diagnos_alarm(alarm_key, f'NQ {error}', details, kategorie='NQ-KRIT'):
+                ausgeloest.append(alarm_key)
         return ausgeloest
 
     def pruefe_stoerungs_alarm(self) -> Optional[str]:
@@ -694,6 +732,10 @@ class EventNotifier:
             text = f"Service {unit} {sev_label}: {state}"
         elif name == 'auxiliary_hosts':
             text = check.get('error') or f"Auxiliary-Host {sev_label}"
+        elif name == 'systemd_pv_working_directories':
+            missing = check.get('missing') or {}
+            units = ', '.join(missing.keys()) if missing else '?'
+            text = f"pv-Units mit fehlendem WorkingDirectory ({len(missing)}): {units}"
         else:
             text = f"{name} {sev_label}"
 

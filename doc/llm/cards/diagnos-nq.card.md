@@ -5,7 +5,7 @@ role: D
 applyTo: "diagnos/nq_health.py"
 tags: [netzqualitaet, pac4200, freshness, pipeline, rolle-n]
 status: stable
-last_review: 2026-10-08
+last_review: 2026-11-14
 ---
 
 # Diagnos NQ
@@ -21,6 +21,7 @@ Read-only Beobachtung des Netzqualitäts-Subsystems (PAC4200, Rolle N) aus Sicht
 - **Ereignisse:** `diagnos/nq_health.py:check_nq_events_recent` (Info, kein Alarm)
 - **Parameter:** `diagnos/config.py` (`NQ_DB_DIR`, `NQ_PIPELINE_WARN_S`/`_CRIT_S`, `NQ_ENERGY_WARN_DAYS`/`_CRIT_DAYS`, `NQ_TIMERS`)
 - **Mail-/Report-Anteil:** `automation/engine/nq_notifier.py:diff_nq_befunde`, `automation/engine/notify/report_format.py`, `diagnos/status_report.py` (Netz-Status.md)
+- **Sofortpfad (neu):** `automation/engine/event_notifier.py:pruefe_nq_alarme` — CRIT aus `nq:services` (tote Core-Timer) und `nq:pipeline_freshness` (stale PAC-Kette) löst sofort Mail aus; alle 10 min vom Daemon geprüft, 1×/Tag dedup.
 
 ## Inputs / Outputs
 - **Inputs:** read-only Monats-DBs `nq/db/nq_YYYY-MM.db` (`nq_5min`, `nq_energy_daily`, `nq_events`), `systemctl show` der NQ-Timer, `.role`.
