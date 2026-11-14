@@ -203,8 +203,8 @@
     <div class="chart-area">
         <div class="chart-box">
             <span class="chart-title" id="chartTitle">Leiterspannungen L-L [V] · Netzfrequenz [Hz]</span>
-            <div id="mainChart"></div>
-            <div class="loading" id="loadingMain">Lade Netzqualitätsdaten...</div>
+            <div id="mainChart" class="chart-shell is-loading"></div>
+            <div class="loading" id="loadingMain" style="display:none;"></div>
         </div>
     </div>
 
@@ -416,8 +416,9 @@
             const dateStr = formatDateISO(currentDate);
             const statusEl = document.getElementById('statusInfo');
             statusEl.textContent = 'Lädt...';
-            document.getElementById('loadingMain').style.display = 'block';
+            document.getElementById('loadingMain').style.display = 'none';
             document.getElementById('mainChart').style.display = 'block';
+            document.getElementById('mainChart').classList.add('is-loading');
 
             try {
                 const resp = await fetch(`/api/nq/netzkriterien?period=${currentPeriod}&date=${dateStr}`);
@@ -427,6 +428,7 @@
                 warningCounts = data.warning_counts || { warn: 0, high: 0, crit: 0 };
 
                 document.getElementById('loadingMain').style.display = 'none';
+                document.getElementById('mainChart').classList.remove('is-loading');
                 currentData = data;
                 currentMeta = data;
                 currentDateStr = dateStr;
@@ -440,6 +442,7 @@
                 statusEl.textContent = status;
             } catch (err) {
                 console.error('Netzqualität Fehler:', err);
+                document.getElementById('mainChart').classList.remove('is-loading');
                 statusEl.textContent = 'Fehler: ' + err.message;
                 document.getElementById('loadingMain').textContent = 'Fehler beim Laden';
             }

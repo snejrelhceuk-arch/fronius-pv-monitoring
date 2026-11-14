@@ -175,10 +175,10 @@
         </div>
         
         <div class="chart-container">
-            <div id="loading" class="loading">Lade Daten...</div>
+            <div id="loading" class="loading" style="display:none;"></div>
             <div id="error" class="error" style="display:none;"></div>
 
-            <div id="mainChart" style="display:none;"></div>
+            <div id="mainChart" class="chart-shell is-loading" style="display:block;"></div>
         </div>
         
         <!-- Footer removed - all navigation is now in top bar -->
@@ -1012,9 +1012,10 @@
         async function loadData() {
             try {
                 scheduleAutoRefresh();
-                document.getElementById('loading').style.display = 'block';
+                document.getElementById('loading').style.display = 'none';
                 document.getElementById('error').style.display = 'none';
                 document.getElementById('mainChart').style.display = 'block';
+                document.getElementById('mainChart').classList.add('is-loading');
                 
                 const dateStr = formatDateISO(currentDate);
                 
@@ -1139,6 +1140,7 @@
                 
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('mainChart').style.display = 'block';
+                document.getElementById('mainChart').classList.remove('is-loading');
                 
                 updateChart();
                 updateSummaryDisplay();
@@ -1148,6 +1150,7 @@
             } catch (error) {
                 scheduleAutoRefresh();
                 document.getElementById('loading').style.display = 'none';
+                document.getElementById('mainChart').classList.remove('is-loading');
                 document.getElementById('error').style.display = 'block';
                 document.getElementById('error').textContent = `Fehler beim Laden: ${error.message}`;
                 console.error('Fehler:', error);

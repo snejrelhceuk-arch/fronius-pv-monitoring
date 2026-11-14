@@ -68,9 +68,9 @@
         </div>
         <div class="chart-area">
             <div id="batteryHeader" class="status-bar" style="display:none;"></div>
-            <div id="chartLoading" class="loading">Lade SOC-Daten...</div>
+            <div id="chartLoading" class="loading" style="display:none;"></div>
             <div id="chartError" class="error" style="display:none;"></div>
-            <div id="batteryChart" style="display:none;"></div>
+            <div id="batteryChart" class="chart-shell is-loading" style="display:block;"></div>
         </div>
     </div>
 
@@ -403,6 +403,7 @@
         function renderChart(data) {
             const el = document.getElementById('batteryChart');
             el.style.display = 'block';
+            el.classList.remove('is-loading');
             if (!chart) chart = echarts.init(el);
             if (currentView === 'tag') {
                 renderTagChart(data);
@@ -413,9 +414,10 @@
 
         async function loadData() {
             scheduleAutoRefresh();
-            document.getElementById('chartLoading').style.display = 'block';
+            document.getElementById('chartLoading').style.display = 'none';
             document.getElementById('chartError').style.display = 'none';
             document.getElementById('batteryChart').style.display = 'block';
+            document.getElementById('batteryChart').classList.add('is-loading');
 
             let url = `/api/verbraucher/batterie?period=${currentView}`;
             if (currentView === 'tag') {
@@ -434,6 +436,7 @@
                 renderChart(data);
                 scheduleAutoRefresh();
             } catch (e) {
+                document.getElementById('batteryChart').classList.remove('is-loading');
                 document.getElementById('chartError').textContent = e.message;
                 document.getElementById('chartError').style.display = 'block';
             } finally {

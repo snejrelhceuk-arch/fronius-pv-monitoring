@@ -70,9 +70,9 @@
         <!-- Chart Area -->
         <div class="chart-area">
             <div id="summaryGrid" class="status-bar" style="display:none;"></div>
-            <div id="chartLoading" class="loading">Lade Verbrauchsdaten...</div>
+            <div id="chartLoading" class="loading" style="display:none;"></div>
             <div id="chartError" class="error" style="display:none;"></div>
-            <div id="verbraucherChart" style="display:none;"></div>
+            <div id="verbraucherChart" class="chart-shell is-loading" style="display:block;"></div>
         </div>
     </div>
 
@@ -274,9 +274,10 @@
         // DATA LOADING
         // ═══════════════════════════════════════
         async function loadData() {
-            document.getElementById('chartLoading').style.display = 'block';
+            document.getElementById('chartLoading').style.display = 'none';
             document.getElementById('chartError').style.display = 'none';
             document.getElementById('verbraucherChart').style.display = 'block';
+            document.getElementById('verbraucherChart').classList.add('is-loading');
             document.getElementById('summaryGrid').style.display = 'flex';
 
             let url;
@@ -307,6 +308,7 @@
 
                 document.getElementById('chartLoading').style.display = 'none';
                 document.getElementById('verbraucherChart').style.display = 'block';
+                document.getElementById('verbraucherChart').classList.remove('is-loading');
                 document.getElementById('summaryGrid').style.display = 'flex';
 
                 updateSummary(data.totals, data.average_summary || null);
@@ -318,6 +320,7 @@
                 }
             } catch (err) {
                 document.getElementById('chartLoading').style.display = 'none';
+                document.getElementById('verbraucherChart').classList.remove('is-loading');
                 document.getElementById('chartError').style.display = 'block';
                 document.getElementById('chartError').textContent = 'Fehler: ' + err.message;
             }

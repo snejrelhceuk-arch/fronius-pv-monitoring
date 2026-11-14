@@ -50,7 +50,7 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 - Standard-DB-Verbindungen in Web-Routen sind read-only; Forecast-Persistenz ist die explizit benannte Write-Ausnahme.
 - Mirror-Modus darf Anzeige beeinflussen, aber keine Aktorik ausloesen.
 - Tage-Views in den Monitoring-/Netzqualitäts-Templates nutzen einheitliche Tages-Navigation per Pointer-Wisch: `pointerdown/up` mit Richtungsprüfung, Mindestschwelle ca. 70 px (~1–2 cm), nur in der Tagesansicht aktiv; für Touch/Mouse gleichwertig.
-- Beim Datumswechsel bleiben die bestehende Chart-Struktur und Übersichtszeile sichtbar; eine reine Lade-Overlay-Statuszeile erscheint auf dem aktuellen Grundgerüst, statt die gesamte Ansicht zu löschen. So bleibt die Oberfläche sofort stabil und wird erst nach dem Fetch mit neuen Daten aktualisiert.
+- Beim Datumswechsel bleiben die bestehende Chart-Struktur und Übersichtszeile sichtbar; die Ladephase nutzt einen unsichtbaren/sekundären Status und ein visuelles Chart-Shell mit gebündelter Hintergrundstruktur, statt einen sichtbaren »Lade Daten…«-Text oder das komplette Chart-Profil nach unten zu quetschen. So bleibt die Oberfläche sofort stabil und wird nach dem Fetch mit neuen Daten schrittweise ersetzt.
 
 ## No-Gos
 - Keine Nutzung von `fronius_api.BatteryConfig` in Web-Routen.
