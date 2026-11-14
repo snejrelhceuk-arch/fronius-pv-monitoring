@@ -351,6 +351,7 @@
                 }],
             };
             if (window.PVChart) option.tooltip = PVChart.tooltipResponsive(option.tooltip);
+            if (window.PVChart && PVChart.staggerReveal) PVChart.staggerReveal(option);
             chart.setOption(option, true);
         }
 

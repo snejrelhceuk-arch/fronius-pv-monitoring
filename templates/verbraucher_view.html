@@ -299,27 +299,30 @@
                 if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
                 const data = await resp.json();
 
-                // Perioden-Extremwerte (konsistent mit Monitoring/Erzeuger)
-                if (currentView !== 'tag' && window.PVExtremes) {
-                    periodExtremes = await PVExtremes.fetchFor(currentView, { year: currentYear, month: currentMonth });
-                    tagExtremes = null;
-                } else if (window.PVExtremes) {
-                    const ex = await PVExtremes.fetchFor('tag', { date: formatDateISO(currentDate) });
-                    tagExtremes = ex ? ex.overall : null;
-                    periodExtremes = null;
-                }
-
                 document.getElementById('chartLoading').style.display = 'none';
                 document.getElementById('verbraucherChart').style.display = 'block';
-                const chartShell = document.getElementById('verbraucherChart').parentElement;
-                if (chartShell) chartShell.classList.remove('is-loading');
+                const shell = document.getElementById('verbraucherChart').parentElement;
+                if (shell) shell.classList.remove('is-loading');
                 document.getElementById('summaryGrid').style.display = 'flex';
 
                 updateSummary(data.totals, data.average_summary || null);
 
+                // Tag-Chart sofort zeichnen; Extremwerte (nur Tooltip) nachladen,
+                // damit die langsame Extremwert-API die Anzeige nicht blockiert.
                 if (currentView === 'tag') {
+                    tagExtremes = null;
+                    periodExtremes = null;
                     createDayChart(data);
+                    if (window.PVExtremes) {
+                        PVExtremes.fetchFor('tag', { date: formatDateISO(currentDate) })
+                            .then(ex => { tagExtremes = ex ? ex.overall : null; })
+                            .catch(() => {});
+                    }
                 } else {
+                    if (window.PVExtremes) {
+                        periodExtremes = await PVExtremes.fetchFor(currentView, { year: currentYear, month: currentMonth });
+                        tagExtremes = null;
+                    }
                     createBarChart(data);
                 }
             } catch (err) {
@@ -604,11 +607,20 @@
             };
 
             if (window.PVChart) option.tooltip = PVChart.tooltipResponsive(option.tooltip);
+            if (window.PVChart && PVChart.staggerReveal) PVChart.staggerReveal(option);
             chart.setOption(option);
+            bindChartResize();
+        }
+        // Resize-Handler genau einmal binden (createDayChart läuft bei jeder
+        // Navigation → sonst würden sich Listener aufsummieren).
+        let _resizeBound = false;
+        function bindChartResize() {
+            if (_resizeBound) return;
+            _resizeBound = true;
             window.addEventListener('resize', () => {
                 if (!chart) return;
                 chart.resize();
-                // X-Achsen-Labels dynamisch an neue Breite anpassen
+                if (currentView !== 'tag') return;
                 const w = window.innerWidth;
                 const step = w < 500 ? 36 : w < 800 ? 24 : 12;
                 chart.setOption({
@@ -887,7 +899,7 @@
                     switchView('tag');
                 });
             }
-            window.addEventListener('resize', () => { if (chart) chart.resize(); });
+            bindChartResize();
         }
 
         // ═══════════════════════════════════════

@@ -1126,14 +1126,9 @@
                 console.log('Daten geladen:', chartData.datapoints.length, 'Punkte',
                              chartData.forecast ? '(PROGNOSE)' : '(MESSDATEN)');
                 
-                // Tages-Extremwerte (Spannung/Frequenz mit Uhrzeit) für Tooltip
+                // Tages-Extremwerte (Tooltip) werden NACH dem Zeichnen nachgeladen,
+                // damit die langsame Extremwert-API die Chart-Anzeige nicht blockiert.
                 tagExtremes = null;
-                if (window.PVExtremes && daysAhead <= 0) {
-                    try {
-                        const ex = await PVExtremes.fetchFor('tag', { date: dateStr });
-                        tagExtremes = ex ? ex.overall : null;
-                    } catch (e) { tagExtremes = null; }
-                }
                 
                 // Update Navigation Display
                 updateDateDisplay();
@@ -1143,13 +1138,19 @@
                 
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('mainChart').style.display = 'block';
-                const chartShell = document.getElementById('mainChart').parentElement;
                 if (chartShell) chartShell.classList.remove('is-loading');
                 
                 updateChart();
                 updateSummaryDisplay();
                 updateJetztButton();
                 scheduleAutoRefresh();
+
+                // Extremwerte im Hintergrund nachladen (nur Tooltip-Inhalt).
+                if (window.PVExtremes && daysAhead <= 0) {
+                    PVExtremes.fetchFor('tag', { date: dateStr })
+                        .then(ex => { tagExtremes = ex ? ex.overall : null; })
+                        .catch(() => { tagExtremes = null; });
+                }
                 
             } catch (error) {
                 scheduleAutoRefresh();
@@ -1360,6 +1361,7 @@
             };
             
             if (window.PVChart && option.tooltip) option.tooltip = PVChart.tooltipResponsive(option.tooltip);
+            if (window.PVChart && PVChart.staggerReveal) PVChart.staggerReveal(option);
             chart.setOption(option);
             console.log('Forecast-Chart erstellt:', times.length, 'Stunden');
         }
@@ -1809,6 +1811,7 @@
             console.log('Ertrag-Option gesetzt, yMax:', calcYMax(peakVal));
             applyClearSkyTitle(option, mobile, compactEmbed);
             if (window.PVChart && option.tooltip) option.tooltip = PVChart.tooltipResponsive(option.tooltip);
+            if (window.PVChart && PVChart.staggerReveal) PVChart.staggerReveal(option);
             chart.setOption(option);
         }
         
@@ -2051,6 +2054,7 @@
             
             applyClearSkyTitle(option, mobile, compactEmbed);
             if (window.PVChart && option.tooltip) option.tooltip = PVChart.tooltipResponsive(option.tooltip);
+            if (window.PVChart && PVChart.staggerReveal) PVChart.staggerReveal(option);
             chart.setOption(option);
         }
         

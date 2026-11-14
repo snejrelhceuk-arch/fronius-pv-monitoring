@@ -707,7 +707,7 @@
             }
             const gridTop = legendTop + 18;
 
-            mainChart.setOption({
+            const nqOption = {
                 grid: { left: 55, right: 55, top: gridTop, bottom: 66 },
                 tooltip: PVChart.tooltipResponsive({
                     trigger: 'axis',
@@ -812,7 +812,12 @@
                     }
                 ],
                 series: [...voltageSeries, freqSeries]
-            });
+            };
+            // Tag-Ansicht: Datenserien gestaffelt einblenden (Achsen zuerst).
+            if (currentPeriod === 'tag' && window.PVChart && PVChart.staggerReveal) {
+                PVChart.staggerReveal(nqOption);
+            }
+            mainChart.setOption(nqOption);
         }
 
         // Resize

@@ -50,7 +50,8 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 - Standard-DB-Verbindungen in Web-Routen sind read-only; Forecast-Persistenz ist die explizit benannte Write-Ausnahme.
 - Mirror-Modus darf Anzeige beeinflussen, aber keine Aktorik ausloesen.
 - Tage-Views in den Monitoring-/Netzqualitäts-Templates nutzen einheitliche Tages-Navigation per Pointer-Wisch: `pointerdown/up` mit Richtungsprüfung, Mindestschwelle ca. 70 px (~1–2 cm), nur in der Tagesansicht aktiv; für Touch/Mouse gleichwertig.
-- Beim Datumswechsel verschwindet die bisherige Chart-Inhaltsebene sofort aus dem sichtbaren Bereich und weicht einem Lade-Shell mit Hintergrundstruktur, sodass der Wechsel spürbar wirksam ist; die Umgebung, Achsen und globale Werte bleiben als Grundgerüst sichtbar, während neue Daten nach Ladefortschritt schrittweise einblenden. Ein sichtbarer »Lade Daten…«-Text bleibt dabei bewusst aus.
+- Beim Datumswechsel verschwindet die bisherige Chart-Inhaltsebene sofort aus dem sichtbaren Bereich (`.chart-shell.is-loading > *` → `opacity:0`) und weicht einem Lade-Shell mit Hintergrundstruktur (`static/css/monitoring.css:.chart-shell`), sodass der Wechsel spürbar wirksam ist; Umgebung, Achsen und globale Werte bleiben als Grundgerüst sichtbar. Die Datenserien blenden danach gestaffelt (Spalte für Spalte) über `static/js/nav-ui.js:PVChart.staggerReveal` ein. Ein sichtbarer »Lade Daten…«-Text bleibt bewusst aus.
+- Tag-Charts rendern, sobald die primäre Tages-API-Antwort da ist; die langsamere Extremwert-API (`/api/period_extremes`, nur Tooltip-Inhalt) wird **nach** dem Zeichnen im Hintergrund nachgeladen und blockiert die Anzeige nicht (`tagExtremes` wird lazily im Tooltip gelesen).
 
 ## No-Gos
 - Keine Nutzung von `fronius_api.BatteryConfig` in Web-Routen.
@@ -61,6 +62,7 @@ Schicht B fuer UI und API-Ausgabe: Blueprints registrieren, Daten read-mostly be
 - Neue API-Route -> passendes Blueprint-Modul in `routes/` erweitern und in `web_api.py` registrieren.
 - Einheitendarstellung korrigieren -> Formatter in `templates/tag_view.html` und Konventionen in `doc/web/DISPLAY_CONVENTIONS.md` synchron halten.
 - Tagesnavigation per Wisch-/Drag-Geste ergänzen -> `static/js/nav-context.js:attachSwipeNavigation` und die aktiven Tag-Templates (`tag_view.html`, `verbraucher_view.html`, `erzeuger_view.html`, `batterie_view.html`, `netzqualitaet_view.html`) parallel halten.
+- Progressives Einblenden eines Tag-Charts -> `static/js/nav-ui.js:PVChart.staggerReveal(option)` direkt vor `chart.setOption(option)` aufrufen (nur Tag-/Tagesansichten, nicht Monat/Jahr/Gesamt-Balken). Werte vollständig vorab holen (gestapelte Summen), animiert wird nur das Enthüllen.
 - Forecast-Fehler analysieren -> `routes/forecast.py` und `routes/helpers.py:store_forecast_daily` gemeinsam debuggen.
 - HA-Entitäten erweitern -> `routes/system/ha.py` im Abschnitt `/api/ha/*` anpassen und den Katalog in `/api/ha/entities` aktualisieren.
 - Lokaler Smoke-Test von Web-Routen -> immer `http://127.0.0.1:8000/...` verwenden (Produktionsport), nicht `:5000`.

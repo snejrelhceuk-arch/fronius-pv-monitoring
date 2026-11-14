@@ -470,12 +470,43 @@
         };
     }
 
+    // Progressive „Lade"-Animation für Tag-Charts: Das Grundgerüst (Achsen,
+    // Grid, Marklines) erscheint sofort, danach blenden die Datenserien
+    // gestaffelt — Spalte für Spalte — animiert ein. Die Werte liegen bereits
+    // vollständig vor (eine API-Antwort, zwingend für gestapelte Summen);
+    // animiert wird ausschließlich das Enthüllen. `option` wird in place
+    // erweitert und zurückgegeben.
+    function staggerReveal(option, opts) {
+        opts = opts || {};
+        if (!option || !Array.isArray(option.series)) return option;
+        var step = opts.step != null ? opts.step : 140;
+        var dur = opts.duration != null ? opts.duration : 650;
+        var easing = opts.easing || 'cubicOut';
+        option.animation = true;
+        option.animationThreshold = opts.threshold != null ? opts.threshold : 6000;
+        var i = 0;
+        option.series.forEach(function (s) {
+            if (!s || typeof s !== 'object') return;
+            var delay = i * step;
+            s.animation = true;
+            s.animationDuration = dur;
+            s.animationDelay = delay;
+            s.animationEasing = easing;
+            s.animationDurationUpdate = dur;
+            s.animationDelayUpdate = delay;
+            s.animationEasingUpdate = easing;
+            i++;
+        });
+        return option;
+    }
+
     window.PVChart = {
         isSmallScreen: isSmallScreen,
         xAxisLabel: xAxisLabel,
         tooltipResponsive: tooltipResponsive,
         peakHeadroomMax: peakHeadroomMax,
-        erzeugungMarkerSeries: erzeugungMarkerSeries
+        erzeugungMarkerSeries: erzeugungMarkerSeries,
+        staggerReveal: staggerReveal
     };
 })();
 
