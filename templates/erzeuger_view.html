@@ -68,7 +68,9 @@
             <div id="summaryGrid" class="status-bar" style="display:none;"></div>
             <div id="chartLoading" class="loading" style="display:none;"></div>
             <div id="chartError" class="error" style="display:none;"></div>
-            <div id="erzeugerChart" class="chart-shell is-loading" style="display:block;"></div>
+            <div class="chart-shell is-loading">
+                <div id="erzeugerChart" style="display:block;"></div>
+            </div>
         </div>
     </div>
 
@@ -343,7 +345,8 @@
             document.getElementById('chartLoading').style.display = 'none';
             document.getElementById('chartError').style.display = 'none';
             document.getElementById('erzeugerChart').style.display = 'block';
-            document.getElementById('erzeugerChart').classList.add('is-loading');
+            const chartShell = document.getElementById('erzeugerChart').parentElement;
+            if (chartShell) chartShell.classList.add('is-loading');
             document.getElementById('summaryGrid').style.display = 'flex';
 
             let url;
@@ -374,7 +377,8 @@
 
                 document.getElementById('chartLoading').style.display = 'none';
                 document.getElementById('erzeugerChart').style.display = 'block';
-                document.getElementById('erzeugerChart').classList.remove('is-loading');
+                const chartShell = document.getElementById('erzeugerChart').parentElement;
+                if (chartShell) chartShell.classList.remove('is-loading');
                 document.getElementById('summaryGrid').style.display = 'flex';
 
                 updateSummary(data.totals);
@@ -388,7 +392,8 @@
             } catch (err) {
                 scheduleAutoRefresh();
                 document.getElementById('chartLoading').style.display = 'none';
-                document.getElementById('erzeugerChart').classList.remove('is-loading');
+                const chartShell = document.getElementById('erzeugerChart').parentElement;
+                if (chartShell) chartShell.classList.remove('is-loading');
                 document.getElementById('chartError').style.display = 'block';
                 document.getElementById('chartError').textContent = 'Fehler: ' + err.message;
             }

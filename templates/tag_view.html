@@ -178,7 +178,9 @@
             <div id="loading" class="loading" style="display:none;"></div>
             <div id="error" class="error" style="display:none;"></div>
 
-            <div id="mainChart" class="chart-shell is-loading" style="display:block;"></div>
+            <div class="chart-shell is-loading">
+                <div id="mainChart" style="display:block;"></div>
+            </div>
         </div>
         
         <!-- Footer removed - all navigation is now in top bar -->
@@ -1015,7 +1017,8 @@
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('error').style.display = 'none';
                 document.getElementById('mainChart').style.display = 'block';
-                document.getElementById('mainChart').classList.add('is-loading');
+                const chartShell = document.getElementById('mainChart').parentElement;
+                if (chartShell) chartShell.classList.add('is-loading');
                 
                 const dateStr = formatDateISO(currentDate);
                 
@@ -1140,7 +1143,8 @@
                 
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('mainChart').style.display = 'block';
-                document.getElementById('mainChart').classList.remove('is-loading');
+                const chartShell = document.getElementById('mainChart').parentElement;
+                if (chartShell) chartShell.classList.remove('is-loading');
                 
                 updateChart();
                 updateSummaryDisplay();
@@ -1150,7 +1154,8 @@
             } catch (error) {
                 scheduleAutoRefresh();
                 document.getElementById('loading').style.display = 'none';
-                document.getElementById('mainChart').classList.remove('is-loading');
+                const chartShell = document.getElementById('mainChart').parentElement;
+                if (chartShell) chartShell.classList.remove('is-loading');
                 document.getElementById('error').style.display = 'block';
                 document.getElementById('error').textContent = `Fehler beim Laden: ${error.message}`;
                 console.error('Fehler:', error);

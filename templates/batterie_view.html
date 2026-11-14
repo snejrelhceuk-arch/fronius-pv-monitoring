@@ -70,7 +70,9 @@
             <div id="batteryHeader" class="status-bar" style="display:none;"></div>
             <div id="chartLoading" class="loading" style="display:none;"></div>
             <div id="chartError" class="error" style="display:none;"></div>
-            <div id="batteryChart" class="chart-shell is-loading" style="display:block;"></div>
+            <div class="chart-shell is-loading">
+                <div id="batteryChart" style="display:block;"></div>
+            </div>
         </div>
     </div>
 
@@ -403,7 +405,8 @@
         function renderChart(data) {
             const el = document.getElementById('batteryChart');
             el.style.display = 'block';
-            el.classList.remove('is-loading');
+            const chartShell = el.parentElement;
+            if (chartShell) chartShell.classList.remove('is-loading');
             if (!chart) chart = echarts.init(el);
             if (currentView === 'tag') {
                 renderTagChart(data);
@@ -417,7 +420,8 @@
             document.getElementById('chartLoading').style.display = 'none';
             document.getElementById('chartError').style.display = 'none';
             document.getElementById('batteryChart').style.display = 'block';
-            document.getElementById('batteryChart').classList.add('is-loading');
+            const chartShell = document.getElementById('batteryChart').parentElement;
+            if (chartShell) chartShell.classList.add('is-loading');
 
             let url = `/api/verbraucher/batterie?period=${currentView}`;
             if (currentView === 'tag') {
@@ -436,7 +440,8 @@
                 renderChart(data);
                 scheduleAutoRefresh();
             } catch (e) {
-                document.getElementById('batteryChart').classList.remove('is-loading');
+                const chartShell = document.getElementById('batteryChart').parentElement;
+                if (chartShell) chartShell.classList.remove('is-loading');
                 document.getElementById('chartError').textContent = e.message;
                 document.getElementById('chartError').style.display = 'block';
             } finally {
