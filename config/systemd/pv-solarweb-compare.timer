@@ -1,0 +1,11 @@
+[Unit]
+Description=PV Solarweb-Abgleich — monatlicher Trigger (5., Catch-up)
+
+[Timer]
+OnCalendar=*-*-05 03:30:00
+RandomizedDelaySec=1800
+Persistent=true
+Unit=pv-solarweb-compare.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,13 @@
+[Unit]
+Description=PV Repo-Drift-Remediation (Auto-Commit lokal, Peers angleichen, Mail)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=admin
+WorkingDirectory=%h/Dokumente/PVAnlage/pv-system
+ExecStart=/bin/bash %h/Dokumente/PVAnlage/pv-system/scripts/pv_repo_drift_remediate.sh
+StandardOutput=journal
+StandardError=journal
+Nice=15

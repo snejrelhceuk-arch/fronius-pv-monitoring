@@ -1,0 +1,11 @@
+[Unit]
+Description=PV Doku-Drift-Report — ~20-Tage-Trigger (1./21., Catch-up)
+
+[Timer]
+OnCalendar=*-*-01,21 05:00:00
+RandomizedDelaySec=1800
+Persistent=true
+Unit=pv-doc-drift-report.service
+
+[Install]
+WantedBy=timers.target

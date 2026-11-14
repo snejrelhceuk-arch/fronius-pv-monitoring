@@ -1,0 +1,13 @@
+[Unit]
+Description=PV Doku-Drift-Report (Engine + Mail-Zusammenfassung)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=admin
+WorkingDirectory=%h/Dokumente/PVAnlage/pv-system
+ExecStart=%h/Dokumente/PVAnlage/pv-system/.venv/bin/python %h/Dokumente/PVAnlage/pv-system/scripts/pv_doc_drift_report.py
+StandardOutput=journal
+StandardError=journal
+Nice=15

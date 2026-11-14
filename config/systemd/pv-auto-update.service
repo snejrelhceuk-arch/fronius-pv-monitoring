@@ -1,0 +1,13 @@
+[Unit]
+Description=PV Auto-Update-Guard (72h-Inaktivitaets-Gate, Warn-/Erfolgs-Mail)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=admin
+WorkingDirectory=%h/Dokumente/PVAnlage/pv-system
+ExecStart=%h/Dokumente/PVAnlage/pv-system/.venv/bin/python %h/Dokumente/PVAnlage/pv-system/scripts/pv_auto_update_guard.py
+StandardOutput=journal
+StandardError=journal
+Nice=15
