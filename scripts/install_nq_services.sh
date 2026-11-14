@@ -48,7 +48,10 @@ install_unit() {
         return 1
     fi
     validate_working_directory "$unit"
-    sudo install -m 0644 "$SRC/$unit" "$DST/$unit"
+    # %h in der Unit-Datei durch das echte Home-Verzeichnis ersetzen, damit
+    # systemd beim Starten als root korrekt expandiert (auf diesem System
+    # expandiert %h in system-units sonst zu /root statt /home/admin).
+    sudo bash -c "sed 's|%h|${HOME}|g' '${SRC}/${unit}' > '${DST}/${unit}'; chmod 0644 '${DST}/${unit}'"
     echo "  ✓ $unit installiert"
 }
 
