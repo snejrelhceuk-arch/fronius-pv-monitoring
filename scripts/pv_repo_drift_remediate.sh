@@ -100,21 +100,56 @@ run_sync() {
 [ -x "$BASE/scripts/sync_code_to_peer.sh" ] && run_sync "Failover (FB)"  bash "$BASE/scripts/sync_code_to_peer.sh" --force
 [ -x "$BASE/scripts/sync_code_to_tech.sh" ] && run_sync "Tech"           bash "$BASE/scripts/sync_code_to_tech.sh" --force
 
-# --- 4. HEAD-Parität aller Sync-Hosts prüfen -----------------------------
+# --- 4. HEAD-Parität aller Sync-Hosts prüfen (+ generischer rsync-Fallback) ---
+RSYNC_EXCLUDES=(
+  --exclude='.role' --exclude='.state/' --exclude='.secrets'
+  --exclude='*.db' --exclude='*.db-shm' --exclude='*.db-wal'
+  --exclude='*.db.bak_*' --exclude='*.db.before_restore_*' --exclude='data_backup_*.db'
+  --exclude='*.log' --exclude='*.pid'
+  --exclude='__pycache__/' --exclude='*.pyc'
+  --exclude='.venv/' --exclude='venv/' --exclude='backup/' --exclude='imports/'
+  --exclude='.vscode/' --exclude='.idea/' --exclude='*.swp' --exclude='*.swo'
+  --exclude='config/tls/'
+  --exclude='config/battery_scheduler_state.json'
+  --exclude='config/battery_bms_checkpoints.json'
+)
+REMOTE_PATH="${PV_SYNC_REMOTE_PATH:-Dokumente/PVAnlage/pv-system}"
+
+remote_head() {
+  ssh -o BatchMode=yes -o ConnectTimeout=6 "$1" \
+    "git -c safe.directory=\"\$HOME/$REMOTE_PATH\" -C \"\$HOME/$REMOTE_PATH\" rev-parse HEAD" 2>/dev/null || echo ''
+}
+
 log ""
 log "4) Commit-Parität der Peers:"
-REMOTE_PATH="${PV_SYNC_REMOTE_PATH:-Dokumente/PVAnlage/pv-system}"
 DRIFT_HOSTS=0
 for hostspec in ${PV_SYNC_HOSTS:-}; do
-  rh="$(ssh -o BatchMode=yes -o ConnectTimeout=6 "$hostspec" \
-        "git -c safe.directory='\$HOME/$REMOTE_PATH' -C \"\$HOME/$REMOTE_PATH\" rev-parse HEAD" 2>/dev/null || echo '')"
+  rh="$(remote_head "$hostspec")"
   if [ -z "$rh" ]; then
     log "   $hostspec: nicht erreichbar / kein Repo (uebersprungen)"
-  elif [ "$rh" = "$LOCAL_HEAD" ]; then
+    continue
+  fi
+  if [ "$rh" = "$LOCAL_HEAD" ]; then
     log "   $hostspec: OK (${rh:0:12})"
+    continue
+  fi
+  # Von den dedizierten Skripten nicht erfasst (z. B. Kueche): generischer rsync.
+  if [ -n "$DRY" ]; then
+    log "   $hostspec: DRIFT (${rh:0:12}) — [dry-run] wuerde generischen rsync anwenden"
+    DRIFT_HOSTS=$((DRIFT_HOSTS+1)); continue
+  fi
+  log "   $hostspec: DRIFT (${rh:0:12}) — generischer rsync -> $REMOTE_PATH"
+  if rsync -az --delete "${RSYNC_EXCLUDES[@]}" "$BASE/" "$hostspec:$REMOTE_PATH/" >>"$REPORT" 2>&1; then
+    rh2="$(remote_head "$hostspec")"
+    if [ "$rh2" = "$LOCAL_HEAD" ]; then
+      log "      -> jetzt OK (${rh2:0:12})"
+    else
+      DRIFT_HOSTS=$((DRIFT_HOSTS+1))
+      log "      -> weiterhin DRIFT (${rh2:0:12})"
+    fi
   else
     DRIFT_HOSTS=$((DRIFT_HOSTS+1))
-    log "   $hostspec: DRIFT (${rh:0:12} != ${LOCAL_HEAD:0:12})"
+    log "      -> rsync FEHLER (siehe Log)"
   fi
 done
 
