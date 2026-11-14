@@ -1,6 +1,6 @@
 # KI-Beitragsanalyse (gepflegte Fassung)
 
-Stand: 01.07.2026
+Stand: 14.11.2026 (forensische Modell-Differenzierung ergänzt, Abschn. 5a; Mengenstand Abschn. 2 unverändert Stand 01.07.2026)
 Geltungsbereich: gesamtes Repository (tracked files)
 Status: aktiv gepflegt
 
@@ -52,8 +52,14 @@ Die historische Phasenfolge bleibt unveraendert:
 2. Claude 3.5/4 Sonnet (Jan-Feb 2026)
 3. Claude Opus 4 (ab Feb 2026)
 4. Claude Sonnet 4.5 (ab Jun 2026) — primär Doku-Infrastruktur
+5. Claude Opus 4.x (ab Nov 2026) — tragende Feature-/Qualitätsarbeit (u. a. Web-Charts). In derselben Phase zeitweise **Copilot-Fusion-Routing** auf ein kleineres Modell (vermutlich MAI-Code) für Micro-Tasks; direkter Qualitätsvergleich s. Abschnitt 5a.
 
 Quelle und Detailbegruendung: Git-History (s. Hinweis in Abschnitt 1).
+
+**Wichtig:** Alle Commits tragen denselben Git-Autor `Copilot`. Die Modellklasse
+ist daher **nicht** aus Commit-Metadaten ableitbar, sondern nur aus
+Betreiber-Beobachtung der Routing-Umgebung plus code-forensischen Markern
+(Methodik in Abschnitt 5a).
 
 ---
 
@@ -112,6 +118,81 @@ Drift-Detection), die selbst wiederum KI-generiert ist.
 
 ---
 
+## 5a) Forensische Modell-Differenzierung — Fallstudie „Tag-Ansichten" (14.11.2026)
+
+Am 14.11.2026 wurde dieselbe Aufgabe (Wisch-Navigation + progressives Laden der
+Tag-Charts) innerhalb **einer** Sitzung von **mehreren LLMs nacheinander**
+bearbeitet. Betreiber-Beobachtung der Routing-Umgebung (Copilot Fusion): die frühen
+Turns liefen auf einem kleineren Modell (vermutlich MAI-Code), der Abschluss-Turn auf
+einem Star-Modell (Claude Opus). Da alle Commits denselben Autor `Copilot` tragen,
+stützt sich die Zuordnung auf diese Beobachtung **plus** code-forensische Marker.
+
+### Commit-Timeline (Sitzung 14.11.2026)
+
+| Commit | Zeit | Umfang | Zuordnung (Konfidenz) |
+|---|---|---|---|
+| a78c6f5 feat: stabilize day-view loading and swipe | 09:47 | 9 Dateien, +170/−22 | klein/Fusion (mittel) |
+| 41161b9 chore: keep swipe fix scoped to UI | 09:48 | 2 Dateien (Revert fremder Daten) | klein/Fusion (mittel) |
+| 2f41beb fix: progressive chart load shell | 09:58 | 8 Dateien, +87/−21 | klein/Fusion (mittel) |
+| d31b2dd fix: hide stale day chart | 10:11 | 8 Dateien, +67/−26 | klein/Fusion (mittel) |
+| 93d1267 feat(web): staggered reveal + non-blocking load; fix leaks | 10:48 | 8 Dateien, +111/−43 | Star/Opus (hoch) |
+
+### Beobachtete Marker (Belege aus der Git-History, nicht Meinung)
+
+Kleineres Modell (a78c6f5 … d31b2dd):
+- **Scope-Hygiene-Verstoß:** a78c6f5 mischte sachfremde Datendateien
+  (`doc/csv/daily_2026.csv`, `doc/volkszaehlung.md`) in einen UI-Commit (AGENTS
+  No-Go #11) und benötigte den Folge-Commit 41161b9 nur zum Zurücknehmen → zwei
+  Commits für ein sauberes Scope.
+- **Iteration ohne Konvergenz:** drei Anläufe (a78c6f5 → 2f41beb → d31b2dd) für
+  dieselbe Lade-UX, die danach immer noch fehlerhaft war.
+- **Harter Korrektheitsfehler ohne Validierung:** d31b2dd fügte in
+  `templates/tag_view.html` zweimal `const chartShell` im selben `try`-Scope ein
+  (Z. 1020 + 1146) → `SyntaxError: Identifier 'chartShell' has already been declared`.
+  Das deaktiviert das **gesamte** Inline-Script der Monitoring-Seite. Die Prüfung
+  erfolgte nur per HTTP-200 (Seite ausgeliefert ≠ JS lauffähig) — eine simple
+  Syntaxprüfung hätte den Fehler gefunden.
+
+Star-Modell (93d1267):
+- **Root-Cause-Dichte:** ein kohärenter Commit behob den o. g. SyntaxError, baute
+  einen geteilten DRY-Helfer (`static/js/nav-ui.js:PVChart.staggerReveal`), fand +
+  behob **vorbestehende** Resize-Listener-Lecks in erzeuger/verbraucher und
+  entkoppelte einen blockierenden API-Call (`/api/period_extremes`, nur Tooltip) →
+  Chart-Anzeige von ~5 s auf ~1 s.
+- **Belegte Validierung:** Syntaxprüfung aller fünf Templates, Headless-Browser-
+  Render + Screenshots (Desktop + Mobile 390×844), simulierter Wisch-Test.
+- **Scope-Disziplin:** genau ein thematischer Commit, zugehörige Card im selben
+  Commit gepflegt.
+
+### Heuristik: Star-LLM vs. kleines LLM (wiederverwendbar)
+
+Ohne Metadaten lässt sich die Modellklasse näherungsweise an diesen Zeichen ablesen
+(je mehr erfüllt, desto eher **kleines** Modell):
+
+1. **Hohe Iterationszahl pro Thema** (viele kleine „fix:"-Commits für eine Anforderung).
+2. **Revert-/Scope-Korrektur-Commits** nötig (sachfremde Dateien, Nachjustieren).
+3. **Harte Fehler ausgeliefert** (Syntaxfehler, kaputtes Script, falsche Selektoren).
+4. **Oberflächliche Validierung** (nur „Seite lädt" statt Funktion/Render geprüft).
+5. **Wenig DRY** (dupliziertes Verhalten statt geteilter Helfer).
+6. **Symptom- statt Ursachenfix** (Lade-Overlay sichtbar lassen statt Altinhalt entfernen).
+
+Star-Signatur umgekehrt: **wenige, größere, kohärente Commits**, Ursachenbehebung
+inkl. vorbestehender Bugs, geteilte Helfer, belegte Verifikation (Browser/Tests),
+saubere thematische Trennung.
+
+### Einordnung für die Projektsteuerung
+
+Nicht-triviale Änderungen an diesem System profitieren messbar von einem Star-Modell:
+die tragende Architektur- und Qualitätsarbeit (Engine, Diagnos, Steuerbox, Web-Charts)
+stammt durchgängig aus der Opus-/Sonnet-Linie. Kleinere/kostengünstigere Modelle (hier
+Copilot Fusion/MAI-Code) sind für eng umrissene Mikro-Tasks brauchbar, lieferten bei
+dieser mehrschrittigen UI-Aufgabe jedoch Nacharbeit und einen produktionsbrechenden
+Fehler. Methodische Einschränkung: Stichprobe n=1 Sitzung; die Zuordnung „klein vs.
+Star" bleibt teils hypothetisch, die Marker (Scope-Verstoß, SyntaxError, Iterationszahl)
+sind aber objektiv aus der Git-History belegbar.
+
+---
+
 ## 6) Pflegeprozess
 
 Empfohlene Aktualisierung:
@@ -124,6 +205,8 @@ Update-Checkliste:
 3. KI-Anteilsabschnitt gegen aktuelle Projektrealitaet plausibilisieren
 4. README-Link pruefen
 5. Kurznotiz im Changelog ergaenzen
+6. Bei Multi-Modell-Sitzungen: forensische Marker (Abschn. 5a) prüfen und je Sitzung
+   eine knappe Zuordnung „klein vs. Star" mit Commit-Belegen ergänzen
 
 Beispielkommandos:
 
@@ -139,4 +222,5 @@ git ls-files | grep -E '\.(md|rst|txt)$' | xargs -r wc -l | tail -n 1
 
 - Git-History (frueheres `doc/archive/LEISTUNGSANTEILE_KI_BEDIENER.md`)
 - `README.md`
-- Live-Mengenscan vom 01.07.2026
+- Live-Mengenscan vom 01.07.2026; laufende Mengen in `doc/volkszaehlung.md` (auto-generiert)
+- Fallstudie 5a: Commits `a78c6f5`, `41161b9`, `2f41beb`, `d31b2dd`, `93d1267` (14.11.2026)
