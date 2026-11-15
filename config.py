@@ -425,7 +425,7 @@ KRAFTSTOFF_KWH_PRO_L = 10.0      # Energiegehalt Kraftstoff (kWh/l)
 # — keine Einzelquelle deckt das automatisierbar ab → bewusst manuell gepflegt.
 # Der Verfallstimer (STALE_MONTHS ≈ AGEB-Quartalstakt) blendet nach Ablauf einen
 # Aktualitäts-Hinweis am Menüpunkt ein und stößt die nächste manuelle Pflege an.
-PRIMAERENERGIE_STAND = '2026-09-16'   # Datum der letzten manuellen Pflege/Prüfung (YYYY-MM-DD)
+PRIMAERENERGIE_STAND = '2026-11-15'   # Datum der letzten manuellen Pflege/Prüfung (YYYY-MM-DD)
 PRIMAERENERGIE_STALE_MONTHS = 3       # Hinweis nach 3 Monaten (AGEB-Quartalstakt)
 # Quellen für die manuelle Aktualisierungs-Sequenz (im Dev-Workspace gepflegt):
 PRIMAERENERGIE_QUELLEN = [
