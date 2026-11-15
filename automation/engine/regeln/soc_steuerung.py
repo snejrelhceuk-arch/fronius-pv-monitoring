@@ -242,7 +242,7 @@ def _dynamische_soc_ziele(obs: ObsState, matrix: dict) -> Optional[Tuple[int, in
     if prog is None:
         return None
 
-    usable_kwh = max(1.0, float(get_param(matrix, _RK_NACHT, 'nacht_soc_usable_kwh', 18.0)))
+    usable_kwh = max(1.0, float(get_param(matrix, _RK_NACHT, 'nacht_soc_usable_kwh', 23.0)))
     soc_floor = float(get_param(matrix, _RK_NACHT, 'nacht_soc_min_floor_pct', 5.0))
     sicherheit = float(get_param(matrix, _RK_NACHT, 'nacht_sicherheit_pct', 10.0))
     komfort_min = int(get_param(matrix, 'komfort_reset', 'komfort_min_pct', 25))
@@ -1031,8 +1031,7 @@ class RegelKomfortReset(Regel):
                 morgen_str = f"{obs.forecast_tomorrow_kwh:.0f}" if obs.forecast_tomorrow_kwh is not None else "?"
                 soc_str = f"{obs.batt_soc_pct:.0f}" if obs.batt_soc_pct is not None else "?"
                 LOG.info(f"Komfort-Reset {now_str}: SOC_MIN-Reset übersprungen "
-                         f"(SOC {soc_str}% > {komfort_min}%, "
-                         f"Morgen-Prognose {morgen_str} kWh → draint über Nacht)")
+                         f"(SOC {soc_str}%, Morgen-Prognose {morgen_str} kWh → draint über Nacht)")
             else:
                 aktionen.append({
                     'tier': 2, 'aktor': 'batterie',

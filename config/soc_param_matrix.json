@@ -419,13 +419,13 @@
           "beschreibung": "Ende des Nachtfensters (lokale Zeit; darf am Folgetag liegen)"
         },
         "nacht_soc_usable_kwh": {
-          "wert": 22.0,
+          "wert": 23.0,
           "bereich": [
             10.0,
-            24.0
+            25.0
           ],
           "einheit": "kWh",
-          "beschreibung": "Nutzbare Batteriemenge (5-100% -> typ. 18kWh)"
+          "beschreibung": "Nutzbare Batteriemenge (7-100% → typ. 23kWh, 25kWh-Speicher)"
         },
         "nacht_soc_min_floor_pct": {
           "wert": 7,
@@ -544,14 +544,14 @@
           "beschreibung": "Hysterese für Früh-Reset: Aufhebung erst bei erholung_schwelle + hysterese (K4 — Anti-Flicker)"
         },
         "nachtlade_schwelle_kwh": {
-          "wert": 20.0,
+          "wert": 100.0,
           "bereich": [
-            5,
-            50
+            20,
+            200
           ],
           "einheit": "kWh",
           "obs_feld": "forecast_tomorrow_kwh",
-          "beschreibung": "Abend-Reset-Logik: SOC_MIN wird auf Komfort (25%) zurückgesetzt, AUSSER: (a) aktueller SOC > komfort_min UND (b) Morgen-Prognose ≥ Schwelle. Dann draint die Batterie über Nacht natürlich ab. Ist SOC bereits ≤ komfort_min (Batterie leer), wird IMMER auf Komfort zurückgesetzt um stundenlangen Stress-Zustand zu vermeiden."
+          "beschreibung": "Abend-Reset-Logik: SOC_MIN wird auf Komfort (20%) zurückgesetzt, AUSSER Morgen-Prognose ≥ Schwelle (FC_TIER_GUT, ≥100kWh). Nur bei sicherer PV-Rückspeisung (Sommer) draint die Batterie über Nacht. Bei mittel/schlecht-Prognose (Herbst/Winter) immer auf 20% zurücksetzen."
         }
       },
       "score_gewicht": 70,
