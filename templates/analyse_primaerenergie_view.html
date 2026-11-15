@@ -7,7 +7,7 @@
     <link rel="shortcut icon" href="/favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png?v={{ favicon_version }}">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <title>Primärenergie-Importe — PV-Anlage</title>
+    <title>Fossile Energieimporte — PV-Anlage</title>
     <link rel="stylesheet" href="/static/css/analyse-dark.css?v=20260302">
     <link rel="stylesheet" href="/static/css/nav-ui.css">
     <script src="/static/js/nav-context.js"></script>
@@ -276,9 +276,9 @@
     <div class="container">
         <div class="top-nav"></div>
 
-        <h1>🌍 Primärenergie-Importe Deutschland</h1>
+        <h1>🌍 Fossile Energieimporte Deutschland</h1>
         <div style="color:rgba(255,255,255,0.4); font-size:13px; margin-top:-20px; margin-bottom:24px;">
-            Öl · Erdgas · Steinkohle &nbsp;·&nbsp; 1990–2025 · 2026 lfd.
+            Mineralöl · Erdgas · Kohle &nbsp;·&nbsp; 1990–2025 · 2026 lfd.
             <span class="dm-badge">1990–2001 in DM umgerechnet</span>
             {% if primaer_stand %}<span class="dm-badge">Datenstand {{ primaer_stand }}</span>{% endif %}
         </div>
@@ -298,13 +298,12 @@
                 <span class="up-status {{ 'bad' if primaer_stale else 'ok' }}">{{ 'fällig' if primaer_stale else 'aktuell' }}</span>
             </summary>
             <div class="up-body">
-                <p>Diese Seite ist eine <strong>Synthese mehrerer amtlicher Quellen</strong> (AGEB-Mengen,
-                   Destatis/BAFA-Importwerte, BDEW-Preise, IEA-Projektion). Keine Einzelquelle deckt das
-                   automatisierbar ab — die Werte werden daher <strong>manuell im Entwicklungs-Workspace</strong>
-                   im Template gepflegt (und <code>PRIMAERENERGIE_STAND</code> in <code>config.py</code> auf das
-                   Pflegedatum gesetzt). Ein vollautomatischer „Fetch"-Button ist bewusst nicht vorgesehen.</p>
-                <p style="margin-top:6px">Pflege-Sequenz: Quelldaten unten öffnen → neue Jahres-/Quartalswerte
-                   in die Tabellen des Templates übernehmen → <code>PRIMAERENERGIE_STAND</code> bumpen → deployen.</p>
+                <p>Diese Seite ist eine <strong>Synthese mehrerer amtlicher Quellen</strong>. Mineralöl-Bruttoimportwerte
+                   (Rohöl + Mineralölprodukte) ab 2023 aus Öko-Institut/WWF-Studie; Erdgas aus Destatis (CN 2711) + BNA
+                   (LNG); Kohle aus Destatis (CN 2701/2704); Preise aus BAFA/EIA; Strom BDEW.
+                   Ohne Strom- und Kernbrennstoffimporte. Gepflegt im <strong>Entwicklungs-Workspace</strong>
+                   (<code>PRIMAERENERGIE_STAND</code> in <code>config.py</code> auf Pflegedatum setzen, deployen).</p>
+                <p style="margin-top:6px">Pflege-Sequenz: Quelldaten öffnen → Jahres-/Quartalswerte übernehmen → Stand bumpen → deployen.</p>
                 <div class="up-sources">
                     {% for q in primaer_quellen %}
                     <a class="up-src-btn" href="{{ q.url }}" target="_blank" rel="noopener noreferrer">{{ q.name }} ↗</a>
@@ -335,20 +334,20 @@
                     </div>
                     <div>
                         <div style="font-size:10px; color:rgba(255,255,255,0.38); margin-bottom:3px">2020er</div>
-                        <div style="font-size:18px; font-weight:700; color:#f87171">88,7 Mrd. €</div>
+                        <div style="font-size:18px; font-weight:700; color:#f87171">100,0 Mrd. €</div>
                         <div style="font-size:10px; color:rgba(255,255,255,0.3)">Ø/Jahr · 2020–2025</div>
                     </div>
                 </div>
             </div>
             <div class="stat-card accent-blue">
                 <div class="s-label">Aktuell (2025)</div>
-                <div class="s-value">64,0 Mrd. €</div>
-                <div class="s-sub">−70 % gegenüber 2022</div>
+                <div class="s-value">90,0 Mrd. €</div>
+                <div class="s-sub">−57 % gegenüber 2022</div>
             </div>
             <div class="stat-card accent-amber">
                 <div class="s-label">Kumuliert 1990–2025</div>
-                <div class="s-value">~1.904 Mrd. €</div>
-                <div class="s-sub">Öl + Gas + Kohle (1990–2024 ~1.840 Mrd. €)</div>
+                <div class="s-value">~1.970 Mrd. €</div>
+                <div class="s-sub">Mineralöl + Gas + Kohle (1990–2024 ~1.880 Mrd. €)</div>
             </div>
             <div class="stat-card accent-green">
                 <div class="s-label">Brent Ø 2025 / 2026</div>
@@ -425,7 +424,7 @@
         <!-- Chart 4: Importmengen + EE-Anteil % -->
         <div class="charts-grid-full">
             <div class="chart-card">
-                <h3>Fossile Importmengen &amp; inländische Erneuerbare am Primärenergieverbrauch</h3>
+                <h3>Fossile Importmengen &amp; EE-Anteil am Primärenergieverbrauch (AGEB)</h3>
                 <div class="chart-subtitle">Balken: fossile Importe in Mio.&thinsp;t SKE (linke Achse) · Linie: EE-Anteil am PEV in % (rechte Achse, 0–100 %) · Quelle: AGEB</div>
                 <div class="legend-row">
                     <span class="legend-item"><span class="legend-dot" style="background:#60a5fa"></span>Öl (SKE)</span>
@@ -515,13 +514,13 @@
                     <thead>
                         <tr>
                             <th style="text-align:left">Jahr</th>
-                            <th>Öl<br>Mio. t</th>
-                            <th>Öl<br>Mrd. DM/€</th>
-                            <th>Erdgas<br>Mrd. m³</th>
-                            <th>Gas<br>Mrd. DM/€</th>
+                            <th>Mineralöl¹<br>Mio. t</th>
+                            <th>Mineralöl¹<br>Mrd. DM/€</th>
+                            <th>Erdgas²<br>Mrd. m³</th>
+                            <th>Gas²<br>Mrd. DM/€</th>
                             <th>Kohle<br>Mio. t</th>
                             <th>Kohle<br>Mrd. DM/€</th>
-                            <th>∑ Import<br>Mrd. DM/€</th>
+                            <th>∑ Fossil<br>Mrd. DM/€</th>
                             <th>Brent<br>Ø $/b</th>
                             <th>Ø Strom<br>Pf/ct</th>
                         </tr>
@@ -560,12 +559,16 @@
                         <tr><td>2020</td><td>80</td><td>20 €</td><td>85</td><td>12 €</td><td>31</td><td>2,5 €</td><td><strong>34,5 €</strong></td><td>42</td><td>31,9 ct</td></tr>
                         <tr><td>2021</td><td>83</td><td>36 €</td><td>87</td><td>22 €</td><td>36</td><td>5,0 €</td><td><strong>63,0 €</strong></td><td>71</td><td>32,2 ct</td></tr>
                         <tr class="crisis-row"><td>2022 ⚡</td><td>79</td><td>107 €</td><td>70</td><td>85 €</td><td>51</td><td>19,0 €</td><td><strong>211,0 €</strong></td><td>99</td><td>37,1 ct</td></tr>
-                        <tr><td>2023</td><td>74</td><td>51 €</td><td>66</td><td>30 €</td><td>36</td><td>5,0 €</td><td><strong>86,0 €</strong></td><td>83</td><td>41,4 ct</td></tr>
-                        <tr><td>2024</td><td>72</td><td>48 €</td><td>62</td><td>22 €</td><td>30</td><td>3,5 €</td><td><strong>73,5 €</strong></td><td>80</td><td>38,0 ct</td></tr>
-                        <tr><td>2025</td><td>75</td><td>36 €</td><td>63</td><td>25 €</td><td>33</td><td>3,0 €</td><td><strong>64,0 €</strong></td><td>69</td><td>39,6 ct</td></tr>
-                        <tr class="partial-row"><td>Q1 2026 ⚠</td><td>~18</td><td>~11 €</td><td>~16</td><td>~7 €</td><td>~5</td><td>~0,7 €</td><td><strong>~18,7 €</strong></td><td>~80</td><td>~37,0 ct</td></tr>
+                        <tr><td>2023</td><td>74</td><td>72 €</td><td>66</td><td>30 €</td><td>36</td><td>5,0 €</td><td><strong>107,0 €</strong></td><td>83</td><td>41,4 ct</td></tr>
+                        <tr><td>2024</td><td>78</td><td>69 €</td><td>62</td><td>20 €</td><td>30</td><td>5,0 €</td><td><strong>94,0 €</strong></td><td>80</td><td>38,0 ct</td></tr>
+                        <tr><td>2025</td><td>75</td><td>57 €</td><td>63</td><td>29 €</td><td>33</td><td>4,0 €</td><td><strong>90,0 €</strong></td><td>69</td><td>39,6 ct</td></tr>
+                        <tr class="partial-row"><td>Q1 2026 ⚠</td><td>~18</td><td>~16 €</td><td>~16</td><td>~7 €</td><td>~5</td><td>~0,7 €</td><td><strong>~23,7 €</strong></td><td>~80</td><td>~37,0 ct</td></tr>
                     </tbody>
                 </table>
+                <p style="margin-top:8px; font-size:11px; color:rgba(255,255,255,0.32)">
+                    <strong style="color:rgba(255,255,255,0.5)">¹ Mineralöl:</strong> Rohöl (Mio. t, CN 2709) + Mineralölprodukte (Diesel, Benzin, Heizöl, Kerosin etc.) = Bruttoimport. Wert ab 2023: Öko-Institut/WWF „Kostenfalle fossile Abhängigkeit" (Brutto, vor Abzug dt. Raffinerie-Re-Exporte). Frühere Jahre: gemischt AGEB/Destatis, tendenziell netto Mineralöl.
+                    &nbsp;·&nbsp; <strong style="color:rgba(255,255,255,0.5)">² Erdgas:</strong> AGEB Nettoimporte + LNG. 2024–2025: Destatis CN 2711 (Pipeline) + BNA-Schätzung LNG. Ohne Strom- und Kernbrennstoffimporte.
+                </p>
             </div>
         </div>
 
@@ -639,7 +642,7 @@
             <!-- 3. Volkswirtschaftliche Dimension -->
             <div class="doc-section">
                 <h3>💸 Volkswirtschaftliche Dimension: Kapitalabfluss vs. Inlandsinvestition</h3>
-                <p>Die kumulierte fossile Importrechnung 1990–2025 beläuft sich auf <strong style="color:rgba(255,255,255,0.75)">~1.904 Mrd. €</strong> — eine Transferzahlung ins Ausland ohne Gegenwert. Im Gegensatz dazu erzeugt Investition in heimische Erneuerbare eine fundamental andere Wertschöpfungsstruktur:</p>
+                <p>Die kumulierte fossile Importrechnung 1990–2025 beläuft sich auf <strong style="color:rgba(255,255,255,0.75)">~1.970 Mrd. €</strong> — eine Transferzahlung ins Ausland ohne Gegenwert. Im Gegensatz dazu erzeugt Investition in heimische Erneuerbare eine fundamental andere Wertschöpfungsstruktur:</p>
                 <table class="doc-table">
                     <thead><tr><th>Aspekt</th><th>Fossile Importe</th><th>PV · Wind · Netz · H₂-Technik</th></tr></thead>
                     <tbody>
@@ -749,21 +752,21 @@
         40/DM, 37/DM,
         19, 20, 24, 30, 35, 38, 49, 31,
         40, 55, 57, 54, 46, 30, 26, 32, 38, 31,
-        20, 36, 107, 51, 48, 36, 11
+        20, 36, 107, 72, 69, 57, 16
     ];
     const gasCost = [
         10/DM, 11/DM, 11/DM, 11/DM, 11/DM, 14/DM, 15/DM, 13/DM, 11/DM, 10/DM,
         17/DM, 21/DM,
         11, 13, 14, 18, 22, 22, 28, 22,
         23, 28, 32, 30, 27, 20, 17, 18, 22, 18,
-        12, 22, 85, 30, 22, 25, 7
+        12, 22, 85, 30, 20, 29, 7
     ];
     const coalCost = [
         3.0/DM, 3.0/DM, 3.0/DM, 3.2/DM, 3.2/DM, 3.5/DM, 4.0/DM, 4.0/DM, 3.5/DM, 3.0/DM,
         4.0/DM, 4.5/DM,
         2.0, 3.0, 3.5, 4.0, 4.5, 5.0, 7.0, 4.0,
         5.0, 6.0, 5.5, 4.5, 4.0, 4.0, 3.5, 4.0, 5.0, 4.0,
-        2.5, 5.0, 19.0, 5.0, 3.5, 3.0, 0.7
+        2.5, 5.0, 19.0, 5.0, 5.0, 4.0, 0.7
     ];
     const totalCost = oilCost.map((v, i) => Math.round((v + gasCost[i] + coalCost[i]) * 10) / 10);
 
@@ -815,7 +818,7 @@
         23.7, 25.3, 26.8, 29.3, 29.1, 29.2, 29.0, 30.0, 30.5, 30.9,
         31.9, 32.2, 37.1, 41.4, 38.0, 39.6, 37.0
     ];
-    const oilVol  = [110,112,112,110,110,112,115,115,118,118,120,118,116,114,113,111,113,110,108,105,109,106,103,100,98,95,93,91,89,86,80,83,79,74,72,75,18];
+    const oilVol  = [110,112,112,110,110,112,115,115,118,118,120,118,116,114,113,111,113,110,108,105,109,106,103,100,98,95,93,91,89,86,80,83,79,74,78,75,18];
     const gasVol  = [55,58,60,61,63,67,71,73,74,75,79,83,84,86,87,91,92,90,88,83,88,87,87,85,84,86,88,88,87,86,85,87,70,66,62,63,16];
     const coalVol = [20,22,24,25,26,28,30,32,33,33,35,38,40,43,45,47,48,48,50,45,46,47,48,46,45,52,55,53,50,43,31,36,51,36,30,33,5];
     // Erneuerbare Energien — Anteil am Primärenergieverbrauch (%) · Quelle: AGEB

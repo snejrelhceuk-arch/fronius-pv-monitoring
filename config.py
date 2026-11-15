@@ -418,21 +418,20 @@ BEV_VERBRAUCH_KWH_100KM = 15.0   # E-Auto Verbrauch (kWh/100 km)
 VERBRENNER_L_100KM = 6.0         # Verbrenner-Referenz (l/100 km)
 KRAFTSTOFF_KWH_PRO_L = 10.0      # Energiegehalt Kraftstoff (kWh/l)
 
-# --- Primärenergie-Übersicht (manuell gepflegte statische Seite) ---
-# AGEB veröffentlicht Primärenergie-Daten quartalsweise als XLSX (Q1 ~Mai,
-# Halbjahr ~Aug, Q1–Q3 ~Nov, Jahr ~Dez). Die Seite ist aber eine Synthese aus
-# AGEB (Mengen) + Destatis/BAFA (Importwerte) + BDEW (Preise) + IEA (Projektion)
-# — keine Einzelquelle deckt das automatisierbar ab → bewusst manuell gepflegt.
-# Der Verfallstimer (STALE_MONTHS ≈ AGEB-Quartalstakt) blendet nach Ablauf einen
-# Aktualitäts-Hinweis am Menüpunkt ein und stößt die nächste manuelle Pflege an.
+# --- Fossile Energie Übersicht (manuell gepflegte statische Seite) ---
+# Mineralöl (Rohöl+Produkte, Brutto), Erdgas (Pipeline+LNG), Kohle — ohne Strom/Kernbrennstoffe.
+# Datenquellen: Öko-Institut/WWF (Mineralöl brutto ab 2023), Destatis CN 2711 (Pipeline-Gas),
+# BNA (LNG), BAFA (Kohlepreise), BDEW (Strompreise), AGEB (Mengen/Anteile).
+# Der Verfallstimer (STALE_MONTHS) erzeugt nach Ablauf einen Aktualitäts-Hinweis.
 PRIMAERENERGIE_STAND = '2026-11-15'   # Datum der letzten manuellen Pflege/Prüfung (YYYY-MM-DD)
 PRIMAERENERGIE_STALE_MONTHS = 3       # Hinweis nach 3 Monaten (AGEB-Quartalstakt)
 # Quellen für die manuelle Aktualisierungs-Sequenz (im Dev-Workspace gepflegt):
 PRIMAERENERGIE_QUELLEN = [
-    {'name': 'AGEB — Auswertungstabellen (Mengen)', 'url': 'https://ag-energiebilanzen.de/daten-und-fakten/auswertungstabellen/'},
-    {'name': 'Destatis — Außenhandel Energie (Importwerte)', 'url': 'https://www.destatis.de/DE/Themen/Branchen-Unternehmen/Energie/_inhalt.html'},
+    {'name': 'AGEB — Auswertungstabellen (Mengen, EE-Anteil)', 'url': 'https://ag-energiebilanzen.de/daten-und-fakten/auswertungstabellen/'},
+    {'name': 'Öko-Institut/WWF — Kostenfalle fossile Abhängigkeit (Mineralöl brutto)', 'url': 'https://www.oeko.de/publikation/energieimporte-nach-deutschland-und-in-die-europaeische-union/'},
+    {'name': 'Destatis — Außenhandel Energie (Pipeline-Gas, Kohle)', 'url': 'https://www.destatis.de/DE/Themen/Branchen-Unternehmen/Energie/_inhalt.html'},
     {'name': 'BAFA — Erdgas-/Drittlandskohlepreis', 'url': 'https://www.bafa.de/DE/Energie/Rohstoffe/rohstoffe_node.html'},
-    {'name': 'BDEW — Strompreisanalyse (Preise)', 'url': 'https://www.bdew.de/service/daten-und-grafiken/bdew-strompreisanalyse/'},
+    {'name': 'BDEW — Strompreisanalyse (Haushaltsstrompreis)', 'url': 'https://www.bdew.de/service/daten-und-grafiken/bdew-strompreisanalyse/'},
 ]
 
 # --- E-Mail-Benachrichtigungen ---

@@ -419,7 +419,7 @@ def analyse_redirect():
 
 @bp.route('/analyse/primaerenergie')
 def analyse_primaerenergie():
-    """Primärenergie-Importe Deutschland 1990–2026 — statische Übersicht"""
+    """Fossile Energieimporte Deutschland 1990–2026 — statische Übersicht"""
     nav_context = _get_nav_context(request.args)
     nav_query = urlencode(nav_context)
 

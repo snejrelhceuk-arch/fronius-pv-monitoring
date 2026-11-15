@@ -42,7 +42,7 @@
             { href: '/analyse/haushalt', label: 'Haushalt' },
             { href: '/analyse/amortisation', label: 'Amortisation' },
             { href: '/analyse/speicherausbau', label: '🔋 Speicher-Ausbau' },
-            { href: '/analyse/primaerenergie', label: '🌍 Primärenergie', stale: true },
+            { href: '/analyse/primaerenergie', label: '🌍 Fossile Energie', stale: true },
         ] },
         { group: 'Netzqualität', items: [
             { href: '/pac4200', label: 'PAC4200' },
