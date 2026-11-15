@@ -13,14 +13,19 @@ Speichergröße und zeigt das Optimum — kleiner *wie* größer ist wirtschaftl
 
 ## Datengrundlage
 - **`data_5min_permanent`** (STATS-DB, permanent, 5-Minuten-Auflösung), read-only.
-  Fenster = Jahresanfang bis gestern. Felder: `SOC_Batt_avg`, `W_Ertrag`, `W_Verbrauch`,
-  `W_Einspeis`, `W_Bezug`.
-- **`monthly_statistics`** als Referenz für den gemessenen Jahres-Netzbezug.
+  Dispatch-Fenster; beginnt Jan 2026 (**dezember-los**). Felder: `SOC_Batt_avg`,
+  `W_Ertrag`, `W_Verbrauch`, `W_Einspeis`, `W_Bezug`.
+- **`monthly_statistics`** (ANALYSIS-DB) als gemessene Baseline (Netzbezug/Verbrauch)
+  der aktuellen Haushalts-Ära (letzte ≤12 vollständige Monate ab Okt 2025, inkl. Dezember).
+- **`daily_data`** (ANALYSIS-DB) für den tag-genauen Herbst-Gleichwochen-Vergleich
+  (Okt/Nov 2025 vs. 2026).
 - **Clear-Sky-Kurve** aus `solar_geometry.get_clearsky_day_curve` (deterministisch je
   Kalendertag, im `tmp/`-Tagescache).
-- Annualisierung: Ergebnisse des Fensters werden mit `×365/Tage` auf das Jahr projiziert
-  (lineare Projektion, im UI mit Zeitraum ausgewiesen — **kein** vollständiges Messjahr,
-  Herbst kann fehlen).
+- Annualisierung: **saisonal je Kalendermonat** statt global `×365/Tage`. Teilmonate
+  (z. B. November) werden auf den Vollmonat normalisiert, der dezember-lose Monat aus
+  Kalendernachbarn geschätzt, und der vermiedene Bezug je Monat auf den gemessenen
+  Netzbezug gedeckelt. Baseline-Netzbezug/-Verbrauch kommen aus Messwerten, nicht aus
+  einer linearen Fenster-Projektion (die den Winterbezug unterschätzte).
 
 ## Modell (inkrementell)
 Statt das Gesamtsystem neu zu kalibrieren, simuliert das Modell einen **Zusatzspeicher
@@ -78,21 +83,27 @@ Defaults und Angebots-Presets stehen in `config/storage_expansion.json`
 - **Presets** setzen Speichergröße und Preis eines konkreten Angebots.
 - **Hauptdiagramm**: vermiedener Netzbezug (Fläche) + Amortisation (Linie) über der
   Speichergröße, mit Optimum-, Auswahl- und Grenz-Markern.
-- **Monatsbilanz**: Rest-Netzbezug vs. Vermieden je Monat, dazu die Abregelung als
-  Potenziallinie — macht die **saisonale Lücke** sichtbar (Sommerüberschuss lässt sich
-  nicht in den Winter verschieben).
+- **Monatsbilanz**: repräsentatives Jahr (Jan–Dez) aus den gemessenen Monatswerten seit
+  Okt 2025 — Rest-Netzbezug vs. Vermieden je Kalendermonat, dazu die Abregelung als
+  Potenziallinie. Macht die **saisonale Lücke** sichtbar (Sommerüberschuss lässt sich
+  nicht in den Winter verschieben). Der Dezember ist aus Nachbarmonaten geschätzt
+  (markiert mit `*`, gedimmt), weil keine 5-Minuten-Daten vorliegen.
+- **Herbst-Vergleich**: gemessener Effekt der Speichererweiterung (Okt/Nov 2025 vs. 2026,
+  nur in beiden Jahren vorhandene Tage) — reine Messung, keine Simulation.
 
 ## Grenzen / Interpretation
 - `curtailed` ist eine **Schätzung** (Größenordnung), keine eichgenaue Energie.
-- `avoided` ist durch den gemessenen Netzbezug begrenzt; der Winterbezug ist mit
-  Tagesspeichern nur teilweise vermeidbar.
-- Das Fenster ist kein volles Messjahr; die Jahreswerte sind projiziert.
+- `avoided` ist je Kalendermonat durch den gemessenen Netzbezug begrenzt; der Winterbezug
+  ist mit Tagesspeichern nur teilweise vermeidbar.
+- Die Baseline stützt sich auf die gemessenen Monate der aktuellen Haushalts-Ära
+  (ab Okt 2025); frühere Jahre haben ein anderes Lastprofil (E-Autos) und bleiben außen vor.
 
 ## API
 - `GET /api/analyse/speicher/sweep?add_pv=<kWp>&curtail=<0|1>` → Kurve über die Kapazität
-  (vermiedener Bezug, Autarkie, Zyklen) + Basis-Kennzahlen + Wirtschafts-Defaults + Presets.
-- `GET /api/analyse/speicher/detail?batt=<kWh>&add_pv=<kWp>&curtail=<0|1>` → Monatsaufschlüsselung
-  eines Szenarios (Bezug, vermieden, Rest, Abregelung).
+  (vermiedener Bezug, Autarkie, Zyklen) + Basis-Kennzahlen + Wirtschafts-Defaults + Presets
+  + `autumn` (Herbst-Gleichwochen-Vergleich).
+- `GET /api/analyse/speicher/detail?batt=<kWh>&add_pv=<kWp>&curtail=<0|1>` → repräsentative
+  Monatsaufschlüsselung (Bezug, vermieden, Rest, Abregelung, `estimated`-Flag).
 
 ## Quellcode
 - Modell: [`analysis/storage_model.py`](../../analysis/storage_model.py)

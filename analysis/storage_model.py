@@ -174,24 +174,137 @@ def data_window() -> tuple[int, int, int]:
     return start_ts, end_ts, n_days
 
 
-def measured_annual_import_kwh() -> float:
-    """Gemessener Netzbezug der letzten 12 Monate (monthly_statistics) fuer Annualisierung."""
+# Anlagen-Fertigstellung / aktuelle Haushalts-Aera (3 E-Autos). Mittelwerte vor
+# diesem Monat sind NICHT repraesentativ (Lastprofil hat sich 2024/2025 geaendert)
+# und werden fuer die Baseline bewusst ausgeschlossen.
+ERA_START_YEAR = 2025
+ERA_START_MONTH = 10
+
+
+def _open_analysis_ro():
+    """Read-only Verbindung zur permanenten Tages/Monats-DB (analysis.db, Fallback RAM-DB)."""
     import sqlite3
+    path = getattr(config, 'ANALYSIS_DB_PATH', None)
+    if not path or not os.path.exists(path):
+        path = getattr(config, 'DB_PATH', None)
+    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=10.0)
     try:
-        conn = sqlite3.connect(f"file:{config.DB_PATH}?mode=ro", uri=True, timeout=10.0)
-        try:
-            row = conn.execute(
-                """SELECT SUM(netz_bezug_kwh) FROM monthly_statistics
-                   WHERE (year * 12 + month) >= (
-                       SELECT MAX(year * 12 + month) - 11 FROM monthly_statistics)"""
-            ).fetchone()
-        finally:
-            conn.close()
-        if row and row[0]:
-            return float(row[0])
+        conn.execute("PRAGMA query_only=ON")
     except Exception:
         pass
-    return 0.0
+    return conn
+
+
+def measured_profile() -> dict:
+    """
+    Gemessener Netzbezug/Verbrauch je Kalendermonat aus den letzten <=12
+    *vollstaendigen* Monaten seit Anlagen-Fertigstellung (>= ERA_START). Der
+    laufende (unvollstaendige) Monat wird ausgelassen; Jahre vor der aktuellen
+    Haushalts-Aera (zusaetzliche E-Autos) bleiben bewusst aussen vor.
+
+    Rueckgabe:
+      import_by_month : {1..12: kWh}   (je Kalendermonat, aus dem juengsten Jahr)
+      load_by_month   : {1..12: kWh}
+      import_kwh_year : Summe Netzbezug  (annualer Baseline-Bezug)
+      load_kwh_year   : Summe Verbrauch
+      source          : {1..12: year}
+      months          : Zahl einbezogener Monate (<=12)
+    """
+    today = date.today()
+    cur_key = today.year * 12 + today.month
+    min_key = ERA_START_YEAR * 12 + ERA_START_MONTH
+    rows = []
+    try:
+        conn = _open_analysis_ro()
+        try:
+            rows = conn.execute(
+                """SELECT year, month, netz_bezug_kwh, gesamt_verbrauch_kwh
+                   FROM monthly_statistics
+                   WHERE (year * 12 + month) >= ? AND netz_bezug_kwh IS NOT NULL
+                   ORDER BY year, month""",
+                (min_key,),
+            ).fetchall()
+        finally:
+            conn.close()
+    except Exception as exc:  # pragma: no cover - defensiv
+        logger.warning("measured_profile: monthly_statistics nicht lesbar (%s)", exc)
+    complete = [r for r in rows if (r[0] * 12 + r[1]) < cur_key][-12:]
+    imp_by, load_by, source = {}, {}, {}
+    for y, m, imp, load in complete:
+        source[m] = y                       # juengeres Jahr ueberschreibt Kalendermonat
+        imp_by[m] = float(imp or 0.0)
+        load_by[m] = float(load or 0.0)
+    return {
+        'import_by_month': imp_by,
+        'load_by_month': load_by,
+        'import_kwh_year': round(sum(imp_by.values()), 1),
+        'load_kwh_year': round(sum(load_by.values()), 1),
+        'source': source,
+        'months': len(complete),
+    }
+
+
+def autumn_comparison() -> dict:
+    """
+    Tag-genauer Gleichwochen-Vergleich Herbst 2025 vs. 2026 (Effekt der
+    Speichererweiterung) aus den permanenten Tagesdaten (daily_data). Vergleicht
+    nur Tage, die in beiden Jahren vorliegen (z. B. Nov 1..14), damit kein
+    unvollstaendiger Monat das Bild verfaelscht.
+    """
+    def _window(conn, year, month, d0, d1):
+        row = conn.execute(
+            """SELECT COUNT(*),
+                      SUM(W_Imp_Netz_total)/1000.0,
+                      SUM(W_PV_total)/1000.0,
+                      SUM(W_Consumption_total)/1000.0
+               FROM daily_data
+               WHERE strftime('%Y-%m', ts, 'unixepoch') = ?
+                 AND CAST(strftime('%d', ts, 'unixepoch') AS INT) BETWEEN ? AND ?""",
+            (f"{year:04d}-{month:02d}", d0, d1),
+        ).fetchone()
+        return row or (0, None, None, None)
+
+    def _max_day(conn, year, month):
+        row = conn.execute(
+            """SELECT MAX(CAST(strftime('%d', ts, 'unixepoch') AS INT))
+               FROM daily_data WHERE strftime('%Y-%m', ts, 'unixepoch') = ?""",
+            (f"{year:04d}-{month:02d}",),
+        ).fetchone()
+        return int(row[0]) if row and row[0] else 0
+
+    months = []
+    try:
+        conn = _open_analysis_ro()
+        try:
+            for month, label in ((10, 'Oktober'), (11, 'November')):
+                d_old = _max_day(conn, ERA_START_YEAR, month)
+                d_new = _max_day(conn, date.today().year, month)
+                d_cmp = min(d_old, d_new)
+                if d_cmp <= 0:
+                    continue
+                a = _window(conn, ERA_START_YEAR, month, 1, d_cmp)
+                b = _window(conn, date.today().year, month, 1, d_cmp)
+                if not a[1] and not b[1]:
+                    continue
+                months.append({
+                    'month': month,
+                    'label': label,
+                    'days': d_cmp,
+                    'year_old': ERA_START_YEAR,
+                    'year_new': date.today().year,
+                    'import_old_kwh': round(float(a[1] or 0.0), 1),
+                    'import_new_kwh': round(float(b[1] or 0.0), 1),
+                    'pv_old_kwh': round(float(a[2] or 0.0), 1),
+                    'pv_new_kwh': round(float(b[2] or 0.0), 1),
+                    'load_old_kwh': round(float(a[3] or 0.0), 1),
+                    'load_new_kwh': round(float(b[3] or 0.0), 1),
+                    'import_delta_kwh': round(float((b[1] or 0.0) - (a[1] or 0.0)), 1),
+                })
+        finally:
+            conn.close()
+    except Exception as exc:  # pragma: no cover - defensiv
+        logger.warning("autumn_comparison fehlgeschlagen: %s", exc)
+    return {'ok': bool(months), 'months': months}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -219,10 +332,12 @@ def _reconstruct(start_ts: int, end_ts: int, soc_cap_pct: float,
     cs_w = np.zeros(n)
     have_cs = False
     day_index = np.empty(n, dtype=np.int64)
+    cal_month = np.empty(n, dtype=np.int64)   # Kalendermonat 0..11 (saisonale Annualisierung)
     minute_maps: dict[str, dict] = {}
     day0 = None
     for i in range(n):
         lt = time.localtime(int(ts[i]))
+        cal_month[i] = lt.tm_mon - 1
         dkey = f"{lt.tm_year:04d}-{lt.tm_mon:02d}-{lt.tm_mday:02d}"
         if dkey not in minute_maps:
             minute_maps[dkey] = _clearsky_minute_map(date(lt.tm_year, lt.tm_mon, lt.tm_mday)) or {}
@@ -266,6 +381,7 @@ def _reconstruct(start_ts: int, end_ts: int, soc_cap_pct: float,
         'n': n,
         'ts': ts,
         'day_index': day_index,
+        'cal_month': cal_month,
         'n_days': n_days,
         'dt_h': dt_h,
         'available_surplus': available_surplus,
@@ -299,15 +415,19 @@ def get_series(soc_cap_pct: float, pv_kwp: float, use_curtailment: bool) -> dict
 # ─────────────────────────────────────────────────────────────────────────────
 def _dispatch(surplus_wh: np.ndarray, deficit_wh: np.ndarray, dt_h: np.ndarray,
               caps_usable_wh: np.ndarray, rt_eff: float,
-              p_charge_w: float, p_discharge_w: float) -> dict:
+              p_charge_w: float, p_discharge_w: float,
+              month_of_row: np.ndarray | None = None) -> dict:
     """
     Simuliert je Kapazitaet K einen Zusatzspeicher. Rueckgabe: avoided_wh[K],
-    discharge_wh[K] (== avoided_wh), throughput fuer Zyklen.
+    discharge_wh[K] (== avoided_wh), throughput fuer Zyklen. Mit month_of_row
+    zusaetzlich avoided_by_month[K, 12] (Kalendermonat) fuer die saisonale
+    Annualisierung.
     """
     K = caps_usable_wh.size
     n = surplus_wh.size
     soc = np.zeros(K)
     avoided = np.zeros(K)
+    by_month = np.zeros((K, 12)) if month_of_row is not None else None
     eta = math.sqrt(max(rt_eff, 1e-6))
     caps = caps_usable_wh
     for i in range(n):
@@ -324,7 +444,9 @@ def _dispatch(surplus_wh: np.ndarray, deficit_wh: np.ndarray, dt_h: np.ndarray,
             supplied = np.minimum(d, avail)
             soc -= supplied / eta
             avoided += supplied
-    return {'avoided_wh': avoided, 'discharge_wh': avoided}
+            if by_month is not None:
+                by_month[:, int(month_of_row[i])] += supplied
+    return {'avoided_wh': avoided, 'discharge_wh': avoided, 'avoided_by_month': by_month}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -343,6 +465,63 @@ def _tech(cfg: dict) -> dict:
         'wr_leistung_kw': float(t.get('wr_leistung_kw', 50)),
         'mppt_frei': int(t.get('mppt_frei', 4)),
     }
+
+
+def _month_geometry(series: dict, source: dict | None = None):
+    """
+    Pro-Kalendermonat-Geometrie des Datenfensters:
+      present_days[12] : im Fenster real vorhandene Tage (fraktional, aus dt_h)
+      full_days[12]    : Tage des vollen Kalendermonats
+      present_mask[12] : True wenn der Monat ausreichend belegt ist (>=3 Tage)
+    """
+    import calendar as _calendar
+    cal = series['cal_month']
+    dt_h = series['dt_h']
+    present_days = np.array([float(dt_h[cal == m].sum()) / 24.0 for m in range(12)])
+    year_for = source or {}
+    full_days = np.array([
+        _calendar.monthrange(int(year_for.get(m + 1, date.today().year)), m + 1)[1]
+        for m in range(12)
+    ], dtype=float)
+    return present_days, full_days, present_days >= 3.0
+
+
+def _month_sum(values: np.ndarray, cal_month: np.ndarray) -> np.ndarray:
+    """Summe einer Zeilenreihe je Kalendermonat -> (1,12)."""
+    out = np.zeros((1, 12))
+    for m in range(12):
+        out[0, m] = float(values[cal_month == m].sum())
+    return out
+
+
+def _annualize_by_month(by_month_wh: np.ndarray, present_days: np.ndarray,
+                        full_days: np.ndarray, present_mask: np.ndarray,
+                        cap_wh: np.ndarray | None = None) -> np.ndarray:
+    """
+    Saisonale Annualisierung simulierter Monatswerte (K,12):
+      - belegte Monate -> x full_days/present_days (Teilmonat auf Vollmonat)
+      - fehlende Monate (z. B. Dezember, keine 5-min-Daten) -> aus den belegten
+        Kalendernachbarn geschaetzt
+      - optionale Deckelung je Monat (cap_wh[12], z. B. gemessener Netzbezug:
+        es laesst sich nie mehr Bezug vermeiden als tatsaechlich bezogen wurde)
+    Rueckgabe: annual_wh[K].
+    """
+    bm = np.atleast_2d(by_month_wh).astype(float)
+    norm = np.where(present_mask, full_days / np.maximum(present_days, 1e-6), 0.0)
+    val = bm * norm
+    for m in range(12):
+        if present_mask[m]:
+            continue
+        neigh = [k for k in ((m - 1) % 12, (m + 1) % 12) if present_mask[k]]
+        if not neigh:
+            neigh = [k for k in range(12) if present_mask[k]]
+        if neigh:
+            val[:, m] = val[:, neigh].mean(axis=1)
+    if cap_wh is not None:
+        cap = np.asarray(cap_wh, dtype=float)
+        has_cap = cap > 0
+        val = np.where(has_cap[None, :], np.minimum(val, cap[None, :]), val)
+    return val.sum(axis=1)
 
 
 def run_sweep(add_pv_kwp: float = 0.0, use_curtailment: bool = True,
@@ -369,30 +548,59 @@ def run_sweep(add_pv_kwp: float = 0.0, use_curtailment: bool = True,
 
     start_ts, end_ts, n_days = series['window']
     annual_factor = 365.0 / max(n_days, 1)
+    cal_month = series['cal_month']
 
-    # Kapazitaets-Gitter (nominal kWh) -> nutzbar Wh.
+    # Kapazitaets-Gitter in ganzen kWh (nominal) -> saubere X-Achse im Chart.
     max_batt = tech['max_zubau_batt_kwh']
-    caps_nom = np.linspace(0.0, max_batt, steps)
+    caps_nom = np.arange(0.0, max_batt + 1e-6, 1.0)
+    if caps_nom.size == 0 or caps_nom[-1] < max_batt - 1e-6:
+        caps_nom = np.append(caps_nom, max_batt)
+    steps = caps_nom.size
     caps_usable_wh = caps_nom * tech['usable_fraction'] * 1000.0
 
     p_charge_w = tech['wr_leistung_kw'] * 1000.0
     disp = _dispatch(surplus, deficit, dt_h, caps_usable_wh,
-                     tech['rt_efficiency'], p_charge_w, p_charge_w)
+                     tech['rt_efficiency'], p_charge_w, p_charge_w,
+                     month_of_row=cal_month)
 
-    avoided_kwh_win = disp['avoided_wh'] / 1000.0
-    avoided_kwh_year = avoided_kwh_win * annual_factor
-    discharge_kwh_year = disp['discharge_wh'] / 1000.0 * annual_factor
+    # Gemessenes Baseline-Profil der aktuellen Haushalts-Aera (seit Okt 2025;
+    # inkl. Dezember). Grundet Netzbezug/Verbrauch auf Messwerte statt auf eine
+    # lineare x365/Tage-Hochrechnung des dezember-losen 5-min-Fensters.
+    prof = measured_profile()
+    present_days, full_days, present_mask = _month_geometry(series, prof.get('source'))
+    imp_cap_wh = np.zeros(12)
+    for m, kwh in prof.get('import_by_month', {}).items():
+        imp_cap_wh[m - 1] = kwh * 1000.0
+    have_measured = prof.get('months', 0) >= 6 and prof.get('import_kwh_year', 0) > 0
 
-    # Kennzahlen
-    total_load_kwh_year = series['load_total_wh'] / 1000.0 * annual_factor
-    measured_import_win = float(deficit.sum()) / 1000.0
-    measured_import_year = measured_import_win * annual_factor
-    curtailed_kwh_year = float(series['curtailed'].sum()) / 1000.0 * annual_factor
-    export_kwh_year = float(series['exp'].sum()) / 1000.0 * annual_factor
-    surplus_kwh_year = float(surplus.sum()) / 1000.0 * annual_factor
+    if have_measured:
+        # Vermiedener Bezug saisonal annualisiert + je Monat auf den gemessenen
+        # Bezug gedeckelt; Baseline = gemessene Jahressumme.
+        avoided_kwh_year = _annualize_by_month(
+            disp['avoided_by_month'], present_days, full_days, present_mask,
+            cap_wh=imp_cap_wh) / 1000.0
+        base_import = float(prof['import_kwh_year'])
+        total_load_kwh_year = float(prof['load_kwh_year'])
+        baseline_source = 'measured'
+    else:
+        avoided_kwh_year = disp['avoided_wh'] / 1000.0 * annual_factor
+        base_import = float(deficit.sum()) / 1000.0 * annual_factor
+        total_load_kwh_year = series['load_total_wh'] / 1000.0 * annual_factor
+        baseline_source = 'projected'
 
-    # Autarkie-Basis: heutiger Bezug / Verbrauch.
-    base_import = measured_import_year
+    discharge_kwh_year = avoided_kwh_year
+    # Potenzial-Groessen saisonal annualisieren (Teilmonate/Dezember korrekt).
+    curtailed_kwh_year = float(_annualize_by_month(
+        _month_sum(series['curtailed'], cal_month),
+        present_days, full_days, present_mask)[0]) / 1000.0
+    export_kwh_year = float(_annualize_by_month(
+        _month_sum(series['exp'], cal_month),
+        present_days, full_days, present_mask)[0]) / 1000.0
+    surplus_kwh_year = float(_annualize_by_month(
+        _month_sum(surplus, cal_month),
+        present_days, full_days, present_mask)[0]) / 1000.0
+
+    # Autarkie-Basis: Bezug / Verbrauch.
     autarky_base = (1.0 - base_import / total_load_kwh_year) * 100.0 if total_load_kwh_year else 0.0
 
     caps_usable_kwh = caps_usable_wh / 1000.0
@@ -424,6 +632,8 @@ def run_sweep(add_pv_kwp: float = 0.0, use_curtailment: bool = True,
             'days': n_days,
             'annual_factor': round(annual_factor, 3),
             'have_clearsky': bool(series['have_clearsky']),
+            'baseline_source': baseline_source,
+            'measured_months': int(prof.get('months', 0)),
         },
         'baseline': {
             'import_kwh_year': round(base_import, 0),
@@ -447,6 +657,7 @@ def run_sweep(add_pv_kwp: float = 0.0, use_curtailment: bool = True,
         },
         'presets': cfg.get('presets', []),
         'curve': curve,
+        'autumn': autumn_comparison(),
     }
 
 
@@ -461,52 +672,80 @@ def run_detail(add_pv_kwp: float, batt_nom_kwh: float,
         return {'error': 'Keine Daten'}
 
     dt_h = series['dt_h']
+    cal_month = series['cal_month']
     surplus = series['available_surplus'].copy()
     if add_pv_kwp > 0:
         surplus = surplus + series['cs_norm_wh'] * add_pv_kwp * series['alpha_per_row']
     deficit = series['residual_deficit']
-    ts = series['ts']
 
-    cap_usable_wh = np.array([batt_nom_kwh * tech['usable_fraction'] * 1000.0])
-    # Zeitaufgeloester Einzel-Dispatch fuer die Monatszuordnung.
-    soc = 0.0
+    cap = batt_nom_kwh * tech['usable_fraction'] * 1000.0
     eta = math.sqrt(max(tech['rt_efficiency'], 1e-6))
-    cap = float(cap_usable_wh[0])
     p_w = tech['wr_leistung_kw'] * 1000.0
-    months: dict[str, dict] = {}
+    # Zeitaufgeloester Einzel-Dispatch, Zuordnung je Kalendermonat (0..11).
+    avoided_m = np.zeros(12)
+    curtailed_m = np.zeros(12)
+    soc = 0.0
     for i in range(series['n']):
+        mo = int(cal_month[i])
         s = surplus[i]
         if s > 0.0 and cap > 0.0:
-            stored = min(min(s * eta, cap - soc), p_w * dt_h[i] * eta)
-            soc += stored
-        avoided_i = 0.0
+            soc += min(min(s * eta, cap - soc), p_w * dt_h[i] * eta)
         d = deficit[i]
         if d > 0.0 and soc > 0.0:
-            avail = min(soc * eta, p_w * dt_h[i] * eta)
-            supplied = min(d, avail)
+            supplied = min(d, min(soc * eta, p_w * dt_h[i] * eta))
             soc -= supplied / eta
-            avoided_i = supplied
-        lt = time.localtime(int(ts[i]))
-        mkey = f"{lt.tm_year:04d}-{lt.tm_mon:02d}"
-        m = months.setdefault(mkey, {'import': 0.0, 'avoided': 0.0, 'curtailed': 0.0})
-        m['import'] += deficit[i]
-        m['avoided'] += avoided_i
-        m['curtailed'] += series['curtailed'][i]
+            avoided_m[mo] += supplied
+        curtailed_m[mo] += series['curtailed'][i]
 
+    # Gemessenes Baseline-Profil (aktuelle Haushalts-Aera, inkl. Dezember) als
+    # Netzbezug je Kalendermonat; simulierter vermiedener Bezug wird saisonal auf
+    # den Vollmonat normalisiert (Teilmonate wie Nov) und je Monat gedeckelt.
+    prof = measured_profile()
+    present_days, full_days, present_mask = _month_geometry(series, prof.get('source'))
+    imp_by = prof.get('import_by_month', {})
+    imp_cap_wh = np.zeros(12)
+    for m, kwh in imp_by.items():
+        imp_cap_wh[m - 1] = kwh * 1000.0
+    have_measured = prof.get('months', 0) >= 6 and imp_by
+
+    avoided_norm = _annualize_by_month(avoided_m, present_days, full_days,
+                                       present_mask, cap_wh=imp_cap_wh if have_measured else None)
+    # Einzelmonate (ungesummt) fuer den Chart.
+    norm = np.where(present_mask, full_days / np.maximum(present_days, 1e-6), 0.0)
+    av_month = avoided_m * norm
+    curt_month = curtailed_m * norm
+    for m in range(12):          # fehlende Monate (Dezember) aus Nachbarn
+        if present_mask[m]:
+            continue
+        neigh = [k for k in ((m - 1) % 12, (m + 1) % 12) if present_mask[k]] or \
+                [k for k in range(12) if present_mask[k]]
+        if neigh:
+            av_month[m] = float(np.mean([av_month[k] for k in neigh]))
+            curt_month[m] = float(np.mean([curt_month[k] for k in neigh]))
+    if have_measured:
+        av_month = np.minimum(av_month, imp_cap_wh)
+
+    _MON = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun',
+            'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
+    source = prof.get('source', {})
     monthly = []
-    for mkey in sorted(months):
-        m = months[mkey]
+    month_order = sorted(imp_by) if have_measured else sorted(set(int(x) + 1 for x in cal_month))
+    for m in month_order:
+        idx = m - 1
+        imp_kwh = (imp_cap_wh[idx] / 1000.0) if have_measured else \
+            float(_month_sum(deficit, cal_month)[0, idx] * norm[idx]) / 1000.0
+        av_kwh = av_month[idx] / 1000.0
+        yr = source.get(m)
         monthly.append({
-            'month': mkey,
-            'import_kwh': round(m['import'] / 1000.0, 1),
-            'avoided_kwh': round(m['avoided'] / 1000.0, 1),
-            'rest_kwh': round(max(m['import'] - m['avoided'], 0.0) / 1000.0, 1),
-            'curtailed_kwh': round(m['curtailed'] / 1000.0, 1),
+            'month': f"{_MON[idx]}{(' ' + str(yr)[2:]) if yr else ''}",
+            'import_kwh': round(imp_kwh, 1),
+            'avoided_kwh': round(av_kwh, 1),
+            'rest_kwh': round(max(imp_kwh - av_kwh, 0.0), 1),
+            'curtailed_kwh': round(curt_month[idx] / 1000.0, 1),
+            'estimated': not bool(present_mask[idx]),
         })
 
-    _, _, n_days = series['window']
-    annual_factor = 365.0 / max(n_days, 1)
-    avoided_year = sum(x['avoided_kwh'] for x in monthly) * annual_factor
+    avoided_year = float(avoided_norm[0]) / 1000.0 if np.ndim(avoided_norm) else float(avoided_norm) / 1000.0
     cap_usable_kwh = batt_nom_kwh * tech['usable_fraction']
     cycles_year = (avoided_year / cap_usable_kwh) if cap_usable_kwh > 0.01 else 0.0
     return {
@@ -515,5 +754,6 @@ def run_detail(add_pv_kwp: float, batt_nom_kwh: float,
         'add_pv_kwp': add_pv_kwp,
         'avoided_kwh_year': round(avoided_year, 1),
         'cycles_year': round(cycles_year, 1),
+        'baseline_source': 'measured' if have_measured else 'projected',
         'monthly': monthly,
     }
