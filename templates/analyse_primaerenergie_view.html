@@ -71,6 +71,27 @@
         .table-scroll {
             overflow-x: auto;
         }
+        .update-panel {
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px; margin-bottom: 24px; font-size: 13px;
+        }
+        .update-panel > summary {
+            cursor: pointer; padding: 12px 16px; list-style: none; display: flex;
+            align-items: center; gap: 10px; color: rgba(255,255,255,0.85); font-weight: 600;
+        }
+        .update-panel > summary::-webkit-details-marker { display: none; }
+        .update-panel .up-stand { font-weight: 400; color: rgba(255,255,255,0.45); font-size: 12px; }
+        .update-panel .up-status { margin-left: auto; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+        .update-panel .up-status.ok { color: #46d17a; background: rgba(70,209,122,0.12); }
+        .update-panel .up-status.bad { color: #fbbf24; background: rgba(251,191,36,0.14); }
+        .update-panel .up-body { padding: 0 16px 16px; color: rgba(255,255,255,0.7); line-height: 1.55; }
+        .update-panel .up-body code { background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+        .update-panel .up-sources { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+        .update-panel .up-src-btn {
+            display: inline-block; padding: 7px 12px; border-radius: 8px; font-size: 12px; text-decoration: none;
+            color: rgba(255,255,255,0.9); background: rgba(96,165,250,0.12); border: 1px solid rgba(96,165,250,0.3);
+        }
+        .update-panel .up-src-btn:hover { background: rgba(96,165,250,0.22); }
         .data-table {
             font-size: 12px;
             min-width: 900px;
@@ -268,6 +289,29 @@
             {{ primaer_stand }} über ein Quartal alt. Eine Aktualisierung der Import-/Preisdaten ist fällig.
         </div>
         {% endif %}
+
+        <!-- Aktualisierungs-Sequenz (manuell, Dev-Workspace) -->
+        <details class="update-panel" {% if primaer_stale %}open{% endif %}>
+            <summary>
+                🔄 Aktualisierungs-Sequenz
+                {% if primaer_stand %}<span class="up-stand">Stand {{ primaer_stand }}{% if primaer_due %} · fällig ab {{ primaer_due }}{% endif %}</span>{% endif %}
+                <span class="up-status {{ 'bad' if primaer_stale else 'ok' }}">{{ 'fällig' if primaer_stale else 'aktuell' }}</span>
+            </summary>
+            <div class="up-body">
+                <p>Diese Seite ist eine <strong>Synthese mehrerer amtlicher Quellen</strong> (AGEB-Mengen,
+                   Destatis/BAFA-Importwerte, BDEW-Preise, IEA-Projektion). Keine Einzelquelle deckt das
+                   automatisierbar ab — die Werte werden daher <strong>manuell im Entwicklungs-Workspace</strong>
+                   im Template gepflegt (und <code>PRIMAERENERGIE_STAND</code> in <code>config.py</code> auf das
+                   Pflegedatum gesetzt). Ein vollautomatischer „Fetch"-Button ist bewusst nicht vorgesehen.</p>
+                <p style="margin-top:6px">Pflege-Sequenz: Quelldaten unten öffnen → neue Jahres-/Quartalswerte
+                   in die Tabellen des Templates übernehmen → <code>PRIMAERENERGIE_STAND</code> bumpen → deployen.</p>
+                <div class="up-sources">
+                    {% for q in primaer_quellen %}
+                    <a class="up-src-btn" href="{{ q.url }}" target="_blank" rel="noopener noreferrer">{{ q.name }} ↗</a>
+                    {% endfor %}
+                </div>
+            </div>
+        </details>
 
         <!-- Summary Cards -->
         <div class="stat-cards">

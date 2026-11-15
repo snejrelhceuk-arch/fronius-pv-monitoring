@@ -4,7 +4,7 @@ Blueprint: Seiten-Routen (HTML-Templates).
 Enthält: /, /flow, /monitoring, /echtzeit, /verbraucher, /erzeuger, /analyse
 """
 from flask import Blueprint, render_template, request, redirect
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlencode
 import config
 from routes.helpers import get_db_connection, get_strompreis_fuer_monat
@@ -428,10 +428,15 @@ def analyse_primaerenergie():
     stale_months = getattr(config, 'PRIMAERENERGIE_STALE_MONTHS', 3)
     primaer_stale = False
     primaer_stand_label = None
+    primaer_due_label = None
+    primaer_age_days = None
     try:
         d = datetime.strptime(stand, '%Y-%m-%d')
         primaer_stand_label = d.strftime('%d.%m.%Y')
         age_days = (datetime.now() - d).days
+        primaer_age_days = age_days
+        due = d + timedelta(days=stale_months * 30)
+        primaer_due_label = due.strftime('%d.%m.%Y')
         primaer_stale = age_days > stale_months * 30
     except Exception:
         pass
@@ -439,7 +444,11 @@ def analyse_primaerenergie():
     return render_template('analyse_primaerenergie_view.html',
                            nav_query=('?' + nav_query) if nav_query else '',
                            primaer_stale=primaer_stale,
-                           primaer_stand=primaer_stand_label)
+                           primaer_stand=primaer_stand_label,
+                           primaer_due=primaer_due_label,
+                           primaer_age_days=primaer_age_days,
+                           primaer_stale_months=stale_months,
+                           primaer_quellen=getattr(config, 'PRIMAERENERGIE_QUELLEN', []))
 
 
 @bp.route('/analyse/pv')

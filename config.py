@@ -427,6 +427,13 @@ KRAFTSTOFF_KWH_PRO_L = 10.0      # Energiegehalt Kraftstoff (kWh/l)
 # Aktualitäts-Hinweis am Menüpunkt ein und stößt die nächste manuelle Pflege an.
 PRIMAERENERGIE_STAND = '2026-09-16'   # Datum der letzten manuellen Pflege/Prüfung (YYYY-MM-DD)
 PRIMAERENERGIE_STALE_MONTHS = 3       # Hinweis nach 3 Monaten (AGEB-Quartalstakt)
+# Quellen für die manuelle Aktualisierungs-Sequenz (im Dev-Workspace gepflegt):
+PRIMAERENERGIE_QUELLEN = [
+    {'name': 'AGEB — Auswertungstabellen (Mengen)', 'url': 'https://ag-energiebilanzen.de/daten-und-fakten/auswertungstabellen/'},
+    {'name': 'Destatis — Außenhandel Energie (Importwerte)', 'url': 'https://www.destatis.de/DE/Themen/Branchen-Unternehmen/Energie/_inhalt.html'},
+    {'name': 'BAFA — Erdgas-/Drittlandskohlepreis', 'url': 'https://www.bafa.de/DE/Energie/Rohstoffe/rohstoffe_node.html'},
+    {'name': 'BDEW — Strompreisanalyse (Preise)', 'url': 'https://www.bdew.de/service/daten-und-grafiken/bdew-strompreisanalyse/'},
+]
 
 # --- E-Mail-Benachrichtigungen ---
 # Einmalige Meldung bei kritischen Events (Deduplizierung: 1× pro Event-Typ pro Tag)
