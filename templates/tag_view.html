@@ -1397,31 +1397,57 @@
                 return { tsData: tsToData, forecastProduction: null, forecastCloudCover: null, hasForecast: false };
             }
             
-            // Forecast as [ts_ms, production] pairs (full day curve)
-            const forecastProduction = forecastData.datapoints.map(dp => 
-                [dp.timestamp * 1000, dp.p_produktion || 0]
-            );
+            // Auflösung des Forecast-Datensatzes (kann stündlich oder feiner sein).
+            const fcRes = forecastData.datapoints.length > 1
+                ? forecastData.datapoints[1].timestamp - forecastData.datapoints[0].timestamp
+                : 3600;
             
-            const peakW = Math.max(...forecastProduction.map(fp => fp[1]));
-            console.log('buildTimeAxis: Forecast Overlay aktiv,',
-                forecastProduction.length, 'Punkte, Peak:', Math.round(peakW), 'W');
+            // Forecast-Lookup: Bucket (floor auf fcRes) → Wert
+            const fcProdMap = {}, fcCloudMap = {};
+            forecastData.datapoints.forEach(dp => {
+                const b = dp.timestamp - (dp.timestamp % fcRes);
+                fcProdMap[b] = dp.p_produktion || 0;
+                fcCloudMap[b] = dp.cloud_cover != null ? dp.cloud_cover : null;
+            });
             
-            // Cloud cover as [ts_ms, %] pairs for background
-            const forecastCloudCover = forecastData.datapoints.map(dp =>
-                [dp.timestamp * 1000, dp.cloud_cover != null ? dp.cloud_cover : null]
-            );
+            // Auf Haupt-Daten-Auflösung expandieren (Carry-Forward je Forecast-Bucket).
+            // ECharts findet zwischen Stunden-Forecast-Punkten keine Werte; ohne Expansion
+            // verschwindet die Zeile im Tooltip zwischen zwei Stundenpunkten.
+            let lastProd = 0, lastCloud = null;
+            const forecastProduction = chartData.datapoints.map(dp => {
+                const b = dp.timestamp - (dp.timestamp % fcRes);
+                if (fcProdMap[b] !== undefined) lastProd = fcProdMap[b];
+                return [dp.timestamp * 1000, lastProd];
+            });
+            const forecastCloudCover = chartData.datapoints.map(dp => {
+                const b = dp.timestamp - (dp.timestamp % fcRes);
+                if (fcCloudMap[b] !== undefined) lastCloud = fcCloudMap[b];
+                return [dp.timestamp * 1000, lastCloud];
+            });
+            
+            const peakW = Math.max(...forecastProduction.map(p => p[1]));
+            console.log('buildTimeAxis: Forecast expandiert auf', forecastProduction.length, 'Punkte, Peak:', Math.round(peakW), 'W');
             
             return { tsData: tsToData, forecastProduction, forecastCloudCover, hasForecast: true };
         }
         
-        // Build Clear-Sky [ts_ms, watt] pairs from clearSkyData
+        // Build Clear-Sky [ts_ms, watt] pairs from clearSkyData, auf Haupt-Daten-Auflösung expandiert.
         function buildClearSkyAxis() {
             if (!clearSkyData || !clearSkyData.datapoints || clearSkyData.datapoints.length === 0) {
                 return null;
             }
-            return clearSkyData.datapoints
-                .filter(dp => dp.total_ac > 0)
-                .map(dp => [dp.timestamp * 1000, dp.total_ac]);
+            // Clear-Sky-API liefert 5-min-Daten, Hauptdaten können 1-min sein.
+            // Carry-Forward über 5-min-Buckets → kein null im Tooltip.
+            const csMap = {};
+            clearSkyData.datapoints.forEach(dp => {
+                csMap[dp.timestamp - (dp.timestamp % 300)] = dp.total_ac || 0;
+            });
+            let last = 0;
+            return chartData.datapoints.map(dp => {
+                const b = dp.timestamp - (dp.timestamp % 300);
+                if (csMap[b] !== undefined) last = csMap[b];
+                return [dp.timestamp * 1000, last];
+            });
         }
 
         // Clear-Sky-/Sonnen-Infozeile. Sonnenzeiten/Temperatur nur wenn eine
@@ -1547,6 +1573,15 @@
             // _last: Carry-Forward je Serienname — letzter bekannter Wert + Zeitpunkt.
             // Reset bei jedem Aufruf (= bei jedem Chart-Neuzeichnen / Tageswechsel).
             const _last = {};
+            // Carry-Forward-Schwelle je Serientyp (nur noch als Fallback für seltene
+            // Fälle, bei denen der Wert fehlt). Clear Sky + Prognose/Bewölkung werden
+            // bereits auf Haupt-Daten-Auflösung expandiert (kein null mehr bei normaler
+            // Hover-Bewegung). Schwellen verhindern Flackern an echten Datenlücken.
+            function _thMs(name) {
+                if (name === 'Clear Sky') return 90000000;        // 25h (Nacht → 0 W)
+                if (name === 'Prognose' || name === 'Bewölkung') return 7200000; // 2h
+                return 900000; // 15 min für 5-min-Messdaten
+            }
 
             return {
                 trigger: 'axis',
@@ -1566,8 +1601,8 @@
                             _last[item.seriesName] = { val, ts };
                         } else {
                             const prev = _last[item.seriesName];
-                            if (prev && ts - prev.ts <= 900000) {
-                                val = prev.val; // vorangegangener Wert innerhalb 15 min
+                            if (prev && ts - prev.ts <= _thMs(item.seriesName)) {
+                                val = prev.val; // vorangegangener Wert innerhalb Schwelle
                             } else {
                                 return; // keine Daten — Zeile weglassen
                             }
