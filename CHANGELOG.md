@@ -5,6 +5,15 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [3.1.1] - 2026-11-16
+
+Ergänzungen zur Strompreis-Analyse (dynamischer Börsentarif):
+
+- **Lastverschiebungs-Potenzial (Best-Case)** in der Analyse: flexible Verbraucher (E-Auto/Wattpilot, Heizpatrone) werden hypothetisch in die günstigsten Viertelstunden geschoben → zeigt, dass der dynamische Tarif erst mit Lastverschiebung konkurrenzfähig wird. (`routes/tarif.py:_shift_potential`, `config.DYN_TARIF` shift-Parameter)
+- **Negative Börsenpreise** korrekt dargestellt: ct/kWh-Achse der Tag-Charts wird nicht bei 0 gekappt (Spot bis −500 EUR/MWh → negativer Gesamtpreis). (`templates/tag_view.html`)
+
+---
+
 ## [3.1.0] - 2026-11-16
 
 Neue Analyse-Schiene **dynamischer Börsentarif** (Tibber-Vergleich): reale
