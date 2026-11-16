@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico?v={{ favicon_version }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png?v={{ favicon_version }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <title>Strompreis — Fixtarif vs. dynamisch</title>
+    <link rel="stylesheet" href="/static/css/analyse-dark.css?v=20260302">
+    <link rel="stylesheet" href="/static/css/nav-ui.css">
+    <script src="/static/js/nav-context.js"></script>
+    <script src="/static/js/nav-ui.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        .intro { font-size: 14px; line-height: 1.55; }
+        .intro code { background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px; }
+        .toolbar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 6px 0 2px; }
+        .toolbar select {
+            background: rgba(255,255,255,0.08); color: #e8eef7; border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 8px; padding: 6px 10px; font-size: 14px;
+        }
+        .result-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-top: 8px; }
+        .result-card { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 14px; text-align: center; }
+        .result-card .label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: rgba(255,255,255,0.5); }
+        .result-card .value { font-size: 23px; font-weight: 700; margin-top: 6px; color: rgba(255,255,255,0.95); }
+        .result-card .sub { font-size: 11px; color: rgba(255,255,255,0.45); margin-top: 3px; }
+        .value.good { color: #46d17a; } .value.bad { color: #ff7a7a; } .value.warn { color: #ffc861; }
+        .verdict { margin-top: 16px; padding: 16px 20px; border-radius: 10px; font-size: 15px; line-height: 1.5;
+            border-left: 4px solid #ffc861; background: rgba(255,200,97,0.10); color: rgba(255,255,255,0.9); }
+        .verdict.ok { border-left-color: #46d17a; background: rgba(70,209,122,0.10); }
+        .verdict.no { border-left-color: #ff7a7a; background: rgba(255,122,122,0.10); }
+        .chart { width: 100%; height: 380px; }
+        table.cmp { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+        table.cmp th, table.cmp td { padding: 6px 8px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.08); }
+        table.cmp th { color: rgba(255,255,255,0.55); font-weight: 600; text-transform: none; position: sticky; top: 0; background: #1b2330; }
+        table.cmp td:first-child, table.cmp th:first-child { text-align: left; }
+        table.cmp tr:hover td { background: rgba(255,255,255,0.03); }
+        table.cmp tfoot td { font-weight: 700; border-top: 2px solid rgba(255,255,255,0.2); color: #fff; }
+        .d-pos { color: #ff7a7a; } .d-neg { color: #46d17a; }
+        .tbl-wrap { max-height: 520px; overflow: auto; border-radius: 8px; }
+        .method { font-size: 13px; line-height: 1.6; color: rgba(255,255,255,0.82); }
+        .method ul { margin: 6px 0 10px 18px; } .method li { margin: 3px 0; }
+        .src-list { list-style: none; padding: 0; margin: 4px 0; font-size: 13px; }
+        .src-list li { padding: 4px 0; } .src-list a { color: #67c1f5; text-decoration: none; }
+        .src-list a:hover { text-decoration: underline; }
+        .comp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .comp-table td { padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+        .comp-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+        .comp-table tr.sum td { font-weight: 700; border-top: 2px solid rgba(255,255,255,0.2); }
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+        @media (max-width: 760px) { .two-col { grid-template-columns: 1fr; } .chart { height: 340px; } }
+        .muted { color: rgba(255,255,255,0.45); font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="top-nav"></div>
+
+        <div class="header-info">
+            <h3>⚡ Strompreis — Fixtarif vs. dynamischer Börsentarif</h3>
+            <p class="intro">
+                Lohnt ein <strong>dynamischer Spotmarkt-Tarif</strong> (Tibber-Schiene) gegenüber dem
+                laufenden <strong>Fixtarif</strong>? Grundlage sind die realen EPEX-Day-Ahead-Preise
+                (<code>DE-LU</code>, 15-min) und der <strong>gemessene 15-min-Netzbezug</strong>. Jede
+                bezogene kWh wird mit ihrem tatsächlichen Viertelstundenpreis bewertet, inkl. aller
+                festen Bestandteile (Netzentgelt, Umlagen, Steuern, Anbieteraufschlag, MwSt.) →
+                <strong>reale Gesamtkosten einer kWh</strong>. Dem gegenüber steht der im selben Zeitraum
+                real gezahlte Fixtarif (Tarifwechsel am 22.02.2026 ist tagesgenau berücksichtigt).
+            </p>
+            <p class="muted" id="period-note">Zeitraum wird geladen…</p>
+        </div>
+
+        <div class="toolbar">
+            <label for="yearSel" class="muted">Jahr:</label>
+            <select id="yearSel"></select>
+        </div>
+
+        <div class="verdict" id="verdict">Auswertung wird geladen…</div>
+
+        <div class="section">
+            <div class="section-title">Jahresbilanz</div>
+            <div class="result-grid" id="result-grid"></div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Monatsvergleich — Ø Preis &amp; Netzbezug</div>
+            <div class="chart" id="chartMonthly"></div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Monatstabelle — reale Kosten</div>
+            <div class="tbl-wrap">
+                <table class="cmp" id="cmpTable">
+                    <thead><tr>
+                        <th>Monat</th><th>Bezug kWh</th><th>Ø Börse ct</th>
+                        <th>Ø dyn. ct<br><span class="muted">gewichtet</span></th>
+                        <th>Fix ct</th><th>dyn. €</th><th>Fix €</th><th>Δ €</th>
+                    </tr></thead>
+                    <tbody id="cmpBody"></tbody>
+                    <tfoot id="cmpFoot"></tfoot>
+                </table>
+            </div>
+            <p class="muted">„Ø dyn. gewichtet“ = Σ(Bezug×Gesamtpreis)/Σ Bezug — teure Verbrauchsstunden
+               schlagen stärker durch als die reine Zeit-Mittelung. €-Spalten = reine Arbeitskosten (ohne Grundgebühren).</p>
+        </div>
+
+        <div class="two-col">
+            <div class="section">
+                <div class="section-title">Aufschlüsselung einer kWh (dynamisch)</div>
+                <p class="muted" id="comp-note"></p>
+                <table class="comp-table" id="compTable"></table>
+            </div>
+            <div class="section">
+                <div class="section-title">Feste Grundkosten / Monat</div>
+                <table class="comp-table" id="fixTable"></table>
+                <div class="method" style="margin-top:12px">
+                    <strong>Methodik</strong>
+                    <ul>
+                        <li>Börsenpreis = EPEX Day-Ahead (Fraunhofer ISE, 15-min), identisch zur Tibber-Abrechnungsbasis.</li>
+                        <li>Feste Adder (ct/kWh) + MwSt. ergeben den Endpreis je Viertelstunde.</li>
+                        <li>Verbrauchsgewichtung über den real gemessenen 15-min-Netzbezug.</li>
+                        <li>Rückrekonstruktion & Pflege erfolgen automatisch im pv-system.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Quellen</div>
+            <ul class="src-list" id="srcList"></ul>
+        </div>
+    </div>
+
+    <script>
+        const nav_query = '{{ nav_query }}';
+        let chartMonthly = null;
+
+        function fmt(n, d=0) { return (n==null) ? '–' : Number(n).toLocaleString('de-DE', {minimumFractionDigits:d, maximumFractionDigits:d}); }
+
+        async function load(year) {
+            const q = year ? ('?year=' + year) : '';
+            const r = await fetch('/api/tarif/analyse' + q);
+            if (!r.ok) { document.getElementById('verdict').textContent = 'Keine Daten verfügbar.'; return; }
+            const data = await r.json();
+            render(data);
+        }
+
+        function render(d) {
+            // Jahr-Auswahl
+            const sel = document.getElementById('yearSel');
+            if (!sel.dataset.filled && d.available_years && d.available_years.length) {
+                sel.innerHTML = d.available_years.map(y => `<option value="${y}" ${y==d.year?'selected':''}>${y}</option>`).join('');
+                sel.dataset.filled = '1';
+            }
+
+            const yt = d.year_total;
+            const vd = document.getElementById('verdict');
+            if (yt) {
+                const guenstiger = yt.delta_eur > 0 ? 'Fixtarif' : 'dynamischer Tarif';
+                const betrag = Math.abs(yt.delta_eur);
+                vd.className = 'verdict ' + (yt.empfehlung === 'fix' ? 'no' : 'ok');
+                vd.innerHTML = `<strong>${d.year}:</strong> Über ${fmt(yt.bezug_kwh)} kWh Netzbezug wäre der
+                    <strong>${guenstiger}</strong> um <strong>${fmt(betrag,0)} €</strong> günstiger
+                    (inkl. Grundkosten). Ø real dynamisch <strong>${fmt(yt.dyn_avg_ct,1)} ct/kWh</strong>
+                    vs. Fix <strong>${fmt(yt.fix_price_ct,1)} ct/kWh</strong>.`;
+
+                document.getElementById('result-grid').innerHTML = `
+                    <div class="result-card"><div class="label">Netzbezug ${d.year}</div><div class="value">${fmt(yt.bezug_kwh)}<span style="font-size:13px"> kWh</span></div></div>
+                    <div class="result-card"><div class="label">Ø dyn. (gewichtet)</div><div class="value warn">${fmt(yt.dyn_avg_ct,1)}<span style="font-size:13px"> ct</span></div><div class="sub">Zeit-Ø ${fmt(yt.dyn_simple_avg_ct,1)} ct</div></div>
+                    <div class="result-card"><div class="label">Ø Fixtarif</div><div class="value">${fmt(yt.fix_price_ct,1)}<span style="font-size:13px"> ct</span></div></div>
+                    <div class="result-card"><div class="label">Kosten dynamisch</div><div class="value">${fmt(yt.dyn_total_eur)}<span style="font-size:13px"> €</span></div><div class="sub">Arbeit ${fmt(yt.dyn_cost_eur)} € + Fix ${fmt(yt.dyn_fixkosten_eur)} €</div></div>
+                    <div class="result-card"><div class="label">Kosten Fixtarif</div><div class="value">${fmt(yt.fix_total_eur)}<span style="font-size:13px"> €</span></div><div class="sub">Arbeit ${fmt(yt.fix_cost_eur)} € + Grund ${fmt(yt.fix_grundpreis_eur)} €</div></div>
+                    <div class="result-card"><div class="label">Differenz (dyn−fix)</div><div class="value ${yt.delta_eur>0?'bad':'good'}">${yt.delta_eur>0?'+':''}${fmt(yt.delta_eur)}<span style="font-size:13px"> €</span></div></div>`;
+            }
+
+            // Monatstabelle
+            const body = document.getElementById('cmpBody');
+            body.innerHTML = d.months.map(m => `
+                <tr>
+                    <td>${m.month_name}</td>
+                    <td>${fmt(m.bezug_kwh,0)}</td>
+                    <td>${fmt(m.spot_avg_ct,1)}</td>
+                    <td>${fmt(m.dyn_avg_ct,1)}</td>
+                    <td>${fmt(m.fix_price_ct,1)}</td>
+                    <td>${fmt(m.dyn_cost_eur,0)}</td>
+                    <td>${fmt(m.fix_cost_eur,0)}</td>
+                    <td class="${m.delta_eur>0?'d-pos':'d-neg'}">${m.delta_eur>0?'+':''}${fmt(m.delta_eur,0)}</td>
+                </tr>`).join('');
+            if (yt) {
+                document.getElementById('cmpFoot').innerHTML = `<tr>
+                    <td>Jahr ${d.year}</td><td>${fmt(yt.bezug_kwh,0)}</td><td>${fmt(yt.spot_avg_ct,1)}</td>
+                    <td>${fmt(yt.dyn_avg_ct,1)}</td><td>${fmt(yt.fix_price_ct,1)}</td>
+                    <td>${fmt(yt.dyn_cost_eur,0)}</td><td>${fmt(yt.fix_cost_eur,0)}</td>
+                    <td class="${yt.delta_eur>0?'d-pos':'d-neg'}">${yt.delta_eur>0?'+':''}${fmt(yt.delta_eur,0)}</td>
+                </tr>`;
+            }
+
+            // Komponenten-Aufschlüsselung
+            document.getElementById('comp-note').textContent =
+                `Beispiel beim Jahres-Ø Börsenpreis ${fmt(d.ref_spot_ct,2)} ct/kWh → Endpreis ${fmt(d.total_at_ref_spot_ct,1)} ct/kWh (${d.bidding_zone}).`;
+            document.getElementById('compTable').innerHTML =
+                d.breakdown.map(c => `<tr><td>${c.label}</td><td>${fmt(c.ct,3)} ct</td></tr>`).join('')
+                + `<tr class="sum"><td>Gesamt (brutto)</td><td>${fmt(d.total_at_ref_spot_ct,1)} ct</td></tr>`;
+
+            // Fixkosten
+            document.getElementById('fixTable').innerHTML =
+                d.dyn_fixkosten_breakdown.map(c => `<tr><td>${c.label}</td><td>${fmt(c.eur_monat,2)} €</td></tr>`).join('')
+                + `<tr class="sum"><td>Summe dynamisch</td><td>${fmt(d.dyn_fixkosten_eur_monat,2)} €</td></tr>`;
+
+            // Quellen
+            document.getElementById('srcList').innerHTML = d.quellen.map(s =>
+                `<li>→ <a href="${s.url}" target="_blank" rel="noopener">${s.name}</a></li>`).join('');
+
+            document.getElementById('period-note').textContent =
+                `Datenquelle: EPEX Day-Ahead (${d.bidding_zone}) · MwSt. ${fmt(d.mwst_pct,0)} % · feste Adder ${fmt(d.netto_adder_ct,2)} ct/kWh netto.`;
+
+            renderChart(d);
+        }
+
+        function renderChart(d) {
+            const dom = document.getElementById('chartMonthly');
+            if (!chartMonthly) chartMonthly = echarts.init(dom);
+            const names = d.months.map(m => m.month_name.substring(0,3));
+            chartMonthly.setOption({
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' },
+                    valueFormatter: null },
+                legend: { bottom: 0, textStyle: { color: '#cfd8e3' } },
+                grid: { left: 48, right: 56, top: 20, bottom: 40 },
+                xAxis: { type: 'category', data: names, axisLabel: { color: '#aeb9c7' } },
+                yAxis: [
+                    { type: 'value', name: 'ct/kWh', position: 'left', axisLabel: { color: '#aeb9c7' }, nameTextStyle:{color:'#aeb9c7'} },
+                    { type: 'value', name: 'kWh', position: 'right', axisLabel: { color: '#6b7a8d' }, splitLine: { show:false }, nameTextStyle:{color:'#6b7a8d'} }
+                ],
+                series: [
+                    { name: 'Netzbezug', type: 'bar', yAxisIndex: 1, itemStyle: { color: 'rgba(120,144,180,0.35)' },
+                      data: d.months.map(m => Math.round(m.bezug_kwh)) },
+                    { name: 'Ø dynamisch (gewichtet)', type: 'line', smooth: true, symbol: 'circle', symbolSize: 6,
+                      lineStyle: { color: '#111', width: 1.5, type: 'dotted' }, itemStyle: { color: '#111' },
+                      data: d.months.map(m => m.dyn_avg_ct!=null ? +m.dyn_avg_ct.toFixed(2) : null) },
+                    { name: 'Fixtarif', type: 'line', smooth: false, symbol: 'none',
+                      lineStyle: { color: '#46d17a', width: 2 }, itemStyle: { color: '#46d17a' },
+                      data: d.months.map(m => m.fix_price_ct!=null ? +m.fix_price_ct.toFixed(2) : null) }
+                ]
+            });
+        }
+
+        document.getElementById('yearSel').addEventListener('change', e => load(e.target.value));
+        window.addEventListener('resize', () => chartMonthly && chartMonthly.resize());
+        load(null);
+    </script>
+</body>
+</html>

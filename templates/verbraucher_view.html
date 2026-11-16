@@ -89,6 +89,7 @@
         let currentDate = new Date();
         let currentYear = currentDate.getFullYear();
         let currentMonth = currentDate.getMonth() + 1;
+        let tariffData = null;  // Dynamischer Börsentarif (15-min Gesamtpreis ct/kWh)
         let chart = null;
         let periodExtremes = null;
         let tagExtremes = null;
@@ -312,6 +313,14 @@
                 if (currentView === 'tag') {
                     tagExtremes = null;
                     periodExtremes = null;
+                    tariffData = null;
+                    try {
+                        const tfResp = await fetch(`/api/tarif/tag?date=${formatDateISO(currentDate)}`);
+                        if (tfResp.ok) {
+                            const tf = await tfResp.json();
+                            tariffData = (tf && tf.points && tf.points.length) ? tf : null;
+                        }
+                    } catch (tfErr) { tariffData = null; }
                     createDayChart(data);
                     if (window.PVExtremes) {
                         PVExtremes.fetchFor('tag', { date: formatDateISO(currentDate) })
@@ -469,6 +478,36 @@
                 }
             } : null;
 
+            // Dynamischer Börsentarif: 15-min Gesamtpreis (ct/kWh) auf die 5-min-Slots mappen.
+            const pad2 = n => String(n).padStart(2, '0');
+            const priceByQuarter = {};
+            if (tariffData && tariffData.points) {
+                tariffData.points.forEach(p => {
+                    const d = new Date(p.timestamp * 1000);
+                    priceByQuarter[`${pad2(d.getHours())}:${pad2(d.getMinutes())}`] = p.total_ct;
+                });
+            }
+            const hasTariff = Object.keys(priceByQuarter).length > 0;
+            const priceData = allTimes.map(t => {
+                const [h, m] = t.split(':').map(Number);
+                const q = m - (m % 15);
+                const v = priceByQuarter[`${pad2(h)}:${pad2(q)}`];
+                return v == null ? null : v;
+            });
+            function tariffFooter() {
+                if (!tariffData) return '';
+                const d = tariffData.day;
+                let s = `<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>`;
+                s += `<span style="color:#111">▪ Börsentarif (dyn.)</span><br/>`;
+                if (d && d.dyn_avg_ct != null) {
+                    s += `Ø real (gewichtet): <strong>${d.dyn_avg_ct.toFixed(1)} ct/kWh</strong><br/>`;
+                    s += `Fixtarif: ${(d.fix_price_ct || tariffData.fix_price_ct).toFixed(1)} ct/kWh`;
+                } else {
+                    s += `Fixtarif: ${(tariffData.fix_price_ct || 0).toFixed(1)} ct/kWh`;
+                }
+                return s;
+            }
+
             const option = {
                 tooltip: {
                     trigger: 'axis',
@@ -487,20 +526,25 @@
                         html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.haushalt};border-radius:2px;margin-right:5px;"></span>Sonstige: <strong>${d.p_haushalt.toFixed(0)} W</strong><br/>`;
                         html += `<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>`;
                         html += `<strong>Gesamt: ${d.p_gesamt.toFixed(0)} W</strong>`;
+                        const pq = priceByQuarter[(function(){const[h,m]=timeStr.split(':').map(Number);return `${pad2(h)}:${pad2(m-(m%15))}`;})()];
+                        if (pq != null) {
+                            html += `<br/><span style="display:inline-block;width:10px;height:10px;background:#111;border-radius:2px;margin-right:5px;"></span>Strompreis: <strong>${pq.toFixed(1)} ct/kWh</strong>`;
+                        }
                         if (window.PVExtremes) {
                             const peakOv = (peakIdx >= 0 && peakVal > 0) ? { kw: peakVal / 1000, label: allTimes[peakIdx] } : undefined;
                             const tl = PVExtremes.tagLines(tagExtremes, { powerOverride: peakOv, powerName: 'Peak-Verbrauch' });
                             if (tl) html += `<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>` + tl;
                         }
+                        html += tariffFooter();
                         return html;
                     }
                 },
                 legend: {
-                    data: ['Wärmepumpe', 'Heizpatrone', 'E-Auto', 'Klima', 'Gefriertruhe', 'Lüftung', 'Sonstige'],
+                    data: ['Wärmepumpe', 'Heizpatrone', 'E-Auto', 'Klima', 'Gefriertruhe', 'Lüftung', 'Sonstige'].concat(hasTariff ? ['Strompreis'] : []),
                     bottom: 10
                 },
                 grid: {
-                    left: '3%', right: '4%',
+                    left: '3%', right: hasTariff ? '8%' : '4%',
                     bottom: '70px', top: '35px',
                     containLabel: true
                 },
@@ -518,7 +562,7 @@
                         };
                     })()
                 },
-                yAxis: {
+                yAxis: [{
                     type: 'value',
                     name: 'Leistung (W)',
                     nameLocation: 'end',
@@ -530,7 +574,18 @@
                             : Math.min(30000, Math.max(10000, Math.ceil(value.max / 1000) * 1000));
                     },
                     axisLabel: { formatter: '{value} W' }
-                },
+                }, {
+                    type: 'value',
+                    name: narrow ? '' : 'ct/kWh',
+                    position: 'right',
+                    scale: true,
+                    show: hasTariff,
+                    splitLine: { show: false },
+                    axisLine: { show: !narrow, lineStyle: { color: '#111' } },
+                    axisTick: { show: !narrow },
+                    axisLabel: { show: !narrow, color: '#111', formatter: v => v.toFixed(0) },
+                    nameTextStyle: { color: '#111' }
+                }],
                 series: [
                     {
                         name: 'Wärmepumpe',
@@ -602,6 +657,19 @@
                         symbol: 'none',
                         areaStyle: { color: COLORS.haushalt, opacity: 0.15 },
                         markPoint: peakMarkPoint || undefined
+                    },
+                    {
+                        name: 'Strompreis',
+                        type: 'line',
+                        yAxisIndex: 1,
+                        data: priceData,
+                        step: 'end',
+                        connectNulls: true,
+                        itemStyle: { color: '#111' },
+                        lineStyle: { color: '#111', width: 1, type: 'dotted' },
+                        smooth: false,
+                        symbol: 'none',
+                        z: 6
                     }
                 ]
             };

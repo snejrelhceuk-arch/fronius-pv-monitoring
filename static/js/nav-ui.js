@@ -42,6 +42,7 @@
             { href: '/analyse/haushalt', label: 'Haushalt' },
             { href: '/analyse/amortisation', label: 'Amortisation' },
             { href: '/analyse/speicherausbau', label: '🔋 Speicher-Ausbau' },
+            { href: '/analyse/strompreis', label: '⚡ Strompreis-Tarif' },
             { href: '/analyse/primaerenergie', label: '🌍 Fossile Energie', stale: true },
         ] },
         { group: 'Netzqualität', items: [

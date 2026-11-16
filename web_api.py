@@ -174,6 +174,7 @@ from routes.forecast import bp as forecast_bp
 from routes.netzqualitaet import bp as netzqualitaet_bp
 from routes.pac4200 import bp as pac4200_bp
 from routes.analyse_speicher import bp as analyse_speicher_bp
+from routes.tarif import bp as tarif_bp
 
 app.register_blueprint(pages_bp)
 app.register_blueprint(data_bp)
@@ -186,6 +187,7 @@ app.register_blueprint(forecast_bp)
 app.register_blueprint(netzqualitaet_bp)
 app.register_blueprint(pac4200_bp)
 app.register_blueprint(analyse_speicher_bp)
+app.register_blueprint(tarif_bp)
 
 # Forecast-Tabelle sicherstellen (idempotent)
 from routes.helpers import ensure_forecast_table

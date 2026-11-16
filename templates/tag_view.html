@@ -201,6 +201,7 @@
         let chartData = null;
         let forecastData = null;  // Separate forecast for background overlay
         let clearSkyData = null;  // Clear-Sky reference curve
+        let tariffData = null;    // Dynamischer Börsentarif (15-min Gesamtpreis ct/kWh)
         let autoRefreshTimeout = null;
         const AUTO_REFRESH_MS = 5 * 60 * 1000;
         
@@ -1123,6 +1124,21 @@
                     }
                 }
                 
+                // Dynamischer Börsentarif: 15-min Gesamtpreis-Kurve (ct/kWh) als
+                // dünne schwarze Punktelinie auf eigener rechter Achse. Best-effort.
+                try {
+                    const tfResponse = await fetch(`/api/tarif/tag?date=${dateStr}`);
+                    if (tfResponse.ok) {
+                        const tf = await tfResponse.json();
+                        tariffData = (tf && tf.points && tf.points.length) ? tf : null;
+                    } else {
+                        tariffData = null;
+                    }
+                } catch (tfErr) {
+                    console.warn('Tarif-Laden fehlgeschlagen:', tfErr.message);
+                    tariffData = null;
+                }
+
                 console.log('Daten geladen:', chartData.datapoints.length, 'Punkte',
                              chartData.forecast ? '(PROGNOSE)' : '(MESSDATEN)');
                 
@@ -1539,6 +1555,10 @@
                     let result = '<strong>' + timeStr + '</strong><br/>';
                     params.forEach(item => {
                         if (item.value[1] == null) return;
+                        if (item.seriesName === 'Strompreis') {
+                            result += item.marker + ' Strompreis: ' + (item.value[1] || 0).toFixed(1) + ' ct/kWh<br/>';
+                            return;
+                        }
                         let unit = ' W';
                         if (item.seriesName === 'SOC (%)') unit = ' %';
                         else if (item.seriesName === 'Bewölkung') unit = ' %';
@@ -1548,11 +1568,86 @@
                         const tl = PVExtremes.tagLines(tagExtremes, peakOpts || undefined);
                         if (tl) result += '<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>' + tl;
                     }
+                    result += tariffTooltipFooter();
                     return result;
                 }
             };
         }
         
+        // ── Dynamischer Börsentarif: Preis-Overlay (geteilt Ertrag+Verbrauch) ──
+        // Dünne schwarze Punktelinie, eigene rechte Achse in ct/kWh, Stufenverlauf
+        // (15-min). Bewusst andere Optik als alle bestehenden Serien.
+        function tariffPriceSeries() {
+            if (!tariffData || !tariffData.points || !tariffData.points.length) return null;
+            return {
+                name: 'Strompreis',
+                type: 'line',
+                yAxisIndex: 2,
+                step: 'end',
+                smooth: false,
+                symbol: 'none',
+                showSymbol: false,
+                z: 6,
+                lineStyle: { color: '#111', width: 1, type: 'dotted' },
+                itemStyle: { color: '#111' },
+                data: tariffData.points.map(p => [p.timestamp * 1000, p.total_ct])
+            };
+        }
+
+        // Rechte ct/kWh-Achse (Index 2); versetzt, damit sie die %-Achse nicht überlagert.
+        function tariffPriceYAxis(mobile) {
+            const vals = tariffData.points.map(p => p.total_ct);
+            // Negative Börsenpreise (Tibber) sind möglich → Achse NICHT bei 0 kappen.
+            const lo = Math.floor(Math.min(...vals) / 10) * 10 - 5;
+            const hi = Math.ceil(Math.max(...vals) / 10) * 10 + 5;
+            return {
+                type: 'value',
+                name: mobile ? '' : 'ct/kWh',
+                position: 'right',
+                offset: mobile ? 0 : 48,
+                min: lo, max: hi,
+                splitLine: { show: false },
+                axisLine: { show: !mobile, lineStyle: { color: '#111' } },
+                axisTick: { show: !mobile },
+                axisLabel: { show: !mobile, color: '#111', fontSize: 11,
+                             formatter: v => v.toFixed(0) },
+                nameTextStyle: { color: '#111' }
+            };
+        }
+
+        // Tooltip-Fußzeile mit der Tagesbilanz (verbrauchsgewichtet vs. Fixtarif).
+        function tariffTooltipFooter() {
+            if (!tariffData) return '';
+            const d = tariffData.day;
+            let s = '<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>';
+            s += '<span style="color:#111">▪ Börsentarif (dyn.)</span><br/>';
+            if (d && d.dyn_avg_ct != null) {
+                s += `Ø real (gewichtet): <strong>${d.dyn_avg_ct.toFixed(1)} ct/kWh</strong><br/>`;
+                s += `Fixtarif: ${(d.fix_price_ct || tariffData.fix_price_ct).toFixed(1)} ct/kWh<br/>`;
+                if (d.bezug_kwh != null) {
+                    s += `Bezug: ${d.bezug_kwh.toFixed(1)} kWh → dyn. ${(d.dyn_cost_eur||0).toFixed(2)} € / fix ${(d.fix_cost_eur||0).toFixed(2)} €`;
+                }
+            } else {
+                s += `Fixtarif: ${(tariffData.fix_price_ct||0).toFixed(1)} ct/kWh`;
+            }
+            return s;
+        }
+
+        // Hängt die Preis-Serie + ct/kWh-Achse + Legende an eine fertige Chart-Option.
+        function applyTariffOverlay(option, mobile) {
+            const s = tariffPriceSeries();
+            if (!s) return;
+            option.series.push(s);
+            if (option.yAxis && option.yAxis.length < 3) option.yAxis.push(tariffPriceYAxis(mobile));
+            if (option.legend && Array.isArray(option.legend.data)) {
+                option.legend.data.push({ name: 'Strompreis', itemStyle: { color: '#111' } });
+            }
+            if (!mobile && option.grid) {
+                const r = option.grid.right;
+                option.grid.right = (typeof r === 'number') ? Math.max(r, 72) : '9%';
+            }
+        }
+
         function createErtragChart() {
             const axis = buildTimeAxis();
             const hasFC = axis.hasForecast;
@@ -1810,6 +1905,7 @@
             
             console.log('Ertrag-Option gesetzt, yMax:', calcYMax(peakVal));
             applyClearSkyTitle(option, mobile, compactEmbed);
+            applyTariffOverlay(option, mobile);
             if (window.PVChart && option.tooltip) option.tooltip = PVChart.tooltipResponsive(option.tooltip);
             if (window.PVChart && PVChart.staggerReveal) PVChart.staggerReveal(option);
             chart.setOption(option);
@@ -2053,6 +2149,7 @@
             };
             
             applyClearSkyTitle(option, mobile, compactEmbed);
+            applyTariffOverlay(option, mobile);
             if (window.PVChart && option.tooltip) option.tooltip = PVChart.tooltipResponsive(option.tooltip);
             if (window.PVChart && PVChart.staggerReveal) PVChart.staggerReveal(option);
             chart.setOption(option);
