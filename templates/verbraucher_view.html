@@ -528,14 +528,13 @@
                         html += `<strong>Gesamt: ${d.p_gesamt.toFixed(0)} W</strong>`;
                         const pq = priceByQuarter[(function(){const[h,m]=timeStr.split(':').map(Number);return `${pad2(h)}:${pad2(m-(m%15))}`;})()];
                         if (pq != null) {
-                            html += `<br/><span style="display:inline-block;width:10px;height:10px;background:#111;border-radius:2px;margin-right:5px;"></span>Strompreis: <strong>${pq.toFixed(1)} ct/kWh</strong>`;
+                            html += `<br/><span style="display:inline-block;width:10px;height:10px;background:#111;border-radius:2px;margin-right:5px;"></span>Strompreis: <strong>${pq.toFixed(1)} ct</strong>`;
                         }
                         if (window.PVExtremes) {
                             const peakOv = (peakIdx >= 0 && peakVal > 0) ? { kw: peakVal / 1000, label: allTimes[peakIdx] } : undefined;
                             const tl = PVExtremes.tagLines(tagExtremes, { powerOverride: peakOv, powerName: 'Peak-Verbrauch' });
                             if (tl) html += `<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>` + tl;
                         }
-                        html += tariffFooter();
                         return html;
                     }
                 },

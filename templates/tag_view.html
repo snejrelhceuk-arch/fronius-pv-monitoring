@@ -1556,7 +1556,7 @@
                     params.forEach(item => {
                         if (item.value[1] == null) return;
                         if (item.seriesName === 'Strompreis') {
-                            result += item.marker + ' Strompreis: ' + (item.value[1] || 0).toFixed(1) + ' ct/kWh<br/>';
+                            result += item.marker + ' Strompreis: ' + (item.value[1] || 0).toFixed(1) + ' ct<br/>';
                             return;
                         }
                         let unit = ' W';
@@ -1568,7 +1568,6 @@
                         const tl = PVExtremes.tagLines(tagExtremes, peakOpts || undefined);
                         if (tl) result += '<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>' + tl;
                     }
-                    result += tariffTooltipFooter();
                     return result;
                 }
             };
