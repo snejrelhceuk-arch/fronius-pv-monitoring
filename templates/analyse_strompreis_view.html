@@ -276,7 +276,13 @@
 
         document.getElementById('yearSel').addEventListener('change', e => load(e.target.value));
         window.addEventListener('resize', () => chartMonthly && chartMonthly.resize());
-        load(null);
+
+        window.addEventListener('DOMContentLoaded', function () {
+            if (window.PVNavUI && PVNavUI.initDrawer) {
+                try { PVNavUI.initDrawer({ barSelector: '.top-nav' }); } catch (e) {}
+            }
+            load(null);
+        });
     </script>
 </body>
 </html>
