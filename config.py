@@ -352,6 +352,10 @@ DYN_TARIF = {
     'netz_grundpreis_netto':    True,    # True → ×(1+MwSt), False → bereits brutto
     'messstellenbetrieb_eur_jahr': 20.00,# iMSys-Entgelt dyn. Tarif (gesetzl. Deckel §31 MsbG, brutto)
     'anbieter_grundgebuehr_eur_monat': 5.99,  # Tibber Grundgebühr (brutto, inkl. MwSt)
+    # Lastverschiebungs-Potenzial (Best-Case-Analyse): flexible Verbraucher, die in
+    # Niedrigpreisfenster verschoben werden könnten, + max. Verschiebeleistung.
+    'shiftable_devices': ['wattpilot', 'heizpatrone'],  # E-Auto + Heizpatrone
+    'shift_max_kw': 11.0,                              # max. Ladeleistung (Wallbox 3~)
 }
 # Rückrekonstruktions-Start der dynamischen Schiene (erst ab hier liegen Spot+Bezug vor).
 DYN_TARIF_START = (2026, 1, 1)

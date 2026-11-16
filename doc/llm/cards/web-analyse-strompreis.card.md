@@ -15,15 +15,23 @@ Read-only Analyse + Chart-Overlay zum dynamischen Börsentarif:
 1. **Preis-Overlay** auf den Tag-Charts (Produktion, Verbrauch, Lasten) als dünne
    **schwarze Punktelinie** mit eigener **rechter ct/kWh-Achse** + Tooltip-Bilanz.
 2. **Analyse-Seite** `/analyse/strompreis`: Tarifvergleich (Monat/Jahr), Kosten-
-   Aufschlüsselung einer kWh, Methodik + Quellen. Beantwortet: dynamischer Tarif
-   wählen oder beim Fixtarif bleiben?
+   Aufschlüsselung einer kWh, **Lastverschiebungs-Potenzial** (Best-Case),
+   Methodik + Quellen. Beantwortet: dynamischer Tarif wählen oder beim Fixtarif bleiben?
 
 ## Ansichten / Endpunkte
 - `/analyse/strompreis` → `templates/analyse_strompreis_view.html`
 - `GET /api/tarif/tag?date=YYYY-MM-DD` → 15-min-Gesamtpreis-Kurve (brutto ct/kWh,
   live aus `spot_price_15min` via Kostenmodell) + Tagesbilanz aus `tariff_cost_daily`.
 - `GET /api/tarif/analyse?year=` → Monats-/Jahresvergleich (`tariff_cost_*`),
-  Komponenten-Breakdown, Fixkosten, Quellen.
+  Komponenten-Breakdown, Fixkosten, **Best-Case-Lastverschiebung**, Quellen.
+
+## Lastverschiebungs-Potenzial (Best-Case)
+`routes/tarif.py:_shift_potential` rechnet on-the-fly (read-only): verschiebbare
+Tagesenergie flexibler Verbraucher (`config.DYN_TARIF.shiftable_devices`, z. B.
+Wattpilot/Heizpatrone) = min(Gerätetagesenergie, Netzbezug), neu bepreist über die
+billigsten 15-min-Spot-Buckets (Deckel `shift_max_kw`), Referenz = Tages-Ø dyn.
+Zeigt, dass der Vergleich mit dem IST-Profil valide ist, ein optimiertes Profil
+die Tiefpreise (Winter-Windtiefs) aber nutzen würde. Keine Persistenz, keine Steuerung.
 
 ## Chart-Overlay (ECharts)
 Die Tag-Charts (`tag_view.html` Produktion+Verbrauch, `verbraucher_view.html`
@@ -35,7 +43,8 @@ Kollision mit der SOC-%-Achse zu vermeiden.
 
 ## Code-Anchor
 - **Blueprint (Rolle B):** `routes/tarif.py:strompreis_page`,
-  `routes/tarif.py:api_tarif_tag`, `routes/tarif.py:api_tarif_analyse`
+  `routes/tarif.py:api_tarif_tag`, `routes/tarif.py:api_tarif_analyse`,
+  `routes/tarif.py:_shift_potential`
 - **Registrierung:** `web_api.py` (`tarif_bp`)
 - **Analyse-Ansicht:** `templates/analyse_strompreis_view.html`
 - **Overlay Produktion/Verbrauch:** `templates/tag_view.html`
@@ -71,6 +80,8 @@ Kollision mit der SOC-%-Achse zu vermeiden.
 - Jinja/Gunicorn cachen Templates: nach Template-Änderung Web neu laden
   (`systemctl restart pv-web.service`). Neue `config`-Attribute → voller Restart.
 - Zwei rechte Achsen (SOC % + ct/kWh): Desktop versetzt (`offset`), Mobile Labels aus.
+- Negative Börsenpreise sind real (Spot bis −500 EUR/MWh → negativer Gesamtpreis):
+  ct/kWh-Achse NICHT bei 0 kappen (`tariffPriceYAxis`), sonst werden Tiefstpreise verdeckt.
 - `/api/tarif/tag` ohne Spot-Daten (Zukunft > morgen) → leere `points`, Overlay entfällt.
 
 ## Verwandte Cards

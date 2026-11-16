@@ -92,6 +92,34 @@ Aggregate. Vollständige Rückrekonstruktion jederzeit per
 - Tibber — Preiskonditionen (Grundgebühr, Beschaffungsaufschlag):
   `https://tibber.com/de/preise`
 
+## Lastverschiebungs-Potenzial (Best-Case)
+
+Der verbrauchsgewichtete Vergleich nutzt das **heutige** Verbrauchsprofil — das
+liegt meist nicht in den günstigen Börsenstunden. Der eigentliche Sinn eines
+dynamischen Tarifs ist die **Lastverschiebung**. Die Analyse-Seite zeigt daher
+zusätzlich eine Best-Case-Obergrenze (`routes/tarif.py:_shift_potential`):
+
+- Verschiebbare Tagesenergie = min(Energie flexibler Verbraucher, Netzbezug);
+  flexible Verbraucher in `config.DYN_TARIF.shiftable_devices` (E-Auto/Wattpilot,
+  Heizpatrone), Leistungsdeckel `shift_max_kw`.
+- Diese Energie wird in die **billigsten 15-min-Fenster** des jeweiligen Tages
+  verschoben und zum Tiefpreis neu bewertet (reale Spotpreise, inkl. Winter-Wind-
+  und Negativpreise). Referenz = Tages-Ø der dynamischen Gesamtkosten.
+- Ergebnis: verschiebbare kWh, Best-Case-Ersparnis, „dynamisch optimiert"-Kosten
+  und die Empfehlung unter Optimierung. So wird sichtbar, dass sich das Bild erst
+  mit konsequenter Verschiebung zugunsten des dynamischen Tarifs dreht.
+
+Es handelt sich um eine **Obergrenze** (ideale Verschiebung) — eine reale
+Steuerung/Direktvermarktung ist damit nicht verbunden (Rolle B, read-only).
+
+## Negative Börsenpreise
+
+Der EPEX-Spot kann negativ werden (bis −500 EUR/MWh an sonnig-windigen
+Schwachlaststunden). Der Gesamtpreis kann dadurch unter 0 ct/kWh fallen
+(`spot_ct < −14,776`). Chart-Achse und Aggregation bilden das korrekt ab: die
+ct/kWh-Achse wird nicht bei 0 gekappt, negative Viertelstunden senken die
+verbrauchsgewichteten Tageskosten.
+
 ## Verwandte Doku
 
 - LLM-Cards: `doc/llm/cards/collector-dynamic-price.card.md`,

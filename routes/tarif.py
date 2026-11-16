@@ -109,6 +109,64 @@ def api_tarif_tag():
         return api_error_response(exc, 'tarif_tag')
 
 
+def _shift_potential(cur, year):
+    """Best-Case-Lastverschiebung: flexible Verbraucher (E-Auto, Heizpatrone) in die
+    günstigsten Viertelstunden des Tages schieben → maximal mögliche dyn. Ersparnis.
+    Grobmodell (Obergrenze): verschiebbare kWh/Tag = min(Gerätetagesenergie,
+    Netzbezug), neu bepreist über die billigsten 15-min-Buckets (Leistungsdeckel
+    shift_max_kw); Referenz = Tages-Ø der dyn. Gesamtkosten. Zeigt, wie viel ein
+    optimiertes Verbrauchsprofil gegenüber dem IST-Profil sparen könnte.
+    """
+    cfg = config.DYN_TARIF
+    devices = cfg.get('shiftable_devices', [])
+    cap_kwh = max(0.1, cfg.get('shift_max_kw', 11.0)) * 0.25
+    y0 = int(datetime(year, 1, 1).timestamp())
+    y1 = int(datetime(year + 1, 1, 1).timestamp())
+
+    dev_by_day = {}
+    for dev in devices:
+        try:
+            for ds, wh in cur.execute(
+                    f"SELECT date(ts,'unixepoch','localtime'), energy_wh FROM {dev}_daily "
+                    f"WHERE ts >= ? AND ts < ?", (y0, y1)):
+                dev_by_day[ds] = dev_by_day.get(ds, 0.0) + (wh or 0.0) / 1000.0
+        except Exception:
+            pass
+
+    spot_by_day = {}
+    for ts, eur in cur.execute(
+            "SELECT ts, price_eur_mwh FROM spot_price_15min WHERE ts >= ? AND ts < ?", (y0, y1)):
+        ds = datetime.fromtimestamp(ts).strftime('%Y-%m-%d')
+        spot_by_day.setdefault(ds, []).append(dyn.total_price_ct(dyn.spot_eur_mwh_to_ct_kwh(eur)))
+
+    months, yr = {}, {'shift_kwh': 0.0, 'savings_eur': 0.0}
+    for day_ts, bezug, dyn_avg in cur.execute(
+            "SELECT day_ts, bezug_kwh, dyn_avg_ct FROM tariff_cost_daily "
+            "WHERE day_ts >= ? AND day_ts < ?", (y0, y1)):
+        d = datetime.fromtimestamp(day_ts)
+        ds = d.strftime('%Y-%m-%d')
+        shift = min(dev_by_day.get(ds, 0.0), bezug or 0.0)
+        prices = spot_by_day.get(ds)
+        if shift <= 0 or not prices or not dyn_avg:
+            continue
+        need, cheap = shift, 0.0
+        for p in sorted(prices):
+            take = min(need, cap_kwh)
+            cheap += take * p / 100.0
+            need -= take
+            if need <= 1e-9:
+                break
+        if need > 1e-9:
+            cheap += need * max(prices) / 100.0
+        sav = max(0.0, shift * dyn_avg / 100.0 - cheap)
+        mm = months.setdefault(d.month, {'shift_kwh': 0.0, 'savings_eur': 0.0})
+        mm['shift_kwh'] += shift
+        mm['savings_eur'] += sav
+        yr['shift_kwh'] += shift
+        yr['savings_eur'] += sav
+    return months, yr
+
+
 @bp.route('/api/tarif/analyse')
 def api_tarif_analyse():
     """Vergleichstabelle (Monat/Jahr) + Methodik/Quellen für die Analyse-Seite."""
@@ -163,6 +221,25 @@ def api_tarif_analyse():
 
         avail_years = [r[0] for r in cur.execute(
             "SELECT DISTINCT year FROM tariff_cost_yearly ORDER BY year").fetchall()]
+
+        # Best-Case-Lastverschiebung (flexible Verbraucher in Niedrigpreisfenster).
+        shift_months, shift_year = _shift_potential(cur, year)
+        for m in months:
+            sm = shift_months.get(m['month'], {'shift_kwh': 0.0, 'savings_eur': 0.0})
+            m['shift_kwh'] = round(sm['shift_kwh'], 1)
+            m['shift_savings_eur'] = round(sm['savings_eur'], 2)
+            m['dyn_opt_total_eur'] = round(m['dyn_total_eur'] - sm['savings_eur'], 2)
+            m['delta_opt_eur'] = round(m['dyn_opt_total_eur'] - m['fix_total_eur'], 2)
+        if year_row:
+            year_row['shift_kwh'] = round(shift_year['shift_kwh'], 1)
+            year_row['shift_savings_eur'] = round(shift_year['savings_eur'], 2)
+            year_row['dyn_opt_total_eur'] = round(
+                year_row['dyn_total_eur'] - shift_year['savings_eur'], 2)
+            year_row['delta_opt_eur'] = round(
+                year_row['dyn_opt_total_eur'] - year_row['fix_total_eur'], 2)
+            year_row['empfehlung_opt'] = (
+                'fix' if year_row['dyn_opt_total_eur'] > year_row['fix_total_eur']
+                else 'dynamisch')
         conn.close()
 
         # Komponenten-Aufschlüsselung mit dem Jahres-Durchschnitts-Börsenpreis.
@@ -182,6 +259,8 @@ def api_tarif_analyse():
             'dyn_fixkosten_breakdown': dyn.dyn_fixkosten_breakdown_eur_monat(),
             'mwst_pct': config.DYN_TARIF['mwst_pct'],
             'bidding_zone': config.DYN_TARIF['bidding_zone'],
+            'shift_max_kw': config.DYN_TARIF.get('shift_max_kw'),
+            'shiftable_devices': config.DYN_TARIF.get('shiftable_devices', []),
             'quellen': _QUELLEN,
         })
     except Exception as exc:

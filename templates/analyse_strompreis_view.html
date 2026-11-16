@@ -84,6 +84,13 @@
         </div>
 
         <div class="section">
+            <div class="section-title">Lastverschiebungs-Potenzial (Best-Case)</div>
+            <p class="method" id="shift-intro"></p>
+            <div class="result-grid" id="shift-grid"></div>
+            <div class="verdict" id="shift-verdict"></div>
+        </div>
+
+        <div class="section">
             <div class="section-title">Monatsvergleich — Ø Preis &amp; Netzbezug</div>
             <div class="chart" id="chartMonthly"></div>
         </div>
@@ -172,6 +179,26 @@
                     <div class="result-card"><div class="label">Kosten dynamisch</div><div class="value">${fmt(yt.dyn_total_eur)}<span style="font-size:13px"> €</span></div><div class="sub">Arbeit ${fmt(yt.dyn_cost_eur)} € + Fix ${fmt(yt.dyn_fixkosten_eur)} €</div></div>
                     <div class="result-card"><div class="label">Kosten Fixtarif</div><div class="value">${fmt(yt.fix_total_eur)}<span style="font-size:13px"> €</span></div><div class="sub">Arbeit ${fmt(yt.fix_cost_eur)} € + Grund ${fmt(yt.fix_grundpreis_eur)} €</div></div>
                     <div class="result-card"><div class="label">Differenz (dyn−fix)</div><div class="value ${yt.delta_eur>0?'bad':'good'}">${yt.delta_eur>0?'+':''}${fmt(yt.delta_eur)}<span style="font-size:13px"> €</span></div></div>`;
+            }
+
+            // Lastverschiebungs-Potenzial (Best-Case)
+            if (yt && yt.shift_kwh != null) {
+                const devs = (d.shiftable_devices || []).join(', ') || 'flexible Verbraucher';
+                document.getElementById('shift-intro').innerHTML =
+                    `Der Vergleich oben nutzt das <strong>heutige Verbrauchsprofil</strong> — das liegt meist NICHT in den günstigen Börsenstunden. Der Sinn eines dynamischen Tarifs ist aber die <strong>Lastverschiebung</strong>: flexible Verbraucher (${devs}, bis ${fmt(d.shift_max_kw,0)} kW) in die billigsten Viertelstunden des Tages schieben. Diese Best-Case-Obergrenze bewertet die verschiebbare Netzbezugs-Energie neu zum Tiefpreis (reale Spotpreise, inkl. Winter-Windtiefs).`;
+                document.getElementById('shift-grid').innerHTML = `
+                    <div class="result-card"><div class="label">Verschiebbar ${d.year}</div><div class="value">${fmt(yt.shift_kwh)}<span style="font-size:13px"> kWh</span></div></div>
+                    <div class="result-card"><div class="label">Best-Case Ersparnis</div><div class="value good">${fmt(yt.shift_savings_eur)}<span style="font-size:13px"> €</span></div></div>
+                    <div class="result-card"><div class="label">Dyn. optimiert</div><div class="value">${fmt(yt.dyn_opt_total_eur)}<span style="font-size:13px"> €</span></div><div class="sub">vs. Fix ${fmt(yt.fix_total_eur)} €</div></div>
+                    <div class="result-card"><div class="label">Δ optimiert (dyn−fix)</div><div class="value ${yt.delta_opt_eur>0?'bad':'good'}">${yt.delta_opt_eur>0?'+':''}${fmt(yt.delta_opt_eur)}<span style="font-size:13px"> €</span></div></div>`;
+                const sv = document.getElementById('shift-verdict');
+                sv.className = 'verdict ' + (yt.empfehlung_opt === 'fix' ? 'no' : 'ok');
+                let txt = `Mit konsequenter Lastverschiebung wäre der <strong>${yt.empfehlung_opt === 'fix' ? 'Fixtarif' : 'dynamische Tarif'}</strong> günstiger. Best-Case-Ersparnis gegenüber dem heutigen Profil: <strong>${fmt(yt.shift_savings_eur)} €/Jahr</strong>.`;
+                if (yt.empfehlung === 'fix' && yt.empfehlung_opt === 'dynamisch') {
+                    txt += ' Erst mit Optimierung dreht das Bild zugunsten des dynamischen Tarifs.';
+                }
+                txt += ' <span class="muted">Obergrenze: ideale Verschiebung, Leistungsdeckel, verschiebbare kWh ≤ Netzbezug.</span>';
+                sv.innerHTML = txt;
             }
 
             // Monatstabelle
