@@ -178,21 +178,36 @@ def api_tarif_analyse():
             return jsonify({'error': 'DB nicht verfügbar'}), 503
         cur = conn.cursor()
 
+        # Netzbezug-Wahrheitsquelle: monthly_statistics (counter-basiert = Monitoring-Wert).
+        # tariff_cost_monthly.bezug_kwh stammt aus data_5min_permanent (beginnt Jan 1 12:45
+        # → Jan fehlt halber Tag; Lücken möglich) → immer zu niedrig.
+        # dyn_avg_ct = korrekte Preisrate (gewichtet), dyn_cost_eur wird hier neu skaliert.
+        ms_bezug = {r[0]: r[1] for r in cur.execute(
+            "SELECT month, netz_bezug_kwh FROM monthly_statistics WHERE year=?", (year,))}
+
         months = []
         for r in cur.execute(
             "SELECT month, bezug_kwh, spot_avg_ct, dyn_avg_ct, dyn_simple_avg_ct, "
             "dyn_cost_eur, dyn_fixkosten_eur, fix_price_ct, fix_cost_eur, "
             "fix_grundpreis_eur, coverage_pct FROM tariff_cost_monthly "
             "WHERE year = ? ORDER BY month", (year,)).fetchall():
-            dyn_total = (r[5] or 0) + (r[6] or 0)
-            fix_total = (r[8] or 0) + (r[9] or 0)
+            bezug_5min = r[1] or 0.0
+            bezug_ms = ms_bezug.get(r[0]) or bezug_5min  # fallback auf 5min wenn noch kein ms-Eintrag
+            # Skaliere Arbeitskosten auf den korrekten Netzbezug.
+            scale = (bezug_ms / bezug_5min) if bezug_5min > 0 else 1.0
+            dyn_cost = round((r[5] or 0) * scale, 2)
+            fix_cost = round((r[8] or 0) * scale, 2)
+            cov = round(bezug_5min / bezug_ms * 100.0, 1) if bezug_ms > 0 else (r[10] or 100.0)
+            dyn_total = dyn_cost + (r[6] or 0)
+            fix_total = fix_cost + (r[9] or 0)
             months.append({
                 'month': r[0], 'month_name': _MONTH_NAMES[r[0]],
-                'bezug_kwh': r[1], 'spot_avg_ct': r[2], 'dyn_avg_ct': r[3],
-                'dyn_simple_avg_ct': r[4], 'dyn_cost_eur': r[5],
+                'bezug_kwh': round(bezug_ms, 1), 'bezug_5min_kwh': round(bezug_5min, 1),
+                'spot_avg_ct': r[2], 'dyn_avg_ct': r[3],
+                'dyn_simple_avg_ct': r[4], 'dyn_cost_eur': dyn_cost,
                 'dyn_fixkosten_eur': r[6], 'fix_price_ct': r[7],
-                'fix_cost_eur': r[8], 'fix_grundpreis_eur': r[9],
-                'coverage_pct': r[10],
+                'fix_cost_eur': fix_cost, 'fix_grundpreis_eur': r[9],
+                'coverage_pct': cov,
                 'dyn_total_eur': round(dyn_total, 2),
                 'fix_total_eur': round(fix_total, 2),
                 'delta_eur': round(dyn_total - fix_total, 2),
@@ -204,15 +219,40 @@ def api_tarif_analyse():
             "fix_grundpreis_eur, coverage_pct FROM tariff_cost_yearly "
             "WHERE year = ?", (year,)).fetchone()
         year_row = None
-        if yr:
-            dyn_total = (yr[4] or 0) + (yr[5] or 0)
-            fix_total = (yr[7] or 0) + (yr[8] or 0)
+        if yr or months:
+            # Jahressummen aus den bereits skalierten Monatswerten, damit Netzbezug
+            # mit dem Monitoring-Wert übereinstimmt.
+            if months:
+                total_bezug = round(sum(m['bezug_kwh'] for m in months), 1)
+                total_dyn_cost = round(sum(m['dyn_cost_eur'] for m in months), 2)
+                total_fix_cost = round(sum(m['fix_cost_eur'] for m in months), 2)
+                total_dyn_fix = round(sum(m['dyn_fixkosten_eur'] for m in months), 2)
+                total_fix_grund = round(sum(m['fix_grundpreis_eur'] for m in months), 2)
+                total_5min = sum(m['bezug_5min_kwh'] for m in months)
+                # Gewichteter Jahres-Ø aus den Monatswerten
+                w_dyn_avg = round(sum(m['dyn_avg_ct'] * m['bezug_5min_kwh'] for m in months if m['dyn_avg_ct']) / total_5min, 4) if total_5min > 0 else (yr[2] if yr else None)
+                w_spot_avg = round(sum((m['spot_avg_ct'] or 0) * m['bezug_5min_kwh'] for m in months) / total_5min, 4) if total_5min > 0 else (yr[1] if yr else None)
+                fix_price_yr = round(total_fix_cost / total_bezug * 100.0, 2) if total_bezug else (yr[6] if yr else None)
+                cov_yr = round(total_5min / total_bezug * 100.0, 1) if total_bezug > 0 else 100.0
+            else:
+                total_bezug = yr[0] if yr else 0
+                total_dyn_cost = (yr[4] or 0) if yr else 0
+                total_fix_cost = (yr[7] or 0) if yr else 0
+                total_dyn_fix = (yr[5] or 0) if yr else 0
+                total_fix_grund = (yr[8] or 0) if yr else 0
+                w_dyn_avg = yr[2] if yr else None
+                w_spot_avg = yr[1] if yr else None
+                fix_price_yr = yr[6] if yr else None
+                cov_yr = yr[9] if yr else 100.0
+            dyn_total = total_dyn_cost + total_dyn_fix
+            fix_total = total_fix_cost + total_fix_grund
             year_row = {
-                'year': year, 'bezug_kwh': yr[0], 'spot_avg_ct': yr[1],
-                'dyn_avg_ct': yr[2], 'dyn_simple_avg_ct': yr[3],
-                'dyn_cost_eur': yr[4], 'dyn_fixkosten_eur': yr[5],
-                'fix_price_ct': yr[6], 'fix_cost_eur': yr[7],
-                'fix_grundpreis_eur': yr[8], 'coverage_pct': yr[9],
+                'year': year, 'bezug_kwh': total_bezug,
+                'spot_avg_ct': w_spot_avg, 'dyn_avg_ct': w_dyn_avg,
+                'dyn_simple_avg_ct': yr[3] if yr else None,
+                'dyn_cost_eur': total_dyn_cost, 'dyn_fixkosten_eur': total_dyn_fix,
+                'fix_price_ct': fix_price_yr, 'fix_cost_eur': total_fix_cost,
+                'fix_grundpreis_eur': total_fix_grund, 'coverage_pct': cov_yr,
                 'dyn_total_eur': round(dyn_total, 2),
                 'fix_total_eur': round(fix_total, 2),
                 'delta_eur': round(dyn_total - fix_total, 2),
