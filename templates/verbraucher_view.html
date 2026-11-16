@@ -511,21 +511,26 @@
             const option = {
                 tooltip: {
                     trigger: 'axis',
-                    formatter: function(params) {
+                    formatter: (function() {
+                        // _lastD: Carry-Forward für Lücken, analog zu tag_view getTimeTooltip.
+                        let _lastD = null;
+                        return function(params) {
                         if (!params || params.length === 0) return '';
                         const timeStr = params[0].axisValue;
                         const d = byTime[timeStr];
-                        if (!d) return `<strong>${timeStr}</strong><br/>Keine Daten`;
+                        if (d != null) _lastD = d;
+                        const useD = d || _lastD;
+                        if (!useD) return `<strong>${timeStr}</strong><br/>Keine Daten`;
                         let html = `<strong>${timeStr}</strong><br/><br/>`;
-                        html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.wp};border-radius:2px;margin-right:5px;"></span>Wärmepumpe: <strong>${d.p_wp.toFixed(0)} W</strong><br/>`;
-                        html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.heizpatrone};border-radius:2px;margin-right:5px;"></span>Heizpatrone: <strong>${d.p_heizpatrone.toFixed(0)} W</strong><br/>`;
-                        html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.wattpilot};border-radius:2px;margin-right:5px;"></span>E-Auto: <strong>${d.p_wattpilot.toFixed(0)} W</strong><br/>`;
-                        if (d.p_klima > 0) html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.klima};border-radius:2px;margin-right:5px;"></span>Klima: <strong>${d.p_klima.toFixed(0)} W</strong><br/>`;
-                        if (d.p_gefrier > 0) html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.gefrier};border-radius:2px;margin-right:5px;"></span>Gefriertruhe: <strong>${d.p_gefrier.toFixed(0)} W</strong><br/>`;
-                        if (d.p_lueftung > 0) html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.lueftung};border-radius:2px;margin-right:5px;"></span>Lüftung: <strong>${d.p_lueftung.toFixed(0)} W</strong><br/>`;
-                        html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.haushalt};border-radius:2px;margin-right:5px;"></span>Sonstige: <strong>${d.p_haushalt.toFixed(0)} W</strong><br/>`;
+                        html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.wp};border-radius:2px;margin-right:5px;"></span>Wärmepumpe: <strong>${useD.p_wp.toFixed(0)} W</strong><br/>`;
+                        html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.heizpatrone};border-radius:2px;margin-right:5px;"></span>Heizpatrone: <strong>${useD.p_heizpatrone.toFixed(0)} W</strong><br/>`;
+                        html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.wattpilot};border-radius:2px;margin-right:5px;"></span>E-Auto: <strong>${useD.p_wattpilot.toFixed(0)} W</strong><br/>`;
+                        if (useD.p_klima > 0) html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.klima};border-radius:2px;margin-right:5px;"></span>Klima: <strong>${useD.p_klima.toFixed(0)} W</strong><br/>`;
+                        if (useD.p_gefrier > 0) html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.gefrier};border-radius:2px;margin-right:5px;"></span>Gefriertruhe: <strong>${useD.p_gefrier.toFixed(0)} W</strong><br/>`;
+                        if (useD.p_lueftung > 0) html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.lueftung};border-radius:2px;margin-right:5px;"></span>Lüftung: <strong>${useD.p_lueftung.toFixed(0)} W</strong><br/>`;
+                        html += `<span style="display:inline-block;width:10px;height:10px;background:${COLORS.haushalt};border-radius:2px;margin-right:5px;"></span>Sonstige: <strong>${useD.p_haushalt.toFixed(0)} W</strong><br/>`;
                         html += `<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>`;
-                        html += `<strong>Gesamt: ${d.p_gesamt.toFixed(0)} W</strong>`;
+                        html += `<strong>Gesamt: ${useD.p_gesamt.toFixed(0)} W</strong>`;
                         const pq = priceByQuarter[(function(){const[h,m]=timeStr.split(':').map(Number);return `${pad2(h)}:${pad2(m-(m%15))}`;})()];
                         if (pq != null) {
                             html += `<br/><span style="display:inline-block;width:10px;height:10px;background:#111;border-radius:2px;margin-right:5px;"></span>Strompreis: <strong>${pq.toFixed(1)} ct</strong>`;
@@ -536,7 +541,8 @@
                             if (tl) html += `<hr style="border:none;border-top:1px solid #ccc;margin:6px 0;"/>` + tl;
                         }
                         return html;
-                    }
+                        };
+                    })()
                 },
                 legend: {
                     data: ['Wärmepumpe', 'Heizpatrone', 'E-Auto', 'Klima', 'Gefriertruhe', 'Lüftung', 'Sonstige'].concat(hasTariff ? ['Strompreis'] : []),

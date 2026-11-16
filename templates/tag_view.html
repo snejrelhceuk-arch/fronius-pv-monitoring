@@ -1544,6 +1544,10 @@
         // Shared tooltip for time-axis charts. peakOpts {powerOverride,powerName}
         // ersetzt die Peak-Zeile durch den gezeichneten Marker-Wert (Anzeige==Marker).
         function getTimeTooltip(peakOpts) {
+            // _last: Carry-Forward je Serienname — letzter bekannter Wert + Zeitpunkt.
+            // Reset bei jedem Aufruf (= bei jedem Chart-Neuzeichnen / Tageswechsel).
+            const _last = {};
+
             return {
                 trigger: 'axis',
                 axisPointer: { type: 'cross' },
@@ -1554,15 +1558,28 @@
                     const timeStr = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
                     let result = '<strong>' + timeStr + '</strong><br/>';
                     params.forEach(item => {
-                        if (item.value[1] == null) return;
+                        if (!item.seriesName) return;
+                        // Wert aus ECharts-Params; bei null/undefined Carry-Forward nutzen
+                        // (innerhalb von 15 min = max. Abstand eines 15-min-Preisstufensprungs).
+                        let val = (item.value && item.value.length > 1) ? item.value[1] : null;
+                        if (val != null && Number.isFinite(val)) {
+                            _last[item.seriesName] = { val, ts };
+                        } else {
+                            const prev = _last[item.seriesName];
+                            if (prev && ts - prev.ts <= 900000) {
+                                val = prev.val; // vorangegangener Wert innerhalb 15 min
+                            } else {
+                                return; // keine Daten — Zeile weglassen
+                            }
+                        }
                         if (item.seriesName === 'Strompreis') {
-                            result += item.marker + ' Strompreis: ' + (item.value[1] || 0).toFixed(1) + ' ct<br/>';
+                            result += item.marker + ' Strompreis: ' + val.toFixed(1) + ' ct<br/>';
                             return;
                         }
                         let unit = ' W';
                         if (item.seriesName === 'SOC (%)') unit = ' %';
                         else if (item.seriesName === 'Bewölkung') unit = ' %';
-                        result += item.marker + ' ' + item.seriesName + ': ' + (item.value[1] || 0).toFixed(0) + unit + '<br/>';
+                        result += item.marker + ' ' + item.seriesName + ': ' + val.toFixed(0) + unit + '<br/>';
                     });
                     if (window.PVExtremes) {
                         const tl = PVExtremes.tagLines(tagExtremes, peakOpts || undefined);
@@ -1574,10 +1591,24 @@
         }
         
         // ── Dynamischer Börsentarif: Preis-Overlay (geteilt Ertrag+Verbrauch) ──
-        // Dünne schwarze Punktelinie, eigene rechte Achse in ct/kWh, Stufenverlauf
-        // (15-min). Bewusst andere Optik als alle bestehenden Serien.
+        // Dünne schwarze Punktelinie, eigene rechte Achse in ct/kWh, Stufenverlauf.
+        // Die Serie wird auf 5-min-Auflösung der Messdaten expandiert (Carry-Forward
+        // der 15-min-Preisstufen), damit der Preiswert im Tooltip bei jedem 5-min-
+        // Datenpunkt ohne Lücke verfügbar ist.
         function tariffPriceSeries() {
             if (!tariffData || !tariffData.points || !tariffData.points.length) return null;
+            // 15-min bucket-aligned timestamp → Preis
+            const priceMap = {};
+            tariffData.points.forEach(p => {
+                priceMap[p.timestamp - (p.timestamp % 900)] = p.total_ct;
+            });
+            // Carry-Forward: für jeden 5-min-Messpunkt den zugehörigen 15-min-Preis suchen
+            let lastPrice = null;
+            const expanded = chartData.datapoints.map(dp => {
+                const bucket = dp.timestamp - (dp.timestamp % 900);
+                if (priceMap[bucket] !== undefined) lastPrice = priceMap[bucket];
+                return [dp.timestamp * 1000, lastPrice];
+            });
             return {
                 name: 'Strompreis',
                 type: 'line',
@@ -1589,7 +1620,7 @@
                 z: 6,
                 lineStyle: { color: '#111', width: 1, type: 'dotted' },
                 itemStyle: { color: '#111' },
-                data: tariffData.points.map(p => [p.timestamp * 1000, p.total_ct])
+                data: expanded
             };
         }
 
