@@ -5,7 +5,23 @@ Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
-## [3.0.0] - 2026-09-23
+## [3.1.0] - 2026-11-16
+
+Neue Analyse-Schiene **dynamischer Börsentarif** (Tibber-Vergleich): reale
+Gesamtkosten einer kWh aus EPEX-Day-Ahead-Spotpreisen + Netzbezug, mit
+Monitoring-Overlay und Tarifvergleich-Seite.
+
+### Collector (Rolle A)
+- **Spot-Erfassung:** EPEX Day-Ahead DE-LU (15-min) von Fraunhofer-ISE Energy-Charts (kostenlos, kein Key) → `spot_price_15min`. (`collector/dynamic_price.py`)
+- **Gesamtkosten-Modell:** Börsenpreis + feste Netto-Adder (MITNETZ-Netzentgelt 6,31 ct, Konzession 1,32, Umlagen 2,946, Stromsteuer 2,05, Tibber-Aufschlag 2,15) + 19 % MwSt — alles pflegbar in `config.DYN_TARIF`. (`dynamic_tariff.py`)
+- **Verbrauchsgewichtete Kostenaggregation** pro Tag/Monat/Jahr aus Spot × gemessenem 15-min-Netzbezug, inkl. Fixtarif-Vergleich. (`collector/aggregate/tariff_cost.py`, `tariff_cost_daily/monthly/yearly`)
+- **Rückrekonstruktion 2026** + tägliche Auto-Pflege (Timer `pv-dynamic-price`). (`tools/backfill_dynamic_price.py`, `scripts/dynamic_price_update.sh`)
+
+### Web (Rolle B)
+- **Chart-Preis-Overlay** auf Produktion/Verbrauch/Lasten: dünne schwarze Punktelinie, eigene rechte ct/kWh-Achse (negative Börsenpreise korrekt skaliert), Tooltip mit Tagesbilanz. (`templates/tag_view.html`, `templates/verbraucher_view.html`)
+- **Analyse-Seite** `/analyse/strompreis`: Tarifvergleich dynamisch vs. Fix (Monat/Jahr), Kosten-Aufschlüsselung einer kWh, Methodik + Quellen. (`routes/tarif.py`, `templates/analyse_strompreis_view.html`)
+
+---
 
 Großer Versionssprung: die prognosebasierte Batterie-Automation wurde grundlegend überarbeitet, neue Analyse-Werkzeuge (Speicherausbau-Amortisation, Batterie-Redesign) kamen hinzu, das System wurde gegen Netzausfälle gehärtet und der Betrieb aller vier Pi-Hosts durchgängig automatisiert.
 
