@@ -300,6 +300,61 @@ INSERT OR IGNORE INTO price_history (valid_from, price_per_kwh) VALUES
     (1803340800, 0.28);               -- Ab 23.02.2028: 0.28 €/kWh (Beispiel)
 
 -- ====================================================================
+-- DYNAMISCHER BÖRSENTARIF (Tibber-Schiene)
+-- spot_price_15min: EPEX Day-Ahead DE-LU, 15-min (EUR/MWh), permanent.
+-- tariff_cost_*: verbrauchsgewichtete reale kWh-Gesamtkosten + Fixtarif-Referenz.
+-- ====================================================================
+CREATE TABLE IF NOT EXISTS spot_price_15min (
+    ts INTEGER PRIMARY KEY,           -- Unix-Timestamp (Intervall-Start)
+    price_eur_mwh REAL NOT NULL,      -- EPEX Day-Ahead Preis (EUR/MWh)
+    source TEXT DEFAULT 'energy-charts',
+    inserted_ts INTEGER DEFAULT (strftime('%s','now'))
+);
+CREATE TABLE IF NOT EXISTS tariff_cost_daily (
+    day_ts INTEGER PRIMARY KEY,       -- lokaler Tagesbeginn (Unix)
+    bezug_kwh REAL DEFAULT 0,         -- Netzbezug des Tages (kWh)
+    spot_avg_ct REAL,                 -- Zeit-Mittel Börsenpreis (netto ct/kWh)
+    dyn_avg_ct REAL,                  -- verbrauchsgewichtete Gesamtkosten (brutto ct/kWh)
+    dyn_simple_avg_ct REAL,           -- Zeit-Mittel Gesamtkosten (brutto ct/kWh)
+    dyn_cost_eur REAL,                -- Σ Bezug×Gesamtpreis (EUR, arbeitsbezogen)
+    fix_price_ct REAL,                -- Fixtarif-Preis (brutto ct/kWh)
+    fix_cost_eur REAL,                -- Bezug×Fixtarif (EUR)
+    coverage_pct REAL,               -- Anteil Bezug-kWh mit Spot-Preis belegt
+    source TEXT DEFAULT 'energy-charts',
+    updated_ts INTEGER DEFAULT (strftime('%s','now'))
+);
+CREATE TABLE IF NOT EXISTS tariff_cost_monthly (
+    year INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    bezug_kwh REAL DEFAULT 0,
+    spot_avg_ct REAL,
+    dyn_avg_ct REAL,
+    dyn_simple_avg_ct REAL,
+    dyn_cost_eur REAL,
+    dyn_fixkosten_eur REAL,
+    fix_price_ct REAL,
+    fix_cost_eur REAL,
+    fix_grundpreis_eur REAL,
+    coverage_pct REAL,
+    updated_ts INTEGER DEFAULT (strftime('%s','now')),
+    PRIMARY KEY (year, month)
+);
+CREATE TABLE IF NOT EXISTS tariff_cost_yearly (
+    year INTEGER PRIMARY KEY,
+    bezug_kwh REAL DEFAULT 0,
+    spot_avg_ct REAL,
+    dyn_avg_ct REAL,
+    dyn_simple_avg_ct REAL,
+    dyn_cost_eur REAL,
+    dyn_fixkosten_eur REAL,
+    fix_price_ct REAL,
+    fix_cost_eur REAL,
+    fix_grundpreis_eur REAL,
+    coverage_pct REAL,
+    updated_ts INTEGER DEFAULT (strftime('%s','now'))
+);
+
+-- ====================================================================
 -- GERÄTE-INFO (statische Daten)
 -- ====================================================================
 CREATE TABLE IF NOT EXISTS device_info (

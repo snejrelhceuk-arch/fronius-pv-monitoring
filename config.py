@@ -329,6 +329,33 @@ STROM_GRUNDPREISE = [
     ((2026,  2, 23),  14.90),    # Vattenfall — 14,90 EUR/Monat, 2J Preisgarantie
 ]
 
+# --- Dynamischer Börsentarif (Tibber-Schiene) — GESAMTKOSTEN-Modell einer kWh ---
+# Zweck: Vergleich "dynamischer Spotmarkt-Tarif" vs. bestehender Fixtarif (STROMTARIFE).
+# Der Börsenpreis (EPEX Day-Ahead DE-LU, 15-min) ist der einzige variable Anteil; alle
+# übrigen Komponenten sind feste Adder pro kWh (netto), auf die am Ende MwSt. kommt:
+#   Gesamt_brutto(ct/kWh) = (Börse_ct + Σ feste_netto_adder_ct) × (1 + MwSt.)
+# Alle Werte in ct/kWh (netto), Stand 2026 — Quellen in doc/web/STROMPREIS_ANALYSE.md.
+# JEDER Wert ist hier pflegbar (einzige Wahrheit für Collector, Aggregation und Analyse).
+DYN_TARIF = {
+    'bidding_zone':        'DE-LU',   # EPEX-Marktgebiet (energy-charts.info)
+    'mwst_pct':            19.0,      # Mehrwertsteuer auf die Summe
+    # Feste Adder pro kWh (netto, ct/kWh):
+    'netzentgelt_ap_ct':   6.31,      # MITNETZ STROM NS SLP 2026 Arbeitspreis (Preisblatt 01.01.2026)
+    'konzessionsabgabe_ct':1.32,      # Gemeinde < 25.000 EW (ländliches Mittelsachsen)
+    'kwkg_umlage_ct':      0.446,     # KWKG-Umlage 2026
+    'offshore_umlage_ct':  0.941,     # Offshore-Netzumlage 2026
+    'paragraf19_umlage_ct':1.559,     # Aufschlag § 19 StromNEV 2026
+    'stromsteuer_ct':      2.05,      # Stromsteuer (Haushalt, EU-Regelsatz)
+    'anbieter_aufschlag_ct':2.15,     # Tibber "weitere Beschaffungskosten" (netto-genähert)
+    # Feste monatliche/jährliche Kosten (brutto, EUR) — nur für Gesamtkosten-Vergleich:
+    'netz_grundpreis_eur_jahr': 73.00,   # MITNETZ NS SLP Grundpreis 2026 (netto; ×MwSt im Modell)
+    'netz_grundpreis_netto':    True,    # True → ×(1+MwSt), False → bereits brutto
+    'messstellenbetrieb_eur_jahr': 20.00,# iMSys-Entgelt dyn. Tarif (gesetzl. Deckel §31 MsbG, brutto)
+    'anbieter_grundgebuehr_eur_monat': 5.99,  # Tibber Grundgebühr (brutto, inkl. MwSt)
+}
+# Rückrekonstruktions-Start der dynamischen Schiene (erst ab hier liegen Spot+Bezug vor).
+DYN_TARIF_START = (2026, 1, 1)
+
 # --- Finanzdaten (Investitionen & Betriebskosten) ---
 INVEST_PV_2021 = 24000           # EUR (PV-Anlage + Batterie, Baujahr 2021, in Betrieb seit Nov/21)
 INVEST_PV_2024 = 8000            # EUR (Erweiterung 13kWp + Optimierer)

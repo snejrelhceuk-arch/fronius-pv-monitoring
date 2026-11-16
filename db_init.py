@@ -796,6 +796,68 @@ def ensure_forecast_table():
                 CREATE INDEX IF NOT EXISTS idx_{_dev}_daily_ts ON {_dev}_daily(ts)
             """)
 
+        # Dynamischer Börsentarif (Tibber-Schiene):
+        # spot_price_15min = EPEX Day-Ahead DE-LU, 15-min (EUR/MWh), permanent.
+        # tariff_cost_{daily,monthly,yearly} = verbrauchsgewichtete reale kWh-
+        # Gesamtkosten (dynamisch) + Fixtarif-Referenz, aggregiert aus Spot × Bezug.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS spot_price_15min (
+                ts INTEGER PRIMARY KEY,
+                price_eur_mwh REAL NOT NULL,
+                source TEXT DEFAULT 'energy-charts',
+                inserted_ts INTEGER DEFAULT (strftime('%s','now'))
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS tariff_cost_daily (
+                day_ts INTEGER PRIMARY KEY,
+                bezug_kwh REAL DEFAULT 0,
+                spot_avg_ct REAL,
+                dyn_avg_ct REAL,
+                dyn_simple_avg_ct REAL,
+                dyn_cost_eur REAL,
+                fix_price_ct REAL,
+                fix_cost_eur REAL,
+                coverage_pct REAL,
+                source TEXT DEFAULT 'energy-charts',
+                updated_ts INTEGER DEFAULT (strftime('%s','now'))
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS tariff_cost_monthly (
+                year INTEGER NOT NULL,
+                month INTEGER NOT NULL,
+                bezug_kwh REAL DEFAULT 0,
+                spot_avg_ct REAL,
+                dyn_avg_ct REAL,
+                dyn_simple_avg_ct REAL,
+                dyn_cost_eur REAL,
+                dyn_fixkosten_eur REAL,
+                fix_price_ct REAL,
+                fix_cost_eur REAL,
+                fix_grundpreis_eur REAL,
+                coverage_pct REAL,
+                updated_ts INTEGER DEFAULT (strftime('%s','now')),
+                PRIMARY KEY (year, month)
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS tariff_cost_yearly (
+                year INTEGER PRIMARY KEY,
+                bezug_kwh REAL DEFAULT 0,
+                spot_avg_ct REAL,
+                dyn_avg_ct REAL,
+                dyn_simple_avg_ct REAL,
+                dyn_cost_eur REAL,
+                dyn_fixkosten_eur REAL,
+                fix_price_ct REAL,
+                fix_cost_eur REAL,
+                fix_grundpreis_eur REAL,
+                coverage_pct REAL,
+                updated_ts INTEGER DEFAULT (strftime('%s','now'))
+            )
+        """)
+
         conn.commit()
 
         conn.close()

@@ -1,41 +1,41 @@
 # Volkszählung — PV-System Workspace
 
-> Stand: 2026-11-15 · auto-generiert von `tools/generate_volkszaehlung.py` (pre-commit).
+> Stand: 2026-11-16 · auto-generiert von `tools/generate_volkszaehlung.py` (pre-commit).
 
 ## Übersicht
 
-**Gesamtgröße (Textdateien gezählt):** 5419 MB
-**Gesamtzeilen (Code/Doku/Daten):** 457.792 Zeilen
-**Gezählte Dateien:** 1.018
+**Gesamtgröße (Textdateien gezählt):** 5506 MB
+**Gesamtzeilen (Code/Doku/Daten):** 460.870 Zeilen
+**Gezählte Dateien:** 1.030
 **Ausgeschlossene Verzeichnisse:** 30 (.venv, __pycache__, node_modules, .git …)
 
 ## Nach Sprache/Typ
 
 | Sprache/Typ | Dateien | Zeilen | Anteil |
 |---|---|---|---|
-| **CSV** | 83 | 317.337 | 69.3% |
-| **Python** | 241 | 68.670 | 15.0% |
-| **Markdown** | 160 | 26.715 | 5.8% |
-| **HTML** | 28 | 17.044 | 3.7% |
-| **TXT** | 4 | 8.458 | 1.8% |
-| **Shell** | 86 | 7.309 | 1.6% |
-| **JSON** | 337 | 5.605 | 1.2% |
-| **JavaScript** | 6 | 1.830 | 0.4% |
+| **CSV** | 83 | 318.704 | 69.2% |
+| **Python** | 246 | 69.552 | 15.1% |
+| **Markdown** | 163 | 27.007 | 5.9% |
+| **HTML** | 29 | 17.463 | 3.8% |
+| **TXT** | 4 | 8.464 | 1.8% |
+| **Shell** | 87 | 7.334 | 1.6% |
+| **JSON** | 337 | 5.610 | 1.2% |
+| **JavaScript** | 6 | 1.831 | 0.4% |
 | **CSS** | 6 | 1.747 | 0.4% |
-| **SQL** | 10 | 1.430 | 0.3% |
+| **SQL** | 10 | 1.485 | 0.3% |
 | **YAML** | 8 | 831 | 0.2% |
-| **systemd** | 45 | 724 | 0.2% |
+| **systemd** | 47 | 750 | 0.2% |
 | **CONF** | 3 | 70 | 0.0% |
 | **TOML** | 1 | 22 | 0.0% |
-| **Total** | 1.018 | 457.792 | 100% |
+| **Total** | 1.030 | 460.870 | 100% |
 
 ## Python-Code nach ABCDEN-Rollen
 
 | Rolle | Verzeichnis | .py-Dateien | Zeilen |
 |---|---|---|---|
 | **C** Automation | `automation/` | 46 | 14.611 |
-| **A** Collector | `collector/` | 20 | 5.202 |
-| **B** Web-API | `routes/` | 29 | 12.169 |
+| **A** Collector | `collector/` | 22 | 5.585 |
+| **B** Web-API | `routes/` | 30 | 12.358 |
 | **D** Diagnos | `diagnos/` | 11 | 2.746 |
 | **E** Steuerbox | `steuerbox/` | 5 | 1.316 |
 | **N** Netzqualität | `nq/` | 37 | 9.143 |

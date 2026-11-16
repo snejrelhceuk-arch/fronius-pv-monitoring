@@ -68,6 +68,10 @@ ANALYSIS_TABLES = [
     'battery_health_daily',
     'forecast_daily',
     'price_history',
+    'spot_price_15min',
+    'tariff_cost_daily',
+    'tariff_cost_monthly',
+    'tariff_cost_yearly',
 ]
 
 

@@ -28,6 +28,7 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 | **collector: Fronius-Modbus, Solar-API, raw_data-Schreiber** | [`collector-fronius-collector.card.md`](./cards/collector-fronius-collector.card.md) | stable |
 | **collector: Wattpilot-Polling, `eto`, `wattpilot_daily`** | [`collector-wattpilot-collector.card.md`](./cards/collector-wattpilot-collector.card.md) | stable |
 | **collector: WP-Wärmemenge/COP/SCOP, Dimplex-Modbus-Zähler, `wp_thermal_daily`** | [`collector-wp-thermal.card.md`](./cards/collector-wp-thermal.card.md) | stable |
+| **collector/tarif: dynamischer Börsentarif, EPEX Day-Ahead, Spot, Strompreis-Gesamtkosten, Tibber, verbrauchsgewichtete kWh-Kosten** | [`collector-dynamic-price.card.md`](./cards/collector-dynamic-price.card.md) | stable |
 | **collector: FritzDECT, AIN-Mapping, Steckdosen-Polling** | [`collector-fritzdect-collector.card.md`](./cards/collector-fritzdect-collector.card.md) | stable |
 | **diagnos: Host-Health, Services, Freshness, Mirror/Backup-Alter** | [`diagnos-health.card.md`](./cards/diagnos-health.card.md) | stable |
 | **diagnos: Energiebilanz, Rollups, Gap-Scan, Config-Parse** | [`diagnos-integrity.card.md`](./cards/diagnos-integrity.card.md) | stable |
@@ -46,6 +47,7 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 | **system: .role-Guards, Failover, Publish-Audit, Backup-GFS** | [`system-ops-guards.card.md`](./cards/system-ops-guards.card.md) | stable || **system: Hosts/Pi-Topologie, Deployment, rsync-Sync, Dienst→Host-Map** | [`system-hosts.card.md`](./cards/system-hosts.card.md) | stable |
 | **web: Blueprints, FroniusReadOnly, Display-Formatierung** | [`web-display-api.card.md`](./cards/web-display-api.card.md) | stable |
 | **web: Speicherausbau/PV-Zubau, vermeidbarer Netzbezug, Amortisation, Abregelungs-Rekonstruktion** | [`web-analyse-speicherausbau.card.md`](./cards/web-analyse-speicherausbau.card.md) | stable |
+| **web/analyse: Strompreis-Tarifvergleich, dynamisch vs. Fix, Chart-Preis-Overlay (ct/kWh), Tibber-Schiene** | [`web-analyse-strompreis.card.md`](./cards/web-analyse-strompreis.card.md) | stable |
 | **web: Flow-Ansicht, SVG-Skalierung, Mobile-Pan, Bubble-Koordinaten** | [`web-flow-view.card.md`](./cards/web-flow-view.card.md) | stable |
 
 ## Cards nach Domäne
@@ -68,6 +70,7 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 - [`collector-fronius-collector.card.md`](./cards/collector-fronius-collector.card.md) — Modbus + Solar-API
 - [`collector-wattpilot-collector.card.md`](./cards/collector-wattpilot-collector.card.md) — WS-Polling, `eto`
 - [`collector-wp-thermal.card.md`](./cards/collector-wp-thermal.card.md) — WP-Wärmemenge/COP/SCOP (Dimplex-Modbus)
+- [`collector-dynamic-price.card.md`](./cards/collector-dynamic-price.card.md) — Dynamischer Börsentarif (EPEX Spot, Gesamtkosten, Aggregation)
 - [`collector-fritzdect-collector.card.md`](./cards/collector-fritzdect-collector.card.md) — AHA-API, AIN-Mapping
 
 ### diagnos (Schicht D)
@@ -99,6 +102,7 @@ Dieser Index ist die **Stufe 3** der Lade-Hierarchie (s. `AGENTS.md`). Er bildet
 ### web
 - [`web-display-api.card.md`](./cards/web-display-api.card.md) — Blueprints, Read-only API, Formatierung
 - [`web-analyse-speicherausbau.card.md`](./cards/web-analyse-speicherausbau.card.md) — Speicherausbau-Amortisationsmodell (vermeidbarer Netzbezug, Abregelung, Optimum)
+- [`web-analyse-strompreis.card.md`](./cards/web-analyse-strompreis.card.md) — Strompreis-Tarifvergleich (dynamisch vs. Fix) + Chart-Preis-Overlay
 - [`web-flow-view.card.md`](./cards/web-flow-view.card.md) — Flow-Ansicht: SVG-Rendering, Breakpoints, Mobile-Pan
 
 ## Konventionen

@@ -89,4 +89,3 @@
 
 - [ ] **Tarif-Wechsel prüfen (Deadline 22.02.2028)** — Laufender Festpreis-Tarif endet 22.02.2028 (seit 23.02.2026: 0,30 €/kWh, 1 Zähler). Spätestens **Herbst 2027** Angebote für dynamischen Tarif vergleichen (Tibber, aWATTar, Octopus u. a.) und Konditionen (Grundgebühr, Spread, Smart-Meter-Pflicht) bewerten. Ohne aktive Steuerbox-Integration (~50–80 €/a Ersparnis) lohnt Wechsel kaum; mit WP/EV-Integration (~375–560 €/a) sehr attraktiv. Analyse: `doc/PLAN/direktvermarktung-vs-netztrennung/ANALYSE.md` §3.5.
 - [ ] **Preis-API-Integration vorbereiten (vor Tarif-Wechsel)** — Tibber-GraphQL oder aWATTar-REST (stündliche Day-Ahead-Preise) in Rolle C einbinden; WP-Vorheizung und Wattpilot-Ladeplanung an Preis-Prognose koppeln. Infrastruktur (WP-Modbus, Wattpilot-Control, Batterie-SOC) bereits vorhanden. Aufwand: ~20 h Entwicklung.
-

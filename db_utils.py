@@ -56,6 +56,10 @@ _ANALYSIS_SHADOW = {
     'battery_health_daily': ['day_ts'],
     'forecast_daily': ['date'],
     'price_history': ['valid_from'],
+    'spot_price_15min': ['ts'],
+    'tariff_cost_daily': ['day_ts'],
+    'tariff_cost_monthly': ['year', 'month'],
+    'tariff_cost_yearly': ['year'],
 }
 
 

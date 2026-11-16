@@ -1,0 +1,13 @@
+[Unit]
+Description=PV Dynamischer Börsentarif (EPEX Day-Ahead holen + Tarif-Kosten aggregieren)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=admin
+WorkingDirectory=%h/Dokumente/PVAnlage/pv-system
+ExecStart=%h/Dokumente/PVAnlage/pv-system/scripts/dynamic_price_update.sh
+StandardOutput=journal
+StandardError=journal
+Nice=18

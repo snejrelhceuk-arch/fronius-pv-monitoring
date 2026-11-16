@@ -5,6 +5,7 @@
 #   pv-repo-drift.{service,timer}        ~10 Tage  — Repo-Drift-Remediation
 #   pv-doc-drift-report.{service,timer}  ~20 Tage  — Doku-Drift-Report (Mail)
 #   pv-solarweb-compare.{service,timer}  monatlich — Solarweb-Abgleich
+#   pv-dynamic-price.{service,timer}     täglich   — EPEX Day-Ahead + Tarif-Kosten
 #
 # Die Update/Upgrade-Strategie (pv-auto-update) gehoert zu Rolle R und wird von
 # recovery/install_recovery.sh installiert.
@@ -53,7 +54,8 @@ TIMERS=()
 for u in \
   pv-repo-drift.service        pv-repo-drift.timer \
   pv-doc-drift-report.service  pv-doc-drift-report.timer \
-  pv-solarweb-compare.service  pv-solarweb-compare.timer; do
+  pv-solarweb-compare.service  pv-solarweb-compare.timer \
+  pv-dynamic-price.service     pv-dynamic-price.timer; do
   install_unit "$u" || true
   [[ "$u" == *.timer ]] && TIMERS+=("$u")
 done
